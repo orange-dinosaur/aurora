@@ -1,0 +1,7 @@
+# rustfmt configuration
+# Matches Prettier settings: 4-space indentation
+tab_spaces = 4
+max_width = 100
+use_small_heuristics = "Default"
+indent_style = "Block"
+newline_style = "Unix"
