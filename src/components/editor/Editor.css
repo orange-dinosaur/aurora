@@ -1,0 +1,148 @@
+/* Lexical Editor Styles */
+
+.editor-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background-color: var(--editor-bg, #ffffff);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.editor-inner {
+    flex: 1;
+    position: relative;
+    overflow: auto;
+}
+
+.editor-input {
+    min-height: 400px;
+    padding: 16px 24px;
+    outline: none;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 16px;
+    line-height: 1.8;
+    color: var(--editor-text, #1a1a1a);
+}
+
+.editor-placeholder {
+    position: absolute;
+    top: 16px;
+    left: 24px;
+    color: #999;
+    pointer-events: none;
+    user-select: none;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 16px;
+}
+
+/* Paragraph styles */
+.editor-paragraph {
+    margin: 0 0 12px 0;
+}
+
+/* Heading styles */
+.editor-heading-h1 {
+    font-size: 2em;
+    font-weight: 700;
+    margin: 24px 0 16px 0;
+    line-height: 1.3;
+}
+
+.editor-heading-h2 {
+    font-size: 1.5em;
+    font-weight: 600;
+    margin: 20px 0 12px 0;
+    line-height: 1.4;
+}
+
+.editor-heading-h3 {
+    font-size: 1.25em;
+    font-weight: 600;
+    margin: 16px 0 10px 0;
+    line-height: 1.4;
+}
+
+.editor-heading-h4,
+.editor-heading-h5,
+.editor-heading-h6 {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin: 12px 0 8px 0;
+}
+
+/* Text formatting styles */
+.editor-text-bold {
+    font-weight: 700;
+}
+
+.editor-text-italic {
+    font-style: italic;
+}
+
+.editor-text-underline {
+    text-decoration: underline;
+}
+
+.editor-text-strikethrough {
+    text-decoration: line-through;
+}
+
+.editor-text-code {
+    font-family: 'Consolas', 'Monaco', monospace;
+    background-color: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+/* Block quote styles */
+.editor-quote {
+    margin: 16px 0;
+    padding: 12px 20px;
+    border-left: 4px solid #ddd;
+    background-color: #f9f9f9;
+    font-style: italic;
+    color: #555;
+}
+
+/* List styles */
+.editor-list-ul,
+.editor-list-ol {
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
+.editor-listitem {
+    margin: 4px 0;
+}
+
+.editor-nested-listitem {
+    list-style-type: none;
+}
+
+/* Mark styles (for revision tracking) */
+.editor-mark {
+    background-color: #fff3cd;
+    padding: 1px 2px;
+    border-radius: 2px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .editor-container {
+        --editor-bg: #1e1e1e;
+        --editor-text: #e0e0e0;
+    }
+
+    .editor-text-code {
+        background-color: #2d2d2d;
+    }
+
+    .editor-quote {
+        background-color: #2a2a2a;
+        border-left-color: #555;
+        color: #bbb;
+    }
+}

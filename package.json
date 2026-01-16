@@ -8,21 +8,38 @@
         "build": "tsc && vite build",
         "preview": "vite preview",
         "tauri": "tauri",
-        "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\" && cd src-tauri && cargo fmt"
+        "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\" && cd src-tauri && cargo fmt",
+        "test": "vitest --run",
+        "test:watch": "vitest",
+        "test:ui": "vitest --ui"
     },
     "dependencies": {
+        "@lexical/list": "^0.39.0",
+        "@lexical/mark": "^0.39.0",
+        "@lexical/markdown": "^0.39.0",
+        "@lexical/react": "^0.39.0",
+        "@lexical/rich-text": "^0.39.0",
+        "@tauri-apps/api": "^2",
+        "@tauri-apps/plugin-opener": "^2",
+        "convex": "^1.31.5",
+        "lexical": "^0.39.0",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
-        "@tauri-apps/api": "^2",
-        "@tauri-apps/plugin-opener": "^2"
+        "zustand": "^5.0.10"
     },
     "devDependencies": {
         "@tauri-apps/cli": "^2",
+        "@testing-library/jest-dom": "^6.9.1",
+        "@testing-library/react": "^16.3.1",
         "@types/react": "^19.1.8",
         "@types/react-dom": "^19.1.6",
         "@vitejs/plugin-react": "^4.6.0",
+        "@vitest/ui": "^4.0.17",
+        "fast-check": "^4.5.3",
+        "jsdom": "^27.4.0",
         "prettier": "3.7.4",
         "typescript": "~5.8.3",
-        "vite": "^7.0.4"
+        "vite": "^7.0.4",
+        "vitest": "^4.0.17"
     }
 }

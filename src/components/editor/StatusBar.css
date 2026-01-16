@@ -1,0 +1,55 @@
+/* Status Bar Styles */
+
+.status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #fafafa;
+    border-radius: 0 0 8px 8px;
+    font-size: 13px;
+    color: #666;
+}
+
+.status-bar-left {
+    display: flex;
+    gap: 16px;
+}
+
+.status-bar-right {
+    display: flex;
+    gap: 16px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.status-label {
+    color: #888;
+}
+
+.status-value {
+    font-weight: 500;
+    color: #444;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .status-bar {
+        background-color: #2a2a2a;
+        border-top-color: #444;
+        color: #aaa;
+    }
+
+    .status-label {
+        color: #888;
+    }
+
+    .status-value {
+        color: #ccc;
+    }
+}

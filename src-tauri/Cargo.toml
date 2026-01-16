@@ -23,3 +23,12 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# Git operations (Requirements 15.1-15.6)
+git2 = "0.19"
+
+# PDF generation (Requirement 5.2)
+printpdf = "0.7"
+
+# Timestamp handling
+chrono = { version = "0.4", features = ["serde"] }
+
