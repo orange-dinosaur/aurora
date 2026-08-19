@@ -1,9 +1,10 @@
+import Welcome from "./Welcome";
 import "./App.css";
 
 function App() {
 	return (
 		<main className="app">
-			<h1>Aurora</h1>
+			<Welcome />
 		</main>
 	);
 }
