@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use time::OffsetDateTime;
 
 /// A folder inside a project, together with the document it starts life with.
@@ -93,6 +93,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
 	InvalidName(NameError),
+	RelativePath,
 	AlreadyExists,
 	UnsupportedFormat(Format),
 	Io(io::Error),
@@ -103,6 +104,7 @@ impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Error::InvalidName(e) => write!(f, "{e}"),
+			Error::RelativePath => write!(f, "the project location must be an absolute path"),
 			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
@@ -113,10 +115,21 @@ impl fmt::Display for Error {
 	}
 }
 
+/// `#[tauri::command]` needs the error type to cross to the frontend, where the
+/// message is all that is used.
+impl Serialize for Error {
+	fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+		serializer.serialize_str(&self.to_string())
+	}
+}
+
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::InvalidName(_) | Error::AlreadyExists | Error::UnsupportedFormat(_) => None,
+			Error::InvalidName(_)
+			| Error::RelativePath
+			| Error::AlreadyExists
+			| Error::UnsupportedFormat(_) => None,
 			Error::Io(e) => Some(e),
 			Error::Json(e) => Some(e),
 		}
@@ -264,6 +277,15 @@ fn fill(
 	let json = serde_json::to_vec_pretty(&manifest)?;
 	fs::write(root.join(MANIFEST_FILE), json)?;
 	Ok(())
+}
+
+#[tauri::command]
+pub fn create_project(parent: PathBuf, name: String, format: Format) -> Result<PathBuf> {
+	// The path arrives from the frontend, so it is not trusted to be sensible.
+	if !parent.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	create(&parent, &name, format, OffsetDateTime::now_utc())
 }
 
 #[cfg(test)]
@@ -561,6 +583,61 @@ mod tests {
 				fixed_time()
 			)
 			.is_err()
+		);
+	}
+
+	#[test]
+	fn the_command_creates_a_project() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create_project(
+			parent.path().to_path_buf(),
+			"Ithaca".to_owned(),
+			Format::Novel,
+		)
+		.unwrap();
+
+		assert!(root.join(MANIFEST_FILE).is_file());
+		assert!(root.join("Manuscript").join("Chapter 1.md").is_file());
+	}
+
+	#[test]
+	fn the_command_stamps_the_current_time() {
+		let parent = tempfile::tempdir().unwrap();
+		let before = OffsetDateTime::now_utc();
+		let root = create_project(
+			parent.path().to_path_buf(),
+			"Ithaca".to_owned(),
+			Format::Novel,
+		)
+		.unwrap();
+
+		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
+		let manifest: Manifest = serde_json::from_str(&json).unwrap();
+		assert!(manifest.created_at >= before);
+		assert!(manifest.created_at <= OffsetDateTime::now_utc());
+	}
+
+	#[test]
+	fn the_command_refuses_a_relative_path() {
+		let err = create_project(
+			PathBuf::from("some/where"),
+			"Ithaca".to_owned(),
+			Format::Novel,
+		)
+		.unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn errors_cross_to_the_frontend_as_their_message() {
+		let err = Error::InvalidName(NameError::IllegalCharacter(':'));
+		assert_eq!(
+			serde_json::to_string(&err).unwrap(),
+			"\"the name cannot contain ':'\""
+		);
+		assert_eq!(
+			serde_json::to_value(Error::AlreadyExists).unwrap(),
+			"a folder of that name is already there"
 		);
 	}
 }
