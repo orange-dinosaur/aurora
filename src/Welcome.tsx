@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { OpenProject } from "./App";
@@ -42,10 +42,14 @@ const FORMATS: Format[] = [
 	},
 ];
 
+type RecentProject = {
+	name: string;
+	root: string;
+	lastOpened: string;
+};
+
 type Status =
-	| { kind: "idle" }
-	| { kind: "creating" }
-	| { kind: "error"; message: string };
+	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
 
 type Props = {
 	notice: string | null;
@@ -59,11 +63,18 @@ export default function Welcome({ notice, onOpened }: Props) {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [name, setName] = useState("");
 	const [parent, setParent] = useState<string | null>(null);
+	const [recents, setRecents] = useState<RecentProject[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 
 	const chosen = FORMATS.find((format) => format.id === selectedId) ?? null;
-	const ready =
-		parent !== null && name.trim() !== "" && status.kind !== "creating";
+	const busy = status.kind === "busy";
+	const ready = parent !== null && name.trim() !== "" && !busy;
+
+	useEffect(() => {
+		invoke<RecentProject[]>("recent_projects")
+			.then(setRecents)
+			.catch(() => setRecents([]));
+	}, []);
 
 	async function chooseFolder() {
 		const picked = await open({
@@ -82,7 +93,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 			return;
 		}
 
-		setStatus({ kind: "creating" });
+		setStatus({ kind: "busy" });
 		try {
 			const root = await invoke<string>("create_project", {
 				parent,
@@ -95,6 +106,26 @@ export default function Welcome({ notice, onOpened }: Props) {
 		}
 	}
 
+	async function openProject(root: string) {
+		setStatus({ kind: "busy" });
+		try {
+			onOpened(await invoke<OpenProject>("open_project", { root }));
+		} catch (error) {
+			setStatus({ kind: "error", message: String(error) });
+		}
+	}
+
+	async function browseForProject() {
+		const picked = await open({
+			directory: true,
+			multiple: false,
+			title: "Open an Aurora project",
+		});
+		if (typeof picked === "string") {
+			await openProject(picked);
+		}
+	}
+
 	return (
 		<section className="welcome">
 			<h1 className="welcome__title">Aurora</h1>
@@ -102,7 +133,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 			{stage === "format" ? (
 				<>
 					<p className="welcome__subtitle">
-						Choose a format to start your first writing project.
+						Choose a format and create a new writing project.
 					</p>
 
 					<ul className="formats">
@@ -137,7 +168,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 					<button
 						type="button"
 						className="welcome__create"
-						disabled={chosen === null}
+						disabled={chosen === null || busy}
 						onClick={() => {
 							setStage("details");
 							setReason(null);
@@ -145,6 +176,43 @@ export default function Welcome({ notice, onOpened }: Props) {
 					>
 						Continue
 					</button>
+
+					<div className="existing">
+						<h2 className="existing__title">Or open a project</h2>
+
+						{recents.length > 0 && (
+							<ul className="recents">
+								{recents.map((project) => (
+									<li key={project.root}>
+										<button
+											type="button"
+											className="recent"
+											disabled={busy}
+											onClick={() =>
+												void openProject(project.root)
+											}
+										>
+											<span className="recent__name">
+												{project.name}
+											</span>
+											<span className="recent__path">
+												{project.root}
+											</span>
+										</button>
+									</li>
+								))}
+							</ul>
+						)}
+
+						<button
+							type="button"
+							className="welcome__back"
+							disabled={busy}
+							onClick={() => void browseForProject()}
+						>
+							Select folder…
+						</button>
+					</div>
 				</>
 			) : (
 				chosen && (
@@ -200,14 +268,12 @@ export default function Welcome({ notice, onOpened }: Props) {
 									className="welcome__create"
 									disabled={!ready}
 								>
-									{status.kind === "creating"
-										? "Creating…"
-										: "Create project"}
+									{busy ? "Creating…" : "Create project"}
 								</button>
 								<button
 									type="button"
 									className="welcome__back"
-									disabled={status.kind === "creating"}
+									disabled={busy}
 									onClick={() => {
 										setStage("format");
 										setStatus({ kind: "idle" });

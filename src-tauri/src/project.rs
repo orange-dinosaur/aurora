@@ -101,6 +101,7 @@ pub enum Error {
 	InvalidName(NameError),
 	RelativePath,
 	NoConfigDir,
+	NotAProject,
 	AlreadyExists,
 	UnsupportedFormat(Format),
 	Io(io::Error),
@@ -115,6 +116,7 @@ impl fmt::Display for Error {
 			Error::NoConfigDir => {
 				write!(f, "Aurora could not find its configuration folder")
 			}
+			Error::NotAProject => write!(f, "that folder is not an Aurora project"),
 			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
@@ -139,6 +141,7 @@ impl std::error::Error for Error {
 			Error::InvalidName(_)
 			| Error::RelativePath
 			| Error::NoConfigDir
+			| Error::NotAProject
 			| Error::AlreadyExists
 			| Error::UnsupportedFormat(_) => None,
 			Error::Io(e) => Some(e),
@@ -371,6 +374,61 @@ pub fn create_project(
 		format,
 		OffsetDateTime::now_utc(),
 	)
+}
+
+/// A project as the frontend refers to it once it is open.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenedProject {
+	pub name: String,
+	pub root: PathBuf,
+}
+
+pub fn read_manifest(root: &Path) -> Result<Manifest> {
+	let bytes = fs::read(root.join(MANIFEST_FILE)).map_err(|e| match e.kind() {
+		io::ErrorKind::NotFound => Error::NotAProject,
+		_ => Error::Io(e),
+	})?;
+	Ok(serde_json::from_slice(&bytes)?)
+}
+
+fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Result<OpenedProject> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	// The manifest holds the name, not the folder, so a renamed folder still
+	// opens under the name the writer gave it.
+	let manifest = read_manifest(root)?;
+	let mut store = store::load(store_path)?;
+	store.remember(manifest.name.clone(), root.to_path_buf(), at);
+	store::save(store_path, &store)?;
+
+	Ok(OpenedProject {
+		name: manifest.name,
+		root: root.to_path_buf(),
+	})
+}
+
+/// Only projects that are still on disk, so the list never offers a button that
+/// cannot work.
+fn available_recents(store_path: &Path) -> Result<Vec<store::RecentProject>> {
+	let store = store::load(store_path)?;
+	Ok(store
+		.recent
+		.into_iter()
+		.filter(|project| project.root.join(MANIFEST_FILE).is_file())
+		.collect())
+}
+
+#[tauri::command]
+pub fn open_project(app: AppHandle, root: PathBuf) -> Result<OpenedProject> {
+	open_and_remember(&store_path(&app)?, &root, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn recent_projects(app: AppHandle) -> Result<Vec<store::RecentProject>> {
+	available_recents(&store_path(&app)?)
 }
 
 #[tauri::command]
@@ -830,6 +888,97 @@ mod tests {
 				"root": "/writing/Ithaca",
 			})
 		);
+	}
+
+	#[test]
+	fn an_existing_project_can_be_reopened() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		assert_eq!(
+			open_and_remember(&store, &root, fixed_time()).unwrap(),
+			OpenedProject {
+				name: "Ithaca".to_owned(),
+				root: root.clone(),
+			}
+		);
+	}
+
+	#[test]
+	fn opening_uses_the_name_in_the_manifest() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		let renamed = parent.path().join("moved-elsewhere");
+		fs::rename(&root, &renamed).unwrap();
+
+		let opened = open_and_remember(&store, &renamed, fixed_time()).unwrap();
+		assert_eq!(opened.name, "Ithaca");
+		assert_eq!(opened.root, renamed);
+	}
+
+	#[test]
+	fn opening_moves_the_project_to_the_front() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let first =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		create_and_remember(
+			&store,
+			parent.path(),
+			"Penelope",
+			Format::Novel,
+			fixed_time(),
+		)
+		.unwrap();
+
+		open_and_remember(&store, &first, fixed_time()).unwrap();
+		assert_eq!(store::load(&store).unwrap().last().unwrap().name, "Ithaca");
+	}
+
+	#[test]
+	fn an_ordinary_folder_is_not_a_project() {
+		let dir = tempfile::tempdir().unwrap();
+		let store = dir.path().join("store.json");
+		let err = open_and_remember(&store, dir.path(), fixed_time()).unwrap_err();
+		assert!(matches!(err, Error::NotAProject));
+	}
+
+	#[test]
+	fn opening_refuses_a_relative_path() {
+		let dir = tempfile::tempdir().unwrap();
+		let store = dir.path().join("store.json");
+		let err = open_and_remember(&store, Path::new("some/where"), fixed_time()).unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn the_recent_list_hides_projects_that_have_gone() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let gone =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		create_and_remember(
+			&store,
+			parent.path(),
+			"Penelope",
+			Format::Novel,
+			fixed_time(),
+		)
+		.unwrap();
+		fs::remove_dir_all(&gone).unwrap();
+
+		let recents = available_recents(&store).unwrap();
+		assert_eq!(recents.len(), 1);
+		assert_eq!(recents[0].name, "Penelope");
 	}
 
 	#[test]

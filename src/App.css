@@ -306,3 +306,61 @@ body,
 	color: var(--text-dim);
 	text-align: center;
 }
+
+.existing {
+	margin-top: 2.5rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--border);
+}
+
+.existing__title {
+	margin: 0 0 1rem;
+	font-size: 0.8rem;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.recents {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin: 0 0 1rem;
+	padding: 0;
+	list-style: none;
+	text-align: left;
+}
+
+.recent {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	width: 100%;
+	padding: 0.6rem 0.85rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.recent:hover:not(:disabled) {
+	border-color: var(--accent);
+}
+
+.recent:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.recent__name {
+	font-weight: 500;
+}
+
+.recent__path {
+	font-size: 0.8rem;
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}

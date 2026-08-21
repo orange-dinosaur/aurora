@@ -9,7 +9,9 @@ pub fn run() {
 		.invoke_handler(tauri::generate_handler![
 			project::create_project,
 			project::last_project,
-			project::forget_project
+			project::forget_project,
+			project::open_project,
+			project::recent_projects
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
