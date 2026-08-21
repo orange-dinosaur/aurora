@@ -4,7 +4,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize, Serializer};
+use tauri::{AppHandle, Manager};
 use time::OffsetDateTime;
+
+use crate::store;
 
 /// A folder inside a project, together with the document it starts life with.
 pub struct Section {
@@ -97,6 +100,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
 	InvalidName(NameError),
 	RelativePath,
+	NoConfigDir,
 	AlreadyExists,
 	UnsupportedFormat(Format),
 	Io(io::Error),
@@ -108,6 +112,9 @@ impl fmt::Display for Error {
 		match self {
 			Error::InvalidName(e) => write!(f, "{e}"),
 			Error::RelativePath => write!(f, "the project location must be an absolute path"),
+			Error::NoConfigDir => {
+				write!(f, "Aurora could not find its configuration folder")
+			}
 			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
@@ -131,6 +138,7 @@ impl std::error::Error for Error {
 		match self {
 			Error::InvalidName(_)
 			| Error::RelativePath
+			| Error::NoConfigDir
 			| Error::AlreadyExists
 			| Error::UnsupportedFormat(_) => None,
 			Error::Io(e) => Some(e),
@@ -291,13 +299,88 @@ fn fill(
 	Ok(())
 }
 
-#[tauri::command]
-pub fn create_project(parent: PathBuf, name: String, format: Format) -> Result<PathBuf> {
+/// What the frontend should show on launch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum LastProject {
+	None,
+	Open { name: String, root: PathBuf },
+	Missing { name: String, root: PathBuf },
+}
+
+fn store_path(app: &AppHandle) -> Result<PathBuf> {
+	app.path()
+		.app_config_dir()
+		.map(|dir| dir.join("store.json"))
+		.map_err(|_| Error::NoConfigDir)
+}
+
+fn create_and_remember(
+	store_path: &Path,
+	parent: &Path,
+	name: &str,
+	format: Format,
+	at: OffsetDateTime,
+) -> Result<PathBuf> {
 	// The path arrives from the frontend, so it is not trusted to be sensible.
 	if !parent.is_absolute() {
 		return Err(Error::RelativePath);
 	}
-	create(&parent, &name, format, OffsetDateTime::now_utc())
+
+	let root = create(parent, name, format, at)?;
+	let mut store = store::load(store_path)?;
+	store.remember(name, root.clone(), at);
+	store::save(store_path, &store)?;
+	Ok(root)
+}
+
+/// Reports what to reopen without changing anything, so asking twice gives the
+/// same answer. Dropping a missing project is `forget` below.
+fn resolve_last(store_path: &Path) -> Result<LastProject> {
+	let store = store::load(store_path)?;
+	let Some(last) = store.last() else {
+		return Ok(LastProject::None);
+	};
+
+	let name = last.name.clone();
+	let root = last.root.clone();
+	if root.join(MANIFEST_FILE).is_file() {
+		Ok(LastProject::Open { name, root })
+	} else {
+		Ok(LastProject::Missing { name, root })
+	}
+}
+
+fn forget(store_path: &Path, root: &Path) -> Result<()> {
+	let mut store = store::load(store_path)?;
+	store.forget(root);
+	store::save(store_path, &store)
+}
+
+#[tauri::command]
+pub fn create_project(
+	app: AppHandle,
+	parent: PathBuf,
+	name: String,
+	format: Format,
+) -> Result<PathBuf> {
+	create_and_remember(
+		&store_path(&app)?,
+		&parent,
+		&name,
+		format,
+		OffsetDateTime::now_utc(),
+	)
+}
+
+#[tauri::command]
+pub fn last_project(app: AppHandle) -> Result<LastProject> {
+	resolve_last(&store_path(&app)?)
+}
+
+#[tauri::command]
+pub fn forget_project(app: AppHandle, root: PathBuf) -> Result<()> {
+	forget(&store_path(&app)?, &root)
 }
 
 #[cfg(test)]
@@ -610,45 +693,143 @@ mod tests {
 	}
 
 	#[test]
-	fn the_command_creates_a_project() {
+	fn creating_records_the_project_in_the_store() {
 		let parent = tempfile::tempdir().unwrap();
-		let root = create_project(
-			parent.path().to_path_buf(),
-			"Ithaca".to_owned(),
-			Format::Novel,
-		)
-		.unwrap();
+		let store = parent.path().join("config").join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
 
 		assert!(root.join(MANIFEST_FILE).is_file());
 		assert!(root.join("Manuscript").join("Chapter 1.md").is_file());
+
+		let remembered = store::load(&store).unwrap();
+		assert_eq!(remembered.last().unwrap().name, "Ithaca");
+		assert_eq!(remembered.last().unwrap().root, root);
 	}
 
 	#[test]
-	fn the_command_stamps_the_current_time() {
+	fn a_failed_creation_is_not_remembered() {
 		let parent = tempfile::tempdir().unwrap();
-		let before = OffsetDateTime::now_utc().replace_nanosecond(0).unwrap();
-		let root = create_project(
-			parent.path().to_path_buf(),
-			"Ithaca".to_owned(),
-			Format::Novel,
-		)
-		.unwrap();
-
-		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
-		let manifest: Manifest = serde_json::from_str(&json).unwrap();
-		assert!(manifest.created_at >= before);
-		assert!(manifest.created_at <= OffsetDateTime::now_utc());
+		let store = parent.path().join("store.json");
+		assert!(
+			create_and_remember(
+				&store,
+				parent.path(),
+				"Ithaca: Book One",
+				Format::Novel,
+				fixed_time()
+			)
+			.is_err()
+		);
+		assert!(store::load(&store).unwrap().last().is_none());
 	}
 
 	#[test]
 	fn the_command_refuses_a_relative_path() {
-		let err = create_project(
-			PathBuf::from("some/where"),
-			"Ithaca".to_owned(),
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let err = create_and_remember(
+			&store,
+			Path::new("some/where"),
+			"Ithaca",
 			Format::Novel,
+			fixed_time(),
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn nothing_remembered_means_nothing_to_reopen() {
+		let dir = tempfile::tempdir().unwrap();
+		let store = dir.path().join("store.json");
+		assert_eq!(resolve_last(&store).unwrap(), LastProject::None);
+	}
+
+	#[test]
+	fn the_last_project_is_reopened() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		assert_eq!(
+			resolve_last(&store).unwrap(),
+			LastProject::Open {
+				name: "Ithaca".to_owned(),
+				root,
+			}
+		);
+	}
+
+	#[test]
+	fn asking_twice_gives_the_same_answer() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		fs::remove_dir_all(&root).unwrap();
+
+		let missing = LastProject::Missing {
+			name: "Ithaca".to_owned(),
+			root: root.clone(),
+		};
+		assert_eq!(resolve_last(&store).unwrap(), missing);
+		assert_eq!(resolve_last(&store).unwrap(), missing);
+
+		forget(&store, &root).unwrap();
+		assert_eq!(resolve_last(&store).unwrap(), LastProject::None);
+	}
+
+	#[test]
+	fn forgetting_twice_is_harmless() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		forget(&store, &root).unwrap();
+		forget(&store, &root).unwrap();
+		assert_eq!(resolve_last(&store).unwrap(), LastProject::None);
+	}
+
+	#[test]
+	fn a_folder_without_a_manifest_counts_as_missing() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		fs::remove_file(root.join(MANIFEST_FILE)).unwrap();
+
+		assert!(matches!(
+			resolve_last(&store).unwrap(),
+			LastProject::Missing { .. }
+		));
+	}
+
+	#[test]
+	fn the_last_project_serializes_as_a_tagged_object() {
+		assert_eq!(
+			serde_json::to_value(LastProject::None).unwrap(),
+			serde_json::json!({ "kind": "none" })
+		);
+		assert_eq!(
+			serde_json::to_value(LastProject::Missing {
+				name: "Ithaca".to_owned(),
+				root: PathBuf::from("/writing/Ithaca"),
+			})
+			.unwrap(),
+			serde_json::json!({
+				"kind": "missing",
+				"name": "Ithaca",
+				"root": "/writing/Ithaca",
+			})
+		);
 	}
 
 	#[test]

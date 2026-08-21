@@ -242,12 +242,16 @@ body,
 	left: 0;
 	margin: 1.25rem 0 0;
 	font-size: 0.9rem;
-	color: #c0392b;
+	color: var(--text-dim);
 	overflow-wrap: anywhere;
 }
 
+.welcome__message--error {
+	color: #c0392b;
+}
+
 @media (prefers-color-scheme: dark) {
-	.welcome__message {
+	.welcome__message--error {
 		color: #ff8b7d;
 	}
 }

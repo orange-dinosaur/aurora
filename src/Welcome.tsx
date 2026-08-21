@@ -48,10 +48,13 @@ type Status =
 	| { kind: "error"; message: string };
 
 type Props = {
+	notice: string | null;
 	onOpened: (project: OpenProject) => void;
 };
 
-export default function Welcome({ onOpened }: Props) {
+export default function Welcome({ notice, onOpened }: Props) {
+	// Seeded once; the notice describes how this screen was reached.
+	const [reason, setReason] = useState(notice);
 	const [stage, setStage] = useState<"format" | "details">("format");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [name, setName] = useState("");
@@ -135,7 +138,10 @@ export default function Welcome({ onOpened }: Props) {
 						type="button"
 						className="welcome__create"
 						disabled={chosen === null}
-						onClick={() => setStage("details")}
+						onClick={() => {
+							setStage("details");
+							setReason(null);
+						}}
 					>
 						Continue
 					</button>
@@ -215,8 +221,15 @@ export default function Welcome({ onOpened }: Props) {
 				)
 			)}
 
-			<p className="welcome__message" role="alert">
-				{status.kind === "error" ? status.message : null}
+			<p
+				className={
+					status.kind === "error"
+						? "welcome__message welcome__message--error"
+						: "welcome__message"
+				}
+				role="alert"
+			>
+				{status.kind === "error" ? status.message : reason}
 			</p>
 		</section>
 	);
