@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 
 type Format = {
 	id: string;
@@ -39,47 +41,189 @@ const FORMATS: Format[] = [
 	},
 ];
 
+type Status =
+	| { kind: "idle" }
+	| { kind: "creating" }
+	| { kind: "error"; message: string }
+	| { kind: "created"; root: string };
+
 export default function Welcome() {
+	const [stage, setStage] = useState<"format" | "details">("format");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [name, setName] = useState("");
+	const [parent, setParent] = useState<string | null>(null);
+	const [status, setStatus] = useState<Status>({ kind: "idle" });
+
+	const chosen = FORMATS.find((format) => format.id === selectedId) ?? null;
+	const ready =
+		parent !== null && name.trim() !== "" && status.kind !== "creating";
+
+	async function chooseFolder() {
+		const picked = await open({
+			directory: true,
+			multiple: false,
+			title: "Where should the project live?",
+		});
+		if (typeof picked === "string") {
+			setParent(picked);
+			setStatus({ kind: "idle" });
+		}
+	}
+
+	async function createProject() {
+		if (chosen === null || parent === null || name.trim() === "") {
+			return;
+		}
+
+		setStatus({ kind: "creating" });
+		try {
+			const root = await invoke<string>("create_project", {
+				parent,
+				name,
+				format: chosen.id,
+			});
+			setStatus({ kind: "created", root });
+		} catch (error) {
+			setStatus({ kind: "error", message: String(error) });
+		}
+	}
 
 	return (
 		<section className="welcome">
 			<h1 className="welcome__title">Aurora</h1>
-			<p className="welcome__subtitle">
-				Choose a format to start your first writing project.
-			</p>
 
-			<ul className="formats">
-				{FORMATS.map((format) => (
-					<li key={format.id}>
-						<button
-							className="format"
-							disabled={!format.available}
-							aria-pressed={format.id === selectedId}
-							onClick={() => {
-								setSelectedId(format.id);
+			{stage === "format" ? (
+				<>
+					<p className="welcome__subtitle">
+						Choose a format to start your first writing project.
+					</p>
+
+					<ul className="formats">
+						{FORMATS.map((format) => (
+							<li key={format.id}>
+								<button
+									type="button"
+									className="format"
+									disabled={!format.available}
+									aria-pressed={format.id === selectedId}
+									onClick={() => setSelectedId(format.id)}
+								>
+									<span className="format__name">
+										{format.name}
+										{!format.available && (
+											<span className="format__soon">
+												Soon
+											</span>
+										)}
+									</span>
+									<span className="format__description">
+										{format.description}
+									</span>
+									<span className="format__files">
+										{format.files.join(" · ")}
+									</span>
+								</button>
+							</li>
+						))}
+					</ul>
+
+					<button
+						type="button"
+						className="welcome__create"
+						disabled={chosen === null}
+						onClick={() => setStage("details")}
+					>
+						Continue
+					</button>
+				</>
+			) : (
+				chosen && (
+					<>
+						<p className="welcome__subtitle">
+							Name your {chosen.name.toLowerCase()} and choose
+							where it should live.
+						</p>
+
+						<form
+							className="setup"
+							onSubmit={(event) => {
+								event.preventDefault();
+								void createProject();
 							}}
 						>
-							<span className="format__name">
-								{format.name}
-								{!format.available && (
-									<span className="format__soon">Soon</span>
-								)}
-							</span>
-							<span className="format__description">
-								{format.description}
-							</span>
-							<span className="format__files">
-								{format.files.join(" · ")}
-							</span>
-						</button>
-					</li>
-				))}
-			</ul>
+							<label
+								className="setup__label"
+								htmlFor="project-name"
+							>
+								Project name
+							</label>
+							<input
+								id="project-name"
+								className="setup__input"
+								value={name}
+								placeholder="Ithaca"
+								autoComplete="off"
+								autoFocus
+								spellCheck={false}
+								onChange={(event) => {
+									setName(event.target.value);
+									setStatus({ kind: "idle" });
+								}}
+							/>
 
-			<button className="welcome__create" disabled={selectedId === null}>
-				Create project
-			</button>
+							<span className="setup__label">Location</span>
+							<button
+								type="button"
+								className="setup__folder"
+								onClick={() => void chooseFolder()}
+							>
+								{parent ?? "Choose a folder…"}
+							</button>
+
+							<p className="setup__note">
+								Aurora will create {chosen.files.join(", ")}.
+							</p>
+
+							<div className="setup__actions">
+								<button
+									type="submit"
+									className="welcome__create"
+									disabled={!ready}
+								>
+									{status.kind === "creating"
+										? "Creating…"
+										: "Create project"}
+								</button>
+								<button
+									type="button"
+									className="welcome__back"
+									disabled={status.kind === "creating"}
+									onClick={() => {
+										setStage("format");
+										setStatus({ kind: "idle" });
+									}}
+								>
+									Back
+								</button>
+							</div>
+						</form>
+					</>
+				)
+			)}
+
+			{status.kind === "error" && (
+				<p
+					className="welcome__message welcome__message--error"
+					role="alert"
+				>
+					{status.message}
+				</p>
+			)}
+			{status.kind === "created" && (
+				<p className="welcome__message" role="status">
+					Created at <code>{status.root}</code>
+				</p>
+			)}
 		</section>
 	);
 }

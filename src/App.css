@@ -154,3 +154,99 @@ body,
 	opacity: 0.4;
 	cursor: not-allowed;
 }
+
+.setup {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	align-items: center;
+	gap: 0.75rem 1rem;
+	max-width: 520px;
+	margin: 0 auto;
+	text-align: left;
+}
+
+.setup__label {
+	font-size: 0.9rem;
+	color: var(--text-dim);
+}
+
+.setup__input,
+.setup__folder {
+	width: 100%;
+	padding: 0.55rem 0.75rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+.setup__input:focus-visible,
+.setup__folder:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.setup__folder {
+	overflow: hidden;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.setup__folder:hover {
+	border-color: var(--accent);
+}
+
+.setup__note {
+	grid-column: 2;
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--text-dim);
+}
+
+.setup__actions {
+	display: flex;
+	grid-column: 2;
+	align-items: center;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
+}
+
+.welcome__back {
+	padding: 0.6rem 1.25rem;
+	font: inherit;
+	color: var(--text-dim);
+	background: none;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.welcome__back:hover:not(:disabled) {
+	color: var(--text);
+	border-color: var(--accent);
+}
+
+.welcome__back:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.welcome__message {
+	margin: 1.25rem 0 0;
+	font-size: 0.9rem;
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}
+
+.welcome__message--error {
+	color: #c0392b;
+}
+
+@media (prefers-color-scheme: dark) {
+	.welcome__message--error {
+		color: #ff8b7d;
+	}
+}
