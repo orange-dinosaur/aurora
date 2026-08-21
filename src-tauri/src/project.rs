@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 /// A folder inside a project, together with the document it starts life with.
 pub struct Section {
@@ -45,6 +46,39 @@ impl Format {
 		match self {
 			Format::Novel => NOVEL,
 			Format::Screenplay | Format::ShortStories | Format::StagePlay => &[],
+		}
+	}
+}
+
+/// Bumped when the on-disk shape changes in a way older builds cannot read.
+pub const MANIFEST_VERSION: u32 = 1;
+
+/// The contents of `aurora.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Manifest {
+	pub version: u32,
+	pub name: String,
+	pub format: Format,
+	#[serde(with = "time::serde::rfc3339")]
+	pub created_at: OffsetDateTime,
+	/// The section folders as they were at creation, so a project keeps its own
+	/// layout even if the format's definition changes later.
+	pub folders: Vec<String>,
+}
+
+impl Manifest {
+	pub fn new(name: impl Into<String>, format: Format, created_at: OffsetDateTime) -> Self {
+		Self {
+			version: MANIFEST_VERSION,
+			name: name.into(),
+			format,
+			created_at,
+			folders: format
+				.layout()
+				.iter()
+				.map(|s| s.folder.to_owned())
+				.collect(),
 		}
 	}
 }
@@ -99,5 +133,43 @@ mod tests {
 				"{format:?} should not be creatable"
 			);
 		}
+	}
+
+	fn fixed_time() -> OffsetDateTime {
+		OffsetDateTime::from_unix_timestamp(1_700_000_000).unwrap()
+	}
+
+	#[test]
+	fn manifest_takes_its_folders_from_the_layout() {
+		let manifest = Manifest::new("Wuthering Heights", Format::Novel, fixed_time());
+		assert_eq!(manifest.version, MANIFEST_VERSION);
+		assert_eq!(
+			manifest.folders,
+			["Manuscript", "Outline", "Characters", "Locations", "Notes"]
+		);
+	}
+
+	#[test]
+	fn manifest_serializes_with_camel_case_keys() {
+		let manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		let json = serde_json::to_value(&manifest).unwrap();
+		assert_eq!(json["version"], 1);
+		assert_eq!(json["name"], "Ithaca");
+		assert_eq!(json["format"], "novel");
+		assert_eq!(json["createdAt"], "2023-11-14T22:13:20Z");
+		assert!(json.get("created_at").is_none());
+	}
+
+	#[test]
+	fn manifest_round_trips() {
+		let manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		let json = serde_json::to_string(&manifest).unwrap();
+		assert_eq!(serde_json::from_str::<Manifest>(&json).unwrap(), manifest);
+	}
+
+	#[test]
+	fn a_manifest_missing_a_field_is_rejected() {
+		let json = r#"{"version":1,"name":"Ithaca","format":"novel","folders":[]}"#;
+		assert!(serde_json::from_str::<Manifest>(json).is_err());
 	}
 }
