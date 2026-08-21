@@ -1,4 +1,7 @@
 use std::fmt;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -90,7 +93,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
 	InvalidName(NameError),
-	Io(std::io::Error),
+	AlreadyExists,
+	UnsupportedFormat(Format),
+	Io(io::Error),
 	Json(serde_json::Error),
 }
 
@@ -98,6 +103,10 @@ impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Error::InvalidName(e) => write!(f, "{e}"),
+			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
+			Error::UnsupportedFormat(format) => {
+				write!(f, "{format:?} projects cannot be created yet")
+			}
 			Error::Io(e) => write!(f, "{e}"),
 			Error::Json(e) => write!(f, "{e}"),
 		}
@@ -107,7 +116,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::InvalidName(_) => None,
+			Error::InvalidName(_) | Error::AlreadyExists | Error::UnsupportedFormat(_) => None,
 			Error::Io(e) => Some(e),
 			Error::Json(e) => Some(e),
 		}
@@ -120,8 +129,8 @@ impl From<NameError> for Error {
 	}
 }
 
-impl From<std::io::Error> for Error {
-	fn from(e: std::io::Error) -> Self {
+impl From<io::Error> for Error {
+	fn from(e: io::Error) -> Self {
 		Error::Io(e)
 	}
 }
@@ -200,6 +209,60 @@ pub fn validate_name(name: &str) -> std::result::Result<(), NameError> {
 		return Err(NameError::Reserved);
 	}
 
+	Ok(())
+}
+
+/// The manifest file at the root of every project.
+pub const MANIFEST_FILE: &str = "aurora.json";
+
+/// Creates `parent/<name>/` with the format's section folders, a seed document
+/// in each, and the manifest. Returns the new project's root.
+pub fn create(
+	parent: &Path,
+	name: &str,
+	format: Format,
+	created_at: OffsetDateTime,
+) -> Result<PathBuf> {
+	validate_name(name)?;
+
+	let sections = format.layout();
+	if sections.is_empty() {
+		return Err(Error::UnsupportedFormat(format));
+	}
+
+	let root = parent.join(name);
+	match fs::create_dir(&root) {
+		Ok(()) => {}
+		Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return Err(Error::AlreadyExists),
+		Err(e) => return Err(e.into()),
+	}
+
+	// The folder did not exist a moment ago, so undoing our own work is safe.
+	match fill(&root, name, format, sections, created_at) {
+		Ok(()) => Ok(root),
+		Err(e) => {
+			let _ = fs::remove_dir_all(&root);
+			Err(e)
+		}
+	}
+}
+
+fn fill(
+	root: &Path,
+	name: &str,
+	format: Format,
+	sections: &[Section],
+	created_at: OffsetDateTime,
+) -> Result<()> {
+	for section in sections {
+		let folder = root.join(section.folder);
+		fs::create_dir(&folder)?;
+		fs::write(folder.join(section.seed), "")?;
+	}
+
+	let manifest = Manifest::new(name, format, created_at);
+	let json = serde_json::to_vec_pretty(&manifest)?;
+	fs::write(root.join(MANIFEST_FILE), json)?;
 	Ok(())
 }
 
@@ -405,5 +468,99 @@ mod tests {
 		let name: Error = NameError::Reserved.into();
 		assert!(std::error::Error::source(&name).is_none());
 		assert_eq!(name.to_string(), NameError::Reserved.to_string());
+	}
+
+	#[test]
+	fn create_lays_out_a_novel() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		assert_eq!(root, parent.path().join("Ithaca"));
+		for section in Format::Novel.layout() {
+			let folder = root.join(section.folder);
+			assert!(folder.is_dir(), "{} is missing", section.folder);
+			let seed = folder.join(section.seed);
+			assert!(seed.is_file(), "{} is missing", section.seed);
+			assert_eq!(fs::read_to_string(&seed).unwrap(), "");
+		}
+
+		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
+		let manifest: Manifest = serde_json::from_str(&json).unwrap();
+		assert_eq!(
+			manifest,
+			Manifest::new("Ithaca", Format::Novel, fixed_time())
+		);
+	}
+
+	#[test]
+	fn the_manifest_is_written_for_a_human_to_read() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
+		assert!(json.contains("\n"), "the manifest should be pretty-printed");
+		assert!(json.contains("\"createdAt\": \"2023-11-14T22:13:20Z\""));
+	}
+
+	#[test]
+	fn create_refuses_a_bad_name_without_touching_the_disk() {
+		let parent = tempfile::tempdir().unwrap();
+		let err = create(
+			parent.path(),
+			"Ithaca: Book One",
+			Format::Novel,
+			fixed_time(),
+		)
+		.unwrap_err();
+		assert!(matches!(
+			err,
+			Error::InvalidName(NameError::IllegalCharacter(':'))
+		));
+		assert_eq!(fs::read_dir(parent.path()).unwrap().count(), 0);
+	}
+
+	#[test]
+	fn create_refuses_a_format_without_a_layout() {
+		let parent = tempfile::tempdir().unwrap();
+		let err = create(parent.path(), "Ithaca", Format::Screenplay, fixed_time()).unwrap_err();
+		assert!(matches!(err, Error::UnsupportedFormat(Format::Screenplay)));
+		assert_eq!(fs::read_dir(parent.path()).unwrap().count(), 0);
+	}
+
+	#[test]
+	fn create_will_not_overwrite_an_existing_folder() {
+		let parent = tempfile::tempdir().unwrap();
+		create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap_err();
+		assert!(matches!(err, Error::AlreadyExists));
+		assert!(parent.path().join("Ithaca").join(MANIFEST_FILE).is_file());
+	}
+
+	#[test]
+	fn create_reports_a_missing_parent() {
+		let parent = tempfile::tempdir().unwrap();
+		let missing = parent.path().join("nowhere");
+		let err = create(&missing, "Ithaca", Format::Novel, fixed_time()).unwrap_err();
+		assert!(matches!(err, Error::Io(_)));
+	}
+
+	#[test]
+	fn a_blocked_section_folder_is_an_error() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = parent.path().join("Ithaca");
+		fs::create_dir(&root).unwrap();
+		// A file where the first section folder needs to go.
+		fs::write(root.join("Manuscript"), "").unwrap();
+
+		assert!(
+			fill(
+				&root,
+				"Ithaca",
+				Format::Novel,
+				Format::Novel.layout(),
+				fixed_time()
+			)
+			.is_err()
+		);
 	}
 }
