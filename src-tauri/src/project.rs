@@ -264,11 +264,11 @@ pub fn create(
 }
 
 /// Pretty-prints with tabs, to match every other configuration file Aurora owns.
-fn to_json(manifest: &Manifest) -> Result<Vec<u8>> {
+pub(crate) fn to_json<T: Serialize>(value: &T) -> Result<Vec<u8>> {
 	let formatter = serde_json::ser::PrettyFormatter::with_indent(b"\t");
 	let mut out = Vec::new();
 	let mut serializer = serde_json::Serializer::with_formatter(&mut out, formatter);
-	manifest.serialize(&mut serializer)?;
+	value.serialize(&mut serializer)?;
 	out.push(b'\n');
 	Ok(out)
 }
