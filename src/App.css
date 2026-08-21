@@ -42,7 +42,9 @@ body,
 
 .app {
 	display: flex;
-	align-items: center;
+	/* Centring with auto margins rather than align-items: overflow past the top
+	   of a centred flex item cannot be scrolled to. */
+	align-items: flex-start;
 	justify-content: center;
 	height: 100%;
 	padding: 2rem;
@@ -54,6 +56,7 @@ body,
 	position: relative;
 	width: 100%;
 	max-width: 720px;
+	margin: auto 0;
 	text-align: center;
 }
 
@@ -259,7 +262,6 @@ body,
 .project {
 	width: 100%;
 	max-width: 720px;
-	align-self: start;
 }
 
 .project__header {

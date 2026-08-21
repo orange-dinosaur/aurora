@@ -12,9 +12,12 @@
 	"app": {
 		"windows": [
 			{
-				"title": "aurora",
-				"width": 800,
-				"height": 600
+				"title": "Aurora",
+				"width": 1000,
+				"height": 800,
+				"minWidth": 560,
+				"minHeight": 480,
+				"center": true
 			}
 		],
 		"security": {
