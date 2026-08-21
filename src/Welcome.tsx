@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import type { OpenProject } from "./App";
 
 type Format = {
 	id: string;
@@ -44,10 +45,13 @@ const FORMATS: Format[] = [
 type Status =
 	| { kind: "idle" }
 	| { kind: "creating" }
-	| { kind: "error"; message: string }
-	| { kind: "created"; root: string };
+	| { kind: "error"; message: string };
 
-export default function Welcome() {
+type Props = {
+	onOpened: (project: OpenProject) => void;
+};
+
+export default function Welcome({ onOpened }: Props) {
 	const [stage, setStage] = useState<"format" | "details">("format");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [name, setName] = useState("");
@@ -82,7 +86,7 @@ export default function Welcome() {
 				name,
 				format: chosen.id,
 			});
-			setStatus({ kind: "created", root });
+			onOpened({ name, root });
 		} catch (error) {
 			setStatus({ kind: "error", message: String(error) });
 		}
@@ -211,19 +215,9 @@ export default function Welcome() {
 				)
 			)}
 
-			{status.kind === "error" && (
-				<p
-					className="welcome__message welcome__message--error"
-					role="alert"
-				>
-					{status.message}
-				</p>
-			)}
-			{status.kind === "created" && (
-				<p className="welcome__message" role="status">
-					Created at <code>{status.root}</code>
-				</p>
-			)}
+			<p className="welcome__message" role="alert">
+				{status.kind === "error" ? status.message : null}
+			</p>
 		</section>
 	);
 }

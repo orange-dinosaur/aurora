@@ -78,7 +78,10 @@ impl Manifest {
 			version: MANIFEST_VERSION,
 			name: name.into(),
 			format,
-			created_at,
+			// The manifest is meant to be readable; sub-second precision is noise.
+			created_at: created_at
+				.replace_nanosecond(0)
+				.expect("zero nanoseconds is always in range"),
 			folders: format
 				.layout()
 				.iter()
@@ -260,6 +263,16 @@ pub fn create(
 	}
 }
 
+/// Pretty-prints with tabs, to match every other configuration file Aurora owns.
+fn to_json(manifest: &Manifest) -> Result<Vec<u8>> {
+	let formatter = serde_json::ser::PrettyFormatter::with_indent(b"\t");
+	let mut out = Vec::new();
+	let mut serializer = serde_json::Serializer::with_formatter(&mut out, formatter);
+	manifest.serialize(&mut serializer)?;
+	out.push(b'\n');
+	Ok(out)
+}
+
 fn fill(
 	root: &Path,
 	name: &str,
@@ -274,8 +287,7 @@ fn fill(
 	}
 
 	let manifest = Manifest::new(name, format, created_at);
-	let json = serde_json::to_vec_pretty(&manifest)?;
-	fs::write(root.join(MANIFEST_FILE), json)?;
+	fs::write(root.join(MANIFEST_FILE), to_json(&manifest)?)?;
 	Ok(())
 }
 
@@ -352,6 +364,13 @@ mod tests {
 			manifest.folders,
 			["Manuscript", "Outline", "Characters", "Locations", "Notes"]
 		);
+	}
+
+	#[test]
+	fn manifest_drops_sub_second_precision() {
+		let precise = OffsetDateTime::from_unix_timestamp_nanos(1_700_000_000_297_374_168).unwrap();
+		let manifest = Manifest::new("Ithaca", Format::Novel, precise);
+		assert_eq!(manifest.created_at, fixed_time());
 	}
 
 	#[test]
@@ -519,8 +538,12 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
-		assert!(json.contains("\n"), "the manifest should be pretty-printed");
+		assert!(
+			json.contains("\n\t\"version\": 1"),
+			"expected tab indentation"
+		);
 		assert!(json.contains("\"createdAt\": \"2023-11-14T22:13:20Z\""));
+		assert!(json.ends_with("\n"), "expected a trailing newline");
 	}
 
 	#[test]
@@ -603,7 +626,7 @@ mod tests {
 	#[test]
 	fn the_command_stamps_the_current_time() {
 		let parent = tempfile::tempdir().unwrap();
-		let before = OffsetDateTime::now_utc();
+		let before = OffsetDateTime::now_utc().replace_nanosecond(0).unwrap();
 		let root = create_project(
 			parent.path().to_path_buf(),
 			"Ithaca".to_owned(),

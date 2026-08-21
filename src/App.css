@@ -51,6 +51,7 @@ body,
 }
 
 .welcome {
+	position: relative;
 	width: 100%;
 	max-width: 720px;
 	text-align: center;
@@ -234,19 +235,70 @@ body,
 	cursor: not-allowed;
 }
 
+/* Out of flow, so a message appearing cannot re-centre the screen above it. */
 .welcome__message {
+	position: absolute;
+	right: 0;
+	left: 0;
 	margin: 1.25rem 0 0;
 	font-size: 0.9rem;
+	color: #c0392b;
+	overflow-wrap: anywhere;
+}
+
+@media (prefers-color-scheme: dark) {
+	.welcome__message {
+		color: #ff8b7d;
+	}
+}
+
+.project {
+	width: 100%;
+	max-width: 720px;
+	align-self: start;
+}
+
+.project__header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	padding-bottom: 1rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.project__title {
+	margin: 0;
+	font-size: 1.75rem;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+
+.project__close {
+	padding: 0.4rem 0.9rem;
+	font: inherit;
+	font-size: 0.9rem;
+	color: var(--text-dim);
+	background: none;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.project__close:hover {
+	color: var(--text);
+	border-color: var(--accent);
+}
+
+.project__path {
+	margin: 1rem 0 0;
+	font-size: 0.85rem;
 	color: var(--text-dim);
 	overflow-wrap: anywhere;
 }
 
-.welcome__message--error {
-	color: #c0392b;
-}
-
-@media (prefers-color-scheme: dark) {
-	.welcome__message--error {
-		color: #ff8b7d;
-	}
+.project__empty {
+	margin: 3rem 0 0;
+	color: var(--text-dim);
+	text-align: center;
 }
