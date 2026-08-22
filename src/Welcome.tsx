@@ -152,36 +152,38 @@ export default function Welcome({ notice, onOpened }: Props) {
 						Choose a format and create a new writing project.
 					</p>
 
-					<ul className="formats">
+					<fieldset className="formats">
+						<legend className="visually-hidden">Format</legend>
 						{formats.map((format) => (
-							<li key={format.id}>
-								<button
-									type="button"
-									className="format"
+							<label key={format.id} className="format">
+								<input
+									type="radio"
+									name="format"
+									className="visually-hidden"
+									value={format.id}
+									checked={format.id === selectedId}
 									disabled={!format.available}
-									aria-pressed={format.id === selectedId}
-									onClick={() => setSelectedId(format.id)}
-								>
-									<span className="format__name">
-										{format.name}
-										{!format.available && (
-											<span className="format__soon">
-												Soon
-											</span>
-										)}
-									</span>
-									<span className="format__description">
-										{format.description}
-									</span>
-									{format.folders.length > 0 && (
-										<span className="format__files">
-											{format.folders.join(" · ")}
+									onChange={() => setSelectedId(format.id)}
+								/>
+								<span className="format__name">
+									{format.name}
+									{!format.available && (
+										<span className="format__soon">
+											Soon
 										</span>
 									)}
-								</button>
-							</li>
+								</span>
+								<span className="format__description">
+									{format.description}
+								</span>
+								{format.folders.length > 0 && (
+									<span className="format__files">
+										{format.folders.join(" · ")}
+									</span>
+								)}
+							</label>
 						))}
-					</ul>
+					</fieldset>
 
 					<button
 						type="button"
