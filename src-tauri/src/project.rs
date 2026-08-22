@@ -474,6 +474,53 @@ pub fn read_manifest(root: &Path) -> Result<Manifest> {
 	Ok(manifest)
 }
 
+/// The `.md` files in each of the project's sections, as paths relative to the
+/// root. Sections keep the order they are given and files within one are
+/// sorted. Anything else is ignored: other extensions, nested folders, symlinks
+/// and names that are not valid UTF-8.
+pub fn scan(root: &Path, folders: &[String]) -> Result<Vec<String>> {
+	let mut found = Vec::new();
+
+	for folder in folders {
+		let entries = match fs::read_dir(root.join(folder)) {
+			Ok(entries) => entries,
+			// A section the writer deleted is not an error; it simply holds
+			// nothing.
+			Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+			Err(e) => return Err(e.into()),
+		};
+
+		let mut files = Vec::new();
+		for entry in entries {
+			let entry = entry?;
+			if !entry.file_type()?.is_file() {
+				continue;
+			}
+
+			let name = entry.file_name();
+			let Some(name) = name.to_str() else {
+				continue;
+			};
+			if !is_markdown(name) {
+				continue;
+			}
+
+			files.push(format!("{folder}/{name}"));
+		}
+
+		files.sort();
+		found.append(&mut files);
+	}
+
+	Ok(found)
+}
+
+fn is_markdown(name: &str) -> bool {
+	Path::new(name)
+		.extension()
+		.is_some_and(|e| e.eq_ignore_ascii_case("md"))
+}
+
 fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Result<OpenedProject> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
@@ -869,6 +916,106 @@ mod tests {
 		assert_eq!(json["path"], "Manuscript/Chapter 1.md");
 		assert_eq!(json["id"], document.id.to_string());
 		assert_eq!(serde_json::from_value::<Document>(json).unwrap(), document);
+	}
+
+	fn novel_folders() -> Vec<String> {
+		Format::Novel
+			.layout()
+			.iter()
+			.map(|s| s.folder.to_owned())
+			.collect()
+	}
+
+	#[test]
+	fn scan_finds_the_seed_files_in_section_order() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		assert_eq!(
+			scan(&root, &novel_folders()).unwrap(),
+			[
+				"Manuscript/Chapter 1.md",
+				"Outline/Outline.md",
+				"Characters/Characters.md",
+				"Locations/Locations.md",
+				"Notes/Notes.md",
+			]
+		);
+	}
+
+	#[test]
+	fn files_within_a_section_are_sorted() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		for name in ["Chapter 3.md", "Chapter 2.md"] {
+			fs::write(root.join("Manuscript").join(name), "").unwrap();
+		}
+
+		let found = scan(&root, &novel_folders()).unwrap();
+		assert_eq!(
+			&found[..3],
+			[
+				"Manuscript/Chapter 1.md",
+				"Manuscript/Chapter 2.md",
+				"Manuscript/Chapter 3.md",
+			]
+		);
+	}
+
+	#[test]
+	fn scan_ignores_everything_that_is_not_a_markdown_file() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = root.join("Manuscript");
+		fs::write(manuscript.join("cover.png"), "").unwrap();
+		fs::write(manuscript.join("notes.txt"), "").unwrap();
+		fs::create_dir(manuscript.join("Part One")).unwrap();
+		fs::write(manuscript.join("Part One").join("Chapter 2.md"), "").unwrap();
+
+		let found = scan(&root, &novel_folders()).unwrap();
+		assert_eq!(
+			found
+				.iter()
+				.filter(|p| p.starts_with("Manuscript/"))
+				.count(),
+			1,
+			"only the seed chapter belongs to Manuscript"
+		);
+	}
+
+	#[test]
+	fn an_uppercase_extension_is_still_markdown() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(root.join("Notes").join("Ideas.MD"), "").unwrap();
+
+		assert!(
+			scan(&root, &novel_folders())
+				.unwrap()
+				.contains(&"Notes/Ideas.MD".to_owned())
+		);
+	}
+
+	#[test]
+	fn a_missing_section_is_skipped_rather_than_failing() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::remove_dir_all(root.join("Outline")).unwrap();
+
+		let found = scan(&root, &novel_folders()).unwrap();
+		assert!(!found.iter().any(|p| p.starts_with("Outline/")));
+		assert_eq!(found.len(), 4);
+	}
+
+	#[test]
+	fn scan_looks_only_where_it_is_told() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::create_dir(root.join("Scraps")).unwrap();
+		fs::write(root.join("Scraps").join("Offcut.md"), "").unwrap();
+
+		let found = scan(&root, &novel_folders()).unwrap();
+		assert!(!found.iter().any(|p| p.starts_with("Scraps/")));
 	}
 
 	#[test]
