@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::io;
@@ -521,6 +522,60 @@ fn is_markdown(name: &str) -> bool {
 		.is_some_and(|e| e.eq_ignore_ascii_case("md"))
 }
 
+/// The section a document belongs to, which is the first component of its path.
+fn section_of(path: &str) -> Option<&str> {
+	path.split_once('/').map(|(section, _)| section)
+}
+
+/// Brings the manifest's document list back in step with what `scan` found.
+/// Documents that are still there keep their id and their relative order,
+/// vanished ones are dropped, and unrecorded files are adopted at the end of
+/// their section. The list is regrouped into section order, since that is the
+/// order the sidebar reads it in. Returns whether anything changed.
+pub fn reconcile(manifest: &mut Manifest, found: &[String]) -> bool {
+	let on_disk: HashSet<&str> = found.iter().map(String::as_str).collect();
+
+	let mut seen: HashSet<&str> = HashSet::new();
+	let mut kept: HashMap<&str, Vec<Document>> = HashMap::new();
+	for document in &manifest.documents {
+		// A path recorded twice — only a hand-edited manifest can manage it —
+		// would otherwise open as two documents over one file.
+		if !on_disk.contains(document.path.as_str()) || !seen.insert(&document.path) {
+			continue;
+		}
+		if let Some(section) = section_of(&document.path) {
+			kept.entry(section).or_default().push(document.clone());
+		}
+	}
+
+	let mut adopted: HashMap<&str, Vec<Document>> = HashMap::new();
+	for path in found {
+		if seen.contains(path.as_str()) {
+			continue;
+		}
+		if let Some(section) = section_of(path) {
+			adopted.entry(section).or_default().push(Document {
+				id: Uuid::new_v4(),
+				path: path.clone(),
+			});
+		}
+	}
+
+	let mut documents = Vec::new();
+	for folder in &manifest.folders {
+		if let Some(existing) = kept.remove(folder.as_str()) {
+			documents.extend(existing);
+		}
+		if let Some(new) = adopted.remove(folder.as_str()) {
+			documents.extend(new);
+		}
+	}
+
+	let changed = documents != manifest.documents;
+	manifest.documents = documents;
+	changed
+}
+
 fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Result<OpenedProject> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
@@ -572,8 +627,6 @@ pub fn forget_project(app: AppHandle, root: PathBuf) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashSet;
-
 	use super::*;
 
 	#[test]
@@ -1016,6 +1069,148 @@ mod tests {
 
 		let found = scan(&root, &novel_folders()).unwrap();
 		assert!(!found.iter().any(|p| p.starts_with("Scraps/")));
+	}
+
+	fn manifest_with(paths: &[&str]) -> Manifest {
+		let mut manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		manifest.documents = paths
+			.iter()
+			.map(|path| Document {
+				id: Uuid::new_v4(),
+				path: (*path).to_owned(),
+			})
+			.collect();
+		manifest
+	}
+
+	fn paths_of(manifest: &Manifest) -> Vec<&str> {
+		manifest.documents.iter().map(|d| d.path.as_str()).collect()
+	}
+
+	fn owned(paths: &[&str]) -> Vec<String> {
+		paths.iter().map(|p| (*p).to_owned()).collect()
+	}
+
+	#[test]
+	fn reconcile_leaves_a_manifest_that_already_agrees_alone() {
+		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+		let before = manifest.documents.clone();
+
+		assert!(!reconcile(
+			&mut manifest,
+			&owned(&["Manuscript/Chapter 1.md", "Notes/Notes.md"])
+		));
+		assert_eq!(manifest.documents, before);
+	}
+
+	#[test]
+	fn a_new_file_is_adopted_at_the_end_of_its_section() {
+		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+		let chapter_one = manifest.documents[0].id;
+
+		assert!(reconcile(
+			&mut manifest,
+			&owned(&[
+				"Manuscript/Chapter 1.md",
+				"Manuscript/Chapter 2.md",
+				"Notes/Notes.md",
+			])
+		));
+		assert_eq!(
+			paths_of(&manifest),
+			[
+				"Manuscript/Chapter 1.md",
+				"Manuscript/Chapter 2.md",
+				"Notes/Notes.md",
+			]
+		);
+		assert_eq!(
+			manifest.documents[0].id, chapter_one,
+			"an existing document keeps its id"
+		);
+	}
+
+	#[test]
+	fn a_vanished_file_is_dropped() {
+		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+
+		assert!(reconcile(&mut manifest, &owned(&["Notes/Notes.md"])));
+		assert_eq!(paths_of(&manifest), ["Notes/Notes.md"]);
+	}
+
+	#[test]
+	fn the_recorded_order_wins_over_the_order_on_disk() {
+		let mut manifest = manifest_with(&["Manuscript/Chapter 2.md", "Manuscript/Chapter 1.md"]);
+
+		assert!(!reconcile(
+			&mut manifest,
+			&owned(&["Manuscript/Chapter 1.md", "Manuscript/Chapter 2.md"])
+		));
+		assert_eq!(
+			paths_of(&manifest),
+			["Manuscript/Chapter 2.md", "Manuscript/Chapter 1.md"]
+		);
+	}
+
+	#[test]
+	fn a_manifest_without_documents_adopts_everything() {
+		let mut manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		let found = owned(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+
+		assert!(reconcile(&mut manifest, &found));
+		assert_eq!(paths_of(&manifest), found.as_slice());
+		let ids: HashSet<_> = manifest.documents.iter().map(|d| d.id).collect();
+		assert_eq!(ids.len(), 2, "each adopted file gets its own id");
+	}
+
+	#[test]
+	fn documents_are_regrouped_into_section_order() {
+		let mut manifest = manifest_with(&[
+			"Notes/Notes.md",
+			"Manuscript/Chapter 1.md",
+			"Notes/Ideas.md",
+		]);
+
+		assert!(reconcile(
+			&mut manifest,
+			&owned(&[
+				"Manuscript/Chapter 1.md",
+				"Notes/Notes.md",
+				"Notes/Ideas.md",
+			])
+		));
+		assert_eq!(
+			paths_of(&manifest),
+			[
+				"Manuscript/Chapter 1.md",
+				"Notes/Notes.md",
+				"Notes/Ideas.md"
+			]
+		);
+	}
+
+	#[test]
+	fn a_path_recorded_twice_is_collapsed() {
+		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Manuscript/Chapter 1.md"]);
+		let first = manifest.documents[0].id;
+
+		assert!(reconcile(
+			&mut manifest,
+			&owned(&["Manuscript/Chapter 1.md"])
+		));
+		assert_eq!(paths_of(&manifest), ["Manuscript/Chapter 1.md"]);
+		assert_eq!(manifest.documents[0].id, first, "the first id wins");
+	}
+
+	#[test]
+	fn a_document_outside_the_projects_sections_is_dropped() {
+		let mut manifest = manifest_with(&["Scraps/Offcut.md", "Notes/Notes.md"]);
+
+		assert!(reconcile(
+			&mut manifest,
+			&owned(&["Scraps/Offcut.md", "Notes/Notes.md"])
+		));
+		assert_eq!(paths_of(&manifest), ["Notes/Notes.md"]);
 	}
 
 	#[test]
