@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use crate::project::{Error, Result, to_json};
+use crate::project::{Error, Result, write_json};
 
 pub const STORE_VERSION: u32 = 1;
 
@@ -81,10 +81,7 @@ pub fn save(path: &Path, store: &Store) -> Result<()> {
 		fs::create_dir_all(parent)?;
 	}
 
-	let temp = path.with_extension("tmp");
-	fs::write(&temp, to_json(store)?)?;
-	fs::rename(&temp, path)?;
-	Ok(())
+	write_json(path, store)
 }
 
 #[cfg(test)]

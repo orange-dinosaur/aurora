@@ -12,7 +12,9 @@ pub fn run() {
 			project::last_project,
 			project::forget_project,
 			project::open_project,
-			project::recent_projects
+			project::recent_projects,
+			project::list_documents,
+			project::refresh_documents
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

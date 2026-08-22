@@ -117,6 +117,40 @@ impl Document {
 			path: format!("{section}/{file_name}"),
 		}
 	}
+
+	/// The file name without its extension. The file name is the title.
+	fn title(&self) -> String {
+		Path::new(&self.path)
+			.file_stem()
+			.and_then(|stem| stem.to_str())
+			.unwrap_or(&self.path)
+			.to_owned()
+	}
+}
+
+/// A document as the sidebar shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DocumentView {
+	pub id: Uuid,
+	pub path: String,
+	pub title: String,
+}
+
+impl From<&Document> for DocumentView {
+	fn from(document: &Document) -> Self {
+		Self {
+			id: document.id,
+			path: document.path.clone(),
+			title: document.title(),
+		}
+	}
+}
+
+/// One of the project's sections and the documents in it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SectionDocuments {
+	pub folder: String,
+	pub documents: Vec<DocumentView>,
 }
 
 /// The contents of `aurora.json`.
@@ -355,6 +389,15 @@ pub(crate) fn to_json<T: Serialize>(value: &T) -> Result<Vec<u8>> {
 	Ok(out)
 }
 
+/// Writes JSON through a temporary file and a rename, so an interrupted save
+/// leaves the previous version intact rather than a truncated one.
+pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+	let temp = path.with_extension("tmp");
+	fs::write(&temp, to_json(value)?)?;
+	fs::rename(&temp, path)?;
+	Ok(())
+}
+
 fn fill(
 	root: &Path,
 	name: &str,
@@ -576,6 +619,36 @@ pub fn reconcile(manifest: &mut Manifest, found: &[String]) -> bool {
 	changed
 }
 
+/// Reads the manifest and brings it back in step with the folder, writing it
+/// back only when reconciliation actually changed something.
+pub fn refresh(root: &Path) -> Result<Manifest> {
+	let mut manifest = read_manifest(root)?;
+	let found = scan(root, &manifest.folders)?;
+	if reconcile(&mut manifest, &found) {
+		write_json(&root.join(MANIFEST_FILE), &manifest)?;
+	}
+	Ok(manifest)
+}
+
+/// The manifest's documents grouped under their section, in the order the
+/// project records both. Sections are fixed by the format, so an empty one is
+/// still listed.
+fn sections(manifest: &Manifest) -> Vec<SectionDocuments> {
+	manifest
+		.folders
+		.iter()
+		.map(|folder| SectionDocuments {
+			folder: folder.clone(),
+			documents: manifest
+				.documents
+				.iter()
+				.filter(|d| section_of(&d.path) == Some(folder.as_str()))
+				.map(DocumentView::from)
+				.collect(),
+		})
+		.collect()
+}
+
 fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Result<OpenedProject> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
@@ -583,7 +656,7 @@ fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Resu
 
 	// The manifest holds the name, not the folder, so a renamed folder still
 	// opens under the name the writer gave it.
-	let manifest = read_manifest(root)?;
+	let manifest = refresh(root)?;
 	let mut store = store::load(store_path)?;
 	store.remember(manifest.name.clone(), root.to_path_buf(), at);
 	store::save(store_path, &store)?;
@@ -608,6 +681,25 @@ fn available_recents(store_path: &Path) -> Result<Vec<store::RecentProject>> {
 #[tauri::command]
 pub fn open_project(app: AppHandle, root: PathBuf) -> Result<OpenedProject> {
 	open_and_remember(&store_path(&app)?, &root, OffsetDateTime::now_utc())
+}
+
+/// The sidebar's view of the project, straight from the manifest.
+#[tauri::command]
+pub fn list_documents(root: PathBuf) -> Result<Vec<SectionDocuments>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	Ok(sections(&read_manifest(&root)?))
+}
+
+/// The same, after looking at the folder again for anything added, removed or
+/// renamed outside Aurora.
+#[tauri::command]
+pub fn refresh_documents(root: PathBuf) -> Result<Vec<SectionDocuments>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	Ok(sections(&refresh(&root)?))
 }
 
 #[tauri::command]
@@ -1307,6 +1399,122 @@ mod tests {
 			.is_err()
 		);
 		assert!(store::load(&store).unwrap().last().is_none());
+	}
+
+	#[test]
+	fn opening_adopts_a_file_added_outside_aurora() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		fs::write(root.join("Manuscript").join("Chapter 2.md"), "").unwrap();
+
+		open_and_remember(&store, &root, fixed_time()).unwrap();
+
+		let manifest = read_manifest(&root).unwrap();
+		assert!(paths_of(&manifest).contains(&"Manuscript/Chapter 2.md"));
+	}
+
+	#[test]
+	fn opening_drops_a_file_deleted_outside_aurora() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		fs::remove_file(root.join("Notes").join("Notes.md")).unwrap();
+
+		open_and_remember(&store, &root, fixed_time()).unwrap();
+
+		let manifest = read_manifest(&root).unwrap();
+		assert!(!paths_of(&manifest).contains(&"Notes/Notes.md"));
+	}
+
+	#[test]
+	fn opening_an_unchanged_project_leaves_the_manifest_alone() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		// Rewritten compactly, so any rewrite would restore the pretty form.
+		let manifest = read_manifest(&root).unwrap();
+		let compact = serde_json::to_vec(&manifest).unwrap();
+		fs::write(root.join(MANIFEST_FILE), &compact).unwrap();
+
+		open_and_remember(&store, &root, fixed_time()).unwrap();
+
+		assert_eq!(fs::read(root.join(MANIFEST_FILE)).unwrap(), compact);
+	}
+
+	#[test]
+	fn listing_groups_documents_under_their_section() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let listed = sections(&read_manifest(&root).unwrap());
+
+		let folders: Vec<_> = listed.iter().map(|s| s.folder.as_str()).collect();
+		assert_eq!(
+			folders,
+			["Manuscript", "Outline", "Characters", "Locations", "Notes"]
+		);
+		assert_eq!(listed[0].documents.len(), 1);
+		assert_eq!(listed[0].documents[0].title, "Chapter 1");
+		assert_eq!(listed[0].documents[0].path, "Manuscript/Chapter 1.md");
+	}
+
+	#[test]
+	fn an_empty_section_is_still_listed() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::remove_file(root.join("Notes").join("Notes.md")).unwrap();
+		refresh(&root).unwrap();
+
+		let listed = sections(&read_manifest(&root).unwrap());
+		let notes = listed.iter().find(|s| s.folder == "Notes").unwrap();
+		assert!(notes.documents.is_empty());
+	}
+
+	#[test]
+	fn listing_does_not_look_at_the_folder_but_refreshing_does() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(root.join("Notes").join("Ideas.md"), "").unwrap();
+
+		let listed = sections(&read_manifest(&root).unwrap());
+		let notes = listed.iter().find(|s| s.folder == "Notes").unwrap();
+		assert_eq!(
+			notes.documents.len(),
+			1,
+			"the manifest has not been re-read"
+		);
+
+		let refreshed = sections(&refresh(&root).unwrap());
+		let notes = refreshed.iter().find(|s| s.folder == "Notes").unwrap();
+		assert_eq!(notes.documents.len(), 2);
+		assert_eq!(notes.documents[1].title, "Ideas");
+	}
+
+	#[test]
+	fn the_listing_commands_refuse_a_relative_path() {
+		let relative = PathBuf::from("some/where");
+		assert!(matches!(
+			list_documents(relative.clone()).unwrap_err(),
+			Error::RelativePath
+		));
+		assert!(matches!(
+			refresh_documents(relative).unwrap_err(),
+			Error::RelativePath
+		));
+	}
+
+	#[test]
+	fn a_title_is_the_file_name_without_its_extension() {
+		let document = Document::new("Manuscript", "Chapter 1.md");
+		assert_eq!(document.title(), "Chapter 1");
+		assert_eq!(DocumentView::from(&document).title, "Chapter 1");
 	}
 
 	#[test]
