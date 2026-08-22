@@ -3,44 +3,51 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { OpenProject } from "./App";
 
+type FormatLayout = {
+	format: string;
+	folders: string[];
+	available: boolean;
+};
+
 type Format = {
 	id: string;
 	name: string;
 	description: string;
-	files: string[];
+	folders: string[];
 	available: boolean;
 };
 
-const FORMATS: Format[] = [
+// Rust owns which formats exist, what they create and whether they can be
+const COPY: Record<string, { name: string; description: string } | undefined> =
 	{
-		id: "novel",
-		name: "Novel",
-		description: "Long-form fiction, organised into chapters.",
-		files: ["Manuscript", "Outline", "Characters", "Locations", "Notes"],
-		available: true,
-	},
-	{
-		id: "screenplay",
-		name: "Screenplay",
-		description: "Film or television, in standard screenplay form.",
-		files: ["Script", "Beat Sheet", "Characters", "Notes"],
-		available: false,
-	},
-	{
-		id: "short-stories",
-		name: "Short Stories",
-		description: "A collection of shorter pieces.",
-		files: ["Stories", "Ideas", "Notes"],
-		available: false,
-	},
-	{
-		id: "stage-play",
-		name: "Stage Play",
-		description: "Theatre, organised into acts and scenes.",
-		files: ["Script", "Characters", "Staging", "Notes"],
-		available: false,
-	},
-];
+		novel: {
+			name: "Novel",
+			description: "Long-form fiction, organised into chapters.",
+		},
+		screenplay: {
+			name: "Screenplay",
+			description: "Film or television, in standard screenplay form.",
+		},
+		"short-stories": {
+			name: "Short Stories",
+			description: "A collection of shorter pieces.",
+		},
+		"stage-play": {
+			name: "Stage Play",
+			description: "Theatre, organised into acts and scenes.",
+		},
+	};
+
+function describe({ format, folders, available }: FormatLayout): Format {
+	const copy = COPY[format];
+	return {
+		id: format,
+		name: copy?.name ?? format,
+		description: copy?.description ?? "",
+		folders,
+		available,
+	};
+}
 
 type RecentProject = {
 	name: string;
@@ -61,14 +68,23 @@ export default function Welcome({ notice, onOpened }: Props) {
 	const [reason, setReason] = useState(notice);
 	const [stage, setStage] = useState<"format" | "details">("format");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [formats, setFormats] = useState<Format[]>([]);
 	const [name, setName] = useState("");
 	const [parent, setParent] = useState<string | null>(null);
 	const [recents, setRecents] = useState<RecentProject[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 
-	const chosen = FORMATS.find((format) => format.id === selectedId) ?? null;
+	const chosen = formats.find((format) => format.id === selectedId) ?? null;
 	const busy = status.kind === "busy";
 	const ready = parent !== null && name.trim() !== "" && !busy;
+
+	useEffect(() => {
+		invoke<FormatLayout[]>("format_layouts")
+			.then((layouts) => setFormats(layouts.map(describe)))
+			.catch((error) =>
+				setStatus({ kind: "error", message: String(error) }),
+			);
+	}, []);
 
 	useEffect(() => {
 		invoke<RecentProject[]>("recent_projects")
@@ -137,7 +153,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 					</p>
 
 					<ul className="formats">
-						{FORMATS.map((format) => (
+						{formats.map((format) => (
 							<li key={format.id}>
 								<button
 									type="button"
@@ -157,9 +173,11 @@ export default function Welcome({ notice, onOpened }: Props) {
 									<span className="format__description">
 										{format.description}
 									</span>
-									<span className="format__files">
-										{format.files.join(" · ")}
-									</span>
+									{format.folders.length > 0 && (
+										<span className="format__files">
+											{format.folders.join(" · ")}
+										</span>
+									)}
 								</button>
 							</li>
 						))}
@@ -178,7 +196,9 @@ export default function Welcome({ notice, onOpened }: Props) {
 					</button>
 
 					<div className="existing">
-						<h2 className="existing__title">Or open an existing project</h2>
+						<h2 className="existing__title">
+							Or open an existing project
+						</h2>
 
 						{recents.length > 0 && (
 							<ul className="recents">
@@ -259,7 +279,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 							</button>
 
 							<p className="setup__note">
-								Aurora will create {chosen.files.join(", ")}.
+								Aurora will create {chosen.folders.join(", ")}.
 							</p>
 
 							<div className="setup__actions">
