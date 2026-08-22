@@ -102,6 +102,7 @@ pub enum Error {
 	RelativePath,
 	NoConfigDir,
 	NotAProject,
+	UnsupportedVersion { found: u32, supported: u32 },
 	AlreadyExists,
 	UnsupportedFormat(Format),
 	Io(io::Error),
@@ -117,6 +118,10 @@ impl fmt::Display for Error {
 				write!(f, "Aurora could not find its configuration folder")
 			}
 			Error::NotAProject => write!(f, "that folder is not an Aurora project"),
+			Error::UnsupportedVersion { found, supported } => write!(
+				f,
+				"that project needs a newer version of Aurora 				 (it was saved as version {found}, this Aurora reads version {supported})"
+			),
 			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
@@ -142,6 +147,7 @@ impl std::error::Error for Error {
 			| Error::RelativePath
 			| Error::NoConfigDir
 			| Error::NotAProject
+			| Error::UnsupportedVersion { .. }
 			| Error::AlreadyExists
 			| Error::UnsupportedFormat(_) => None,
 			Error::Io(e) => Some(e),
@@ -389,7 +395,16 @@ pub fn read_manifest(root: &Path) -> Result<Manifest> {
 		io::ErrorKind::NotFound => Error::NotAProject,
 		_ => Error::Io(e),
 	})?;
-	Ok(serde_json::from_slice(&bytes)?)
+	let manifest: Manifest = serde_json::from_slice(&bytes)?;
+	// An older Aurora cannot know what a newer one added, so refuse rather than
+	// silently dropping fields and writing them away on the next save.
+	if manifest.version > MANIFEST_VERSION {
+		return Err(Error::UnsupportedVersion {
+			found: manifest.version,
+			supported: MANIFEST_VERSION,
+		});
+	}
+	Ok(manifest)
 }
 
 fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Result<OpenedProject> {
@@ -957,6 +972,59 @@ mod tests {
 		let store = dir.path().join("store.json");
 		let err = open_and_remember(&store, Path::new("some/where"), fixed_time()).unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
+	}
+
+	/// Rewrites the manifest's version field, leaving the rest of the file alone.
+	fn set_manifest_version(root: &Path, version: u32) {
+		let path = root.join(MANIFEST_FILE);
+		let mut value: serde_json::Value =
+			serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+		value["version"] = version.into();
+		fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+	}
+
+	#[test]
+	fn a_manifest_from_a_newer_aurora_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		set_manifest_version(&root, MANIFEST_VERSION + 1);
+
+		let err = read_manifest(&root).unwrap_err();
+		assert!(matches!(
+			err,
+			Error::UnsupportedVersion { found, supported }
+				if found == MANIFEST_VERSION + 1 && supported == MANIFEST_VERSION
+		));
+	}
+
+	#[test]
+	fn a_project_we_cannot_read_is_not_remembered() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		set_manifest_version(&root, MANIFEST_VERSION + 1);
+		forget(&store, &root).unwrap();
+
+		let err = open_and_remember(&store, &root, fixed_time()).unwrap_err();
+		assert!(matches!(err, Error::UnsupportedVersion { .. }));
+		assert!(available_recents(&store).unwrap().is_empty());
+	}
+
+	#[test]
+	fn an_older_manifest_still_opens() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		set_manifest_version(&root, MANIFEST_VERSION - 1);
+
+		assert_eq!(read_manifest(&root).unwrap().version, MANIFEST_VERSION - 1);
 	}
 
 	#[test]
