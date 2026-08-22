@@ -1,3 +1,5 @@
+import Sidebar from "./Sidebar";
+
 type Props = {
 	name: string;
 	root: string;
@@ -17,12 +19,18 @@ export default function Project({ name, root, onClose }: Props) {
 					Close project
 				</button>
 			</header>
-			<p className="project__path">
-				<code>{root}</code>
-			</p>
-			<p className="project__empty">
-				Your manuscript will appear here once Aurora can read it.
-			</p>
+
+			<div className="project__body">
+				<Sidebar root={root} />
+				<div className="project__main">
+					<p className="project__path">
+						<code>{root}</code>
+					</p>
+					<p className="project__empty">
+						Choosing a document to read comes next.
+					</p>
+				</div>
+			</div>
 		</section>
 	);
 }
