@@ -202,6 +202,10 @@ pub enum Error {
 	NoConfigDir,
 	NotAProject,
 	UnsupportedVersion { found: u32, supported: u32 },
+	UnknownDocument,
+	DocumentMissing,
+	OutsideProject,
+	NotText,
 	AlreadyExists,
 	UnsupportedFormat(Format),
 	Io(io::Error),
@@ -221,6 +225,12 @@ impl fmt::Display for Error {
 				f,
 				"that project needs a newer version of Aurora 				 (it was saved as version {found}, this Aurora reads version {supported})"
 			),
+			Error::UnknownDocument => write!(f, "that document is not part of this project"),
+			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
+			Error::OutsideProject => {
+				write!(f, "that document is outside the project folder")
+			}
+			Error::NotText => write!(f, "that document is not text Aurora can read"),
 			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
@@ -247,6 +257,10 @@ impl std::error::Error for Error {
 			| Error::NoConfigDir
 			| Error::NotAProject
 			| Error::UnsupportedVersion { .. }
+			| Error::UnknownDocument
+			| Error::DocumentMissing
+			| Error::OutsideProject
+			| Error::NotText
 			| Error::AlreadyExists
 			| Error::UnsupportedFormat(_) => None,
 			Error::Io(e) => Some(e),
@@ -681,6 +695,43 @@ fn available_recents(store_path: &Path) -> Result<Vec<store::RecentProject>> {
 #[tauri::command]
 pub fn open_project(app: AppHandle, root: PathBuf) -> Result<OpenedProject> {
 	open_and_remember(&store_path(&app)?, &root, OffsetDateTime::now_utc())
+}
+
+/// Turns a document id into a path on disk, refusing anything that does not
+/// end up inside the project. `aurora.json` is an ordinary file a writer can
+/// edit, so the path it records is not to be trusted.
+fn resolve(manifest: &Manifest, root: &Path, id: Uuid) -> Result<PathBuf> {
+	let document = manifest
+		.documents
+		.iter()
+		.find(|d| d.id == id)
+		.ok_or(Error::UnknownDocument)?;
+
+	// Canonicalising both sides resolves `..` and follows symlinks, so the
+	// comparison is between two real locations.
+	let path = root.join(&document.path);
+	let path = path.canonicalize().map_err(|e| match e.kind() {
+		io::ErrorKind::NotFound => Error::DocumentMissing,
+		_ => Error::Io(e),
+	})?;
+
+	if !path.starts_with(root.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+
+	Ok(path)
+}
+
+/// The text of one document.
+#[tauri::command]
+pub fn read_document(root: PathBuf, id: Uuid) -> Result<String> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	let path = resolve(&manifest, &root, id)?;
+	String::from_utf8(fs::read(path)?).map_err(|_| Error::NotText)
 }
 
 /// The sidebar's view of the project, straight from the manifest.
@@ -1690,6 +1741,101 @@ mod tests {
 		let dir = tempfile::tempdir().unwrap();
 		let store = dir.path().join("store.json");
 		let err = open_and_remember(&store, Path::new("some/where"), fixed_time()).unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	/// Rewrites one document's recorded path, the way a hand-edited manifest
+	/// could.
+	fn set_document_path(root: &Path, index: usize, path: &str) {
+		let file = root.join(MANIFEST_FILE);
+		let mut value: serde_json::Value =
+			serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+		value["documents"][index]["path"] = path.into();
+		fs::write(&file, serde_json::to_vec(&value).unwrap()).unwrap();
+	}
+
+	fn first_document(root: &Path) -> Document {
+		read_manifest(root).unwrap().documents[0].clone()
+	}
+
+	#[test]
+	fn a_document_reads_back_what_was_written_to_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(
+			root.join("Manuscript").join("Chapter 1.md"),
+			"Sing to me of the man, Muse.",
+		)
+		.unwrap();
+
+		let id = first_document(&root).id;
+		assert_eq!(
+			read_document(root, id).unwrap(),
+			"Sing to me of the man, Muse."
+		);
+	}
+
+	#[test]
+	fn an_unknown_id_is_not_a_document() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = read_document(root, Uuid::new_v4()).unwrap_err();
+		assert!(matches!(err, Error::UnknownDocument));
+	}
+
+	#[test]
+	fn a_recorded_document_whose_file_has_gone_is_reported() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+		fs::remove_file(root.join("Manuscript").join("Chapter 1.md")).unwrap();
+
+		let err = read_document(root, id).unwrap_err();
+		assert!(matches!(err, Error::DocumentMissing));
+	}
+
+	#[test]
+	fn a_path_that_climbs_out_of_the_project_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(parent.path().join("secrets.md"), "not yours").unwrap();
+		set_document_path(&root, 0, "../secrets.md");
+
+		let id = first_document(&root).id;
+		let err = read_document(root, id).unwrap_err();
+		assert!(matches!(err, Error::OutsideProject));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn a_symlink_out_of_the_project_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let outside = parent.path().join("secrets.md");
+		fs::write(&outside, "not yours").unwrap();
+		std::os::unix::fs::symlink(&outside, root.join("Manuscript").join("Link.md")).unwrap();
+		set_document_path(&root, 0, "Manuscript/Link.md");
+
+		let id = first_document(&root).id;
+		let err = read_document(root, id).unwrap_err();
+		assert!(matches!(err, Error::OutsideProject));
+	}
+
+	#[test]
+	fn a_document_that_is_not_text_is_reported() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(root.join("Manuscript").join("Chapter 1.md"), [0xff, 0xfe]).unwrap();
+
+		let id = first_document(&root).id;
+		let err = read_document(root, id).unwrap_err();
+		assert!(matches!(err, Error::NotText));
+	}
+
+	#[test]
+	fn reading_refuses_a_relative_path() {
+		let err = read_document(PathBuf::from("some/where"), Uuid::new_v4()).unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
 	}
 
