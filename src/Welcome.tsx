@@ -178,7 +178,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 					</button>
 
 					<div className="existing">
-						<h2 className="existing__title">Or open a project</h2>
+						<h2 className="existing__title">Or open an existing project</h2>
 
 						{recents.length > 0 && (
 							<ul className="recents">
