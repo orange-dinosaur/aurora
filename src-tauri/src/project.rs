@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize, Serializer};
 use tauri::{AppHandle, Manager};
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 use crate::store;
 
@@ -97,7 +98,25 @@ pub fn format_layouts() -> Vec<FormatLayout> {
 }
 
 /// Bumped when the on-disk shape changes in a way older builds cannot read.
-pub const MANIFEST_VERSION: u32 = 1;
+pub const MANIFEST_VERSION: u32 = 2;
+
+/// A document inside a project. The path is relative to the project root and
+/// always uses forward slashes, so a manifest written on one platform still
+/// resolves on another.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Document {
+	pub id: Uuid,
+	pub path: String,
+}
+
+impl Document {
+	fn new(section: &str, file_name: &str) -> Self {
+		Self {
+			id: Uuid::new_v4(),
+			path: format!("{section}/{file_name}"),
+		}
+	}
+}
 
 /// The contents of `aurora.json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,6 +130,10 @@ pub struct Manifest {
 	/// The section folders as they were at creation, so a project keeps its own
 	/// layout even if the format's definition changes later.
 	pub folders: Vec<String>,
+	/// Every document Aurora knows about, in the order it shows them. Absent
+	/// from manifests written before version 2.
+	#[serde(default)]
+	pub documents: Vec<Document>,
 }
 
 impl Manifest {
@@ -128,6 +151,9 @@ impl Manifest {
 				.iter()
 				.map(|s| s.folder.to_owned())
 				.collect(),
+			// Ids are random, so the seed documents are attached by `fill`,
+			// leaving this deterministic.
+			documents: Vec::new(),
 		}
 	}
 }
@@ -335,13 +361,16 @@ fn fill(
 	sections: &[Section],
 	created_at: OffsetDateTime,
 ) -> Result<()> {
+	let mut documents = Vec::new();
 	for section in sections {
 		let folder = root.join(section.folder);
 		fs::create_dir(&folder)?;
 		fs::write(folder.join(section.seed), "")?;
+		documents.push(Document::new(section.folder, section.seed));
 	}
 
-	let manifest = Manifest::new(name, format, created_at);
+	let mut manifest = Manifest::new(name, format, created_at);
+	manifest.documents = documents;
 	fs::write(root.join(MANIFEST_FILE), to_json(&manifest)?)?;
 	Ok(())
 }
@@ -496,6 +525,8 @@ pub fn forget_project(app: AppHandle, root: PathBuf) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+	use std::collections::HashSet;
+
 	use super::*;
 
 	#[test]
@@ -607,7 +638,7 @@ mod tests {
 	fn manifest_serializes_with_camel_case_keys() {
 		let manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
 		let json = serde_json::to_value(&manifest).unwrap();
-		assert_eq!(json["version"], 1);
+		assert_eq!(json["version"], MANIFEST_VERSION);
 		assert_eq!(json["name"], "Ithaca");
 		assert_eq!(json["format"], "novel");
 		assert_eq!(json["createdAt"], "2023-11-14T22:13:20Z");
@@ -757,8 +788,12 @@ mod tests {
 
 		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
 		let manifest: Manifest = serde_json::from_str(&json).unwrap();
+		// The seed documents carry random ids and are checked on their own.
 		assert_eq!(
-			manifest,
+			Manifest {
+				documents: Vec::new(),
+				..manifest
+			},
 			Manifest::new("Ithaca", Format::Novel, fixed_time())
 		);
 	}
@@ -769,11 +804,71 @@ mod tests {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
 		assert!(
-			json.contains("\n\t\"version\": 1"),
+			json.contains(&format!("\n\t\"version\": {MANIFEST_VERSION}")),
 			"expected tab indentation"
 		);
 		assert!(json.contains("\"createdAt\": \"2023-11-14T22:13:20Z\""));
 		assert!(json.ends_with("\n"), "expected a trailing newline");
+	}
+
+	#[test]
+	fn a_new_project_records_its_seed_documents() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manifest = read_manifest(&root).unwrap();
+
+		let paths: Vec<_> = manifest.documents.iter().map(|d| d.path.as_str()).collect();
+		assert_eq!(
+			paths,
+			[
+				"Manuscript/Chapter 1.md",
+				"Outline/Outline.md",
+				"Characters/Characters.md",
+				"Locations/Locations.md",
+				"Notes/Notes.md",
+			]
+		);
+
+		let ids: HashSet<_> = manifest.documents.iter().map(|d| d.id).collect();
+		assert_eq!(ids.len(), manifest.documents.len(), "ids must be unique");
+	}
+
+	#[test]
+	fn every_recorded_document_is_on_disk() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		for document in read_manifest(&root).unwrap().documents {
+			assert!(
+				root.join(&document.path).is_file(),
+				"{} is recorded but missing",
+				document.path
+			);
+		}
+	}
+
+	#[test]
+	fn a_manifest_from_before_documents_existed_still_loads() {
+		let dir = tempfile::tempdir().unwrap();
+		fs::write(
+			dir.path().join(MANIFEST_FILE),
+			r#"{"version":1,"name":"Ithaca","format":"novel",
+			   "createdAt":"2023-11-14T22:13:20Z","folders":["Manuscript"]}"#,
+		)
+		.unwrap();
+
+		let manifest = read_manifest(dir.path()).unwrap();
+		assert_eq!(manifest.version, 1);
+		assert!(manifest.documents.is_empty());
+	}
+
+	#[test]
+	fn a_document_id_survives_the_round_trip() {
+		let document = Document::new("Manuscript", "Chapter 1.md");
+		let json = serde_json::to_value(&document).unwrap();
+		assert_eq!(json["path"], "Manuscript/Chapter 1.md");
+		assert_eq!(json["id"], document.id.to_string());
+		assert_eq!(serde_json::from_value::<Document>(json).unwrap(), document);
 	}
 
 	#[test]
