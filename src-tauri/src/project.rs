@@ -48,6 +48,15 @@ const NOVEL: &[Section] = &[
 ];
 
 impl Format {
+	/// Every format, in the order the Welcome screen offers them. Keep in step
+	/// with the enum.
+	pub const ALL: &'static [Format] = &[
+		Format::Novel,
+		Format::Screenplay,
+		Format::ShortStories,
+		Format::StagePlay,
+	];
+
 	/// The sections a new project of this format is created with. An empty
 	/// layout means the format cannot be created yet.
 	pub fn layout(self) -> &'static [Section] {
@@ -56,6 +65,35 @@ impl Format {
 			Format::Screenplay | Format::ShortStories | Format::StagePlay => &[],
 		}
 	}
+}
+
+/// A format as the Welcome screen needs to describe it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FormatLayout {
+	pub format: Format,
+	pub folders: Vec<String>,
+	pub available: bool,
+}
+
+/// The folders each format creates, so the Welcome screen does not have to keep
+/// its own copy of them.
+#[tauri::command]
+pub fn format_layouts() -> Vec<FormatLayout> {
+	Format::ALL
+		.iter()
+		.map(|&format| {
+			let folders: Vec<String> = format
+				.layout()
+				.iter()
+				.map(|s| s.folder.to_owned())
+				.collect();
+			FormatLayout {
+				format,
+				available: !folders.is_empty(),
+				folders,
+			}
+		})
+		.collect()
 }
 
 /// Bumped when the on-disk shape changes in a way older builds cannot read.
@@ -506,6 +544,42 @@ mod tests {
 				"{format:?} should not be creatable"
 			);
 		}
+	}
+
+	#[test]
+	fn every_format_is_offered_in_order() {
+		let formats: Vec<_> = format_layouts().into_iter().map(|f| f.format).collect();
+		assert_eq!(formats, Format::ALL);
+	}
+
+	#[test]
+	fn the_layouts_match_the_formats() {
+		let layouts = format_layouts();
+		let novel = layouts.iter().find(|f| f.format == Format::Novel).unwrap();
+		assert!(novel.available);
+		assert_eq!(
+			novel.folders,
+			["Manuscript", "Outline", "Characters", "Locations", "Notes"]
+		);
+
+		for layout in layouts.iter().filter(|f| f.format != Format::Novel) {
+			assert!(layout.folders.is_empty());
+			assert!(!layout.available);
+		}
+	}
+
+	#[test]
+	fn a_layout_crosses_with_the_format_name_the_frontend_uses() {
+		let layouts = format_layouts();
+		let stage_play = layouts.last().unwrap();
+		assert_eq!(
+			serde_json::to_value(stage_play).unwrap(),
+			serde_json::json!({
+				"format": "stage-play",
+				"folders": [],
+				"available": false,
+			})
+		);
 	}
 
 	fn fixed_time() -> OffsetDateTime {

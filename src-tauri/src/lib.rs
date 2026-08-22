@@ -7,6 +7,7 @@ pub fn run() {
 		.plugin(tauri_plugin_opener::init())
 		.plugin(tauri_plugin_dialog::init())
 		.invoke_handler(tauri::generate_handler![
+			project::format_layouts,
 			project::create_project,
 			project::last_project,
 			project::forget_project,
