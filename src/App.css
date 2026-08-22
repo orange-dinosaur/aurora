@@ -290,7 +290,7 @@ body,
 
 .project__header {
 	display: flex;
-	align-items: baseline;
+	align-items: flex-start;
 	justify-content: space-between;
 	gap: 1rem;
 	padding-bottom: 1rem;
@@ -337,7 +337,7 @@ body,
 }
 
 .project__path {
-	margin: 1rem 0 0;
+	margin: 0.25rem 0 0;
 	font-size: 0.85rem;
 	color: var(--text-dim);
 	overflow-wrap: anywhere;
@@ -430,10 +430,60 @@ body,
 }
 
 .document {
-	padding: 0.2rem 0;
+	display: block;
+	width: 100%;
+	padding: 0.2rem 0.4rem;
+	font: inherit;
 	font-size: 0.9rem;
+	text-align: left;
 	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
 	overflow-wrap: anywhere;
+}
+
+.document:hover {
+	color: var(--text);
+	background: var(--bg-card);
+}
+
+.document[aria-current="page"] {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.reader {
+	max-width: 40rem;
+}
+
+.reader__title {
+	margin: 0 0 1rem;
+	font-size: 1.25rem;
+	font-weight: 600;
+}
+
+.reader__text {
+	margin: 0;
+	font: inherit;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.reader__note {
+	margin: 0;
+	color: var(--text-dim);
+}
+
+.reader__note--error {
+	color: #c0392b;
+}
+
+@media (prefers-color-scheme: dark) {
+	.reader__note--error {
+		color: #ff8a7a;
+	}
 }
 
 /* Always in the DOM and out of flow, so an error appears without moving the

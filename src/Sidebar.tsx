@@ -17,9 +17,11 @@ type Status =
 
 type Props = {
 	root: string;
+	selectedId: string | null;
+	onSelect: (document: ProjectDocument) => void;
 };
 
-export default function Sidebar({ root }: Props) {
+export default function Sidebar({ root, selectedId, onSelect }: Props) {
 	const [sections, setSections] = useState<SectionDocuments[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 
@@ -65,8 +67,19 @@ export default function Sidebar({ root }: Props) {
 						{section.documents.length > 0 ? (
 							<ul className="documents">
 								{section.documents.map((doc) => (
-									<li key={doc.id} className="document">
-										{doc.title}
+									<li key={doc.id}>
+										<button
+											type="button"
+											className="document"
+											aria-current={
+												doc.id === selectedId
+													? "page"
+													: undefined
+											}
+											onClick={() => onSelect(doc)}
+										>
+											{doc.title}
+										</button>
 									</li>
 								))}
 							</ul>
