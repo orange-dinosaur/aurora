@@ -165,7 +165,7 @@ export default function SectionView({
 						<li
 							key={document.id}
 							className="cards__item"
-							{...reorder.item(document.id, at)}
+							{...reorder.item(document.id, at, folder)}
 						>
 							<button
 								type="button"

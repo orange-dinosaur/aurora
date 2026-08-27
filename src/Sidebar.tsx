@@ -5,6 +5,7 @@ import NameField from "./NameField";
 import type { ProjectDocument, SectionDocuments } from "./types";
 import { createDocument, renameDocument, reorderDocument } from "./documents";
 import { failure } from "./errors";
+import { useReorder } from "./reorder";
 
 type Status =
 	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
@@ -65,6 +66,7 @@ export default function Sidebar({
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
+	const reorder = useReorder((id, index) => void move(id, index));
 
 	// `list_documents` reads the manifest; `refresh_documents` looks at the
 	// folder again first, for anything changed outside Aurora.
@@ -254,6 +256,11 @@ export default function Sidebar({
 											<li
 												key={doc.id}
 												className="documents__item"
+												{...reorder.item(
+													doc.id,
+													at,
+													section.folder,
+												)}
 											>
 												<button
 													type="button"
