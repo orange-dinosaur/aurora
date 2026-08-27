@@ -27,14 +27,29 @@ type Save =
 	| { kind: "missing" }
 	| { kind: "failed"; message: string };
 
-type Tab = {
+type DocumentTab = {
+	kind: "document";
 	document: ProjectDocument;
 	content: Content;
 	save: Save;
 };
 
+type SectionTab = {
+	kind: "section";
+	folder: string;
+};
+
+type Tab = DocumentTab | SectionTab;
+
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
+
+// What the strip and `activeKey` identify a tab by. Derived rather than stored,
+// so it cannot fall out of step with the tab it names — a restored document
+// arrives under a new id and takes its tab's key with it.
+function keyOf(tab: Tab): string {
+	return tab.kind === "document" ? tab.document.id : `section/${tab.folder}`;
+}
 
 async function read(root: string, id: string): Promise<Content> {
 	try {
@@ -47,14 +62,14 @@ async function read(root: string, id: string): Promise<Content> {
 
 export default function Project({ name, root, onClose }: Props) {
 	const [tabs, setTabs] = useState<Tab[]>([]);
-	const [activeId, setActiveId] = useState<string | null>(null);
+	const [activeKey, setActiveKey] = useState<string | null>(null);
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
-	const active = tabs.find((tab) => tab.document.id === activeId) ?? null;
+	const active = tabs.find((tab) => keyOf(tab) === activeKey) ?? null;
 
-	// One timer per tab, so a tab keeps its own countdown once the writer has
-	// moved on to another one.
+	// One timer per open document, so a tab keeps its own countdown once the
+	// writer has moved on to another one.
 	const timers = useRef(new Map<string, number>());
 
 	// The tabs as they stand now. The handlers below are registered once and
@@ -64,8 +79,15 @@ export default function Project({ name, root, onClose }: Props) {
 		latest.current = tabs;
 	});
 
+	function documentTab(id: string): DocumentTab | undefined {
+		return tabs.find(
+			(tab): tab is DocumentTab =>
+				tab.kind === "document" && tab.document.id === id,
+		);
+	}
+
 	// Puts a tab's text on disk, putting the file itself back if it has gone.
-	function put(tab: Tab, text: string) {
+	function put(tab: DocumentTab, text: string) {
 		return tab.save.kind === "missing"
 			? invoke("restore_document", {
 					root,
@@ -84,7 +106,9 @@ export default function Project({ name, root, onClose }: Props) {
 
 		await Promise.allSettled(
 			latest.current.flatMap((tab) =>
-				tab.save.kind !== "clean" && tab.content.kind === "ready"
+				tab.kind === "document" &&
+				tab.save.kind !== "clean" &&
+				tab.content.kind === "ready"
 					? [put(tab, tab.content.text)]
 					: [],
 			),
@@ -114,21 +138,30 @@ export default function Project({ name, root, onClose }: Props) {
 		}
 	}
 
-	function patch(id: string, change: (tab: Tab) => Tab) {
+	function patch(id: string, change: (tab: DocumentTab) => DocumentTab) {
 		setTabs((open) =>
-			open.map((tab) => (tab.document.id === id ? change(tab) : tab)),
+			open.map((tab) =>
+				tab.kind === "document" && tab.document.id === id
+					? change(tab)
+					: tab,
+			),
 		);
 	}
 
 	async function openDocument(document: ProjectDocument) {
-		setActiveId(document.id);
-		if (tabs.some((tab) => tab.document.id === document.id)) {
+		setActiveKey(document.id);
+		if (documentTab(document.id) !== undefined) {
 			return;
 		}
 
 		setTabs((open) => [
 			...open,
-			{ document, content: { kind: "loading" }, save: { kind: "clean" } },
+			{
+				kind: "document",
+				document,
+				content: { kind: "loading" },
+				save: { kind: "clean" },
+			},
 		]);
 		const content = await read(root, document.id);
 		// Keyed by id, so a slow read can only ever fill in its own tab — and
@@ -185,7 +218,7 @@ export default function Project({ name, root, onClose }: Props) {
 	}
 
 	async function restore(id: string) {
-		const tab = tabs.find((open) => open.document.id === id);
+		const tab = documentTab(id);
 		if (tab === undefined || tab.content.kind !== "ready") {
 			return;
 		}
@@ -216,38 +249,76 @@ export default function Project({ name, root, onClose }: Props) {
 			document: restored,
 			save: { kind: "clean" },
 		}));
-		setActiveId((current) => (current === id ? restored.id : current));
+		setActiveKey((current) => (current === id ? restored.id : current));
 		setListing((version) => version + 1);
 	}
 
-	function closeTab(id: string) {
-		const index = tabs.findIndex((tab) => tab.document.id === id);
+	function closeTab(key: string) {
+		const index = tabs.findIndex((tab) => keyOf(tab) === key);
 		if (index === -1) {
 			return;
 		}
 
 		const closing = tabs[index];
-		stopTimer(id);
-		// Closing must not throw away what the debounce has not written yet.
-		if (
-			closing.save.kind === "pending" &&
-			closing.content.kind === "ready"
-		) {
-			void invoke("write_document", {
-				root,
-				id,
-				text: closing.content.text,
-			});
+		if (closing.kind === "document") {
+			stopTimer(closing.document.id);
+			// Closing must not throw away what the debounce has not written
+			// yet.
+			if (
+				closing.save.kind === "pending" &&
+				closing.content.kind === "ready"
+			) {
+				void invoke("write_document", {
+					root,
+					id: closing.document.id,
+					text: closing.content.text,
+				});
+			}
 		}
 
-		const remaining = tabs.filter((tab) => tab.document.id !== id);
+		const remaining = tabs.filter((tab) => keyOf(tab) !== key);
 		setTabs(remaining);
-		if (activeId === id) {
+		if (activeKey === key) {
 			// The one to its left, or the new first if it was leftmost.
 			const neighbour: Tab | undefined =
 				remaining[index - 1] ?? remaining[0];
-			setActiveId(neighbour?.document.id ?? null);
+			setActiveKey(neighbour === undefined ? null : keyOf(neighbour));
 		}
+	}
+
+	function documentBody(tab: DocumentTab) {
+		if (tab.content.kind === "ready") {
+			return (
+				// Keyed by path rather than id: switching tabs gives the
+				// textarea a fresh element rather than one carrying the last
+				// document's scroll position and selection, and a restored
+				// document coming back under a new id should not tear it down.
+				<Editor
+					key={tab.document.path}
+					title={tab.document.title}
+					text={tab.content.text}
+					dirty={tab.save.kind !== "clean"}
+					saving={tab.save.kind === "saving"}
+					missing={tab.save.kind === "missing"}
+					error={tab.save.kind === "failed" ? tab.save.message : null}
+					onChange={(text) => edit(tab.document.id, text)}
+					onRestore={() => void restore(tab.document.id)}
+				/>
+			);
+		}
+
+		return (
+			<article className="reader">
+				<h2 className="reader__title">{tab.document.title}</h2>
+				{tab.content.kind === "loading" ? (
+					<p className="reader__note">Opening…</p>
+				) : (
+					<p className="reader__note reader__note--error">
+						{tab.content.message}
+					</p>
+				)}
+			</article>
+		);
 	}
 
 	return (
@@ -257,18 +328,30 @@ export default function Project({ name, root, onClose }: Props) {
 					name={name}
 					root={root}
 					reload={listing}
-					selectedId={activeId}
+					selectedId={
+						active?.kind === "document" ? active.document.id : null
+					}
 					onSelect={(document) => void openDocument(document)}
 					onClose={onClose}
 				/>
 				<div className="project__main">
 					<Tabs
-						documents={tabs.map((tab) => tab.document)}
-						dirty={tabs
-							.filter((tab) => tab.save.kind !== "clean")
-							.map((tab) => tab.document.id)}
-						activeId={activeId}
-						onActivate={setActiveId}
+						tabs={tabs.map((tab) => ({
+							key: keyOf(tab),
+							folder:
+								tab.kind === "document"
+									? tab.document.folder
+									: null,
+							title:
+								tab.kind === "document"
+									? tab.document.title
+									: tab.folder,
+							dirty:
+								tab.kind === "document" &&
+								tab.save.kind !== "clean",
+						}))}
+						activeKey={activeKey}
+						onActivate={setActiveKey}
 						onClose={closeTab}
 					/>
 
@@ -276,41 +359,12 @@ export default function Project({ name, root, onClose }: Props) {
 						<p className="project__empty">
 							Choose a document to open.
 						</p>
-					) : active.content.kind === "ready" ? (
-						// Keyed, so switching tabs gives the textarea a fresh
-						// element rather than one carrying the last document's
-						// scroll position and selection.
-						<Editor
-							// Keyed by path rather than id: a restored document
-							// can come back under a new id, and the tab should
-							// not be torn down for that.
-							key={active.document.path}
-							title={active.document.title}
-							text={active.content.text}
-							dirty={active.save.kind !== "clean"}
-							saving={active.save.kind === "saving"}
-							missing={active.save.kind === "missing"}
-							error={
-								active.save.kind === "failed"
-									? active.save.message
-									: null
-							}
-							onChange={(text) => edit(active.document.id, text)}
-							onRestore={() => void restore(active.document.id)}
-						/>
-					) : (
+					) : active.kind === "section" ? (
 						<article className="reader">
-							<h2 className="reader__title">
-								{active.document.title}
-							</h2>
-							{active.content.kind === "loading" ? (
-								<p className="reader__note">Opening…</p>
-							) : (
-								<p className="reader__note reader__note--error">
-									{active.content.message}
-								</p>
-							)}
+							<h2 className="reader__title">{active.folder}</h2>
 						</article>
+					) : (
+						documentBody(active)
 					)}
 				</div>
 			</div>
