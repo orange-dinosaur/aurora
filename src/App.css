@@ -298,9 +298,13 @@ body,
 }
 
 .project__main {
+	display: flex;
+	flex-direction: column;
 	flex: 1;
 	min-width: 0;
-	overflow-y: auto;
+	/* The editor scrolls its own text rather than the column, so the tab strip
+	   stays put while the writer works. */
+	overflow: hidden;
 }
 
 .project__empty {
@@ -449,6 +453,7 @@ body,
 
 .tabs {
 	display: flex;
+	flex: none;
 	gap: 2px;
 	margin: 0 0 1rem;
 	padding: 0;
@@ -498,6 +503,18 @@ body,
 	opacity: 0.7;
 }
 
+.tab__dirty {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--accent);
+	opacity: 0;
+}
+
+.tab__dirty[data-dirty] {
+	opacity: 1;
+}
+
 .tab__close {
 	padding: 0.25rem 0.4rem 0.25rem 0.15rem;
 	font: inherit;
@@ -515,6 +532,59 @@ body,
 
 .reader {
 	max-width: 40rem;
+}
+
+.editor {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	width: 100%;
+	max-width: 40rem;
+	min-height: 0;
+}
+
+.editor__title {
+	margin: 0 0 1rem;
+	font-size: 1.25rem;
+	font-weight: 600;
+}
+
+.editor__text {
+	flex: 1;
+	min-height: 0;
+	padding: 0;
+	font: inherit;
+	line-height: 1.7;
+	color: inherit;
+	background: none;
+	border: 0;
+	outline: none;
+	resize: none;
+	overflow-y: auto;
+}
+
+.editor__text::placeholder {
+	color: var(--text-dim);
+}
+
+/* Always in the DOM, so the wording can change without moving the text above
+   it. */
+.editor__status {
+	flex: none;
+	margin: 0.5rem 0 0;
+	font-size: 0.8rem;
+	color: var(--text-dim);
+	text-align: right;
+}
+
+.editor__status--error {
+	color: #c0392b;
+}
+
+@media (prefers-color-scheme: dark) {
+	.editor__status--error {
+		color: #ff8a7a;
+	}
 }
 
 .reader__title {

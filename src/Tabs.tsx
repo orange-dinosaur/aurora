@@ -2,6 +2,7 @@ import type { ProjectDocument } from "./types";
 
 type Props = {
 	documents: ProjectDocument[];
+	dirty: string[];
 	activeId: string | null;
 	onActivate: (id: string) => void;
 	onClose: (id: string) => void;
@@ -9,6 +10,7 @@ type Props = {
 
 export default function Tabs({
 	documents,
+	dirty,
 	activeId,
 	onActivate,
 	onClose,
@@ -36,6 +38,15 @@ export default function Tabs({
 						<span className="tab__folder">{document.folder}/</span>
 						{document.title}
 					</button>
+					{/* Always in the strip and only ever faded in, so a tab
+					    does not change width the moment it is typed into. */}
+					<span
+						className="tab__dirty"
+						data-dirty={
+							dirty.includes(document.id) ? "" : undefined
+						}
+						aria-hidden="true"
+					/>
 					<button
 						type="button"
 						className="tab__close"
