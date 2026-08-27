@@ -376,6 +376,7 @@ export default function Project({ name, root, onClose }: Props) {
 					onSelect={(document) => void openDocument(document)}
 					onOpenSection={openSection}
 					onCreated={created}
+					onRenamed={renamed}
 					onClose={onClose}
 				/>
 				<div className="project__main">

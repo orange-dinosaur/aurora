@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import DocumentMenu from "./DocumentMenu";
 import NameField from "./NameField";
 import type { ProjectDocument, SectionDocuments } from "./types";
-import { createDocument } from "./documents";
+import { createDocument, renameDocument } from "./documents";
 import { failure } from "./errors";
 
 type Status =
@@ -16,6 +17,14 @@ type Naming =
 	| { kind: "creating"; folder: string }
 	| { kind: "refused"; folder: string; message: string };
 
+// The document the writer is retitling, and what Rust made of the last name
+// they tried.
+type Renaming =
+	| { kind: "closed" }
+	| { kind: "open"; id: string }
+	| { kind: "saving"; id: string }
+	| { kind: "refused"; id: string; message: string };
+
 type Props = {
 	name: string;
 	root: string;
@@ -26,6 +35,7 @@ type Props = {
 	onSelect: (document: ProjectDocument) => void;
 	onOpenSection: (folder: string) => void;
 	onCreated: (document: ProjectDocument) => void;
+	onRenamed: (document: ProjectDocument) => void;
 	onClose: () => void;
 };
 
@@ -38,11 +48,13 @@ export default function Sidebar({
 	onSelect,
 	onOpenSection,
 	onCreated,
+	onRenamed,
 	onClose,
 }: Props) {
 	const [sections, setSections] = useState<SectionDocuments[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
+	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
 
 	// `list_documents` reads the manifest; `refresh_documents` looks at the
 	// folder again first, for anything changed outside Aurora.
@@ -64,6 +76,20 @@ export default function Sidebar({
 	useEffect(() => {
 		void load("list_documents");
 	}, [load, reload]);
+
+	async function rename(id: string, name: string) {
+		setRenaming({ kind: "saving", id });
+		try {
+			onRenamed(await renameDocument(root, id, name));
+			setRenaming({ kind: "closed" });
+		} catch (error) {
+			setRenaming({
+				kind: "refused",
+				id,
+				message: failure(error).message,
+			});
+		}
+	}
 
 	async function create(folder: string, name: string) {
 		setNaming({ kind: "creating", folder });
@@ -137,7 +163,7 @@ export default function Sidebar({
 
 							{naming.kind !== "closed" &&
 								naming.folder === section.folder && (
-									<div className="section__naming">
+									<div className="sidebar__field">
 										<NameField
 											label={`Name of the new document in ${section.folder}`}
 											placeholder="Chapter 2"
@@ -161,22 +187,73 @@ export default function Sidebar({
 								)}
 							{section.documents.length > 0 ? (
 								<ul className="documents">
-									{section.documents.map((doc) => (
-										<li key={doc.id}>
-											<button
-												type="button"
-												className="document"
-												aria-current={
-													doc.id === selectedId
-														? "page"
-														: undefined
-												}
-												onClick={() => onSelect(doc)}
+									{section.documents.map((doc) =>
+										renaming.kind !== "closed" &&
+										renaming.id === doc.id ? (
+											<li
+												key={doc.id}
+												className="documents__item"
 											>
-												{doc.title}
-											</button>
-										</li>
-									))}
+												<div className="sidebar__field">
+													<NameField
+														label={`New name for ${doc.title}`}
+														placeholder="Chapter 2"
+														initial={doc.title}
+														busy={
+															renaming.kind ===
+															"saving"
+														}
+														error={
+															renaming.kind ===
+															"refused"
+																? renaming.message
+																: null
+														}
+														onSubmit={(name) =>
+															void rename(
+																doc.id,
+																name,
+															)
+														}
+														onCancel={() =>
+															setRenaming({
+																kind: "closed",
+															})
+														}
+													/>
+												</div>
+											</li>
+										) : (
+											<li
+												key={doc.id}
+												className="documents__item"
+											>
+												<button
+													type="button"
+													className="document"
+													aria-current={
+														doc.id === selectedId
+															? "page"
+															: undefined
+													}
+													onClick={() =>
+														onSelect(doc)
+													}
+												>
+													{doc.title}
+												</button>
+												<DocumentMenu
+													label={`Actions for ${doc.title}`}
+													onRename={() =>
+														setRenaming({
+															kind: "open",
+															id: doc.id,
+														})
+													}
+												/>
+											</li>
+										),
+									)}
 								</ul>
 							) : (
 								<p className="section__empty">

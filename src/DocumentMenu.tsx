@@ -7,38 +7,54 @@ type Props = {
 
 export default function DocumentMenu({ label, onRename }: Props) {
 	const [open, setOpen] = useState(false);
+	const menu = useRef<HTMLDivElement>(null);
 	const items = useRef<HTMLDivElement>(null);
 
-	// The card grid scrolls itself, so a menu on the bottom row opens below
-	// the edge of it. Asking for it to be brought into view costs nothing when
-	// it is already there.
+	// Dismissal is watched on the document rather than through the menu losing
+	// focus: this webview does not focus a button when it is clicked, so a
+	// blur handler would close the menu on mousedown and the click that
+	// followed would land on whatever the menu was covering.
 	useEffect(() => {
-		if (open) {
-			items.current?.scrollIntoView({ block: "nearest" });
+		if (!open) {
+			return;
 		}
+
+		function away(event: MouseEvent) {
+			const at = event.target;
+			if (!(at instanceof Node) || !menu.current?.contains(at)) {
+				setOpen(false);
+			}
+		}
+
+		function escape(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				setOpen(false);
+			}
+		}
+
+		document.addEventListener("mousedown", away);
+		document.addEventListener("keydown", escape);
+		return () => {
+			document.removeEventListener("mousedown", away);
+			document.removeEventListener("keydown", escape);
+		};
+	}, [open]);
+
+	useEffect(() => {
+		if (!open) {
+			return;
+		}
+
+		// Both surfaces scroll themselves, so a menu near the bottom opens
+		// past the edge. Asking costs nothing when it is already in view.
+		items.current?.scrollIntoView({ block: "nearest" });
+		// Nothing has focus after a click here, so the keyboard needs putting
+		// somewhere it can walk the menu from.
+		items.current?.querySelector("button")?.focus();
 	}, [open]);
 
 	return (
-		<div
-			className="menu"
-			onBlur={(event) => {
-				// Clicking away closes it. Escape below does the same, but a
-				// writer reaching for the mouse cannot see Escape.
-				const moved = event.relatedTarget;
-				if (
-					!(moved instanceof Node) ||
-					!event.currentTarget.contains(moved)
-				) {
-					setOpen(false);
-				}
-			}}
-			onKeyDown={(event) => {
-				if (event.key === "Escape") {
-					event.preventDefault();
-					setOpen(false);
-				}
-			}}
-		>
+		<div ref={menu} className="menu">
 			<button
 				type="button"
 				className="menu__trigger"

@@ -440,9 +440,9 @@ body,
 	background: var(--bg-card);
 }
 
-/* The field sits where the `+` that opened it is, and its message hangs over
-   the documents below rather than pushing them down. */
-.section__naming {
+/* A field opened in the sidebar sits where the button that opened it was, and
+   its message hangs over what is below rather than pushing it down. */
+.sidebar__field {
 	position: relative;
 	margin-bottom: 0.35rem;
 }
@@ -480,10 +480,16 @@ body,
 	list-style: none;
 }
 
+/* The menu sits over the row rather than inside it: the row is a button, and a
+   button cannot hold another one. */
+.documents__item {
+	position: relative;
+}
+
 .document {
 	display: block;
 	width: 100%;
-	padding: 0.2rem 0.4rem;
+	padding: 0.2rem 1.4rem 0.2rem 0.4rem;
 	font: inherit;
 	font-size: 0.9rem;
 	text-align: left;
@@ -750,7 +756,7 @@ body,
 	right: 0.85rem;
 }
 
-.section__naming .namefield__message {
+.sidebar__field .namefield__message {
 	top: 100%;
 	left: 0;
 	right: 0;
@@ -764,10 +770,33 @@ body,
 	}
 }
 
+/* Out of flow wherever it appears; each surface says where. */
 .menu {
 	position: absolute;
+}
+
+.cards__item .menu {
 	top: 0.35rem;
 	right: 0.35rem;
+}
+
+/* Spanning the row and centring with flex rather than translating: a transform
+   would make this a stacking context, trapping the dropdown's z-index inside it
+   so every row after this one painted over the open menu. */
+.documents__item .menu {
+	top: 0;
+	bottom: 0;
+	right: 0;
+	display: flex;
+	align-items: center;
+	/* Faded rather than removed, so a row of documents is quiet to read but
+	   never changes width. */
+	opacity: 0;
+}
+
+.documents__item:hover .menu,
+.documents__item:focus-within .menu {
+	opacity: 1;
 }
 
 .menu__trigger {
@@ -785,14 +814,14 @@ body,
 .menu__trigger:hover,
 .menu__trigger[aria-expanded="true"] {
 	color: var(--text);
-	background: var(--bg);
+	background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .menu__items {
 	position: absolute;
 	top: 100%;
 	right: 0;
-	z-index: 2;
+	z-index: 5;
 	display: flex;
 	flex-direction: column;
 	min-width: 8rem;
