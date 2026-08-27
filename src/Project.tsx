@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
@@ -48,13 +49,50 @@ export default function Project({ name, root, onClose }: Props) {
 	// One timer per tab, so a tab keeps its own countdown once the writer has
 	// moved on to another one.
 	const timers = useRef(new Map<string, number>());
+
+	// The tabs as they stand now. The handlers below are registered once and
+	// would otherwise go on seeing the tabs they were born with.
+	const latest = useRef(tabs);
 	useEffect(() => {
-		const pending = timers.current;
+		latest.current = tabs;
+	});
+
+	// Writes every tab that is not on disk yet, cancelling the timers that were
+	// going to do it. Nothing reports a failure here: by the time this runs
+	// there is no longer anywhere to report it.
+	async function flush() {
+		timers.current.forEach(window.clearTimeout);
+		timers.current.clear();
+
+		await Promise.allSettled(
+			latest.current.flatMap((tab) =>
+				tab.save.kind !== "clean" && tab.content.kind === "ready"
+					? [
+							invoke("write_document", {
+								root,
+								id: tab.document.id,
+								text: tab.content.text,
+							}),
+						]
+					: [],
+			),
+		);
+	}
+
+	// Quitting must not lose what the debounce has not written yet. Tauri waits
+	// for this handler before it closes the window, so awaiting the writes here
+	// is what holds the door.
+	useEffect(() => {
+		const stopping = getCurrentWindow().onCloseRequested(() => flush());
 		return () => {
-			pending.forEach(window.clearTimeout);
-			pending.clear();
+			void stopping.then((stop) => stop());
 		};
-	}, []);
+	}, [root]);
+
+	// Closing the project unmounts this view, and loses the same edits.
+	useEffect(() => {
+		return () => void flush();
+	}, [root]);
 
 	function stopTimer(id: string) {
 		const timer = timers.current.get(id);
