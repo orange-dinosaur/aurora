@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Sidebar from "./Sidebar";
+import Tabs from "./Tabs";
 import type { ProjectDocument } from "./Sidebar";
 
 type Props = {
@@ -9,97 +10,109 @@ type Props = {
 	onClose: () => void;
 };
 
-type Reading =
-	| { kind: "none" }
-	| { kind: "loading"; document: ProjectDocument }
-	| { kind: "ready"; document: ProjectDocument; text: string }
-	| { kind: "error"; document: ProjectDocument; message: string };
+type Content =
+	| { kind: "loading" }
+	| { kind: "ready"; text: string }
+	| { kind: "error"; message: string };
+
+type Tab = {
+	document: ProjectDocument;
+	content: Content;
+};
+
+async function read(root: string, id: string): Promise<Content> {
+	try {
+		const text = await invoke<string>("read_document", { root, id });
+		return { kind: "ready", text };
+	} catch (error) {
+		return { kind: "error", message: String(error) };
+	}
+}
 
 export default function Project({ name, root, onClose }: Props) {
-	const [reading, setReading] = useState<Reading>({ kind: "none" });
-	const open = reading.kind === "none" ? null : reading.document;
+	const [tabs, setTabs] = useState<Tab[]>([]);
+	const [activeId, setActiveId] = useState<string | null>(null);
+	const active = tabs.find((tab) => tab.document.id === activeId) ?? null;
 
-	useEffect(() => {
-		if (open === null) {
+	async function openDocument(document: ProjectDocument) {
+		setActiveId(document.id);
+		if (tabs.some((tab) => tab.document.id === document.id)) {
 			return;
 		}
 
-		// Clicking through the sidebar quickly leaves earlier reads in flight;
-		// only the newest may set the text.
-		let current = true;
-		invoke<string>("read_document", { root, id: open.id })
-			.then((text) => {
-				if (current) {
-					setReading({ kind: "ready", document: open, text });
-				}
-			})
-			.catch((error: unknown) => {
-				if (current) {
-					setReading({
-						kind: "error",
-						document: open,
-						message: String(error),
-					});
-				}
-			});
+		setTabs((open) => [
+			...open,
+			{ document, content: { kind: "loading" } },
+		]);
+		const content = await read(root, document.id);
+		// Keyed by id, so a slow read can only ever fill in its own tab — and
+		// quietly does nothing if that tab was closed while it was in flight.
+		setTabs((open) =>
+			open.map((tab) =>
+				tab.document.id === document.id ? { ...tab, content } : tab,
+			),
+		);
+	}
 
-		return () => {
-			current = false;
-		};
-	}, [root, open]);
+	function closeTab(id: string) {
+		const index = tabs.findIndex((tab) => tab.document.id === id);
+		if (index === -1) {
+			return;
+		}
+
+		const remaining = tabs.filter((tab) => tab.document.id !== id);
+		setTabs(remaining);
+		if (activeId === id) {
+			// The one to its left, or the new first if it was leftmost.
+			const neighbour: Tab | undefined =
+				remaining[index - 1] ?? remaining[0];
+			setActiveId(neighbour?.document.id ?? null);
+		}
+	}
 
 	return (
 		<section className="project">
-			<header className="project__header">
-				<div>
-					<h1 className="project__title">{name}</h1>
-					<p className="project__path">
-						<code>{root}</code>
-					</p>
-				</div>
-				<button
-					type="button"
-					className="project__close"
-					onClick={onClose}
-				>
-					Close project
-				</button>
-			</header>
-
 			<div className="project__body">
 				<Sidebar
+					name={name}
 					root={root}
-					selectedId={open?.id ?? null}
-					onSelect={(document) =>
-						setReading({ kind: "loading", document })
-					}
+					selectedId={activeId}
+					onSelect={(document) => void openDocument(document)}
+					onClose={onClose}
 				/>
 				<div className="project__main">
-					{reading.kind === "none" ? (
+					<Tabs
+						documents={tabs.map((tab) => tab.document)}
+						activeId={activeId}
+						onActivate={setActiveId}
+						onClose={closeTab}
+					/>
+
+					{active === null ? (
 						<p className="project__empty">
 							Choose a document to read.
 						</p>
 					) : (
 						<article className="reader">
 							<h2 className="reader__title">
-								{reading.document.title}
+								{active.document.title}
 							</h2>
-							{reading.kind === "loading" && (
+							{active.content.kind === "loading" && (
 								<p className="reader__note">Opening…</p>
 							)}
-							{reading.kind === "error" && (
+							{active.content.kind === "error" && (
 								<p className="reader__note reader__note--error">
-									{reading.message}
+									{active.content.message}
 								</p>
 							)}
-							{reading.kind === "ready" &&
-								(reading.text === "" ? (
+							{active.content.kind === "ready" &&
+								(active.content.text === "" ? (
 									<p className="reader__note">
 										This document is empty.
 									</p>
 								) : (
 									<pre className="reader__text">
-										{reading.text}
+										{active.content.text}
 									</pre>
 								))}
 						</article>

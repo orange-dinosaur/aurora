@@ -288,38 +288,6 @@ body,
 	min-height: 0;
 }
 
-.project__header {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 1rem;
-	padding-bottom: 1rem;
-	border-bottom: 1px solid var(--border);
-}
-
-.project__title {
-	margin: 0;
-	font-size: 1.75rem;
-	font-weight: 600;
-	letter-spacing: -0.02em;
-}
-
-.project__close {
-	padding: 0.4rem 0.9rem;
-	font: inherit;
-	font-size: 0.9rem;
-	color: var(--text-dim);
-	background: none;
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	cursor: pointer;
-}
-
-.project__close:hover {
-	color: var(--text);
-	border-color: var(--accent);
-}
-
 .project__body {
 	display: flex;
 	gap: 1.5rem;
@@ -327,20 +295,12 @@ body,
 	   scrollbar never appears. */
 	min-height: 0;
 	flex: 1;
-	margin-top: 1rem;
 }
 
 .project__main {
 	flex: 1;
 	min-width: 0;
 	overflow-y: auto;
-}
-
-.project__path {
-	margin: 0.25rem 0 0;
-	font-size: 0.85rem;
-	color: var(--text-dim);
-	overflow-wrap: anywhere;
 }
 
 .project__empty {
@@ -358,6 +318,14 @@ body,
 	min-height: 0;
 	padding-right: 1.5rem;
 	border-right: 1px solid var(--border);
+}
+
+.sidebar__project {
+	margin: 0 0 1.25rem;
+	font-size: 1.05rem;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	overflow-wrap: anywhere;
 }
 
 .sidebar__header {
@@ -398,12 +366,37 @@ body,
 	cursor: default;
 }
 
+.sidebar__list {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
 .sidebar__sections {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
 	/* Room for the message, which floats over the foot of the list. */
 	padding-bottom: 2rem;
+}
+
+.sidebar__close {
+	margin-top: 1rem;
+	padding: 0.35rem 0.7rem;
+	font: inherit;
+	font-size: 0.8rem;
+	color: var(--text-dim);
+	background: none;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.sidebar__close:hover {
+	color: var(--text);
+	border-color: var(--accent);
 }
 
 .section + .section {
@@ -454,6 +447,72 @@ body,
 	background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+.tabs {
+	display: flex;
+	gap: 2px;
+	margin: 0 0 1rem;
+	padding: 0;
+	list-style: none;
+	overflow-x: auto;
+	border-bottom: 1px solid var(--border);
+}
+
+.tab {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	max-width: 16rem;
+	border-radius: 5px 5px 0 0;
+}
+
+.tab:hover {
+	background: var(--bg-card);
+}
+
+/* An inset edge rather than a border, so the active tab's marker covers the
+   strip's own bottom rule instead of sitting above it. */
+.tab[data-active] {
+	box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab__title {
+	min-width: 0;
+	padding: 0.25rem 0.15rem 0.25rem 0.5rem;
+	font: inherit;
+	font-size: 0.8rem;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tab[data-active] .tab__title {
+	color: var(--text);
+}
+
+.tab__folder {
+	color: var(--text-dim);
+	opacity: 0.7;
+}
+
+.tab__close {
+	padding: 0.25rem 0.4rem 0.25rem 0.15rem;
+	font: inherit;
+	font-size: 0.85rem;
+	line-height: 1;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.tab__close:hover {
+	color: var(--text);
+}
+
 .reader {
 	max-width: 40rem;
 }
@@ -492,7 +551,7 @@ body,
 	position: absolute;
 	bottom: 0;
 	left: 0;
-	right: 1.5rem;
+	right: 0;
 	margin: 0;
 	font-size: 0.8rem;
 	color: #c0392b;

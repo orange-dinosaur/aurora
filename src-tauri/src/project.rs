@@ -133,6 +133,7 @@ impl Document {
 pub struct DocumentView {
 	pub id: Uuid,
 	pub path: String,
+	pub folder: String,
 	pub title: String,
 }
 
@@ -141,6 +142,7 @@ impl From<&Document> for DocumentView {
 		Self {
 			id: document.id,
 			path: document.path.clone(),
+			folder: section_of(&document.path).unwrap_or_default().to_owned(),
 			title: document.title(),
 		}
 	}
@@ -1513,6 +1515,7 @@ mod tests {
 		);
 		assert_eq!(listed[0].documents.len(), 1);
 		assert_eq!(listed[0].documents[0].title, "Chapter 1");
+		assert_eq!(listed[0].documents[0].folder, "Manuscript");
 		assert_eq!(listed[0].documents[0].path, "Manuscript/Chapter 1.md");
 	}
 
@@ -1565,7 +1568,9 @@ mod tests {
 	fn a_title_is_the_file_name_without_its_extension() {
 		let document = Document::new("Manuscript", "Chapter 1.md");
 		assert_eq!(document.title(), "Chapter 1");
-		assert_eq!(DocumentView::from(&document).title, "Chapter 1");
+		let view = DocumentView::from(&document);
+		assert_eq!(view.title, "Chapter 1");
+		assert_eq!(view.folder, "Manuscript");
 	}
 
 	#[test]
