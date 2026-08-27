@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::project::{Error, MANIFEST_FILE, Manifest, Result, read_manifest, write_json};
+use crate::project::{
+	Error, MANIFEST_FILE, Manifest, Result, read_manifest, write_atomic, write_json,
+};
 
 /// A document inside a project. The path is relative to the project root and
 /// always uses forward slashes, so a manifest written on one platform still
@@ -228,6 +230,20 @@ pub fn read_document(root: PathBuf, id: Uuid) -> Result<String> {
 	let manifest = read_manifest(&root)?;
 	let path = resolve(&manifest, &root, id)?;
 	String::from_utf8(fs::read(path)?).map_err(|_| Error::NotText)
+}
+
+/// Replaces one document's text. The document has to be one the project knows
+/// about and its file has to still be there; writing back a file that has
+/// vanished is a different thing to ask for.
+#[tauri::command]
+pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	let path = resolve(&manifest, &root, id)?;
+	write_atomic(&path, text.as_bytes())
 }
 
 /// The sidebar's view of the project, straight from the manifest.
@@ -673,6 +689,87 @@ mod tests {
 	#[test]
 	fn reading_refuses_a_relative_path() {
 		let err = read_document(PathBuf::from("some/where"), Uuid::new_v4()).unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn what_is_written_is_what_is_read_back() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		write_document(root.clone(), id, "Sing to me of the man, Muse.".to_owned()).unwrap();
+		assert_eq!(
+			read_document(root, id).unwrap(),
+			"Sing to me of the man, Muse."
+		);
+	}
+
+	#[test]
+	fn a_second_write_replaces_the_first_rather_than_adding_to_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		write_document(root.clone(), id, "a long first draft".to_owned()).unwrap();
+		write_document(root.clone(), id, "short".to_owned()).unwrap();
+		assert_eq!(read_document(root, id).unwrap(), "short");
+	}
+
+	#[test]
+	fn writing_leaves_no_temporary_file_behind() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		write_document(root.clone(), id, "Chapter one.".to_owned()).unwrap();
+
+		let left: Vec<_> = fs::read_dir(root.join("Manuscript"))
+			.unwrap()
+			.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+			.collect();
+		assert_eq!(left, ["Chapter 1.md"]);
+		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 5);
+	}
+
+	#[test]
+	fn writing_to_an_unknown_id_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = write_document(root, Uuid::new_v4(), "lost".to_owned()).unwrap_err();
+		assert!(matches!(err, Error::UnknownDocument));
+	}
+
+	#[test]
+	fn writing_to_a_document_whose_file_has_gone_is_reported() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+		fs::remove_file(root.join("Manuscript").join("Chapter 1.md")).unwrap();
+
+		let err = write_document(root, id, "back again".to_owned()).unwrap_err();
+		assert!(matches!(err, Error::DocumentMissing));
+	}
+
+	#[test]
+	fn writing_outside_the_project_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let outside = parent.path().join("secrets.md");
+		fs::write(&outside, "not yours").unwrap();
+		set_document_path(&root, 0, "../secrets.md");
+
+		let id = first_document(&root).id;
+		let err = write_document(root, id, "overwritten".to_owned()).unwrap_err();
+		assert!(matches!(err, Error::OutsideProject));
+		assert_eq!(fs::read_to_string(&outside).unwrap(), "not yours");
+	}
+
+	#[test]
+	fn writing_refuses_a_relative_path() {
+		let err =
+			write_document(PathBuf::from("some/where"), Uuid::new_v4(), String::new()).unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
 	}
 }

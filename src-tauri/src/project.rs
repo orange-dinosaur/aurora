@@ -351,13 +351,18 @@ pub(crate) fn to_json<T: Serialize>(value: &T) -> Result<Vec<u8>> {
 	Ok(out)
 }
 
-/// Writes JSON through a temporary file and a rename, so an interrupted save
-/// leaves the previous version intact rather than a truncated one.
-pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+/// Writes through a temporary file and a rename, so an interrupted save leaves
+/// the previous version intact rather than a truncated one. The temporary file
+/// replaces the extension rather than adding one, which keeps it out of `scan`.
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
 	let temp = path.with_extension("tmp");
-	fs::write(&temp, to_json(value)?)?;
+	fs::write(&temp, bytes)?;
 	fs::rename(&temp, path)?;
 	Ok(())
+}
+
+pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+	write_atomic(path, &to_json(value)?)
 }
 
 fn fill(
