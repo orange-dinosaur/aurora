@@ -23,7 +23,10 @@ pub fn run() {
 			document::section_overview,
 			document::create_document,
 			document::rename_document,
-			document::delete_document
+			document::delete_document,
+			document::list_trash,
+			document::restore_from_trash,
+			document::purge_trash_entry
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

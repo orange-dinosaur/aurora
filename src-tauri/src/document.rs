@@ -5,7 +5,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
+use time::{Date, Month, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::project::{
@@ -340,9 +340,10 @@ pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
 }
 
 /// Turns a path offered by the frontend into somewhere this project is willing
-/// to put a document: one of the format's sections, and a Markdown file
-/// directly inside it.
-fn restore_path(manifest: &Manifest, root: &Path, path: &str) -> Result<PathBuf> {
+/// to keep a document: one of the format's sections, and a Markdown file
+/// directly inside it. `base` is the project root, or the trash inside it,
+/// which is laid out the same way.
+fn document_path(manifest: &Manifest, base: &Path, path: &str) -> Result<PathBuf> {
 	let Some((section, name)) = path.split_once('/') else {
 		return Err(Error::BadDocumentPath);
 	};
@@ -362,7 +363,7 @@ fn restore_path(manifest: &Manifest, root: &Path, path: &str) -> Result<PathBuf>
 		return Err(Error::BadDocumentPath);
 	}
 
-	Ok(root.join(section).join(name))
+	Ok(base.join(section).join(name))
 }
 
 /// Puts a document that has gone missing back on disk and brings the manifest
@@ -385,7 +386,7 @@ pub fn restore_document(root: PathBuf, path: String, text: String) -> Result<Doc
 /// document and creating a new one: on disk the two are the same act, and the
 /// document that comes back is the one to start editing.
 fn add_document(root: &Path, manifest: &Manifest, path: &str, text: &str) -> Result<DocumentView> {
-	let file = restore_path(manifest, root, path)?;
+	let file = document_path(manifest, root, path)?;
 	if file.exists() {
 		return Err(Error::DocumentExists);
 	}
@@ -484,7 +485,7 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 		return Ok(DocumentView::from(&manifest.documents[index]));
 	}
 
-	let to = restore_path(&manifest, &root, &path)?;
+	let to = document_path(&manifest, &root, &path)?;
 	if to.exists() {
 		return Err(Error::DocumentExists);
 	}
@@ -496,6 +497,21 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 	manifest.documents[index].path = path;
 	write_json(&root.join(MANIFEST_FILE), &manifest)?;
 	Ok(DocumentView::from(&manifest.documents[index]))
+}
+
+/// One document in the project's trash, as the Trash view shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TrashEntry {
+	/// Where it is, relative to the trash, in the same `section/file` shape a
+	/// document's own path uses.
+	pub path: String,
+	pub folder: String,
+	/// The title it had before it was deleted.
+	pub title: String,
+	/// When it was deleted, or nothing at all if its name does not carry a
+	/// moment Aurora recognises.
+	#[serde(with = "time::serde::rfc3339::option")]
+	pub deleted: Option<OffsetDateTime>,
 }
 
 /// The moment of a deletion, as the prefix on its file in the trash: sortable,
@@ -564,6 +580,143 @@ pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
 		return Err(Error::RelativePath);
 	}
 	trash(&root, id, OffsetDateTime::now_utc())
+}
+
+/// Reads a trash file's name back: the moment it was deleted, and the name it
+/// had before that. Anything that is not a stamp Aurora wrote is not one.
+fn unstamp(name: &str) -> Option<(OffsetDateTime, &str)> {
+	let (token, was) = name.split_once(' ')?;
+	let (date, rest) = token.split_once('-')?;
+	// A second deletion in the same second carries `-1`, `-2` after the stamp.
+	let (time, again) = match rest.split_once('-') {
+		Some((time, again)) => (time, Some(again)),
+		None => (rest, None),
+	};
+
+	fn digits(part: &str, len: usize) -> Option<&str> {
+		(part.len() == len && part.bytes().all(|b| b.is_ascii_digit())).then_some(part)
+	}
+	let date = digits(date, 8)?;
+	let time = digits(time, 6)?;
+	if again.is_some_and(|n| n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit())) {
+		return None;
+	}
+	let number = |from: usize, to: usize, of: &str| of[from..to].parse::<u32>().ok();
+
+	let at = Date::from_calendar_date(
+		number(0, 4, date)? as i32,
+		Month::try_from(number(4, 6, date)? as u8).ok()?,
+		number(6, 8, date)? as u8,
+	)
+	.ok()?
+	.with_hms(
+		number(0, 2, time)? as u8,
+		number(2, 4, time)? as u8,
+		number(4, 6, time)? as u8,
+	)
+	.ok()?
+	.assume_utc();
+
+	Some((at, was))
+}
+
+/// Everything in the project's trash, most recently deleted first.
+#[tauri::command]
+pub fn list_trash(root: PathBuf) -> Result<Vec<TrashEntry>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	// The trash is laid out in sections exactly as the project is, so the same
+	// scan reads it.
+	let mut entries: Vec<TrashEntry> = scan(&root.join(TRASH_DIR), &manifest.folders)?
+		.iter()
+		.map(|path| {
+			let file = path.split_once('/').map_or(path.as_str(), |(_, file)| file);
+			let (deleted, was) = match unstamp(file) {
+				Some((at, was)) => (Some(at), was),
+				// A file somebody put there by hand is still shown, so it can
+				// at least be got rid of.
+				None => (None, file),
+			};
+			TrashEntry {
+				path: path.clone(),
+				folder: section_of(path).unwrap_or_default().to_owned(),
+				title: Path::new(was)
+					.file_stem()
+					.and_then(|stem| stem.to_str())
+					.unwrap_or(was)
+					.to_owned(),
+				deleted,
+			}
+		})
+		.collect();
+
+	// Newest first, with anything undated behind the rest.
+	entries.sort_by(|a, b| b.deleted.cmp(&a.deleted).then_with(|| a.path.cmp(&b.path)));
+	Ok(entries)
+}
+
+/// A file in the trash, once the project is satisfied it is really in there.
+fn trash_entry(manifest: &Manifest, root: &Path, path: &str) -> Result<PathBuf> {
+	let file = document_path(manifest, &root.join(TRASH_DIR), path)?;
+	if !file.exists() {
+		return Err(Error::DocumentMissing);
+	}
+	// The trash is an ordinary folder a writer can replace with a symlink.
+	if !file.canonicalize()?.starts_with(root.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+	Ok(file)
+}
+
+/// Puts a deleted document back in the section it came from, under the name it
+/// had. A document already using that name is not written over.
+#[tauri::command]
+pub fn restore_from_trash(root: PathBuf, path: String) -> Result<DocumentView> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	let from = trash_entry(&manifest, &root, &path)?;
+
+	let (section, file) = path.split_once('/').ok_or(Error::BadDocumentPath)?;
+	let was = unstamp(file).map_or(file, |(_, was)| was);
+	let back = format!("{section}/{was}");
+
+	let to = document_path(&manifest, &root, &back)?;
+	if to.exists() {
+		return Err(Error::DocumentExists);
+	}
+
+	let folder = to.parent().ok_or(Error::BadDocumentPath)?;
+	fs::create_dir_all(folder)?;
+	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+
+	fs::rename(&from, &to)?;
+
+	refresh(&root)?
+		.documents
+		.iter()
+		.find(|d| d.path == back)
+		.map(DocumentView::from)
+		.ok_or(Error::UnknownDocument)
+}
+
+/// Throws one document in the trash away for good.
+#[tauri::command]
+pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	let file = trash_entry(&manifest, &root, &path)?;
+	Ok(fs::remove_file(file)?)
 }
 
 /// Every document in one section, with enough of each to recognise it. Reads
@@ -1869,6 +2022,221 @@ mod tests {
 	fn a_stamp_is_sortable_and_holds_no_separators() {
 		assert_eq!(stamp(fixed_time()), "20231114-221320");
 		assert!(!stamp(fixed_time()).contains(' '));
+	}
+
+	#[test]
+	fn a_stamp_reads_back_as_the_moment_and_the_name() {
+		let (at, was) = unstamp("20231114-221320 Chapter 1.md").unwrap();
+		assert_eq!(at, fixed_time());
+		assert_eq!(was, "Chapter 1.md");
+
+		// The suffix a second deletion in the same second carries.
+		let (at, was) = unstamp("20231114-221320-1 Chapter 1.md").unwrap();
+		assert_eq!(at, fixed_time());
+		assert_eq!(was, "Chapter 1.md");
+	}
+
+	#[test]
+	fn a_name_that_is_not_a_stamp_is_not_read_as_one() {
+		for name in [
+			"Chapter 1.md",
+			"20231114 Chapter 1.md",
+			"2023111-4221320 Chapter 1.md",
+			"20231145-221320 Chapter 1.md",
+			"20231114-991320 Chapter 1.md",
+			"abcdefgh-221320 Chapter 1.md",
+			"20231114-221320Chapter 1.md",
+			"20231114-221320- Chapter 1.md",
+			"20231114-221320-x Chapter 1.md",
+		] {
+			assert!(unstamp(name).is_none(), "{name:?}");
+		}
+	}
+
+	/// A project with one document deleted out of Manuscript.
+	fn with_chapter_one_deleted(parent: &tempfile::TempDir) -> PathBuf {
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+		write_document(root.clone(), id, "Sing to me of the man, Muse.".to_owned()).unwrap();
+		trash(&root, id, fixed_time()).unwrap();
+		root
+	}
+
+	#[test]
+	fn the_trash_lists_what_was_deleted_and_when() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_chapter_one_deleted(&parent);
+
+		let listed = list_trash(root).unwrap();
+
+		assert_eq!(listed.len(), 1);
+		assert_eq!(listed[0].title, "Chapter 1");
+		assert_eq!(listed[0].folder, "Manuscript");
+		assert_eq!(listed[0].path, "Manuscript/20231114-221320 Chapter 1.md");
+		assert_eq!(listed[0].deleted, Some(fixed_time()));
+	}
+
+	#[test]
+	fn an_empty_trash_lists_nothing() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		assert!(list_trash(root).unwrap().is_empty());
+	}
+
+	#[test]
+	fn the_trash_shows_the_most_recent_first_and_the_undated_last() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let later = fixed_time() + time::Duration::days(1);
+
+		let first = first_document(&root).id;
+		trash(&root, first, fixed_time()).unwrap();
+		let second = create_document(root.clone(), "Notes".to_owned(), "Ideas".to_owned()).unwrap();
+		trash(&root, second.id, later).unwrap();
+		// Something a writer dropped in by hand.
+		fs::write(root.join(TRASH_DIR).join("Notes").join("Stray.md"), "").unwrap();
+
+		let listed = list_trash(root).unwrap();
+
+		let titles: Vec<_> = listed.iter().map(|e| e.title.as_str()).collect();
+		assert_eq!(titles, ["Ideas", "Chapter 1", "Stray"]);
+		assert!(listed[2].deleted.is_none());
+	}
+
+	#[test]
+	fn a_deleted_document_can_be_put_back_where_it_was() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_chapter_one_deleted(&parent);
+		let entry = list_trash(root.clone()).unwrap().remove(0);
+
+		let back = restore_from_trash(root.clone(), entry.path).unwrap();
+
+		assert_eq!(back.path, "Manuscript/Chapter 1.md");
+		assert_eq!(back.title, "Chapter 1");
+		assert_eq!(
+			read_document(root.clone(), back.id).unwrap(),
+			"Sing to me of the man, Muse."
+		);
+		assert!(list_trash(root).unwrap().is_empty(), "it left the trash");
+	}
+
+	#[test]
+	fn putting_one_back_over_a_document_of_that_name_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_chapter_one_deleted(&parent);
+		create_document(
+			root.clone(),
+			"Manuscript".to_owned(),
+			"Chapter 1".to_owned(),
+		)
+		.unwrap();
+		let entry = list_trash(root.clone()).unwrap().remove(0);
+
+		let err = restore_from_trash(root.clone(), entry.path).unwrap_err();
+
+		assert!(matches!(err, Error::DocumentExists));
+		assert_eq!(list_trash(root).unwrap().len(), 1, "it is still there");
+	}
+
+	#[test]
+	fn putting_one_back_recreates_a_section_folder_that_has_gone() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_chapter_one_deleted(&parent);
+		fs::remove_dir_all(root.join("Manuscript")).unwrap();
+		let entry = list_trash(root.clone()).unwrap().remove(0);
+
+		let back = restore_from_trash(root.clone(), entry.path).unwrap();
+
+		assert_eq!(back.folder, "Manuscript");
+		assert_eq!(
+			read_document(root, back.id).unwrap(),
+			"Sing to me of the man, Muse."
+		);
+	}
+
+	#[test]
+	fn a_purged_entry_is_gone_for_good() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_chapter_one_deleted(&parent);
+		let entry = list_trash(root.clone()).unwrap().remove(0);
+
+		purge_trash_entry(root.clone(), entry.path).unwrap();
+
+		assert!(list_trash(root.clone()).unwrap().is_empty());
+		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 4);
+	}
+
+	#[test]
+	fn the_trash_commands_refuse_an_entry_that_is_not_there() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let path = "Manuscript/20231114-221320 Chapter 1.md".to_owned();
+
+		assert!(matches!(
+			restore_from_trash(root.clone(), path.clone()).unwrap_err(),
+			Error::DocumentMissing
+		));
+		assert!(matches!(
+			purge_trash_entry(root, path).unwrap_err(),
+			Error::DocumentMissing
+		));
+	}
+
+	#[test]
+	fn the_trash_commands_refuse_a_path_out_of_the_trash() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_chapter_one_deleted(&parent);
+		fs::write(parent.path().join("secrets.md"), "not yours").unwrap();
+
+		for path in [
+			"secrets.md",
+			"../secrets.md",
+			"Manuscript/../../secrets.md",
+			"Scraps/Offcut.md",
+			"Manuscript/notes.txt",
+		] {
+			assert!(matches!(
+				purge_trash_entry(root.clone(), path.to_owned()).unwrap_err(),
+				Error::BadDocumentPath | Error::DocumentMissing
+			));
+		}
+
+		assert!(parent.path().join("secrets.md").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn a_trash_entry_that_leads_out_of_the_project_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_chapter_one_deleted(&parent);
+		let outside = parent.path().join("secrets.md");
+		fs::write(&outside, "not yours").unwrap();
+		fs::create_dir_all(root.join(TRASH_DIR).join("Notes")).unwrap();
+		std::os::unix::fs::symlink(&outside, root.join(TRASH_DIR).join("Notes").join("Link.md"))
+			.unwrap();
+
+		let err = purge_trash_entry(root, "Notes/Link.md".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::OutsideProject));
+		assert!(outside.exists());
+	}
+
+	#[test]
+	fn the_trash_commands_refuse_a_relative_path() {
+		let relative = PathBuf::from("some/where");
+		assert!(matches!(
+			list_trash(relative.clone()).unwrap_err(),
+			Error::RelativePath
+		));
+		assert!(matches!(
+			restore_from_trash(relative.clone(), "Notes/Notes.md".to_owned()).unwrap_err(),
+			Error::RelativePath
+		));
+		assert!(matches!(
+			purge_trash_entry(relative, "Notes/Notes.md".to_owned()).unwrap_err(),
+			Error::RelativePath
+		));
 	}
 
 	#[test]
