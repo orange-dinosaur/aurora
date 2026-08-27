@@ -225,7 +225,8 @@ impl fmt::Display for Error {
 			Error::NotAProject => write!(f, "that folder is not an Aurora project"),
 			Error::UnsupportedVersion { found, supported } => write!(
 				f,
-				"that project needs a newer version of Aurora 				 (it was saved as version {found}, this Aurora reads version {supported})"
+				"that project needs a newer version of Aurora (it was saved as version \
+				 {found}, this Aurora reads version {supported})"
 			),
 			Error::UnknownDocument => write!(f, "that document is not part of this project"),
 			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
@@ -1868,6 +1869,33 @@ mod tests {
 			Error::UnsupportedVersion { found, supported }
 				if found == MANIFEST_VERSION + 1 && supported == MANIFEST_VERSION
 		));
+	}
+
+	/// The message reaches the writer verbatim, so it has to read as a sentence.
+	#[test]
+	fn error_messages_are_single_spaced() {
+		for error in [
+			Error::UnsupportedVersion {
+				found: 3,
+				supported: 2,
+			},
+			Error::InvalidName(NameError::Empty),
+			Error::RelativePath,
+			Error::NoConfigDir,
+			Error::NotAProject,
+			Error::UnknownDocument,
+			Error::DocumentMissing,
+			Error::OutsideProject,
+			Error::NotText,
+			Error::AlreadyExists,
+			Error::UnsupportedFormat(Format::Screenplay),
+		] {
+			let message = error.to_string();
+			assert!(
+				!message.contains('\t') && !message.contains('\n') && !message.contains("  "),
+				"{message:?}"
+			);
+		}
 	}
 
 	#[test]
