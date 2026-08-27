@@ -403,15 +403,26 @@ fn add_document(root: &Path, manifest: &Manifest, path: &str, text: &str) -> Res
 		.ok_or(Error::UnknownDocument)
 }
 
+/// `.md` is Aurora's business rather than the writer's, so a name that already
+/// carries it means the same thing as one that does not, and gets it taken off
+/// rather than doubled.
+fn without_extension(name: &str) -> &str {
+	match name.rfind('.') {
+		Some(dot) if name[dot..].eq_ignore_ascii_case(".md") => &name[..dot],
+		_ => name,
+	}
+}
+
 /// Starts a new, empty document in one of the project's sections. The name is
-/// the title; `.md` is this project's business rather than the writer's.
+/// the title.
 #[tauri::command]
 pub fn create_document(root: PathBuf, section: String, name: String) -> Result<DocumentView> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
 
-	validate_name(&name)?;
+	let name = without_extension(&name);
+	validate_name(name)?;
 
 	let manifest = read_manifest(&root)?;
 	if !manifest.folders.contains(&section) {
@@ -468,7 +479,7 @@ pub fn section_overview(root: PathBuf, section: String) -> Result<Vec<DocumentSu
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::project::{Format, create};
+	use crate::project::{Format, NameError, create};
 	use time::OffsetDateTime;
 
 	fn fixed_time() -> OffsetDateTime {
@@ -1410,6 +1421,35 @@ mod tests {
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn a_name_that_already_carries_the_extension_does_not_double_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		for (typed, title) in [
+			("Chapter 2.md", "Chapter 2"),
+			("Chapter 3.MD", "Chapter 3"),
+			("Chapter 4.markdown", "Chapter 4.markdown"),
+			("Chapter 5", "Chapter 5"),
+		] {
+			let created =
+				create_document(root.clone(), "Manuscript".to_owned(), typed.to_owned()).unwrap();
+			assert_eq!(created.title, title, "typed {typed:?}");
+			assert_eq!(created.path, format!("Manuscript/{title}.md"));
+		}
+	}
+
+	#[test]
+	fn a_name_that_is_nothing_but_the_extension_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = create_document(root.clone(), "Notes".to_owned(), ".md".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::InvalidName(NameError::Empty)));
+		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 5);
 	}
 
 	#[test]

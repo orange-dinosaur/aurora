@@ -652,6 +652,70 @@ body,
 	color: var(--text-dim);
 }
 
+/* Outlined rather than filled, so the row of real documents reads first. */
+.card--new {
+	align-items: flex-start;
+	justify-content: center;
+	min-height: 6rem;
+	font-size: 0.85rem;
+	color: var(--text-dim);
+	background: none;
+	border-style: dashed;
+}
+
+.card--new:hover {
+	color: var(--text);
+}
+
+.card--naming {
+	position: relative;
+	justify-content: center;
+	min-height: 6rem;
+	cursor: default;
+}
+
+.namefield {
+	display: contents;
+}
+
+.namefield__input {
+	width: 100%;
+	padding: 0.3rem 0.4rem;
+	font: inherit;
+	font-size: 0.9rem;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+
+.namefield__input:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+.namefield__input:disabled {
+	opacity: 0.6;
+}
+
+/* Out of flow, so a refused name reports without growing the card it sits in
+   and shifting the rest of the grid. */
+.namefield__message {
+	position: absolute;
+	left: 0.85rem;
+	right: 0.85rem;
+	margin: 0;
+	font-size: 0.75rem;
+	color: #c0392b;
+	overflow-wrap: anywhere;
+}
+
+@media (prefers-color-scheme: dark) {
+	.namefield__message {
+		color: #ff8a7a;
+	}
+}
+
 .editor {
 	display: flex;
 	flex-direction: column;

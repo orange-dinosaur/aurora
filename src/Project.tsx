@@ -384,6 +384,12 @@ export default function Project({ name, root, onClose }: Props) {
 							folder={active.folder}
 							reload={listing}
 							onSelect={(document) => void openDocument(document)}
+							onCreated={(document) => {
+								// A new document is opened for writing in, and
+								// every listing of it has to be read again.
+								void openDocument(document);
+								setListing((version) => version + 1);
+							}}
 						/>
 					) : (
 						documentBody(active)
