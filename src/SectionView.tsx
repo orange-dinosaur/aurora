@@ -5,6 +5,7 @@ import NameField from "./NameField";
 import type { DocumentSummary, ProjectDocument } from "./types";
 import { createDocument, renameDocument, reorderDocument } from "./documents";
 import { when } from "./dates";
+import { useReorder } from "./reorder";
 import { failure } from "./errors";
 
 type Status =
@@ -58,6 +59,7 @@ export default function SectionView({
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
+	const reorder = useReorder((id, index) => void move(id, index));
 
 	const load = useCallback(async () => {
 		setStatus({ kind: "busy" });
@@ -160,7 +162,11 @@ export default function SectionView({
 							</div>
 						</li>
 					) : (
-						<li key={document.id} className="cards__item">
+						<li
+							key={document.id}
+							className="cards__item"
+							{...reorder.item(document.id, at)}
+						>
 							<button
 								type="button"
 								className="card"
