@@ -1,9 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::project::{
@@ -53,6 +55,34 @@ impl From<&Document> for DocumentView {
 			path: document.path.clone(),
 			folder: section_of(&document.path).unwrap_or_default().to_owned(),
 			title: document.title(),
+		}
+	}
+}
+
+/// How much of a document's opening the overview carries. Long enough to
+/// recognise a chapter by, short enough that a whole section stays small.
+const EXCERPT_CHARS: usize = 240;
+
+/// A document as the section overview shows it: the sidebar's view plus enough
+/// of the file to tell one chapter from another without opening it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DocumentSummary {
+	#[serde(flatten)]
+	pub document: DocumentView,
+	pub words: usize,
+	pub excerpt: String,
+	#[serde(with = "time::serde::rfc3339::option")]
+	pub modified: Option<OffsetDateTime>,
+}
+
+impl DocumentSummary {
+	/// A card for a document whose file cannot be read.
+	fn blank(document: &Document) -> Self {
+		Self {
+			document: document.into(),
+			words: 0,
+			excerpt: String::new(),
+			modified: None,
 		}
 	}
 }
@@ -195,6 +225,64 @@ fn sections(manifest: &Manifest) -> Vec<SectionDocuments> {
 		.collect()
 }
 
+/// The opening of a document collapsed onto one line and cut to something a
+/// card can hold.
+fn excerpt(text: &str) -> String {
+	let mut excerpt = String::new();
+	let mut length = 0;
+
+	for word in text.split_whitespace() {
+		let separator = usize::from(!excerpt.is_empty());
+		let width = word.chars().count();
+
+		if length + separator + width > EXCERPT_CHARS {
+			// A first word longer than the whole excerpt still has to show
+			// something.
+			if excerpt.is_empty() {
+				excerpt.extend(word.chars().take(EXCERPT_CHARS));
+			}
+			excerpt.push('\u{2026}');
+			break;
+		}
+
+		if separator == 1 {
+			excerpt.push(' ');
+		}
+		excerpt.push_str(word);
+		length += separator + width;
+	}
+
+	excerpt
+}
+
+/// Everything the overview shows about one document, from a single open of its
+/// file. A file that cannot be read gives a blank card rather than failing the
+/// whole section.
+fn summarise(document: &Document, path: &Path) -> DocumentSummary {
+	let Ok(mut file) = fs::File::open(path) else {
+		return DocumentSummary::blank(document);
+	};
+
+	let modified = file
+		.metadata()
+		.and_then(|metadata| metadata.modified())
+		.ok()
+		.map(OffsetDateTime::from);
+
+	let mut bytes = Vec::new();
+	let text = match file.read_to_end(&mut bytes) {
+		Ok(_) => String::from_utf8(bytes).unwrap_or_default(),
+		Err(_) => String::new(),
+	};
+
+	DocumentSummary {
+		document: document.into(),
+		words: text.split_whitespace().count(),
+		excerpt: excerpt(&text),
+		modified,
+	}
+}
+
 /// Turns a document id into a path on disk, refusing anything that does not
 /// end up inside the project. `aurora.json` is an ordinary file a writer can
 /// edit, so the path it records is not to be trusted.
@@ -324,6 +412,31 @@ pub fn refresh_documents(root: PathBuf) -> Result<Vec<SectionDocuments>> {
 		return Err(Error::RelativePath);
 	}
 	Ok(sections(&refresh(&root)?))
+}
+
+/// Every document in one section, with enough of each to recognise it. Reads
+/// the manifest rather than the folder, the way `list_documents` does.
+#[tauri::command]
+pub fn section_overview(root: PathBuf, section: String) -> Result<Vec<DocumentSummary>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	if !manifest.folders.contains(&section) {
+		return Err(Error::UnknownSection);
+	}
+
+	Ok(manifest
+		.documents
+		.iter()
+		.filter(|d| section_of(&d.path) == Some(section.as_str()))
+		.map(|document| match resolve(&manifest, &root, document.id) {
+			Ok(path) => summarise(document, &path),
+			// A vanished file, or one the manifest points outside the project.
+			Err(_) => DocumentSummary::blank(document),
+		})
+		.collect())
 }
 
 #[cfg(test)]
@@ -966,6 +1079,158 @@ mod tests {
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn an_overview_carries_the_opening_the_count_and_the_time() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(
+			root.join("Manuscript").join("Chapter 1.md"),
+			"Sing to me of the man, Muse.",
+		)
+		.unwrap();
+
+		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+
+		assert_eq!(overview.len(), 1);
+		assert_eq!(overview[0].document.title, "Chapter 1");
+		assert_eq!(overview[0].excerpt, "Sing to me of the man, Muse.");
+		assert_eq!(overview[0].words, 7);
+		assert!(overview[0].modified.is_some());
+	}
+
+	#[test]
+	fn an_overview_lists_a_section_in_the_manifests_order() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		for name in ["Chapter 3.md", "Chapter 2.md"] {
+			fs::write(root.join("Manuscript").join(name), "").unwrap();
+		}
+		refresh(&root).unwrap();
+
+		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+
+		let titles: Vec<_> = overview.iter().map(|d| d.document.title.as_str()).collect();
+		assert_eq!(titles, ["Chapter 1", "Chapter 2", "Chapter 3"]);
+	}
+
+	#[test]
+	fn an_overview_holds_only_its_own_section() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let overview = section_overview(root, "Notes".to_owned()).unwrap();
+
+		assert_eq!(overview.len(), 1);
+		assert_eq!(overview[0].document.folder, "Notes");
+	}
+
+	#[test]
+	fn a_document_whose_file_has_gone_still_gets_a_card() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, id) = with_chapter_one_gone(&parent);
+
+		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+
+		assert_eq!(overview.len(), 1);
+		assert_eq!(overview[0].document.id, id);
+		assert_eq!(overview[0].words, 0);
+		assert_eq!(overview[0].excerpt, "");
+		assert!(overview[0].modified.is_none());
+	}
+
+	#[test]
+	fn an_overview_does_not_read_a_document_outside_the_project() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(parent.path().join("secrets.md"), "not yours").unwrap();
+		set_document_path(&root, 0, "../secrets.md");
+
+		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+
+		assert!(overview.is_empty(), "it is no longer in Manuscript");
+	}
+
+	#[test]
+	fn an_overview_of_a_section_the_project_does_not_have_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = section_overview(root, "Scraps".to_owned()).unwrap_err();
+		assert!(matches!(err, Error::UnknownSection));
+	}
+
+	#[test]
+	fn an_overview_refuses_a_relative_path() {
+		let err = section_overview(PathBuf::from("some/where"), "Notes".to_owned()).unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn a_summary_serializes_flat_alongside_the_document() {
+		let document = Document::new("Manuscript", "Chapter 1.md");
+		let summary = DocumentSummary {
+			document: (&document).into(),
+			words: 3,
+			excerpt: "Sing to me".to_owned(),
+			modified: Some(fixed_time()),
+		};
+
+		let json = serde_json::to_value(&summary).unwrap();
+		assert_eq!(json["title"], "Chapter 1");
+		assert_eq!(json["path"], "Manuscript/Chapter 1.md");
+		assert_eq!(json["words"], 3);
+		assert_eq!(json["modified"], "2023-11-14T22:13:20Z");
+		assert!(json.get("document").is_none());
+	}
+
+	#[test]
+	fn an_unreadable_summary_reports_no_time_at_all() {
+		let document = Document::new("Manuscript", "Chapter 1.md");
+		let json = serde_json::to_value(DocumentSummary::blank(&document)).unwrap();
+		assert!(json["modified"].is_null());
+	}
+
+	#[test]
+	fn an_excerpt_is_one_line_of_the_opening() {
+		assert_eq!(
+			excerpt("  Sing to me\n\nof the man,\tMuse.  "),
+			"Sing to me of the man, Muse."
+		);
+		assert_eq!(excerpt(""), "");
+	}
+
+	#[test]
+	fn a_long_excerpt_is_cut_on_a_word_boundary() {
+		let text = "word ".repeat(200);
+		let cut = excerpt(&text);
+
+		assert!(cut.ends_with('\u{2026}'));
+		assert!(cut.chars().count() <= EXCERPT_CHARS + 1);
+		assert!(cut.trim_end_matches('\u{2026}').ends_with("word"));
+	}
+
+	#[test]
+	fn a_single_endless_word_is_still_shown() {
+		let cut = excerpt(&"a".repeat(EXCERPT_CHARS * 2));
+
+		assert_eq!(cut.chars().count(), EXCERPT_CHARS + 1);
+		assert!(cut.ends_with('\u{2026}'));
+	}
+
+	#[test]
+	fn words_are_counted_across_lines() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(
+			root.join("Notes").join("Notes.md"),
+			"one two\nthree\n\n  four  ",
+		)
+		.unwrap();
+
+		let overview = section_overview(root, "Notes".to_owned()).unwrap();
+		assert_eq!(overview[0].words, 4);
 	}
 
 	#[test]

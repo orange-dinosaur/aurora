@@ -151,6 +151,7 @@ pub enum Error {
 	NotAProject,
 	UnsupportedVersion { found: u32, supported: u32 },
 	UnknownDocument,
+	UnknownSection,
 	DocumentMissing,
 	DocumentExists,
 	BadDocumentPath,
@@ -177,6 +178,7 @@ impl fmt::Display for Error {
 				 {found}, this Aurora reads version {supported})"
 			),
 			Error::UnknownDocument => write!(f, "that document is not part of this project"),
+			Error::UnknownSection => write!(f, "that section is not part of this project"),
 			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
 			Error::DocumentExists => write!(
 				f,
@@ -210,6 +212,7 @@ impl Error {
 			Error::NotAProject => "notAProject",
 			Error::UnsupportedVersion { .. } => "unsupportedVersion",
 			Error::UnknownDocument => "unknownDocument",
+			Error::UnknownSection => "unknownSection",
 			Error::DocumentMissing => "documentMissing",
 			Error::DocumentExists => "documentExists",
 			Error::BadDocumentPath => "badDocumentPath",
@@ -243,6 +246,7 @@ impl std::error::Error for Error {
 			| Error::NotAProject
 			| Error::UnsupportedVersion { .. }
 			| Error::UnknownDocument
+			| Error::UnknownSection
 			| Error::DocumentMissing
 			| Error::DocumentExists
 			| Error::BadDocumentPath
@@ -1314,6 +1318,7 @@ mod tests {
 				supported: 2,
 			},
 			Error::UnknownDocument,
+			Error::UnknownSection,
 			Error::DocumentMissing,
 			Error::DocumentExists,
 			Error::BadDocumentPath,
