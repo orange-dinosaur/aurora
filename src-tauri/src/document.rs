@@ -9,7 +9,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::project::{
-	Error, MANIFEST_FILE, Manifest, Result, read_manifest, write_atomic, write_json,
+	Error, MANIFEST_FILE, Manifest, Result, read_manifest, validate_name, write_atomic, write_json,
 };
 
 /// A document inside a project. The path is relative to the project root and
@@ -372,7 +372,15 @@ pub fn restore_document(root: PathBuf, path: String, text: String) -> Result<Doc
 	}
 
 	let manifest = read_manifest(&root)?;
-	let file = restore_path(&manifest, &root, &path)?;
+	add_document(&root, &manifest, &path, &text)
+}
+
+/// Puts a file that is not there yet at a relative path this project is willing
+/// to accept, and brings the manifest with it. Shared by restoring a vanished
+/// document and creating a new one: on disk the two are the same act, and the
+/// document that comes back is the one to start editing.
+fn add_document(root: &Path, manifest: &Manifest, path: &str, text: &str) -> Result<DocumentView> {
+	let file = restore_path(manifest, root, path)?;
 	if file.exists() {
 		return Err(Error::DocumentExists);
 	}
@@ -387,12 +395,30 @@ pub fn restore_document(root: PathBuf, path: String, text: String) -> Result<Doc
 
 	write_atomic(&file, text.as_bytes())?;
 
-	refresh(&root)?
+	refresh(root)?
 		.documents
 		.iter()
 		.find(|d| d.path == path)
 		.map(DocumentView::from)
 		.ok_or(Error::UnknownDocument)
+}
+
+/// Starts a new, empty document in one of the project's sections. The name is
+/// the title; `.md` is this project's business rather than the writer's.
+#[tauri::command]
+pub fn create_document(root: PathBuf, section: String, name: String) -> Result<DocumentView> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	validate_name(&name)?;
+
+	let manifest = read_manifest(&root)?;
+	if !manifest.folders.contains(&section) {
+		return Err(Error::UnknownSection);
+	}
+
+	add_document(&root, &manifest, &format!("{section}/{name}.md"), "")
 }
 
 /// The sidebar's view of the project, straight from the manifest.
@@ -1231,6 +1257,159 @@ mod tests {
 
 		let overview = section_overview(root, "Notes".to_owned()).unwrap();
 		assert_eq!(overview[0].words, 4);
+	}
+
+	#[test]
+	fn a_new_document_starts_empty_at_the_end_of_its_section() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let created = create_document(
+			root.clone(),
+			"Manuscript".to_owned(),
+			"Chapter 2".to_owned(),
+		)
+		.unwrap();
+
+		assert_eq!(created.title, "Chapter 2");
+		assert_eq!(created.folder, "Manuscript");
+		assert_eq!(created.path, "Manuscript/Chapter 2.md");
+		assert_eq!(read_document(root.clone(), created.id).unwrap(), "");
+
+		let manuscript = sections(&read_manifest(&root).unwrap()).remove(0);
+		let titles: Vec<_> = manuscript.documents.iter().map(|d| &d.title).collect();
+		assert_eq!(titles, ["Chapter 1", "Chapter 2"]);
+	}
+
+	#[test]
+	fn a_new_document_can_be_written_to_straight_away() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let created =
+			create_document(root.clone(), "Notes".to_owned(), "Ideas".to_owned()).unwrap();
+		write_document(root.clone(), created.id, "Begin in the middle.".to_owned()).unwrap();
+
+		assert_eq!(
+			read_document(root, created.id).unwrap(),
+			"Begin in the middle."
+		);
+	}
+
+	#[test]
+	fn a_name_already_taken_in_that_section_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(
+			root.join("Manuscript").join("Chapter 1.md"),
+			"Sing to me of the man, Muse.",
+		)
+		.unwrap();
+
+		let err = create_document(
+			root.clone(),
+			"Manuscript".to_owned(),
+			"Chapter 1".to_owned(),
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::DocumentExists));
+		assert_eq!(
+			fs::read_to_string(root.join("Manuscript").join("Chapter 1.md")).unwrap(),
+			"Sing to me of the man, Muse.",
+			"the document that was already there is untouched"
+		);
+	}
+
+	#[test]
+	fn the_same_name_in_another_section_is_fine() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		create_document(root.clone(), "Notes".to_owned(), "Chapter 1".to_owned()).unwrap();
+
+		assert!(root.join("Notes").join("Chapter 1.md").exists());
+	}
+
+	#[test]
+	fn a_name_the_filesystem_would_not_take_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		for name in [
+			"",
+			"  ",
+			"Chapter/Two",
+			"Chapter?",
+			".hidden",
+			"NUL",
+			"Chapter ",
+		] {
+			let err = create_document(root.clone(), "Manuscript".to_owned(), name.to_owned())
+				.unwrap_err();
+			assert!(
+				matches!(err, Error::InvalidName(_)),
+				"{name:?} should not be a document name"
+			);
+		}
+
+		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 5);
+	}
+
+	#[test]
+	fn creating_in_a_section_the_project_does_not_have_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err =
+			create_document(root.clone(), "Scraps".to_owned(), "Offcut".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::UnknownSection));
+		assert!(!root.join("Scraps").exists());
+	}
+
+	#[test]
+	fn creating_recreates_a_section_folder_that_has_gone() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::remove_dir_all(root.join("Manuscript")).unwrap();
+
+		let created = create_document(
+			root.clone(),
+			"Manuscript".to_owned(),
+			"Chapter 2".to_owned(),
+		)
+		.unwrap();
+
+		assert_eq!(created.path, "Manuscript/Chapter 2.md");
+		assert_eq!(read_document(root, created.id).unwrap(), "");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn creating_through_a_symlinked_section_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let elsewhere = parent.path().join("elsewhere");
+		fs::create_dir(&elsewhere).unwrap();
+		fs::remove_dir_all(root.join("Notes")).unwrap();
+		std::os::unix::fs::symlink(&elsewhere, root.join("Notes")).unwrap();
+
+		let err = create_document(root, "Notes".to_owned(), "Ideas".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::OutsideProject));
+		assert!(!elsewhere.join("Ideas.md").exists());
+	}
+
+	#[test]
+	fn creating_refuses_a_relative_path() {
+		let err = create_document(
+			PathBuf::from("some/where"),
+			"Notes".to_owned(),
+			"Ideas".to_owned(),
+		)
+		.unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
 	}
 
 	#[test]

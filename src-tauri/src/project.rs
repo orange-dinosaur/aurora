@@ -180,10 +180,9 @@ impl fmt::Display for Error {
 			Error::UnknownDocument => write!(f, "that document is not part of this project"),
 			Error::UnknownSection => write!(f, "that section is not part of this project"),
 			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
-			Error::DocumentExists => write!(
-				f,
-				"that document's file is there again — open it rather than writing over it"
-			),
+			Error::DocumentExists => {
+				write!(f, "a document of that name is already there")
+			}
 			Error::BadDocumentPath => {
 				write!(f, "that is not a path to a document in this project")
 			}
@@ -1348,6 +1347,7 @@ mod tests {
 			Error::NoConfigDir,
 			Error::NotAProject,
 			Error::UnknownDocument,
+			Error::UnknownSection,
 			Error::DocumentMissing,
 			Error::DocumentExists,
 			Error::BadDocumentPath,

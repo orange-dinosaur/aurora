@@ -20,7 +20,8 @@ pub fn run() {
 			document::read_document,
 			document::write_document,
 			document::restore_document,
-			document::section_overview
+			document::section_overview,
+			document::create_document
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
