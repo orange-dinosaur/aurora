@@ -26,7 +26,8 @@ pub fn run() {
 			document::delete_document,
 			document::list_trash,
 			document::restore_from_trash,
-			document::purge_trash_entry
+			document::purge_trash_entry,
+			document::reorder_document
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

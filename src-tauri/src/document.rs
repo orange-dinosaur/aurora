@@ -582,6 +582,61 @@ pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
 	trash(&root, id, OffsetDateTime::now_utc())
 }
 
+/// Moves a document to a different place in its own section. Ordering lives in
+/// the manifest and nowhere else, so this touches no files — and a document
+/// whose file has gone can still be moved, since where it sits in the list is
+/// not a question about the disk.
+fn reorder(manifest: &mut Manifest, id: Uuid, index: usize) -> Result<()> {
+	let section = manifest
+		.documents
+		.iter()
+		.find(|d| d.id == id)
+		.ok_or(Error::UnknownDocument)
+		.and_then(|d| section_of(&d.path).ok_or(Error::BadDocumentPath))?
+		.to_owned();
+
+	// Which places in the list belong to this section. Taken as positions
+	// rather than assuming the section's documents sit together, which only
+	// holds while nothing has hand-edited the manifest.
+	let slots: Vec<usize> = manifest
+		.documents
+		.iter()
+		.enumerate()
+		.filter(|(_, d)| section_of(&d.path) == Some(section.as_str()))
+		.map(|(at, _)| at)
+		.collect();
+
+	let mut order: Vec<Document> = slots
+		.iter()
+		.map(|&at| manifest.documents[at].clone())
+		.collect();
+	let from = order
+		.iter()
+		.position(|d| d.id == id)
+		.expect("the document is in its own section");
+
+	let moving = order.remove(from);
+	order.insert(index.min(order.len()), moving);
+
+	for (&slot, document) in slots.iter().zip(order) {
+		manifest.documents[slot] = document;
+	}
+	Ok(())
+}
+
+/// Puts a document at a given place among the others in its section. An index
+/// past the end means the end.
+#[tauri::command]
+pub fn reorder_document(root: PathBuf, id: Uuid, index: usize) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let mut manifest = read_manifest(&root)?;
+	reorder(&mut manifest, id, index)?;
+	write_json(&root.join(MANIFEST_FILE), &manifest)
+}
+
 /// Reads a trash file's name back: the moment it was deleted, and the name it
 /// had before that. Anything that is not a stamp Aurora wrote is not one.
 fn unstamp(name: &str) -> Option<(OffsetDateTime, &str)> {
@@ -2237,6 +2292,178 @@ mod tests {
 			purge_trash_entry(relative, "Notes/Notes.md".to_owned()).unwrap_err(),
 			Error::RelativePath
 		));
+	}
+
+	/// A novel whose Manuscript holds three chapters in order.
+	fn with_three_chapters(parent: &tempfile::TempDir) -> PathBuf {
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		for name in ["Chapter 2", "Chapter 3"] {
+			create_document(root.clone(), "Manuscript".to_owned(), name.to_owned()).unwrap();
+		}
+		root
+	}
+
+	/// The titles in one section, in the order the manifest records them.
+	fn order_of(root: &Path, folder: &str) -> Vec<String> {
+		sections(&read_manifest(root).unwrap())
+			.into_iter()
+			.find(|s| s.folder == folder)
+			.unwrap()
+			.documents
+			.iter()
+			.map(|d| d.title.clone())
+			.collect()
+	}
+
+	fn chapter(root: &Path, title: &str) -> Uuid {
+		read_manifest(root)
+			.unwrap()
+			.documents
+			.iter()
+			.find(|d| d.path == format!("Manuscript/{title}.md"))
+			.unwrap()
+			.id
+	}
+
+	#[test]
+	fn a_document_can_be_moved_up_its_section() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_three_chapters(&parent);
+
+		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
+
+		assert_eq!(
+			order_of(&root, "Manuscript"),
+			["Chapter 3", "Chapter 1", "Chapter 2"]
+		);
+	}
+
+	#[test]
+	fn a_document_can_be_moved_down_its_section() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_three_chapters(&parent);
+
+		reorder_document(root.clone(), chapter(&root, "Chapter 1"), 1).unwrap();
+
+		assert_eq!(
+			order_of(&root, "Manuscript"),
+			["Chapter 2", "Chapter 1", "Chapter 3"]
+		);
+	}
+
+	#[test]
+	fn an_index_past_the_end_means_the_end() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_three_chapters(&parent);
+
+		reorder_document(root.clone(), chapter(&root, "Chapter 1"), 99).unwrap();
+
+		assert_eq!(
+			order_of(&root, "Manuscript"),
+			["Chapter 2", "Chapter 3", "Chapter 1"]
+		);
+	}
+
+	#[test]
+	fn moving_a_document_where_it_already_is_changes_nothing() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_three_chapters(&parent);
+		let before = read_manifest(&root).unwrap();
+
+		reorder_document(root.clone(), chapter(&root, "Chapter 2"), 1).unwrap();
+
+		assert_eq!(read_manifest(&root).unwrap(), before);
+	}
+
+	#[test]
+	fn reordering_one_section_leaves_the_others_alone() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_three_chapters(&parent);
+		create_document(root.clone(), "Notes".to_owned(), "Ideas".to_owned()).unwrap();
+		let notes = order_of(&root, "Notes");
+
+		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
+
+		assert_eq!(order_of(&root, "Notes"), notes);
+		assert_eq!(read_manifest(&root).unwrap().documents.len(), 8);
+	}
+
+	#[test]
+	fn a_new_order_survives_a_refresh() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_three_chapters(&parent);
+
+		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
+		refresh(&root).unwrap();
+
+		assert_eq!(
+			order_of(&root, "Manuscript"),
+			["Chapter 3", "Chapter 1", "Chapter 2"]
+		);
+	}
+
+	#[test]
+	fn reordering_touches_no_files() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_three_chapters(&parent);
+		let before = scan(&root, &novel_folders()).unwrap();
+
+		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
+
+		assert_eq!(scan(&root, &novel_folders()).unwrap(), before);
+	}
+
+	#[test]
+	fn a_document_whose_file_has_gone_can_still_be_moved() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = with_three_chapters(&parent);
+		let id = chapter(&root, "Chapter 3");
+		fs::remove_file(root.join("Manuscript").join("Chapter 3.md")).unwrap();
+
+		reorder_document(root.clone(), id, 0).unwrap();
+
+		assert_eq!(
+			order_of(&root, "Manuscript"),
+			["Chapter 3", "Chapter 1", "Chapter 2"]
+		);
+	}
+
+	#[test]
+	fn reordering_an_unknown_document_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = reorder_document(root, Uuid::new_v4(), 0).unwrap_err();
+		assert!(matches!(err, Error::UnknownDocument));
+	}
+
+	#[test]
+	fn reordering_refuses_a_relative_path() {
+		let err = reorder_document(PathBuf::from("some/where"), Uuid::new_v4(), 0).unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn a_section_whose_documents_are_scattered_is_still_reordered() {
+		// Only a hand-edited manifest can interleave two sections like this.
+		let mut manifest = manifest_with(&[
+			"Manuscript/Chapter 1.md",
+			"Notes/Notes.md",
+			"Manuscript/Chapter 2.md",
+		]);
+		let second = manifest.documents[2].id;
+
+		reorder(&mut manifest, second, 0).unwrap();
+
+		assert_eq!(
+			paths_of(&manifest),
+			[
+				"Manuscript/Chapter 2.md",
+				"Notes/Notes.md",
+				"Manuscript/Chapter 1.md"
+			],
+			"the section's own places keep their contents, in the new order"
+		);
 	}
 
 	#[test]
