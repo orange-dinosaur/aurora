@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-
-export type ProjectDocument = {
-	id: string;
-	path: string;
-	folder: string;
-	title: string;
-};
-
-export type SectionDocuments = {
-	folder: string;
-	documents: ProjectDocument[];
-};
+import type { ProjectDocument, SectionDocuments } from "./types";
 
 type Status =
 	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };

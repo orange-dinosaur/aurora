@@ -2,17 +2,8 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Welcome from "./Welcome";
 import Project from "./Project";
+import type { LastProject, OpenProject } from "./types";
 import "./App.css";
-
-export type OpenProject = {
-	name: string;
-	root: string;
-};
-
-type LastProject =
-	| { kind: "none" }
-	| { kind: "open"; name: string; root: string }
-	| { kind: "missing"; name: string; root: string };
 
 type Boot =
 	| { kind: "loading" }

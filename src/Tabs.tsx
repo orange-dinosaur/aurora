@@ -1,4 +1,4 @@
-import type { ProjectDocument } from "./Sidebar";
+import type { ProjectDocument } from "./types";
 
 type Props = {
 	documents: ProjectDocument[];

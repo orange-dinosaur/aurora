@@ -2,7 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
-import type { ProjectDocument } from "./Sidebar";
+import type { ProjectDocument } from "./types";
 
 type Props = {
 	name: string;

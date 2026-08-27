@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { OpenProject } from "./App";
-
-type FormatLayout = {
-	format: string;
-	folders: string[];
-	available: boolean;
-};
+import type { FormatLayout, OpenProject, RecentProject } from "./types";
 
 type Format = {
 	id: string;
@@ -48,12 +42,6 @@ function describe({ format, folders, available }: FormatLayout): Format {
 		available,
 	};
 }
-
-type RecentProject = {
-	name: string;
-	root: string;
-	lastOpened: string;
-};
 
 type Status =
 	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
