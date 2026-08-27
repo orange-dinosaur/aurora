@@ -36,6 +36,9 @@ type Props = {
 	onOpenSection: (folder: string) => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
+	// The project view owns this one: it has to write down what the writer
+	// last typed before the file moves, and close the tab afterwards.
+	onDelete: (id: string) => Promise<void>;
 	onClose: () => void;
 };
 
@@ -49,6 +52,7 @@ export default function Sidebar({
 	onOpenSection,
 	onCreated,
 	onRenamed,
+	onDelete,
 	onClose,
 }: Props) {
 	const [sections, setSections] = useState<SectionDocuments[]>([]);
@@ -76,6 +80,14 @@ export default function Sidebar({
 	useEffect(() => {
 		void load("list_documents");
 	}, [load, reload]);
+
+	async function remove(id: string) {
+		try {
+			await onDelete(id);
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
+		}
+	}
 
 	async function rename(id: string, name: string) {
 		setRenaming({ kind: "saving", id });
@@ -249,6 +261,9 @@ export default function Sidebar({
 															kind: "open",
 															id: doc.id,
 														})
+													}
+													onDelete={() =>
+														void remove(doc.id)
 													}
 												/>
 											</li>

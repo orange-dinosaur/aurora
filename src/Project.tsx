@@ -6,6 +6,7 @@ import SectionView from "./SectionView";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
 import type { ProjectDocument } from "./types";
+import { deleteDocument } from "./documents";
 import { failure } from "./errors";
 
 type Props = {
@@ -292,13 +293,32 @@ export default function Project({ name, root, onClose }: Props) {
 		setListing((version) => version + 1);
 	}
 
-	function closeTab(key: string) {
-		const index = tabs.findIndex((tab) => tab.key === key);
+	// Takes a tab out of the strip and moves off it if it was the one being
+	// looked at. Reads the tabs through `latest`, since a caller may have
+	// awaited something before getting here.
+	function dropTab(key: string) {
+		const open = latest.current;
+		const index = open.findIndex((tab) => tab.key === key);
 		if (index === -1) {
 			return;
 		}
 
-		const closing = tabs[index];
+		const remaining = open.filter((tab) => tab.key !== key);
+		setTabs(remaining);
+		setActiveKey((current) =>
+			current === key
+				? // The one to its left, or the new first if it was leftmost.
+					((remaining[index - 1] ?? remaining[0])?.key ?? null)
+				: current,
+		);
+	}
+
+	function closeTab(key: string) {
+		const closing = tabs.find((tab) => tab.key === key);
+		if (closing === undefined) {
+			return;
+		}
+
 		if (closing.kind === "document") {
 			stopTimer(closing.document.id);
 			// Closing must not throw away what the debounce has not written
@@ -315,14 +335,39 @@ export default function Project({ name, root, onClose }: Props) {
 			}
 		}
 
-		const remaining = tabs.filter((tab) => tab.key !== key);
-		setTabs(remaining);
-		if (activeKey === key) {
-			// The one to its left, or the new first if it was leftmost.
-			const neighbour: Tab | undefined =
-				remaining[index - 1] ?? remaining[0];
-			setActiveKey(neighbour?.key ?? null);
+		dropTab(key);
+	}
+
+	// Deleting belongs here rather than on the surface that asked for it,
+	// because what the writer last typed is here. The pending write goes down
+	// first so the copy in the trash is the one they were looking at, then the
+	// file moves, then the tab goes. A failure is thrown back to the surface,
+	// which has somewhere to show it.
+	async function remove(id: string) {
+		const tab = documentTab(id);
+		stopTimer(id);
+
+		if (
+			tab !== undefined &&
+			tab.content.kind === "ready" &&
+			tab.save.kind !== "clean" &&
+			// A tab whose file has gone has nothing to flush to, and putting
+			// the file back only to trash it would be absurd.
+			tab.save.kind !== "missing"
+		) {
+			await invoke("write_document", {
+				root,
+				id,
+				text: tab.content.text,
+			});
 		}
+
+		await deleteDocument(root, id);
+
+		if (tab !== undefined) {
+			dropTab(tab.key);
+		}
+		setListing((version) => version + 1);
 	}
 
 	function documentBody(tab: DocumentTab) {
@@ -377,6 +422,7 @@ export default function Project({ name, root, onClose }: Props) {
 					onOpenSection={openSection}
 					onCreated={created}
 					onRenamed={renamed}
+					onDelete={remove}
 					onClose={onClose}
 				/>
 				<div className="project__main">
@@ -416,6 +462,7 @@ export default function Project({ name, root, onClose }: Props) {
 							onSelect={(document) => void openDocument(document)}
 							onCreated={created}
 							onRenamed={renamed}
+							onDelete={remove}
 						/>
 					) : (
 						documentBody(active)

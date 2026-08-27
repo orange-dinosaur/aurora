@@ -25,3 +25,8 @@ export function renameDocument(
 ): Promise<ProjectDocument> {
 	return invoke<ProjectDocument>("rename_document", { root, id, name });
 }
+
+/** Moves a document into the project's trash. */
+export function deleteDocument(root: string, id: string): Promise<void> {
+	return invoke<void>("delete_document", { root, id });
+}

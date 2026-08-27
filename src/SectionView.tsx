@@ -33,6 +33,9 @@ type Props = {
 	onSelect: (document: ProjectDocument) => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
+	// The project view owns this one: it has to write down what the writer
+	// last typed before the file moves, and close the tab afterwards.
+	onDelete: (id: string) => Promise<void>;
 };
 
 function counted(words: number) {
@@ -57,6 +60,7 @@ export default function SectionView({
 	onSelect,
 	onCreated,
 	onRenamed,
+	onDelete,
 }: Props) {
 	const [documents, setDocuments] = useState<DocumentSummary[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
@@ -105,6 +109,14 @@ export default function SectionView({
 				id,
 				message: failure(error).message,
 			});
+		}
+	}
+
+	async function remove(id: string) {
+		try {
+			await onDelete(id);
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
 		}
 	}
 
@@ -173,6 +185,7 @@ export default function SectionView({
 										id: document.id,
 									})
 								}
+								onDelete={() => void remove(document.id)}
 							/>
 						</li>
 					),

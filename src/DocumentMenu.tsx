@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
 	label: string;
 	onRename: () => void;
+	onDelete: () => void;
 };
 
-export default function DocumentMenu({ label, onRename }: Props) {
+export default function DocumentMenu({ label, onRename, onDelete }: Props) {
 	const [open, setOpen] = useState(false);
 	const menu = useRef<HTMLDivElement>(null);
 	const items = useRef<HTMLDivElement>(null);
@@ -77,6 +78,17 @@ export default function DocumentMenu({ label, onRename }: Props) {
 						}}
 					>
 						Rename
+					</button>
+					<button
+						type="button"
+						role="menuitem"
+						className="menu__item menu__item--danger"
+						onClick={() => {
+							setOpen(false);
+							onDelete();
+						}}
+					>
+						Delete
 					</button>
 				</div>
 			)}
