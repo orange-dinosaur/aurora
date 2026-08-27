@@ -451,6 +451,48 @@ pub fn refresh_documents(root: PathBuf) -> Result<Vec<SectionDocuments>> {
 	Ok(sections(&refresh(&root)?))
 }
 
+/// Gives a document a new title, which is to say a new file name. It stays in
+/// its section, and keeps its id and its place in the order.
+#[tauri::command]
+pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<DocumentView> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let name = without_extension(&name);
+	validate_name(name)?;
+
+	let mut manifest = read_manifest(&root)?;
+	let from = resolve(&manifest, &root, id)?;
+
+	let index = manifest
+		.documents
+		.iter()
+		.position(|d| d.id == id)
+		.ok_or(Error::UnknownDocument)?;
+	let section = section_of(&manifest.documents[index].path).ok_or(Error::BadDocumentPath)?;
+	let path = format!("{section}/{name}.md");
+
+	// Being renamed to what it is already called is not a collision with
+	// itself.
+	if path == manifest.documents[index].path {
+		return Ok(DocumentView::from(&manifest.documents[index]));
+	}
+
+	let to = restore_path(&manifest, &root, &path)?;
+	if to.exists() {
+		return Err(Error::DocumentExists);
+	}
+
+	// The file moves first. If writing the manifest then fails, the next
+	// refresh adopts the renamed file under a new id rather than losing it.
+	fs::rename(&from, &to)?;
+
+	manifest.documents[index].path = path;
+	write_json(&root.join(MANIFEST_FILE), &manifest)?;
+	Ok(DocumentView::from(&manifest.documents[index]))
+}
+
 /// Every document in one section, with enough of each to recognise it. Reads
 /// the manifest rather than the folder, the way `list_documents` does.
 #[tauri::command]
@@ -1450,6 +1492,157 @@ mod tests {
 
 		assert!(matches!(err, Error::InvalidName(NameError::Empty)));
 		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 5);
+	}
+
+	#[test]
+	fn a_renamed_document_keeps_its_id_its_text_and_its_place() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		create_document(
+			root.clone(),
+			"Manuscript".to_owned(),
+			"Chapter 2".to_owned(),
+		)
+		.unwrap();
+		let id = first_document(&root).id;
+		write_document(root.clone(), id, "Sing to me of the man, Muse.".to_owned()).unwrap();
+
+		let renamed = rename_document(root.clone(), id, "Ithaca Falls".to_owned()).unwrap();
+
+		assert_eq!(renamed.id, id);
+		assert_eq!(renamed.title, "Ithaca Falls");
+		assert_eq!(renamed.folder, "Manuscript");
+		assert_eq!(renamed.path, "Manuscript/Ithaca Falls.md");
+		assert_eq!(
+			read_document(root.clone(), id).unwrap(),
+			"Sing to me of the man, Muse."
+		);
+
+		let manuscript = sections(&read_manifest(&root).unwrap()).remove(0);
+		let titles: Vec<_> = manuscript.documents.iter().map(|d| &d.title).collect();
+		assert_eq!(titles, ["Ithaca Falls", "Chapter 2"], "it did not move");
+	}
+
+	#[test]
+	fn renaming_takes_the_old_file_with_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		rename_document(root.clone(), id, "Ithaca Falls".to_owned()).unwrap();
+
+		assert!(!root.join("Manuscript").join("Chapter 1.md").exists());
+		assert_eq!(
+			scan(&root, &novel_folders()).unwrap()[0],
+			"Manuscript/Ithaca Falls.md"
+		);
+	}
+
+	#[test]
+	fn renaming_to_the_name_it_already_has_changes_nothing() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		let renamed = rename_document(root.clone(), id, "Chapter 1".to_owned()).unwrap();
+
+		assert_eq!(renamed.id, id);
+		assert_eq!(renamed.path, "Manuscript/Chapter 1.md");
+		assert!(root.join("Manuscript").join("Chapter 1.md").exists());
+	}
+
+	#[test]
+	fn renaming_onto_another_document_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let other = create_document(
+			root.clone(),
+			"Manuscript".to_owned(),
+			"Chapter 2".to_owned(),
+		)
+		.unwrap();
+		write_document(root.clone(), other.id, "the second chapter".to_owned()).unwrap();
+		let id = first_document(&root).id;
+
+		let err = rename_document(root.clone(), id, "Chapter 2".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::DocumentExists));
+		assert_eq!(
+			read_document(root.clone(), other.id).unwrap(),
+			"the second chapter",
+			"the document that was already there is untouched"
+		);
+		assert_eq!(first_document(&root).path, "Manuscript/Chapter 1.md");
+	}
+
+	#[test]
+	fn a_name_in_another_section_is_not_a_collision() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		let renamed = rename_document(root.clone(), id, "Notes".to_owned()).unwrap();
+
+		assert_eq!(renamed.path, "Manuscript/Notes.md");
+		assert!(root.join("Notes").join("Notes.md").exists());
+	}
+
+	#[test]
+	fn renaming_drops_an_extension_the_writer_typed() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		let renamed = rename_document(root, id, "Ithaca Falls.md".to_owned()).unwrap();
+
+		assert_eq!(renamed.title, "Ithaca Falls");
+		assert_eq!(renamed.path, "Manuscript/Ithaca Falls.md");
+	}
+
+	#[test]
+	fn renaming_to_a_name_the_filesystem_would_not_take_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		for name in ["", "  ", "Chapter/Two", "Chapter?", ".hidden", "NUL"] {
+			let err = rename_document(root.clone(), id, name.to_owned()).unwrap_err();
+			assert!(
+				matches!(err, Error::InvalidName(_)),
+				"{name:?} should not be a document name"
+			);
+		}
+
+		assert_eq!(first_document(&root).path, "Manuscript/Chapter 1.md");
+	}
+
+	#[test]
+	fn renaming_an_unknown_document_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = rename_document(root, Uuid::new_v4(), "Ithaca Falls".to_owned()).unwrap_err();
+		assert!(matches!(err, Error::UnknownDocument));
+	}
+
+	#[test]
+	fn renaming_a_document_whose_file_has_gone_is_reported() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, id) = with_chapter_one_gone(&parent);
+
+		let err = rename_document(root, id, "Ithaca Falls".to_owned()).unwrap_err();
+		assert!(matches!(err, Error::DocumentMissing));
+	}
+
+	#[test]
+	fn renaming_refuses_a_relative_path() {
+		let err = rename_document(
+			PathBuf::from("some/where"),
+			Uuid::new_v4(),
+			"Ithaca Falls".to_owned(),
+		)
+		.unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
 	}
 
 	#[test]
