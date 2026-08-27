@@ -242,6 +242,12 @@ export default function Project({ name, root, onClose }: Props) {
 		setListing((version) => version + 1);
 	}
 
+	// Ordering lives in the manifest, so nothing here changes except what every
+	// listing of it has to be told to read again.
+	function reordered() {
+		setListing((version) => version + 1);
+	}
+
 	// A rename gives a document a new path and title but not a new id, so a
 	// tab holding it is re-pointed where it stands. Its key is its own, so
 	// neither the strip nor the editor is torn down for this.
@@ -464,6 +470,7 @@ export default function Project({ name, root, onClose }: Props) {
 					onOpenTrash={openTrash}
 					onCreated={created}
 					onRenamed={renamed}
+					onReordered={reordered}
 					onDelete={remove}
 					onClose={onClose}
 				/>
@@ -491,6 +498,7 @@ export default function Project({ name, root, onClose }: Props) {
 							onSelect={(document) => void openDocument(document)}
 							onCreated={created}
 							onRenamed={renamed}
+							onReordered={reordered}
 							onDelete={remove}
 						/>
 					) : active.kind === "trash" ? (

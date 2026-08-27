@@ -26,6 +26,18 @@ export function renameDocument(
 	return invoke<ProjectDocument>("rename_document", { root, id, name });
 }
 
+/**
+ * Puts a document at a given place among the others in its section. An index
+ * past the end means the end.
+ */
+export function reorderDocument(
+	root: string,
+	id: string,
+	index: number,
+): Promise<void> {
+	return invoke<void>("reorder_document", { root, id, index });
+}
+
 /** Moves a document into the project's trash. */
 export function deleteDocument(root: string, id: string): Promise<void> {
 	return invoke<void>("delete_document", { root, id });

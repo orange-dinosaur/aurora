@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
 import NameField from "./NameField";
 import type { DocumentSummary, ProjectDocument } from "./types";
-import { createDocument, renameDocument } from "./documents";
+import { createDocument, renameDocument, reorderDocument } from "./documents";
 import { when } from "./dates";
 import { failure } from "./errors";
 
@@ -34,6 +34,7 @@ type Props = {
 	onSelect: (document: ProjectDocument) => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
+	onReordered: () => void;
 	// The project view owns this one: it has to write down what the writer
 	// last typed before the file moves, and close the tab afterwards.
 	onDelete: (id: string) => Promise<void>;
@@ -50,6 +51,7 @@ export default function SectionView({
 	onSelect,
 	onCreated,
 	onRenamed,
+	onReordered,
 	onDelete,
 }: Props) {
 	const [documents, setDocuments] = useState<DocumentSummary[]>([]);
@@ -102,6 +104,15 @@ export default function SectionView({
 		}
 	}
 
+	async function move(id: string, index: number) {
+		try {
+			await reorderDocument(root, id, index);
+			onReordered();
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
+		}
+	}
+
 	async function remove(id: string) {
 		try {
 			await onDelete(id);
@@ -124,7 +135,7 @@ export default function SectionView({
 			<h2 className="overview__title">{folder}</h2>
 
 			<ul className="cards">
-				{documents.map((document) =>
+				{documents.map((document, at) =>
 					renaming.kind !== "closed" &&
 					renaming.id === document.id ? (
 						<li key={document.id} className="cards__item">
@@ -169,6 +180,9 @@ export default function SectionView({
 							</button>
 							<DocumentMenu
 								label={`Actions for ${document.title}`}
+								index={at}
+								count={documents.length}
+								onMove={(to) => void move(document.id, to)}
 								onRename={() =>
 									setRenaming({
 										kind: "open",

@@ -2,11 +2,23 @@ import { useEffect, useRef, useState } from "react";
 
 type Props = {
 	label: string;
+	// Where this document sits among the others in its section, which is what
+	// says whether there is anywhere left to move it.
+	index: number;
+	count: number;
+	onMove: (index: number) => void;
 	onRename: () => void;
 	onDelete: () => void;
 };
 
-export default function DocumentMenu({ label, onRename, onDelete }: Props) {
+export default function DocumentMenu({
+	label,
+	index,
+	count,
+	onMove,
+	onRename,
+	onDelete,
+}: Props) {
 	const [open, setOpen] = useState(false);
 	const menu = useRef<HTMLDivElement>(null);
 	const items = useRef<HTMLDivElement>(null);
@@ -51,7 +63,9 @@ export default function DocumentMenu({ label, onRename, onDelete }: Props) {
 		items.current?.scrollIntoView({ block: "nearest" });
 		// Nothing has focus after a click here, so the keyboard needs putting
 		// somewhere it can walk the menu from.
-		items.current?.querySelector("button")?.focus();
+		items.current
+			?.querySelector<HTMLButtonElement>("button:enabled")
+			?.focus();
 	}, [open]);
 
 	return (
@@ -68,6 +82,30 @@ export default function DocumentMenu({ label, onRename, onDelete }: Props) {
 
 			{open && (
 				<div ref={items} className="menu__items" role="menu">
+					<button
+						type="button"
+						role="menuitem"
+						className="menu__item"
+						disabled={index === 0}
+						onClick={() => {
+							setOpen(false);
+							onMove(index - 1);
+						}}
+					>
+						Move up
+					</button>
+					<button
+						type="button"
+						role="menuitem"
+						className="menu__item"
+						disabled={index >= count - 1}
+						onClick={() => {
+							setOpen(false);
+							onMove(index + 1);
+						}}
+					>
+						Move down
+					</button>
 					<button
 						type="button"
 						role="menuitem"

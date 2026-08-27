@@ -946,15 +946,21 @@ body,
 	cursor: pointer;
 }
 
-.menu__item:hover {
+.menu__item:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.menu__item:disabled {
+	color: var(--text-dim);
+	opacity: 0.5;
+	cursor: default;
 }
 
 .menu__item--danger {
 	color: #c0392b;
 }
 
-.menu__item--danger:hover {
+.menu__item--danger:hover:not(:disabled) {
 	background: color-mix(in srgb, #c0392b 14%, transparent);
 }
 
@@ -963,7 +969,7 @@ body,
 		color: #ff8a7a;
 	}
 
-	.menu__item--danger:hover {
+	.menu__item--danger:hover:not(:disabled) {
 		background: color-mix(in srgb, #ff8a7a 16%, transparent);
 	}
 }
