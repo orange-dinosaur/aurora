@@ -407,10 +407,44 @@ body,
 	margin-top: 1.25rem;
 }
 
+.section__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.25rem;
+	margin-bottom: 0.35rem;
+}
+
 .section__title {
-	margin: 0 0 0.35rem;
+	margin: 0;
+	min-width: 0;
 	font-size: 0.9rem;
 	font-weight: 600;
+}
+
+.section__new {
+	flex: none;
+	padding: 0 0.35rem;
+	font: inherit;
+	font-size: 1rem;
+	line-height: 1.2;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.section__new:hover {
+	color: var(--text);
+	background: var(--bg-card);
+}
+
+/* The field sits where the `+` that opened it is, and its message hangs over
+   the documents below rather than pushing them down. */
+.section__naming {
+	position: relative;
+	margin-bottom: 0.35rem;
 }
 
 .section__open {
@@ -698,16 +732,27 @@ body,
 	opacity: 0.6;
 }
 
-/* Out of flow, so a refused name reports without growing the card it sits in
-   and shifting the rest of the grid. */
+/* Out of flow wherever it appears, so a refused name reports without moving
+   anything around it. Each surface says where. */
 .namefield__message {
 	position: absolute;
-	left: 0.85rem;
-	right: 0.85rem;
 	margin: 0;
 	font-size: 0.75rem;
 	color: #c0392b;
 	overflow-wrap: anywhere;
+}
+
+.card--naming .namefield__message {
+	left: 0.85rem;
+	right: 0.85rem;
+}
+
+.section__naming .namefield__message {
+	top: 100%;
+	left: 0;
+	right: 0;
+	padding-bottom: 0.25rem;
+	background: var(--bg);
 }
 
 @media (prefers-color-scheme: dark) {

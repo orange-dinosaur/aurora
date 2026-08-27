@@ -180,6 +180,13 @@ export default function Project({ name, root, onClose }: Props) {
 		);
 	}
 
+	// A new document is opened for writing in, and every listing of it has to
+	// be read again.
+	function created(document: ProjectDocument) {
+		void openDocument(document);
+		setListing((version) => version + 1);
+	}
+
 	function edit(id: string, text: string) {
 		patch(id, (tab) =>
 			tab.content.kind === "ready"
@@ -347,6 +354,7 @@ export default function Project({ name, root, onClose }: Props) {
 					}
 					onSelect={(document) => void openDocument(document)}
 					onOpenSection={openSection}
+					onCreated={created}
 					onClose={onClose}
 				/>
 				<div className="project__main">
@@ -384,12 +392,7 @@ export default function Project({ name, root, onClose }: Props) {
 							folder={active.folder}
 							reload={listing}
 							onSelect={(document) => void openDocument(document)}
-							onCreated={(document) => {
-								// A new document is opened for writing in, and
-								// every listing of it has to be read again.
-								void openDocument(document);
-								setListing((version) => version + 1);
-							}}
+							onCreated={created}
 						/>
 					) : (
 						documentBody(active)
