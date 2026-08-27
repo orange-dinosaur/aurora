@@ -577,6 +577,18 @@ body,
 	text-align: right;
 }
 
+/* A link rather than a button: it sits inside a sentence, and a box here would
+   pull the eye away from the writing. */
+.editor__restore {
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: 0;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
 .editor__status--error {
 	color: #c0392b;
 }

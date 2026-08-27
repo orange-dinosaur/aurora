@@ -22,6 +22,9 @@ type Save =
 	| { kind: "clean" }
 	| { kind: "pending" }
 	| { kind: "saving" }
+	// The file has gone from under the tab, so the text here is all there is
+	// left of it.
+	| { kind: "missing" }
 	| { kind: "failed"; message: string };
 
 type Tab = {
@@ -45,6 +48,9 @@ async function read(root: string, id: string): Promise<Content> {
 export default function Project({ name, root, onClose }: Props) {
 	const [tabs, setTabs] = useState<Tab[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
+	// Bumped whenever this view changes what the manifest holds, so the sidebar
+	// knows to read it again.
+	const [listing, setListing] = useState(0);
 	const active = tabs.find((tab) => tab.document.id === activeId) ?? null;
 
 	// One timer per tab, so a tab keeps its own countdown once the writer has
@@ -58,6 +64,17 @@ export default function Project({ name, root, onClose }: Props) {
 		latest.current = tabs;
 	});
 
+	// Puts a tab's text on disk, putting the file itself back if it has gone.
+	function put(tab: Tab, text: string) {
+		return tab.save.kind === "missing"
+			? invoke("restore_document", {
+					root,
+					path: tab.document.path,
+					text,
+				})
+			: invoke("write_document", { root, id: tab.document.id, text });
+	}
+
 	// Writes every tab that is not on disk yet, cancelling the timers that were
 	// going to do it. Nothing reports a failure here: by the time this runs
 	// there is no longer anywhere to report it.
@@ -68,13 +85,7 @@ export default function Project({ name, root, onClose }: Props) {
 		await Promise.allSettled(
 			latest.current.flatMap((tab) =>
 				tab.save.kind !== "clean" && tab.content.kind === "ready"
-					? [
-							invoke("write_document", {
-								root,
-								id: tab.document.id,
-								text: tab.content.text,
-							}),
-						]
+					? [put(tab, tab.content.text)]
 					: [],
 			),
 		);
@@ -154,7 +165,13 @@ export default function Project({ name, root, onClose }: Props) {
 			await invoke("write_document", { root, id, text });
 			result = { kind: "clean" };
 		} catch (error) {
-			result = { kind: "failed", message: failure(error).message };
+			const { kind, message } = failure(error);
+			// The file going missing is the one failure the writer can do
+			// something about, so it gets its own state rather than a message.
+			result =
+				kind === "documentMissing"
+					? { kind: "missing" }
+					: { kind: "failed", message };
 		}
 
 		// Only the write that put down what the tab still holds may report on
@@ -165,6 +182,42 @@ export default function Project({ name, root, onClose }: Props) {
 				? { ...tab, save: result }
 				: tab,
 		);
+	}
+
+	async function restore(id: string) {
+		const tab = tabs.find((open) => open.document.id === id);
+		if (tab === undefined || tab.content.kind !== "ready") {
+			return;
+		}
+
+		const text = tab.content.text;
+		stopTimer(id);
+		patch(id, (open) => ({ ...open, save: { kind: "saving" } }));
+
+		let restored: ProjectDocument;
+		try {
+			restored = await invoke<ProjectDocument>("restore_document", {
+				root,
+				path: tab.document.path,
+				text,
+			});
+		} catch (error) {
+			patch(id, (open) => ({
+				...open,
+				save: { kind: "failed", message: failure(error).message },
+			}));
+			return;
+		}
+
+		// A refresh while the file was away drops the document, so it can come
+		// back under a new id and the tab has to follow it.
+		patch(id, (open) => ({
+			...open,
+			document: restored,
+			save: { kind: "clean" },
+		}));
+		setActiveId((current) => (current === id ? restored.id : current));
+		setListing((version) => version + 1);
 	}
 
 	function closeTab(id: string) {
@@ -203,6 +256,7 @@ export default function Project({ name, root, onClose }: Props) {
 				<Sidebar
 					name={name}
 					root={root}
+					reload={listing}
 					selectedId={activeId}
 					onSelect={(document) => void openDocument(document)}
 					onClose={onClose}
@@ -227,17 +281,22 @@ export default function Project({ name, root, onClose }: Props) {
 						// element rather than one carrying the last document's
 						// scroll position and selection.
 						<Editor
-							key={active.document.id}
+							// Keyed by path rather than id: a restored document
+							// can come back under a new id, and the tab should
+							// not be torn down for that.
+							key={active.document.path}
 							title={active.document.title}
 							text={active.content.text}
 							dirty={active.save.kind !== "clean"}
 							saving={active.save.kind === "saving"}
+							missing={active.save.kind === "missing"}
 							error={
 								active.save.kind === "failed"
 									? active.save.message
 									: null
 							}
 							onChange={(text) => edit(active.document.id, text)}
+							onRestore={() => void restore(active.document.id)}
 						/>
 					) : (
 						<article className="reader">

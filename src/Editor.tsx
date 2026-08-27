@@ -3,8 +3,10 @@ type Props = {
 	text: string;
 	dirty: boolean;
 	saving: boolean;
+	missing: boolean;
 	error: string | null;
 	onChange: (text: string) => void;
+	onRestore: () => void;
 };
 
 export default function Editor({
@@ -12,8 +14,10 @@ export default function Editor({
 	text,
 	dirty,
 	saving,
+	missing,
 	error,
 	onChange,
+	onRestore,
 }: Props) {
 	const note = error ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
 
@@ -30,13 +34,26 @@ export default function Editor({
 			/>
 			<p
 				className={
-					error === null
+					error === null && !missing
 						? "editor__status"
 						: "editor__status editor__status--error"
 				}
 				role="status"
 			>
-				{note}
+				{missing ? (
+					<>
+						This document&rsquo;s file is no longer there.{" "}
+						<button
+							type="button"
+							className="editor__restore"
+							onClick={onRestore}
+						>
+							Write it back
+						</button>
+					</>
+				) : (
+					note
+				)}
 			</p>
 		</div>
 	);

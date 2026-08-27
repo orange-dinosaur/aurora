@@ -9,6 +9,8 @@ type Status =
 type Props = {
 	name: string;
 	root: string;
+	// Changes when the project view has altered the manifest.
+	reload: number;
 	selectedId: string | null;
 	onSelect: (document: ProjectDocument) => void;
 	onClose: () => void;
@@ -17,6 +19,7 @@ type Props = {
 export default function Sidebar({
 	name,
 	root,
+	reload,
 	selectedId,
 	onSelect,
 	onClose,
@@ -43,7 +46,7 @@ export default function Sidebar({
 
 	useEffect(() => {
 		void load("list_documents");
-	}, [load]);
+	}, [load, reload]);
 
 	return (
 		<nav className="sidebar" aria-label="Documents">
