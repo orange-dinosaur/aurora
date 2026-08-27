@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import DocumentMenu from "./DocumentMenu";
 import NameField from "./NameField";
 import type { DocumentSummary, ProjectDocument } from "./types";
-import { createDocument } from "./documents";
+import { createDocument, renameDocument } from "./documents";
 import { failure } from "./errors";
 
 type Status =
@@ -16,6 +17,14 @@ type Naming =
 	| { kind: "creating" }
 	| { kind: "refused"; message: string };
 
+// The card the writer is retitling, and what Rust made of the last name they
+// tried.
+type Renaming =
+	| { kind: "closed" }
+	| { kind: "open"; id: string }
+	| { kind: "saving"; id: string }
+	| { kind: "refused"; id: string; message: string };
+
 type Props = {
 	root: string;
 	folder: string;
@@ -23,6 +32,7 @@ type Props = {
 	reload: number;
 	onSelect: (document: ProjectDocument) => void;
 	onCreated: (document: ProjectDocument) => void;
+	onRenamed: (document: ProjectDocument) => void;
 };
 
 function counted(words: number) {
@@ -46,10 +56,12 @@ export default function SectionView({
 	reload,
 	onSelect,
 	onCreated,
+	onRenamed,
 }: Props) {
 	const [documents, setDocuments] = useState<DocumentSummary[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
+	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
 
 	const load = useCallback(async () => {
 		setStatus({ kind: "busy" });
@@ -82,6 +94,20 @@ export default function SectionView({
 		}
 	}
 
+	async function rename(id: string, name: string) {
+		setRenaming({ kind: "saving", id });
+		try {
+			onRenamed(await renameDocument(root, id, name));
+			setRenaming({ kind: "closed" });
+		} catch (error) {
+			setRenaming({
+				kind: "refused",
+				id,
+				message: failure(error).message,
+			});
+		}
+	}
+
 	if (status.kind === "busy" && documents.length === 0) {
 		return (
 			<div className="overview">
@@ -96,29 +122,63 @@ export default function SectionView({
 			<h2 className="overview__title">{folder}</h2>
 
 			<ul className="cards">
-				{documents.map((document) => (
-					<li key={document.id}>
-						<button
-							type="button"
-							className="card"
-							onClick={() => onSelect(document)}
-						>
-							<span className="card__title">
-								{document.title}
-							</span>
-							<span className="card__excerpt">
-								{document.excerpt}
-							</span>
-							<span className="card__meta">
-								{document.modified === null
-									? "This document’s file is no longer there"
-									: `${counted(document.words)} · ${when(document.modified)}`}
-							</span>
-						</button>
-					</li>
-				))}
+				{documents.map((document) =>
+					renaming.kind !== "closed" &&
+					renaming.id === document.id ? (
+						<li key={document.id} className="cards__item">
+							<div className="card card--naming">
+								<NameField
+									label={`New name for ${document.title}`}
+									placeholder="Chapter 2"
+									initial={document.title}
+									busy={renaming.kind === "saving"}
+									error={
+										renaming.kind === "refused"
+											? renaming.message
+											: null
+									}
+									onSubmit={(name) =>
+										void rename(document.id, name)
+									}
+									onCancel={() =>
+										setRenaming({ kind: "closed" })
+									}
+								/>
+							</div>
+						</li>
+					) : (
+						<li key={document.id} className="cards__item">
+							<button
+								type="button"
+								className="card"
+								onClick={() => onSelect(document)}
+							>
+								<span className="card__title">
+									{document.title}
+								</span>
+								<span className="card__excerpt">
+									{document.excerpt}
+								</span>
+								<span className="card__meta">
+									{document.modified === null
+										? "This document’s file is no longer there"
+										: `${counted(document.words)} · ${when(document.modified)}`}
+								</span>
+							</button>
+							<DocumentMenu
+								label={`Actions for ${document.title}`}
+								onRename={() =>
+									setRenaming({
+										kind: "open",
+										id: document.id,
+									})
+								}
+							/>
+						</li>
+					),
+				)}
 
-				<li>
+				<li className="cards__item">
 					{naming.kind === "closed" ? (
 						<button
 							type="button"

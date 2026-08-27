@@ -393,6 +393,9 @@ export default function Project({ name, root, onClose }: Props) {
 							reload={listing}
 							onSelect={(document) => void openDocument(document)}
 							onCreated={created}
+							onRenamed={() =>
+								setListing((version) => version + 1)
+							}
 						/>
 					) : (
 						documentBody(active)

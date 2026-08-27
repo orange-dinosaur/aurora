@@ -664,7 +664,14 @@ body,
 	border-color: var(--accent);
 }
 
+/* The menu sits over the card's corner rather than inside it: the card is a
+   button, and a button cannot hold another one. */
+.cards__item {
+	position: relative;
+}
+
 .card__title {
+	padding-right: 1.25rem;
 	font-weight: 500;
 	overflow-wrap: anywhere;
 }
@@ -755,6 +762,61 @@ body,
 	.namefield__message {
 		color: #ff8a7a;
 	}
+}
+
+.menu {
+	position: absolute;
+	top: 0.35rem;
+	right: 0.35rem;
+}
+
+.menu__trigger {
+	padding: 0 0.3rem;
+	font: inherit;
+	font-size: 0.9rem;
+	line-height: 1.4;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.menu__trigger:hover,
+.menu__trigger[aria-expanded="true"] {
+	color: var(--text);
+	background: var(--bg);
+}
+
+.menu__items {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	min-width: 8rem;
+	padding: 0.2rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+}
+
+.menu__item {
+	padding: 0.3rem 0.5rem;
+	font: inherit;
+	font-size: 0.85rem;
+	text-align: left;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.menu__item:hover {
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .editor {

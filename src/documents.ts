@@ -16,3 +16,12 @@ export function createDocument(
 ): Promise<ProjectDocument> {
 	return invoke<ProjectDocument>("create_document", { root, section, name });
 }
+
+/** Gives a document a new title. It stays where it is in its section. */
+export function renameDocument(
+	root: string,
+	id: string,
+	name: string,
+): Promise<ProjectDocument> {
+	return invoke<ProjectDocument>("rename_document", { root, id, name });
+}

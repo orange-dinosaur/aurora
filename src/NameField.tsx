@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
 	label: string;
 	placeholder: string;
+	// What the field starts with, which is the current title when renaming.
+	initial?: string;
 	busy: boolean;
 	// Whatever Rust said about the last name that was tried.
 	error: string | null;
@@ -13,12 +15,20 @@ type Props = {
 export default function NameField({
 	label,
 	placeholder,
+	initial = "",
 	busy,
 	error,
 	onSubmit,
 	onCancel,
 }: Props) {
-	const [name, setName] = useState("");
+	const [name, setName] = useState(initial);
+	const input = useRef<HTMLInputElement>(null);
+
+	// A name the field opened with is there to be replaced, so it starts
+	// selected rather than with the caret parked at one end of it.
+	useEffect(() => {
+		input.current?.select();
+	}, []);
 
 	return (
 		<form
@@ -48,6 +58,7 @@ export default function NameField({
 			{/* The field only appears because the writer asked for it, so
 			    it takes the caret with it. */}
 			<input
+				ref={input}
 				className="namefield__input"
 				autoFocus
 				value={name}
