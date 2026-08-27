@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ProjectDocument, SectionDocuments } from "./types";
+import { failure } from "./errors";
 
 type Status =
 	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
@@ -34,7 +35,7 @@ export default function Sidebar({
 				);
 				setStatus({ kind: "idle" });
 			} catch (error) {
-				setStatus({ kind: "error", message: String(error) });
+				setStatus({ kind: "error", message: failure(error).message });
 			}
 		},
 		[root],

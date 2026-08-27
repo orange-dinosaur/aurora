@@ -5,6 +5,7 @@ import Editor from "./Editor";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
 import type { ProjectDocument } from "./types";
+import { failure } from "./errors";
 
 type Props = {
 	name: string;
@@ -37,7 +38,7 @@ async function read(root: string, id: string): Promise<Content> {
 		const text = await invoke<string>("read_document", { root, id });
 		return { kind: "ready", text };
 	} catch (error) {
-		return { kind: "error", message: String(error) };
+		return { kind: "error", message: failure(error).message };
 	}
 }
 
@@ -153,7 +154,7 @@ export default function Project({ name, root, onClose }: Props) {
 			await invoke("write_document", { root, id, text });
 			result = { kind: "clean" };
 		} catch (error) {
-			result = { kind: "failed", message: String(error) };
+			result = { kind: "failed", message: failure(error).message };
 		}
 
 		// Only the write that put down what the tab still holds may report on

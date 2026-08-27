@@ -4,6 +4,7 @@ import Welcome from "./Welcome";
 import Project from "./Project";
 import type { LastProject, OpenProject } from "./types";
 import "./App.css";
+import { failure } from "./errors";
 
 type Boot =
 	| { kind: "loading" }
@@ -32,7 +33,7 @@ function App() {
 				}
 			})
 			.catch((error: unknown) => {
-				setBoot({ kind: "welcome", notice: String(error) });
+				setBoot({ kind: "welcome", notice: failure(error).message });
 			});
 	}, []);
 

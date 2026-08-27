@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { FormatLayout, OpenProject, RecentProject } from "./types";
+import { failure } from "./errors";
 
 type Format = {
 	id: string;
@@ -70,7 +71,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 		invoke<FormatLayout[]>("format_layouts")
 			.then((layouts) => setFormats(layouts.map(describe)))
 			.catch((error) =>
-				setStatus({ kind: "error", message: String(error) }),
+				setStatus({ kind: "error", message: failure(error).message }),
 			);
 	}, []);
 
@@ -106,7 +107,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 			});
 			onOpened({ name, root });
 		} catch (error) {
-			setStatus({ kind: "error", message: String(error) });
+			setStatus({ kind: "error", message: failure(error).message });
 		}
 	}
 
@@ -115,7 +116,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 		try {
 			onOpened(await invoke<OpenProject>("open_project", { root }));
 		} catch (error) {
-			setStatus({ kind: "error", message: String(error) });
+			setStatus({ kind: "error", message: failure(error).message });
 		}
 	}
 

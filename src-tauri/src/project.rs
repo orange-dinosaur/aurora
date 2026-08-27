@@ -3,6 +3,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use tauri::{AppHandle, Manager};
 use time::OffsetDateTime;
@@ -198,11 +199,38 @@ impl fmt::Display for Error {
 	}
 }
 
-/// `#[tauri::command]` needs the error type to cross to the frontend, where the
-/// message is all that is used.
+impl Error {
+	/// A name the frontend can switch on. The message beside it is only meant
+	/// to be read, so it can be reworded without breaking anything.
+	pub fn kind(&self) -> &'static str {
+		match self {
+			Error::InvalidName(_) => "invalidName",
+			Error::RelativePath => "relativePath",
+			Error::NoConfigDir => "noConfigDir",
+			Error::NotAProject => "notAProject",
+			Error::UnsupportedVersion { .. } => "unsupportedVersion",
+			Error::UnknownDocument => "unknownDocument",
+			Error::DocumentMissing => "documentMissing",
+			Error::DocumentExists => "documentExists",
+			Error::BadDocumentPath => "badDocumentPath",
+			Error::OutsideProject => "outsideProject",
+			Error::NotText => "notText",
+			Error::AlreadyExists => "alreadyExists",
+			Error::UnsupportedFormat(_) => "unsupportedFormat",
+			Error::Io(_) => "io",
+			Error::Json(_) => "json",
+		}
+	}
+}
+
+/// `#[tauri::command]` needs the error type to cross to the frontend, which
+/// shows the message and occasionally has to act on the kind.
 impl Serialize for Error {
 	fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-		serializer.serialize_str(&self.to_string())
+		let mut error = serializer.serialize_struct("Error", 2)?;
+		error.serialize_field("kind", self.kind())?;
+		error.serialize_field("message", &self.to_string())?;
+		error.end()
 	}
 }
 
@@ -1261,6 +1289,47 @@ mod tests {
 		));
 	}
 
+	#[test]
+	fn an_error_crosses_as_a_kind_and_a_message() {
+		let json = serde_json::to_value(Error::DocumentMissing).unwrap();
+		assert_eq!(json["kind"], "documentMissing");
+		assert_eq!(json["message"], "that document's file is no longer there");
+
+		let json = serde_json::to_value(Error::InvalidName(NameError::Empty)).unwrap();
+		assert_eq!(json["kind"], "invalidName");
+		assert_eq!(json["message"], NameError::Empty.to_string());
+	}
+
+	/// The frontend switches on these, so no two variants may answer to the
+	/// same name and none may be left out.
+	#[test]
+	fn every_error_has_its_own_kind() {
+		let kinds = [
+			Error::InvalidName(NameError::Empty),
+			Error::RelativePath,
+			Error::NoConfigDir,
+			Error::NotAProject,
+			Error::UnsupportedVersion {
+				found: 3,
+				supported: 2,
+			},
+			Error::UnknownDocument,
+			Error::DocumentMissing,
+			Error::DocumentExists,
+			Error::BadDocumentPath,
+			Error::OutsideProject,
+			Error::NotText,
+			Error::AlreadyExists,
+			Error::UnsupportedFormat(Format::Screenplay),
+			Error::Io(io::Error::from(io::ErrorKind::PermissionDenied)),
+			Error::Json(serde_json::from_str::<Manifest>("{").unwrap_err()),
+		]
+		.map(|error| error.kind());
+
+		let unique: std::collections::HashSet<_> = kinds.iter().collect();
+		assert_eq!(unique.len(), kinds.len());
+	}
+
 	/// The message reaches the writer verbatim, so it has to read as a sentence.
 	#[test]
 	fn error_messages_are_single_spaced() {
@@ -1275,6 +1344,8 @@ mod tests {
 			Error::NotAProject,
 			Error::UnknownDocument,
 			Error::DocumentMissing,
+			Error::DocumentExists,
+			Error::BadDocumentPath,
 			Error::OutsideProject,
 			Error::NotText,
 			Error::AlreadyExists,
@@ -1335,18 +1406,5 @@ mod tests {
 		let recents = available_recents(&store).unwrap();
 		assert_eq!(recents.len(), 1);
 		assert_eq!(recents[0].name, "Penelope");
-	}
-
-	#[test]
-	fn errors_cross_to_the_frontend_as_their_message() {
-		let err = Error::InvalidName(NameError::IllegalCharacter(':'));
-		assert_eq!(
-			serde_json::to_string(&err).unwrap(),
-			"\"the name cannot contain ':'\""
-		);
-		assert_eq!(
-			serde_json::to_value(Error::AlreadyExists).unwrap(),
-			"a folder of that name is already there"
-		);
 	}
 }
