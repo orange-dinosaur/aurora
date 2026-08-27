@@ -436,7 +436,7 @@ fn create_and_remember(
 /// same answer. Dropping a missing project is `forget` below.
 fn resolve_last(store_path: &Path) -> Result<LastProject> {
 	let store = store::load(store_path)?;
-	let Some(last) = store.last() else {
+	let Some(last) = store.reopen() else {
 		return Ok(LastProject::None);
 	};
 
@@ -452,6 +452,12 @@ fn resolve_last(store_path: &Path) -> Result<LastProject> {
 fn forget(store_path: &Path, root: &Path) -> Result<()> {
 	let mut store = store::load(store_path)?;
 	store.forget(root);
+	store::save(store_path, &store)
+}
+
+fn close(store_path: &Path) -> Result<()> {
+	let mut store = store::load(store_path)?;
+	store.close();
 	store::save(store_path, &store)
 }
 
@@ -543,6 +549,13 @@ pub fn last_project(app: AppHandle) -> Result<LastProject> {
 #[tauri::command]
 pub fn forget_project(app: AppHandle, root: PathBuf) -> Result<()> {
 	forget(&store_path(&app)?, &root)
+}
+
+/// The writer is done with the open project for now. It stays in the recent
+/// list, but Aurora starts on the welcome screen next time.
+#[tauri::command]
+pub fn close_project(app: AppHandle) -> Result<()> {
+	close(&store_path(&app)?)
 }
 
 #[cfg(test)]
@@ -962,8 +975,8 @@ mod tests {
 		assert!(root.join("Manuscript").join("Chapter 1.md").is_file());
 
 		let remembered = store::load(&store).unwrap();
-		assert_eq!(remembered.last().unwrap().name, "Ithaca");
-		assert_eq!(remembered.last().unwrap().root, root);
+		assert_eq!(remembered.reopen().unwrap().name, "Ithaca");
+		assert_eq!(remembered.reopen().unwrap().root, root);
 	}
 
 	#[test]
@@ -980,7 +993,7 @@ mod tests {
 			)
 			.is_err()
 		);
-		assert!(store::load(&store).unwrap().last().is_none());
+		assert!(store::load(&store).unwrap().reopen().is_none());
 	}
 
 	#[test]
@@ -1044,6 +1057,18 @@ mod tests {
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn a_closed_project_does_not_reopen_but_is_still_offered() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		close(&store).unwrap();
+
+		assert_eq!(resolve_last(&store).unwrap(), LastProject::None);
+		assert_eq!(available_recents(&store).unwrap().len(), 1);
 	}
 
 	#[test]
@@ -1188,7 +1213,10 @@ mod tests {
 		.unwrap();
 
 		open_and_remember(&store, &first, fixed_time()).unwrap();
-		assert_eq!(store::load(&store).unwrap().last().unwrap().name, "Ithaca");
+		assert_eq!(
+			store::load(&store).unwrap().reopen().unwrap().name,
+			"Ithaca"
+		);
 	}
 
 	#[test]

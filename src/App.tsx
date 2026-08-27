@@ -42,7 +42,12 @@ function App() {
 				<Project
 					name={boot.project.name}
 					root={boot.project.root}
-					onClose={() => setBoot({ kind: "welcome", notice: null })}
+					onClose={() => {
+						// Stops the project reopening on launch; it stays in
+						// the recent list.
+						void invoke("close_project");
+						setBoot({ kind: "welcome", notice: null });
+					}}
 				/>
 			) : (
 				boot.kind === "welcome" && (

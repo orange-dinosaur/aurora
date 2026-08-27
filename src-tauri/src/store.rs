@@ -7,7 +7,7 @@ use time::OffsetDateTime;
 
 use crate::project::{Error, Result, write_json};
 
-pub const STORE_VERSION: u32 = 1;
+pub const STORE_VERSION: u32 = 2;
 
 /// How many projects are worth offering on the welcome screen.
 const MAX_RECENT: usize = 10;
@@ -25,6 +25,12 @@ pub struct RecentProject {
 #[serde(rename_all = "camelCase")]
 pub struct Store {
 	pub version: u32,
+	/// The project to reopen on launch, which is not simply the newest in the
+	/// list: closing a project clears this and leaves the list alone, and
+	/// forgetting one has to clear it rather than let the next project inherit
+	/// the marker.
+	#[serde(default)]
+	pub last: Option<PathBuf>,
 	pub recent: Vec<RecentProject>,
 }
 
@@ -32,6 +38,7 @@ impl Default for Store {
 	fn default() -> Self {
 		Self {
 			version: STORE_VERSION,
+			last: None,
 			recent: Vec::new(),
 		}
 	}
@@ -41,6 +48,7 @@ impl Store {
 	/// Moves a project to the front of the list, whether or not it was already
 	/// there, and drops the oldest once the list is full.
 	pub fn remember(&mut self, name: impl Into<String>, root: PathBuf, at: OffsetDateTime) {
+		self.last = Some(root.clone());
 		self.recent.retain(|project| project.root != root);
 		self.recent.insert(
 			0,
@@ -55,12 +63,23 @@ impl Store {
 		self.recent.truncate(MAX_RECENT);
 	}
 
-	pub fn last(&self) -> Option<&RecentProject> {
-		self.recent.first()
+	/// What to reopen on launch, if anything.
+	pub fn reopen(&self) -> Option<&RecentProject> {
+		let root = self.last.as_ref()?;
+		self.recent.iter().find(|project| &project.root == root)
+	}
+
+	/// The writer is done for now. The project stays in the list, so it is one
+	/// click away, but Aurora starts on the welcome screen next time.
+	pub fn close(&mut self) {
+		self.last = None;
 	}
 
 	pub fn forget(&mut self, root: &Path) {
 		self.recent.retain(|project| project.root != root);
+		if self.last.as_deref() == Some(root) {
+			self.last = None;
+		}
 	}
 }
 
@@ -68,10 +87,23 @@ impl Store {
 /// The list is a convenience, so a damaged one must not stop Aurora starting.
 pub fn load(path: &Path) -> Result<Store> {
 	match fs::read(path) {
-		Ok(bytes) => Ok(serde_json::from_slice(&bytes).unwrap_or_default()),
+		Ok(bytes) => Ok(migrate(serde_json::from_slice(&bytes).unwrap_or_default())),
 		Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Store::default()),
 		Err(e) => Err(Error::Io(e)),
 	}
+}
+
+/// Version 1 had no `last`: whatever was at the head of the list was what
+/// reopened. Adopting it here means an upgrade does not lose the open project.
+/// Nothing is written back — the next save carries the new shape.
+fn migrate(mut store: Store) -> Store {
+	if store.version < STORE_VERSION {
+		if store.last.is_none() {
+			store.last = store.recent.first().map(|project| project.root.clone());
+		}
+		store.version = STORE_VERSION;
+	}
+	store
 }
 
 /// Writes through a temporary file, so an interrupted save cannot leave a
@@ -152,7 +184,7 @@ mod tests {
 
 		let json = fs::read_to_string(&path).unwrap();
 		assert!(
-			json.contains("\n\t\"version\": 1"),
+			json.contains("\n\t\"version\": 2"),
 			"expected tab indentation"
 		);
 		assert!(json.contains("\"lastOpened\": \"2023-11-14T22:13:20Z\""));
@@ -165,7 +197,7 @@ mod tests {
 		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(1));
 		store.remember("Penelope", PathBuf::from("/writing/Penelope"), at(2));
 
-		assert_eq!(store.last().unwrap().name, "Penelope");
+		assert_eq!(store.reopen().unwrap().name, "Penelope");
 		assert_eq!(store.recent.len(), 2);
 	}
 
@@ -177,8 +209,8 @@ mod tests {
 		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(3));
 
 		assert_eq!(store.recent.len(), 2);
-		assert_eq!(store.last().unwrap().name, "Ithaca");
-		assert_eq!(store.last().unwrap().last_opened, at(3));
+		assert_eq!(store.reopen().unwrap().name, "Ithaca");
+		assert_eq!(store.reopen().unwrap().last_opened, at(3));
 	}
 
 	#[test]
@@ -193,7 +225,7 @@ mod tests {
 		}
 
 		assert_eq!(store.recent.len(), MAX_RECENT);
-		assert_eq!(store.last().unwrap().name, "Book 14");
+		assert_eq!(store.reopen().unwrap().name, "Book 14");
 	}
 
 	#[test]
@@ -201,7 +233,87 @@ mod tests {
 		let mut store = Store::default();
 		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(1));
 		store.forget(Path::new("/writing/Ithaca"));
-		assert!(store.last().is_none());
+		assert!(store.reopen().is_none());
+	}
+
+	#[test]
+	fn closing_leaves_the_project_in_the_list() {
+		let mut store = Store::default();
+		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(1));
+		store.close();
+
+		assert!(store.reopen().is_none(), "nothing reopens on launch");
+		assert_eq!(store.recent.len(), 1, "but it is still one click away");
+		assert_eq!(store.recent[0].name, "Ithaca");
+	}
+
+	#[test]
+	fn opening_a_project_again_marks_it_for_reopening() {
+		let mut store = Store::default();
+		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(1));
+		store.close();
+		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(2));
+
+		assert_eq!(store.reopen().unwrap().name, "Ithaca");
+	}
+
+	#[test]
+	fn forgetting_the_marked_project_does_not_promote_the_next_one() {
+		let mut store = Store::default();
+		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(1));
+		store.remember("Penelope", PathBuf::from("/writing/Penelope"), at(2));
+		store.forget(Path::new("/writing/Penelope"));
+
+		assert!(store.reopen().is_none());
+		assert_eq!(store.recent.len(), 1);
+	}
+
+	#[test]
+	fn forgetting_another_project_leaves_the_marker_alone() {
+		let mut store = Store::default();
+		store.remember("Penelope", PathBuf::from("/writing/Penelope"), at(1));
+		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(2));
+		store.forget(Path::new("/writing/Penelope"));
+
+		assert_eq!(store.reopen().unwrap().name, "Ithaca");
+	}
+
+	#[test]
+	fn a_version_one_store_reopens_the_head_of_its_list() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(
+			&path,
+			r#"{
+				"version": 1,
+				"recent": [
+					{
+						"name": "Ithaca",
+						"root": "/writing/Ithaca",
+						"lastOpened": "2023-11-14T22:13:20Z"
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+
+		let store = load(&path).unwrap();
+		assert_eq!(store.version, STORE_VERSION);
+		assert_eq!(store.reopen().unwrap().name, "Ithaca");
+	}
+
+	#[test]
+	fn a_closed_store_stays_closed_across_a_save() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = store_path(&dir);
+		let mut store = Store::default();
+		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(1));
+		store.close();
+		save(&path, &store).unwrap();
+
+		let read_back = load(&path).unwrap();
+		assert!(read_back.reopen().is_none());
+		assert_eq!(read_back.recent.len(), 1);
 	}
 
 	#[test]
@@ -209,6 +321,6 @@ mod tests {
 		let mut store = Store::default();
 		let precise = OffsetDateTime::from_unix_timestamp_nanos(1_700_000_000_297_374_168).unwrap();
 		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), precise);
-		assert_eq!(store.last().unwrap().last_opened, at(1_700_000_000));
+		assert_eq!(store.reopen().unwrap().last_opened, at(1_700_000_000));
 	}
 }
