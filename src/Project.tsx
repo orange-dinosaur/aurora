@@ -5,6 +5,7 @@ import Editor from "./Editor";
 import SectionView from "./SectionView";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
+import Trash from "./Trash";
 import type { ProjectDocument } from "./types";
 import { deleteDocument } from "./documents";
 import { failure } from "./errors";
@@ -43,10 +44,37 @@ type SectionTab = {
 	folder: string;
 };
 
-type Tab = DocumentTab | SectionTab;
+type TrashTab = {
+	kind: "trash";
+	key: string;
+};
+
+type Tab = DocumentTab | SectionTab | TrashTab;
 
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
+
+/** One tab as the strip shows it. Only a document can be unsaved. */
+function strip(tab: Tab) {
+	switch (tab.kind) {
+		case "document":
+			return {
+				key: tab.key,
+				folder: tab.document.folder,
+				title: tab.document.title,
+				dirty: tab.save.kind !== "clean",
+			};
+		case "section":
+			return {
+				key: tab.key,
+				folder: null,
+				title: tab.folder,
+				dirty: false,
+			};
+		case "trash":
+			return { key: tab.key, folder: null, title: "Trash", dirty: false };
+	}
+}
 
 async function read(root: string, id: string): Promise<Content> {
 	try {
@@ -191,6 +219,18 @@ export default function Project({ name, root, onClose }: Props) {
 			key: freshKey(),
 			folder,
 		};
+		setTabs((open) => [...open, opening]);
+		setActiveKey(opening.key);
+	}
+
+	function openTrash() {
+		const already = tabs.find((tab) => tab.kind === "trash");
+		if (already !== undefined) {
+			setActiveKey(already.key);
+			return;
+		}
+
+		const opening: TrashTab = { kind: "trash", key: freshKey() };
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
 	}
@@ -418,8 +458,10 @@ export default function Project({ name, root, onClose }: Props) {
 					selectedFolder={
 						active?.kind === "section" ? active.folder : null
 					}
+					selectedTrash={active?.kind === "trash"}
 					onSelect={(document) => void openDocument(document)}
 					onOpenSection={openSection}
+					onOpenTrash={openTrash}
 					onCreated={created}
 					onRenamed={renamed}
 					onDelete={remove}
@@ -427,20 +469,7 @@ export default function Project({ name, root, onClose }: Props) {
 				/>
 				<div className="project__main">
 					<Tabs
-						tabs={tabs.map((tab) => ({
-							key: tab.key,
-							folder:
-								tab.kind === "document"
-									? tab.document.folder
-									: null,
-							title:
-								tab.kind === "document"
-									? tab.document.title
-									: tab.folder,
-							dirty:
-								tab.kind === "document" &&
-								tab.save.kind !== "clean",
-						}))}
+						tabs={tabs.map(strip)}
 						activeKey={activeKey}
 						onActivate={setActiveKey}
 						onClose={closeTab}
@@ -463,6 +492,15 @@ export default function Project({ name, root, onClose }: Props) {
 							onCreated={created}
 							onRenamed={renamed}
 							onDelete={remove}
+						/>
+					) : active.kind === "trash" ? (
+						<Trash
+							key={active.key}
+							root={root}
+							reload={listing}
+							onChanged={() =>
+								setListing((version) => version + 1)
+							}
 						/>
 					) : (
 						documentBody(active)

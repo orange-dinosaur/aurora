@@ -52,3 +52,13 @@ export type SectionDocuments = {
 	folder: string;
 	documents: ProjectDocument[];
 };
+
+/** `document::TrashEntry` */
+export type TrashEntry = {
+	/** Where it is, relative to the project's trash. */
+	path: string;
+	folder: string;
+	title: string;
+	/** RFC 3339, or null when the name carries no moment Aurora recognises. */
+	deleted: string | null;
+};

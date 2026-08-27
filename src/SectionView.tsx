@@ -4,6 +4,7 @@ import DocumentMenu from "./DocumentMenu";
 import NameField from "./NameField";
 import type { DocumentSummary, ProjectDocument } from "./types";
 import { createDocument, renameDocument } from "./documents";
+import { when } from "./dates";
 import { failure } from "./errors";
 
 type Status =
@@ -40,17 +41,6 @@ type Props = {
 
 function counted(words: number) {
 	return words === 1 ? "1 word" : `${words} words`;
-}
-
-function when(modified: string): string {
-	const at = new Date(modified);
-	return Number.isNaN(at.getTime())
-		? modified
-		: at.toLocaleDateString(undefined, {
-				day: "numeric",
-				month: "short",
-				year: "numeric",
-			});
 }
 
 export default function SectionView({

@@ -32,8 +32,10 @@ type Props = {
 	reload: number;
 	selectedId: string | null;
 	selectedFolder: string | null;
+	selectedTrash: boolean;
 	onSelect: (document: ProjectDocument) => void;
 	onOpenSection: (folder: string) => void;
+	onOpenTrash: () => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
 	// The project view owns this one: it has to write down what the writer
@@ -48,8 +50,10 @@ export default function Sidebar({
 	reload,
 	selectedId,
 	selectedFolder,
+	selectedTrash,
 	onSelect,
 	onOpenSection,
+	onOpenTrash,
 	onCreated,
 	onRenamed,
 	onDelete,
@@ -284,9 +288,23 @@ export default function Sidebar({
 				</p>
 			</div>
 
-			<button type="button" className="sidebar__close" onClick={onClose}>
-				Close project
-			</button>
+			<div className="sidebar__foot">
+				<button
+					type="button"
+					className="sidebar__trash"
+					aria-current={selectedTrash ? "page" : undefined}
+					onClick={onOpenTrash}
+				>
+					Trash
+				</button>
+				<button
+					type="button"
+					className="sidebar__close"
+					onClick={onClose}
+				>
+					Close project
+				</button>
+			</div>
 		</nav>
 	);
 }
