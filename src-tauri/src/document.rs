@@ -59,6 +59,11 @@ impl From<&Document> for DocumentView {
 	}
 }
 
+/// Where a deleted document goes. It sits inside the project so that a move
+/// into it is a rename rather than a copy, and `scan` never looks at it: it
+/// only ever reads the section folders the manifest names.
+pub const TRASH_DIR: &str = ".trash";
+
 /// How much of a document's opening the overview carries. Long enough to
 /// recognise a chapter by, short enough that a whole section stays small.
 const EXCERPT_CHARS: usize = 240;
@@ -491,6 +496,74 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 	manifest.documents[index].path = path;
 	write_json(&root.join(MANIFEST_FILE), &manifest)?;
 	Ok(DocumentView::from(&manifest.documents[index]))
+}
+
+/// The moment of a deletion, as the prefix on its file in the trash: sortable,
+/// and made of nothing a filesystem objects to.
+fn stamp(at: OffsetDateTime) -> String {
+	format!(
+		"{:04}{:02}{:02}-{:02}{:02}{:02}",
+		at.year(),
+		at.month() as u8,
+		at.day(),
+		at.hour(),
+		at.minute(),
+		at.second()
+	)
+}
+
+/// Moves a document into the project's trash and drops it from the manifest.
+/// The file keeps its name behind the moment it was deleted, so deleting two
+/// documents called the same thing does not lose the first.
+fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
+	let mut manifest = read_manifest(root)?;
+	let from = resolve(&manifest, root, id)?;
+
+	let index = manifest
+		.documents
+		.iter()
+		.position(|d| d.id == id)
+		.ok_or(Error::UnknownDocument)?;
+	let (section, file_name) = manifest.documents[index]
+		.path
+		.split_once('/')
+		.ok_or(Error::BadDocumentPath)?;
+
+	let folder = root.join(TRASH_DIR).join(section);
+	fs::create_dir_all(&folder)?;
+	// The trash is an ordinary folder a writer can replace with a symlink, so
+	// where it actually leads is what decides whether this move stays inside
+	// the project.
+	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+
+	let at = stamp(at);
+	let mut to = folder.join(format!("{at} {file_name}"));
+	// Two deletions within the same second would otherwise write over each
+	// other.
+	let mut again = 1;
+	while to.exists() {
+		to = folder.join(format!("{at}-{again} {file_name}"));
+		again += 1;
+	}
+
+	// The file moves first. If writing the manifest then fails, the next
+	// refresh drops the document anyway, since its file is no longer in the
+	// section.
+	fs::rename(&from, &to)?;
+
+	manifest.documents.remove(index);
+	write_json(&root.join(MANIFEST_FILE), &manifest)
+}
+
+/// Deletes a document, which is to say puts it in the project's trash.
+#[tauri::command]
+pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	trash(&root, id, OffsetDateTime::now_utc())
 }
 
 /// Every document in one section, with enough of each to recognise it. Reads
@@ -1643,6 +1716,159 @@ mod tests {
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
+	}
+
+	/// What is in the trash, as file names relative to `.trash/<section>`.
+	fn trashed(root: &Path, section: &str) -> Vec<String> {
+		let mut names: Vec<String> = fs::read_dir(root.join(TRASH_DIR).join(section))
+			.unwrap()
+			.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+			.collect();
+		names.sort();
+		names
+	}
+
+	#[test]
+	fn a_deleted_document_keeps_its_text_in_the_trash() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+		write_document(root.clone(), id, "Sing to me of the man, Muse.".to_owned()).unwrap();
+
+		trash(&root, id, fixed_time()).unwrap();
+
+		assert_eq!(
+			trashed(&root, "Manuscript"),
+			["20231114-221320 Chapter 1.md"]
+		);
+		assert_eq!(
+			fs::read_to_string(
+				root.join(TRASH_DIR)
+					.join("Manuscript")
+					.join("20231114-221320 Chapter 1.md")
+			)
+			.unwrap(),
+			"Sing to me of the man, Muse."
+		);
+	}
+
+	#[test]
+	fn a_deleted_document_leaves_its_section_and_the_manifest() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		trash(&root, id, fixed_time()).unwrap();
+
+		assert!(!root.join("Manuscript").join("Chapter 1.md").exists());
+		assert!(
+			!read_manifest(&root)
+				.unwrap()
+				.documents
+				.iter()
+				.any(|d| d.id == id)
+		);
+		let manuscript = sections(&read_manifest(&root).unwrap()).remove(0);
+		assert!(manuscript.documents.is_empty());
+	}
+
+	#[test]
+	fn the_trash_is_invisible_to_a_refresh() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		trash(&root, id, fixed_time()).unwrap();
+		refresh(&root).unwrap();
+
+		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 4);
+		assert_eq!(read_manifest(&root).unwrap().documents.len(), 4);
+		assert!(trashed(&root, "Manuscript").len() == 1, "it is still there");
+	}
+
+	#[test]
+	fn deleting_two_documents_of_the_same_name_keeps_both() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		for text in ["the first one", "the second one"] {
+			let made =
+				create_document(root.clone(), "Notes".to_owned(), "Ideas".to_owned()).unwrap();
+			write_document(root.clone(), made.id, text.to_owned()).unwrap();
+			// The same instant both times, which is what forces the collision.
+			trash(&root, made.id, fixed_time()).unwrap();
+		}
+
+		assert_eq!(
+			trashed(&root, "Notes"),
+			["20231114-221320 Ideas.md", "20231114-221320-1 Ideas.md"]
+		);
+	}
+
+	#[test]
+	fn documents_deleted_from_different_sections_do_not_meet() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let notes =
+			create_document(root.clone(), "Notes".to_owned(), "Chapter 1".to_owned()).unwrap();
+		let manuscript = first_document(&root).id;
+
+		trash(&root, manuscript, fixed_time()).unwrap();
+		trash(&root, notes.id, fixed_time()).unwrap();
+
+		assert_eq!(
+			trashed(&root, "Manuscript"),
+			["20231114-221320 Chapter 1.md"]
+		);
+		assert_eq!(trashed(&root, "Notes"), ["20231114-221320 Chapter 1.md"]);
+	}
+
+	#[test]
+	fn deleting_an_unknown_document_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = delete_document(root.clone(), Uuid::new_v4()).unwrap_err();
+
+		assert!(matches!(err, Error::UnknownDocument));
+		assert!(!root.join(TRASH_DIR).exists());
+	}
+
+	#[test]
+	fn deleting_a_document_whose_file_has_gone_is_reported() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, id) = with_chapter_one_gone(&parent);
+
+		let err = delete_document(root, id).unwrap_err();
+		assert!(matches!(err, Error::DocumentMissing));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn a_trash_that_leads_out_of_the_project_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let elsewhere = parent.path().join("elsewhere");
+		fs::create_dir(&elsewhere).unwrap();
+		std::os::unix::fs::symlink(&elsewhere, root.join(TRASH_DIR)).unwrap();
+		let id = first_document(&root).id;
+
+		let err = trash(&root, id, fixed_time()).unwrap_err();
+
+		assert!(matches!(err, Error::OutsideProject));
+		assert!(root.join("Manuscript").join("Chapter 1.md").exists());
+	}
+
+	#[test]
+	fn deleting_refuses_a_relative_path() {
+		let err = delete_document(PathBuf::from("some/where"), Uuid::new_v4()).unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn a_stamp_is_sortable_and_holds_no_separators() {
+		assert_eq!(stamp(fixed_time()), "20231114-221320");
+		assert!(!stamp(fixed_time()).contains(' '));
 	}
 
 	#[test]
