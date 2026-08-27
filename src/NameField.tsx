@@ -31,6 +31,19 @@ export default function NameField({
 					onSubmit(name);
 				}
 			}}
+			onBlur={(event) => {
+				// Clicking away abandons it. Escape does the same, but a
+				// writer reaching for the mouse cannot see Escape.
+				const moved = event.relatedTarget;
+				const inside =
+					moved instanceof Node &&
+					event.currentTarget.contains(moved);
+				// Not while a name is with Rust: closing now would only reopen
+				// the field if that name comes back refused.
+				if (!busy && !inside) {
+					onCancel();
+				}
+			}}
 		>
 			{/* The field only appears because the writer asked for it, so
 			    it takes the caret with it. */}
@@ -40,7 +53,6 @@ export default function NameField({
 				value={name}
 				aria-label={label}
 				placeholder={placeholder}
-				disabled={busy}
 				onChange={(event) => setName(event.target.value)}
 				onKeyDown={(event) => {
 					if (event.key === "Escape") {

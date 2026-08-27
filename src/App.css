@@ -728,10 +728,6 @@ body,
 	border-color: var(--accent);
 }
 
-.namefield__input:disabled {
-	opacity: 0.6;
-}
-
 /* Out of flow wherever it appears, so a refused name reports without moving
    anything around it. Each surface says where. */
 .namefield__message {
