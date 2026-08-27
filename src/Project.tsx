@@ -30,6 +30,7 @@ type Save =
 
 type DocumentTab = {
 	kind: "document";
+	key: string;
 	document: ProjectDocument;
 	content: Content;
 	save: Save;
@@ -37,6 +38,7 @@ type DocumentTab = {
 
 type SectionTab = {
 	kind: "section";
+	key: string;
 	folder: string;
 };
 
@@ -44,13 +46,6 @@ type Tab = DocumentTab | SectionTab;
 
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
-
-// What the strip and `activeKey` identify a tab by. Derived rather than stored,
-// so it cannot fall out of step with the tab it names — a restored document
-// arrives under a new id and takes its tab's key with it.
-function keyOf(tab: Tab): string {
-	return tab.kind === "document" ? tab.document.id : `section/${tab.folder}`;
-}
 
 async function read(root: string, id: string): Promise<Content> {
 	try {
@@ -67,7 +62,16 @@ export default function Project({ name, root, onClose }: Props) {
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
-	const active = tabs.find((tab) => keyOf(tab) === activeKey) ?? null;
+	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
+
+	// A tab's key is its own, handed out when it opens and never derived from
+	// what it holds: a rename changes a document's path and a restore can
+	// change its id, and neither of those is the tab being replaced.
+	const keys = useRef(0);
+	function freshKey() {
+		keys.current += 1;
+		return String(keys.current);
+	}
 
 	// One timer per open document, so a tab keeps its own countdown once the
 	// writer has moved on to another one.
@@ -150,20 +154,22 @@ export default function Project({ name, root, onClose }: Props) {
 	}
 
 	async function openDocument(document: ProjectDocument) {
-		setActiveKey(document.id);
-		if (documentTab(document.id) !== undefined) {
+		const already = documentTab(document.id);
+		if (already !== undefined) {
+			setActiveKey(already.key);
 			return;
 		}
 
-		setTabs((open) => [
-			...open,
-			{
-				kind: "document",
-				document,
-				content: { kind: "loading" },
-				save: { kind: "clean" },
-			},
-		]);
+		const opening: DocumentTab = {
+			kind: "document",
+			key: freshKey(),
+			document,
+			content: { kind: "loading" },
+			save: { kind: "clean" },
+		};
+		setTabs((open) => [...open, opening]);
+		setActiveKey(opening.key);
+
 		const content = await read(root, document.id);
 		// Keyed by id, so a slow read can only ever fill in its own tab — and
 		// quietly does nothing if that tab was closed while it was in flight.
@@ -171,19 +177,35 @@ export default function Project({ name, root, onClose }: Props) {
 	}
 
 	function openSection(folder: string) {
-		const opening: SectionTab = { kind: "section", folder };
-		setActiveKey(keyOf(opening));
-		setTabs((open) =>
-			open.some((tab) => keyOf(tab) === keyOf(opening))
-				? open
-				: [...open, opening],
+		const already = tabs.find(
+			(tab) => tab.kind === "section" && tab.folder === folder,
 		);
+		if (already !== undefined) {
+			setActiveKey(already.key);
+			return;
+		}
+
+		const opening: SectionTab = {
+			kind: "section",
+			key: freshKey(),
+			folder,
+		};
+		setTabs((open) => [...open, opening]);
+		setActiveKey(opening.key);
 	}
 
 	// A new document is opened for writing in, and every listing of it has to
 	// be read again.
 	function created(document: ProjectDocument) {
 		void openDocument(document);
+		setListing((version) => version + 1);
+	}
+
+	// A rename gives a document a new path and title but not a new id, so a
+	// tab holding it is re-pointed where it stands. Its key is its own, so
+	// neither the strip nor the editor is torn down for this.
+	function renamed(document: ProjectDocument) {
+		patch(document.id, (tab) => ({ ...tab, document }));
 		setListing((version) => version + 1);
 	}
 
@@ -267,12 +289,11 @@ export default function Project({ name, root, onClose }: Props) {
 			document: restored,
 			save: { kind: "clean" },
 		}));
-		setActiveKey((current) => (current === id ? restored.id : current));
 		setListing((version) => version + 1);
 	}
 
 	function closeTab(key: string) {
-		const index = tabs.findIndex((tab) => keyOf(tab) === key);
+		const index = tabs.findIndex((tab) => tab.key === key);
 		if (index === -1) {
 			return;
 		}
@@ -294,25 +315,25 @@ export default function Project({ name, root, onClose }: Props) {
 			}
 		}
 
-		const remaining = tabs.filter((tab) => keyOf(tab) !== key);
+		const remaining = tabs.filter((tab) => tab.key !== key);
 		setTabs(remaining);
 		if (activeKey === key) {
 			// The one to its left, or the new first if it was leftmost.
 			const neighbour: Tab | undefined =
 				remaining[index - 1] ?? remaining[0];
-			setActiveKey(neighbour === undefined ? null : keyOf(neighbour));
+			setActiveKey(neighbour?.key ?? null);
 		}
 	}
 
 	function documentBody(tab: DocumentTab) {
 		if (tab.content.kind === "ready") {
 			return (
-				// Keyed by path rather than id: switching tabs gives the
-				// textarea a fresh element rather than one carrying the last
-				// document's scroll position and selection, and a restored
-				// document coming back under a new id should not tear it down.
+				// Keyed by the tab, so switching tabs gives the textarea a
+				// fresh element rather than one carrying the last document's
+				// scroll position and selection — and renaming or restoring
+				// this one does not, since the tab is the same tab.
 				<Editor
-					key={tab.document.path}
+					key={tab.key}
 					title={tab.document.title}
 					text={tab.content.text}
 					dirty={tab.save.kind !== "clean"}
@@ -360,7 +381,7 @@ export default function Project({ name, root, onClose }: Props) {
 				<div className="project__main">
 					<Tabs
 						tabs={tabs.map((tab) => ({
-							key: keyOf(tab),
+							key: tab.key,
 							folder:
 								tab.kind === "document"
 									? tab.document.folder
@@ -387,15 +408,13 @@ export default function Project({ name, root, onClose }: Props) {
 						// new one empty rather than showing the previous
 						// section's cards until its read comes back.
 						<SectionView
-							key={active.folder}
+							key={active.key}
 							root={root}
 							folder={active.folder}
 							reload={listing}
 							onSelect={(document) => void openDocument(document)}
 							onCreated={created}
-							onRenamed={() =>
-								setListing((version) => version + 1)
-							}
+							onRenamed={renamed}
 						/>
 					) : (
 						documentBody(active)
