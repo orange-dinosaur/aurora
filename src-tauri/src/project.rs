@@ -151,6 +151,8 @@ pub enum Error {
 	UnsupportedVersion { found: u32, supported: u32 },
 	UnknownDocument,
 	DocumentMissing,
+	DocumentExists,
+	BadDocumentPath,
 	OutsideProject,
 	NotText,
 	AlreadyExists,
@@ -175,6 +177,13 @@ impl fmt::Display for Error {
 			),
 			Error::UnknownDocument => write!(f, "that document is not part of this project"),
 			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
+			Error::DocumentExists => write!(
+				f,
+				"that document's file is there again — open it rather than writing over it"
+			),
+			Error::BadDocumentPath => {
+				write!(f, "that is not a path to a document in this project")
+			}
 			Error::OutsideProject => {
 				write!(f, "that document is outside the project folder")
 			}
@@ -207,6 +216,8 @@ impl std::error::Error for Error {
 			| Error::UnsupportedVersion { .. }
 			| Error::UnknownDocument
 			| Error::DocumentMissing
+			| Error::DocumentExists
+			| Error::BadDocumentPath
 			| Error::OutsideProject
 			| Error::NotText
 			| Error::AlreadyExists

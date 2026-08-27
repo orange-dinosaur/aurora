@@ -246,6 +246,67 @@ pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
 	write_atomic(&path, text.as_bytes())
 }
 
+/// Turns a path offered by the frontend into somewhere this project is willing
+/// to put a document: one of the format's sections, and a Markdown file
+/// directly inside it.
+fn restore_path(manifest: &Manifest, root: &Path, path: &str) -> Result<PathBuf> {
+	let Some((section, name)) = path.split_once('/') else {
+		return Err(Error::BadDocumentPath);
+	};
+
+	let ordinary = |part: &str| {
+		!part.is_empty()
+			&& part != "."
+			&& part != ".."
+			&& !part.contains('/')
+			&& !part.contains('\\')
+	};
+
+	if !ordinary(section) || !ordinary(name) || !is_markdown(name) {
+		return Err(Error::BadDocumentPath);
+	}
+	if !manifest.folders.iter().any(|folder| folder == section) {
+		return Err(Error::BadDocumentPath);
+	}
+
+	Ok(root.join(section).join(name))
+}
+
+/// Puts a document that has gone missing back on disk and brings the manifest
+/// with it. The path comes from the tab that still holds the text rather than
+/// from the manifest, since a refresh may already have dropped the document.
+/// The document it returns is the one to carry on editing: the same id if the
+/// manifest still knew the path, a fresh one if it had to be adopted again.
+#[tauri::command]
+pub fn restore_document(root: PathBuf, path: String, text: String) -> Result<DocumentView> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	let file = restore_path(&manifest, &root, &path)?;
+	if file.exists() {
+		return Err(Error::DocumentExists);
+	}
+
+	let folder = file.parent().ok_or(Error::BadDocumentPath)?;
+	fs::create_dir_all(folder)?;
+	// A section folder can be a symlink the writer made, so where it actually
+	// leads is what decides whether this write stays inside the project.
+	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+
+	write_atomic(&file, text.as_bytes())?;
+
+	refresh(&root)?
+		.documents
+		.iter()
+		.find(|d| d.path == path)
+		.map(DocumentView::from)
+		.ok_or(Error::UnknownDocument)
+}
+
 /// The sidebar's view of the project, straight from the manifest.
 #[tauri::command]
 pub fn list_documents(root: PathBuf) -> Result<Vec<SectionDocuments>> {
@@ -764,6 +825,147 @@ mod tests {
 		let err = write_document(root, id, "overwritten".to_owned()).unwrap_err();
 		assert!(matches!(err, Error::OutsideProject));
 		assert_eq!(fs::read_to_string(&outside).unwrap(), "not yours");
+	}
+
+	/// A project whose first document has been deleted from disk.
+	fn with_chapter_one_gone(parent: &tempfile::TempDir) -> (PathBuf, Uuid) {
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+		fs::remove_file(root.join("Manuscript").join("Chapter 1.md")).unwrap();
+		(root, id)
+	}
+
+	#[test]
+	fn a_vanished_document_can_be_put_back() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, id) = with_chapter_one_gone(&parent);
+
+		let restored = restore_document(
+			root.clone(),
+			"Manuscript/Chapter 1.md".to_owned(),
+			"Sing to me of the man, Muse.".to_owned(),
+		)
+		.unwrap();
+
+		assert_eq!(restored.id, id, "the manifest still knew the path");
+		assert_eq!(restored.title, "Chapter 1");
+		assert_eq!(
+			read_document(root, restored.id).unwrap(),
+			"Sing to me of the man, Muse."
+		);
+	}
+
+	#[test]
+	fn a_document_already_forgotten_comes_back_under_a_new_id() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, id) = with_chapter_one_gone(&parent);
+		// A refresh while the file was away drops it from the manifest, which
+		// is why the path has to come from the caller.
+		refresh(&root).unwrap();
+
+		let restored = restore_document(
+			root.clone(),
+			"Manuscript/Chapter 1.md".to_owned(),
+			"Back again.".to_owned(),
+		)
+		.unwrap();
+
+		assert_ne!(restored.id, id);
+		assert_eq!(read_document(root, restored.id).unwrap(), "Back again.");
+	}
+
+	#[test]
+	fn restoring_recreates_a_section_folder_that_went_with_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::remove_dir_all(root.join("Manuscript")).unwrap();
+
+		let restored = restore_document(
+			root.clone(),
+			"Manuscript/Chapter 1.md".to_owned(),
+			"Back again.".to_owned(),
+		)
+		.unwrap();
+
+		assert_eq!(restored.folder, "Manuscript");
+		assert_eq!(read_document(root, restored.id).unwrap(), "Back again.");
+	}
+
+	#[test]
+	fn a_document_that_came_back_on_its_own_is_not_written_over() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(
+			root.join("Manuscript").join("Chapter 1.md"),
+			"what the sync client brought back",
+		)
+		.unwrap();
+
+		let err = restore_document(
+			root.clone(),
+			"Manuscript/Chapter 1.md".to_owned(),
+			"my copy".to_owned(),
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::DocumentExists));
+		assert_eq!(
+			fs::read_to_string(root.join("Manuscript").join("Chapter 1.md")).unwrap(),
+			"what the sync client brought back"
+		);
+	}
+
+	#[test]
+	fn restoring_refuses_a_path_that_is_not_a_document_in_a_section() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, _) = with_chapter_one_gone(&parent);
+
+		for path in [
+			"secrets.md",
+			"../secrets.md",
+			"Manuscript/../../secrets.md",
+			"Scraps/Offcut.md",
+			"Manuscript/notes.txt",
+			"Manuscript/",
+			"Manuscript/..",
+		] {
+			let err =
+				restore_document(root.clone(), path.to_owned(), "text".to_owned()).unwrap_err();
+			assert!(
+				matches!(err, Error::BadDocumentPath),
+				"{path} should not be a document path"
+			);
+		}
+
+		assert!(!parent.path().join("secrets.md").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn restoring_through_a_symlinked_section_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let elsewhere = parent.path().join("elsewhere");
+		fs::create_dir(&elsewhere).unwrap();
+		fs::remove_dir_all(root.join("Notes")).unwrap();
+		std::os::unix::fs::symlink(&elsewhere, root.join("Notes")).unwrap();
+
+		let err =
+			restore_document(root, "Notes/Notes.md".to_owned(), "text".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::OutsideProject));
+		assert!(!elsewhere.join("Notes.md").exists());
+	}
+
+	#[test]
+	fn restoring_refuses_a_relative_path() {
+		let err = restore_document(
+			PathBuf::from("some/where"),
+			"Notes/Notes.md".to_owned(),
+			String::new(),
+		)
+		.unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
 	}
 
 	#[test]

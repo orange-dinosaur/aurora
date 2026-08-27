@@ -17,7 +17,8 @@ pub fn run() {
 			document::list_documents,
 			document::refresh_documents,
 			document::read_document,
-			document::write_document
+			document::write_document,
+			document::restore_document
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
