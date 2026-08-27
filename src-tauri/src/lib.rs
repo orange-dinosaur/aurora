@@ -1,3 +1,4 @@
+pub mod document;
 pub mod project;
 pub mod store;
 
@@ -13,9 +14,9 @@ pub fn run() {
 			project::forget_project,
 			project::open_project,
 			project::recent_projects,
-			project::list_documents,
-			project::refresh_documents,
-			project::read_document
+			document::list_documents,
+			document::refresh_documents,
+			document::read_document
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
