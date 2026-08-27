@@ -12,7 +12,9 @@ type Props = {
 	// Changes when the project view has altered the manifest.
 	reload: number;
 	selectedId: string | null;
+	selectedFolder: string | null;
 	onSelect: (document: ProjectDocument) => void;
+	onOpenSection: (folder: string) => void;
 	onClose: () => void;
 };
 
@@ -21,7 +23,9 @@ export default function Sidebar({
 	root,
 	reload,
 	selectedId,
+	selectedFolder,
 	onSelect,
+	onOpenSection,
 	onClose,
 }: Props) {
 	const [sections, setSections] = useState<SectionDocuments[]>([]);
@@ -70,7 +74,22 @@ export default function Sidebar({
 				<div className="sidebar__sections">
 					{sections.map((section) => (
 						<section key={section.folder} className="section">
-							<h3 className="section__title">{section.folder}</h3>
+							<h3 className="section__title">
+								<button
+									type="button"
+									className="section__open"
+									aria-current={
+										section.folder === selectedFolder
+											? "page"
+											: undefined
+									}
+									onClick={() =>
+										onOpenSection(section.folder)
+									}
+								>
+									{section.folder}
+								</button>
+							</h3>
 							{section.documents.length > 0 ? (
 								<ul className="documents">
 									{section.documents.map((doc) => (

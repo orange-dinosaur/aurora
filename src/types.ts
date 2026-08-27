@@ -36,6 +36,17 @@ export type ProjectDocument = {
 	title: string;
 };
 
+/**
+ * `document::DocumentSummary` — the sidebar's view of a document with the
+ * overview's extras flattened onto it, which is how Rust serializes it.
+ */
+export type DocumentSummary = ProjectDocument & {
+	words: number;
+	excerpt: string;
+	/** RFC 3339, or null when the file could not be read at all. */
+	modified: string | null;
+};
+
 /** `document::SectionDocuments` */
 export type SectionDocuments = {
 	folder: string;

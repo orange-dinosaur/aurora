@@ -413,6 +413,26 @@ body,
 	font-weight: 600;
 }
 
+.section__open {
+	padding: 0.1rem 0.4rem;
+	margin-left: -0.4rem;
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+	overflow-wrap: anywhere;
+}
+
+.section__open:hover {
+	background: var(--bg-card);
+}
+
+.section__open[aria-current="page"] {
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .section__empty {
 	margin: 0;
 	font-size: 0.85rem;
@@ -532,6 +552,104 @@ body,
 
 .reader {
 	max-width: 40rem;
+}
+
+/* The grid scrolls itself, the way the editor scrolls its own text, so the tab
+   strip above it stays put. */
+.overview {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	padding-bottom: 1.5rem;
+}
+
+.overview__title {
+	flex: none;
+	margin: 0 0 1rem;
+	font-size: 1.25rem;
+	font-weight: 600;
+}
+
+.overview__note {
+	margin: 0;
+	color: var(--text-dim);
+}
+
+/* Always in the DOM and out of flow, so an error appears without moving the
+   cards above it. */
+.overview__message {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	margin: 0;
+	font-size: 0.8rem;
+	color: #c0392b;
+	background: var(--bg);
+	overflow-wrap: anywhere;
+}
+
+@media (prefers-color-scheme: dark) {
+	.overview__message {
+		color: #ff8a7a;
+	}
+}
+
+.cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+	gap: 0.75rem;
+	flex: 1;
+	min-height: 0;
+	margin: 0;
+	padding: 0 0 0.5rem;
+	list-style: none;
+	overflow-y: auto;
+	align-content: start;
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	width: 100%;
+	height: 100%;
+	padding: 0.75rem 0.85rem;
+	font: inherit;
+	text-align: left;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.card:hover {
+	border-color: var(--accent);
+}
+
+.card__title {
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+/* Four lines of the opening, however long the excerpt Rust sent is. */
+.card__excerpt {
+	font-size: 0.85rem;
+	line-height: 1.5;
+	color: var(--text-dim);
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
+}
+
+.card__meta {
+	margin-top: auto;
+	font-size: 0.75rem;
+	color: var(--text-dim);
 }
 
 .editor {

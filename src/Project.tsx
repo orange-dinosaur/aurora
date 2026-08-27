@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
+import SectionView from "./SectionView";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
 import type { ProjectDocument } from "./types";
@@ -169,6 +170,16 @@ export default function Project({ name, root, onClose }: Props) {
 		patch(document.id, (tab) => ({ ...tab, content }));
 	}
 
+	function openSection(folder: string) {
+		const opening: SectionTab = { kind: "section", folder };
+		setActiveKey(keyOf(opening));
+		setTabs((open) =>
+			open.some((tab) => keyOf(tab) === keyOf(opening))
+				? open
+				: [...open, opening],
+		);
+	}
+
 	function edit(id: string, text: string) {
 		patch(id, (tab) =>
 			tab.content.kind === "ready"
@@ -331,7 +342,11 @@ export default function Project({ name, root, onClose }: Props) {
 					selectedId={
 						active?.kind === "document" ? active.document.id : null
 					}
+					selectedFolder={
+						active?.kind === "section" ? active.folder : null
+					}
 					onSelect={(document) => void openDocument(document)}
+					onOpenSection={openSection}
 					onClose={onClose}
 				/>
 				<div className="project__main">
@@ -360,9 +375,16 @@ export default function Project({ name, root, onClose }: Props) {
 							Choose a document to open.
 						</p>
 					) : active.kind === "section" ? (
-						<article className="reader">
-							<h2 className="reader__title">{active.folder}</h2>
-						</article>
+						// Keyed, so moving between two overviews starts the
+						// new one empty rather than showing the previous
+						// section's cards until its read comes back.
+						<SectionView
+							key={active.folder}
+							root={root}
+							folder={active.folder}
+							reload={listing}
+							onSelect={(document) => void openDocument(document)}
+						/>
 					) : (
 						documentBody(active)
 					)}
