@@ -1035,7 +1035,7 @@ body,
 }
 
 .editor__title {
-	margin: 0 0 1rem;
+	margin: 0 0 0.5rem;
 	font-size: 1.25rem;
 	font-weight: 600;
 }
@@ -1196,6 +1196,26 @@ body,
 	user-select: none;
 }
 
+/* The same row of buttons in both bars, so the two can never look like they do
+   different things. */
+.controls {
+	display: flex;
+	align-items: center;
+	gap: 0.1rem;
+	white-space: nowrap;
+}
+
+/* Under the title, always there. No box of its own — a hairline is enough to
+   separate it from the writing. */
+.toolbar {
+	flex: none;
+	display: flex;
+	align-items: center;
+	margin: 0 0 0.75rem;
+	padding-bottom: 0.5rem;
+	border-bottom: 1px solid var(--border);
+}
+
 /* The bar that floats over a selection. Out of flow, so it can never move the
    writing it is sitting on top of, and placed from JavaScript because it
    follows the words rather than the layout. */
@@ -1204,15 +1224,11 @@ body,
 	top: 0;
 	left: 0;
 	z-index: 5;
-	display: flex;
-	align-items: center;
-	gap: 0.1rem;
 	padding: 0.2rem;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
-	white-space: nowrap;
 }
 
 /* Hidden rather than removed: the bar has to be measured to be centred, and
@@ -1222,11 +1238,11 @@ body,
 	pointer-events: none;
 }
 
-.bubble__block {
+.controls__block {
 	position: relative;
 }
 
-.bubble__turn {
+.controls__turn {
 	display: flex;
 	align-items: center;
 	gap: 0.3rem;
@@ -1240,17 +1256,17 @@ body,
 	cursor: pointer;
 }
 
-.bubble__turn:hover,
-.bubble__turn[aria-expanded="true"] {
+.controls__turn:hover,
+.controls__turn[aria-expanded="true"] {
 	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-.bubble__caret {
+.controls__caret {
 	font-size: 0.7rem;
 	color: var(--text-dim);
 }
 
-.bubble__list {
+.controls__list {
 	position: absolute;
 	top: 100%;
 	left: 0;
@@ -1266,7 +1282,7 @@ body,
 	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
-.bubble__option {
+.controls__option {
 	padding: 0.3rem 0.5rem;
 	font: inherit;
 	font-size: 0.85rem;
@@ -1278,15 +1294,15 @@ body,
 	cursor: pointer;
 }
 
-.bubble__option:hover {
+.controls__option:hover {
 	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-.bubble__option[aria-checked="true"] {
+.controls__option[aria-checked="true"] {
 	color: var(--accent);
 }
 
-.bubble__divider {
+.controls__divider {
 	align-self: stretch;
 	width: 1px;
 	margin: 0.15rem 0.25rem;
@@ -1294,7 +1310,7 @@ body,
 }
 
 /* Each button is drawn in the style it applies, so it needs no label. */
-.bubble__mark {
+.controls__mark {
 	min-width: 1.8rem;
 	padding: 0.25rem 0.35rem;
 	font: inherit;
@@ -1306,34 +1322,34 @@ body,
 	cursor: pointer;
 }
 
-.bubble__mark:hover {
+.controls__mark:hover {
 	color: var(--text);
 	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-.bubble__mark[aria-pressed="true"] {
+.controls__mark[aria-pressed="true"] {
 	color: var(--accent);
 	background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
-.bubble__mark--bold {
+.controls__mark--bold {
 	font-weight: 700;
 }
 
-.bubble__mark--italic {
+.controls__mark--italic {
 	font-family: Georgia, "Times New Roman", serif;
 	font-style: italic;
 }
 
-.bubble__mark--strikethrough {
+.controls__mark--strikethrough {
 	text-decoration: line-through;
 }
 
-.bubble__mark--highlight {
+.controls__mark--highlight {
 	font-size: 0.95rem;
 }
 
-.bubble__mark--code {
+.controls__mark--code {
 	font-family: var(--mono);
 	font-size: 0.75rem;
 }

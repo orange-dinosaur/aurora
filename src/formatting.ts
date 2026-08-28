@@ -154,6 +154,22 @@ export type Formatting = {
 	block: Action | null;
 };
 
+/** Whether two readings would draw the same bar. */
+export function sameFormatting(
+	a: Formatting | null,
+	b: Formatting | null,
+): boolean {
+	if (a === null || b === null) {
+		return a === b;
+	}
+	// The actions are declared once and never rebuilt, so identity is enough.
+	return (
+		a.block === b.block &&
+		a.marks.size === b.marks.size &&
+		[...a.marks].every((id) => b.marks.has(id))
+	);
+}
+
 export function $formattingOf(selection: RangeSelection): Formatting {
 	return {
 		marks: new Set(

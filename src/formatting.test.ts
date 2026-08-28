@@ -3,7 +3,14 @@ import { registerList } from "@lexical/list";
 import { registerRichText } from "@lexical/rich-text";
 import { $getRoot, $getSelection, $isRangeSelection } from "lexical";
 import { beforeEach, describe, expect, test } from "vitest";
-import { $blockOf, BLOCKS, MARKS, type Action } from "./formatting";
+import {
+	$blockOf,
+	$formattingOf,
+	BLOCKS,
+	MARKS,
+	sameFormatting,
+	type Action,
+} from "./formatting";
 import { $fromMarkdown, $toMarkdown, EDITOR_NODES } from "./markdown";
 
 // The list and heading commands are handled by plugins, not by the editor
@@ -146,5 +153,47 @@ describe("the marks on words", () => {
 				: -1;
 		});
 		expect(active).toBe(0);
+	});
+});
+
+// A bar only redraws itself when this says the reading changed, so a false
+// positive here would freeze it on a stale answer.
+describe("comparing two readings of the selection", () => {
+	function readingOf(markdown: string) {
+		const editor = editorWith(markdown);
+		return editor.getEditorState().read(() => {
+			const selection = $getSelection();
+			if (!$isRangeSelection(selection)) {
+				throw new Error("no selection");
+			}
+			return $formattingOf(selection);
+		});
+	}
+
+	test("two readings of the same block are the same", () => {
+		expect(
+			sameFormatting(readingOf("She ran."), readingOf("He sat.")),
+		).toBe(true);
+	});
+
+	test("different blocks are not the same", () => {
+		expect(
+			sameFormatting(readingOf("She ran."), readingOf("# Chapter")),
+		).toBe(false);
+	});
+
+	test("nothing selected matches only nothing selected", () => {
+		expect(sameFormatting(null, null)).toBe(true);
+		expect(sameFormatting(null, readingOf("She ran."))).toBe(false);
+	});
+
+	test("the same block with a different mark is not the same", () => {
+		const plain = readingOf("She ran.");
+		expect(
+			sameFormatting(plain, {
+				block: plain.block,
+				marks: new Set(["bold"]),
+			}),
+		).toBe(false);
 	});
 });

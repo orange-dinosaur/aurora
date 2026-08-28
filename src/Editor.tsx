@@ -15,6 +15,7 @@ import {
 	EDITOR_NODES,
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
+import Toolbar from "./Toolbar";
 
 // Lexical puts these class names on the elements it renders; App.css styles
 // them. Bold and italic are left out because they come out as <strong> and
@@ -89,6 +90,7 @@ export default function Editor({
 		<div className="editor">
 			<h2 className="editor__title">{title}</h2>
 			<LexicalComposer initialConfig={config}>
+				<Toolbar />
 				<div className="editor__surface">
 					<RichTextPlugin
 						contentEditable={
