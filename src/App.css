@@ -288,13 +288,7 @@ body,
 }
 
 .welcome__message--error {
-	color: #c0392b;
-}
-
-@media (prefers-color-scheme: dark) {
-	.welcome__message--error {
-		color: #ff8b7d;
-	}
+	color: var(--danger);
 }
 
 .project {
@@ -439,7 +433,7 @@ body,
 
 .sidebar__trash[aria-current="page"] {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	background: var(--accent-wash);
 }
 
 .sidebar__foot {
@@ -524,7 +518,7 @@ body,
 }
 
 .section__open[aria-current="page"] {
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	background: var(--accent-wash);
 }
 
 .section__empty {
@@ -579,7 +573,7 @@ body,
 
 .document[aria-current="page"] {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	background: var(--accent-wash);
 }
 
 .tabs {
@@ -697,15 +691,9 @@ body,
 	right: 0;
 	margin: 0;
 	font-size: 0.8rem;
-	color: #c0392b;
+	color: var(--danger);
 	background: var(--bg);
 	overflow-wrap: anywhere;
-}
-
-@media (prefers-color-scheme: dark) {
-	.overview__message {
-		color: #ff8a7a;
-	}
 }
 
 .cards {
@@ -829,7 +817,7 @@ body,
 	position: absolute;
 	margin: 0;
 	font-size: 0.75rem;
-	color: #c0392b;
+	color: var(--danger);
 	overflow-wrap: anywhere;
 }
 
@@ -844,12 +832,6 @@ body,
 	right: 0;
 	padding-bottom: 0.25rem;
 	background: var(--bg);
-}
-
-@media (prefers-color-scheme: dark) {
-	.namefield__message {
-		color: #ff8a7a;
-	}
 }
 
 /* Out of flow wherever it appears; each surface says where. */
@@ -922,23 +904,12 @@ body,
 }
 
 .trashed__action--danger {
-	color: #c0392b;
+	color: var(--danger);
 }
 
 .trashed__action--danger:hover:not(:disabled) {
-	color: #c0392b;
-	border-color: #c0392b;
-}
-
-@media (prefers-color-scheme: dark) {
-	.trashed__action--danger {
-		color: #ff8a7a;
-	}
-
-	.trashed__action--danger:hover:not(:disabled) {
-		color: #ff8a7a;
-		border-color: #ff8a7a;
-	}
+	color: var(--danger);
+	border-color: var(--danger);
 }
 
 .menu {
@@ -984,7 +955,7 @@ body,
 .menu__trigger:hover,
 .menu__trigger[aria-expanded="true"] {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent) 16%, transparent);
+	background: var(--accent-wash);
 }
 
 .menu__items {
@@ -1015,7 +986,7 @@ body,
 }
 
 .menu__item:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .menu__item:disabled {
@@ -1025,21 +996,11 @@ body,
 }
 
 .menu__item--danger {
-	color: #c0392b;
+	color: var(--danger);
 }
 
 .menu__item--danger:hover:not(:disabled) {
-	background: color-mix(in srgb, #c0392b 14%, transparent);
-}
-
-@media (prefers-color-scheme: dark) {
-	.menu__item--danger {
-		color: #ff8a7a;
-	}
-
-	.menu__item--danger:hover:not(:disabled) {
-		background: color-mix(in srgb, #ff8a7a 16%, transparent);
-	}
+	background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
 .editor {
@@ -1106,7 +1067,7 @@ body,
 
 .editor__toggle:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .editor__toggle[aria-pressed="true"] {
@@ -1320,7 +1281,7 @@ body,
 
 .editor__outline-item:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 /* Where the caret is, so the list says where the writer is as well as where
@@ -1392,7 +1353,7 @@ body,
 
 .controls__turn:hover,
 .controls__turn[aria-expanded="true"] {
-	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: var(--accent-wash);
 }
 
 .controls__caret {
@@ -1435,7 +1396,7 @@ body,
 
 .controls__option:hover,
 .slash__option[aria-selected="true"] {
-	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: var(--accent-wash);
 }
 
 .controls__option[aria-checked="true"] {
@@ -1470,12 +1431,12 @@ body,
 
 .controls__mark:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .controls__mark[aria-pressed="true"] {
 	color: var(--accent);
-	background: color-mix(in srgb, var(--accent) 16%, transparent);
+	background: var(--accent-wash);
 }
 
 .controls__mark--bold {
@@ -1699,7 +1660,7 @@ body,
 }
 
 .typography__step:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .typography__step:disabled {
@@ -1823,13 +1784,7 @@ body,
 }
 
 .editor__status--error {
-	color: #c0392b;
-}
-
-@media (prefers-color-scheme: dark) {
-	.editor__status--error {
-		color: #ff8a7a;
-	}
+	color: var(--danger);
 }
 
 .reader__title {
@@ -1851,13 +1806,7 @@ body,
 }
 
 .reader__note--error {
-	color: #c0392b;
-}
-
-@media (prefers-color-scheme: dark) {
-	.reader__note--error {
-		color: #ff8a7a;
-	}
+	color: var(--danger);
 }
 
 /* Always in the DOM and out of flow, so an error appears without moving the
@@ -1869,15 +1818,9 @@ body,
 	right: 0;
 	margin: 0;
 	font-size: 0.8rem;
-	color: #c0392b;
+	color: var(--danger);
 	background: var(--bg);
 	overflow-wrap: anywhere;
-}
-
-@media (prefers-color-scheme: dark) {
-	.sidebar__message {
-		color: #ff8a7a;
-	}
 }
 
 .existing {
