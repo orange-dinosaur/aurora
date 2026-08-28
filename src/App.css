@@ -1,13 +1,24 @@
 :root {
-	--bg: #fbfaf8;
-	--bg-card: #ffffff;
-	--border: #e0dbd3;
-	--text: #1c1a17;
-	--text-dim: #6d675f;
-	--accent: #7a5cff;
+	--bg: oklch(0.985 0.006 85);
+	/* The tint that separates chrome from paper: the sidebar, the tab strip and
+	   anything else that is not the manuscript. */
+	--bg-chrome: oklch(0.965 0.009 85);
+	--bg-card: oklch(0.997 0.003 85);
+	--border: oklch(0.89 0.012 80);
+	--text: oklch(0.24 0.012 60);
+	--text-dim: oklch(0.53 0.012 65);
+	--accent: oklch(0.58 0.115 70);
+	/* Behind whatever is selected, at full strength; hover takes the same wash
+	   at half. A selection is never drawn with a border. */
+	--accent-wash: oklch(0.93 0.05 82);
+	--danger: oklch(0.48 0.14 25);
 	/* The tint on a match that is not the one being read. */
-	--find: #ffe9a8;
+	--find: oklch(0.92 0.09 95);
 	--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	--serif: Newsreader, Georgia, "Times New Roman", serif;
+	/* The one shadow in the app, and only ever under something that floats.
+	   Everything that sits in the layout is separated by a hairline instead. */
+	--shadow-pop: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.1);
 
 	font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
 	font-size: 16px;
@@ -23,13 +34,16 @@
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--bg: #16151a;
-		--bg-card: #1e1d24;
-		--border: #2e2c36;
-		--text: #ece9f0;
-		--text-dim: #918c9c;
-		--accent: #a48cff;
-		--find: #4c421f;
+		--bg: oklch(0.195 0.008 70);
+		--bg-chrome: oklch(0.165 0.008 70);
+		--bg-card: oklch(0.235 0.009 70);
+		--border: oklch(0.31 0.01 70);
+		--text: oklch(0.93 0.008 80);
+		--text-dim: oklch(0.68 0.01 75);
+		--accent: oklch(0.78 0.1 78);
+		--accent-wash: oklch(0.33 0.05 78);
+		--danger: oklch(0.7 0.13 30);
+		--find: oklch(0.42 0.07 90);
 	}
 }
 
