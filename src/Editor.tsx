@@ -7,7 +7,7 @@ import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
-import type { EditorThemeClasses } from "lexical";
+import type { EditorState, EditorThemeClasses } from "lexical";
 import type { Preferences } from "./types";
 import { useCallback, useState, type CSSProperties } from "react";
 import {
@@ -24,6 +24,7 @@ import SlashMenu from "./SlashMenu";
 import Toolbar from "./Toolbar";
 import Typewriter from "./Typewriter";
 import Typography from "./Typography";
+import { characters, charactersWithoutSpaces, words } from "./words";
 
 // Lexical puts these class names on the elements it renders; App.css styles
 // them. Bold and italic are left out because they come out as <strong> and
@@ -58,6 +59,27 @@ const THEME: EditorThemeClasses = {
 	},
 };
 
+function counted(text: string) {
+	return {
+		words: words(text),
+		characters: characters(text),
+		tight: charactersWithoutSpaces(text),
+	};
+}
+
+/** The status line's tally, in the order a writer scans it. */
+function tallied(counts: ReturnType<typeof counted>): string {
+	return [
+		counts.words === 1
+			? "1 word"
+			: `${counts.words.toLocaleString()} words`,
+		counts.characters === 1
+			? "1 character"
+			: `${counts.characters.toLocaleString()} characters`,
+		`${counts.tight.toLocaleString()} without spaces`,
+	].join(" · ");
+}
+
 type Props = {
 	title: string;
 	text: string;
@@ -88,6 +110,18 @@ export default function Editor({
 		[preferences, onPreferences],
 	);
 	const note = error ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
+	// Counted from the markdown the editor would save, which is the same text
+	// the Rust side counts when it summarises the file. The three numbers are
+	// taken from one draft together, so they cannot describe different text.
+	const [tally, setTally] = useState(() => counted(text));
+	const edited = useCallback(
+		(state: EditorState) => {
+			const markdown = state.read(() => $toMarkdown());
+			setTally(counted(markdown));
+			onChange(markdown);
+		},
+		[onChange],
+	);
 	const look = ["editor"];
 	if (preferences.focus) {
 		look.push("editor--focus");
@@ -211,41 +245,39 @@ export default function Editor({
 					<Links />
 					{/* Moving the caret is not an edit, or every click would
 					    mark the document unsaved. */}
-					<OnChangePlugin
-						ignoreSelectionChange
-						onChange={(state) =>
-							onChange(state.read(() => $toMarkdown()))
-						}
-					/>
+					<OnChangePlugin ignoreSelectionChange onChange={edited} />
 					<Shortcuts onToolbar={toggle} />
 					<Focus on={preferences.focus} />
 					<Typewriter on={preferences.typewriter} />
 					<SlashMenu />
 				</div>
 			</LexicalComposer>
-			<p
-				className={
-					error === null && !missing
-						? "editor__status"
-						: "editor__status editor__status--error"
-				}
-				role="status"
-			>
-				{missing ? (
-					<>
-						This document&rsquo;s file is no longer there.{" "}
-						<button
-							type="button"
-							className="editor__restore"
-							onClick={onRestore}
-						>
-							Write it back
-						</button>
-					</>
-				) : (
-					note
-				)}
-			</p>
+			<div className="editor__foot">
+				<p className="editor__count">{tallied(tally)}</p>
+				<p
+					className={
+						error === null && !missing
+							? "editor__status"
+							: "editor__status editor__status--error"
+					}
+					role="status"
+				>
+					{missing ? (
+						<>
+							This document&rsquo;s file is no longer there.{" "}
+							<button
+								type="button"
+								className="editor__restore"
+								onClick={onRestore}
+							>
+								Write it back
+							</button>
+						</>
+					) : (
+						note
+					)}
+				</p>
+			</div>
 		</div>
 	);
 }

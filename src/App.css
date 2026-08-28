@@ -1542,11 +1542,28 @@ body,
 	padding-bottom: 60vh;
 }
 
+/* The count and the save state share one row, so the row keeps its height
+   whatever either of them says. */
+.editor__foot {
+	flex: none;
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	margin: 0.5rem 0 0;
+}
+
+.editor__count {
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
 /* Always in the DOM, so the wording can change without moving the text above
    it. */
 .editor__status {
-	flex: none;
-	margin: 0.5rem 0 0;
+	margin: 0;
 	font-size: 0.8rem;
 	color: var(--text-dim);
 	text-align: right;
