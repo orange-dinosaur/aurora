@@ -100,7 +100,6 @@ export default function Project({
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
-	const [sidebar, setSidebar] = useState(true);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
 
 	// A tab's key is its own, handed out when it opens and never derived from
@@ -486,14 +485,16 @@ export default function Project({
 			<Titlebar
 				name={name}
 				root={root}
-				sidebar={sidebar}
-				onSidebar={setSidebar}
+				sidebar={preferences.sidebar}
+				onSidebar={(open) =>
+					onPreferences({ ...preferences, sidebar: open })
+				}
 				onRefreshed={() => setListing((version) => version + 1)}
 			/>
 
 			<div className="project__body">
 				<Sidebar
-					hidden={!sidebar}
+					hidden={!preferences.sidebar}
 					root={root}
 					reload={listing}
 					selectedId={

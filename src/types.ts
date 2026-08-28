@@ -75,6 +75,8 @@ export type Preferences = {
 	typewriter: boolean;
 	/** Whether the headings are listed in a column beside the text. */
 	outline: boolean;
+	/** Whether the list of documents is showing beside the writing. */
+	sidebar: boolean;
 	/** The width of the column of text, in characters. */
 	measure: number;
 	/** In pixels. */

@@ -13,6 +13,7 @@ const DEFAULTS: Preferences = {
 	focus: false,
 	typewriter: false,
 	outline: false,
+	sidebar: true,
 	measure: 68,
 	fontSize: 16,
 	lineHeight: 1.7,

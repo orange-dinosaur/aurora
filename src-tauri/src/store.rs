@@ -9,7 +9,7 @@ use tauri::AppHandle;
 
 use crate::project::{Error, Result, store_path, write_json};
 
-pub const STORE_VERSION: u32 = 3;
+pub const STORE_VERSION: u32 = 4;
 
 /// How many projects are worth offering on the welcome screen.
 const MAX_RECENT: usize = 10;
@@ -32,12 +32,22 @@ pub struct Preferences {
 	/// Defaulted for the same reason as the field above it.
 	#[serde(default)]
 	pub outline: bool,
+	/// Whether the list of documents is showing beside the writing. Needs a
+	/// default of its own: an older store has no such field, and falling back
+	/// to `false` would open Aurora with the sidebar gone.
+	#[serde(default = "shown")]
+	pub sidebar: bool,
 	/// The width of the column of text, in characters.
 	pub measure: u32,
 	/// In pixels.
 	pub font_size: u32,
 	/// A multiple of the font size, as CSS takes it.
 	pub line_height: f32,
+}
+
+/// serde takes a field's default from a function, not from the type's `Default`.
+fn shown() -> bool {
+	true
 }
 
 impl Default for Preferences {
@@ -47,6 +57,7 @@ impl Default for Preferences {
 			focus: false,
 			typewriter: false,
 			outline: false,
+			sidebar: shown(),
 			measure: 68,
 			font_size: 16,
 			line_height: 1.7,
@@ -142,7 +153,8 @@ pub fn load(path: &Path) -> Result<Store> {
 
 /// Version 1 had no `last`: whatever was at the head of the list was what
 /// reopened. Adopting it here means an upgrade does not lose the open project.
-/// Version 2 had no preferences, and serde's defaults are the whole migration.
+/// Version 2 had no preferences, and version 3 no `sidebar`; serde's defaults
+/// are the whole migration for both.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
 	if store.version < STORE_VERSION {
@@ -256,7 +268,7 @@ mod tests {
 
 		let json = fs::read_to_string(&path).unwrap();
 		assert!(
-			json.contains("\n\t\"version\": 3"),
+			json.contains("\n\t\"version\": 4"),
 			"expected tab indentation"
 		);
 		assert!(json.contains("\"lastOpened\": \"2023-11-14T22:13:20Z\""));
@@ -452,6 +464,9 @@ mod tests {
 		assert!(!store.preferences.toolbar);
 		assert!(!store.preferences.typewriter);
 		assert!(!store.preferences.outline);
+		// The one field whose default is not its type's: a store that predates
+		// it has to come back with the sidebar showing, not hidden.
+		assert!(store.preferences.sidebar);
 		assert_eq!(store.preferences.measure, 80);
 	}
 
@@ -464,6 +479,7 @@ mod tests {
 			focus: true,
 			typewriter: true,
 			outline: true,
+			sidebar: false,
 			measure: 80,
 			font_size: 19,
 			line_height: 2.0,
