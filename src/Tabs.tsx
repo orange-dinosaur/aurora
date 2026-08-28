@@ -27,6 +27,13 @@ export default function Tabs({ tabs, activeKey, onActivate, onClose }: Props) {
 					className="tab"
 					data-active={tab.key === activeKey ? "" : undefined}
 				>
+					{/* Always in the strip and only ever faded in, so a tab
+					    does not change width the moment it is typed into. */}
+					<span
+						className="tab__dirty"
+						data-dirty={tab.dirty ? "" : undefined}
+						aria-hidden="true"
+					/>
 					<button
 						type="button"
 						className="tab__title"
@@ -40,13 +47,6 @@ export default function Tabs({ tabs, activeKey, onActivate, onClose }: Props) {
 						)}
 						{tab.title}
 					</button>
-					{/* Always in the strip and only ever faded in, so a tab
-					    does not change width the moment it is typed into. */}
-					<span
-						className="tab__dirty"
-						data-dirty={tab.dirty ? "" : undefined}
-						aria-hidden="true"
-					/>
 					<button
 						type="button"
 						className="tab__close"
