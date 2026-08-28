@@ -9,7 +9,7 @@ import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { EditorThemeClasses } from "lexical";
 import type { Preferences } from "./types";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import {
 	$fromMarkdown,
 	$toMarkdown,
@@ -21,6 +21,7 @@ import Links from "./Links";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
 import Toolbar from "./Toolbar";
+import Typography from "./Typography";
 
 // Lexical puts these class names on the elements it renders; App.css styles
 // them. Bold and italic are left out because they come out as <strong> and
@@ -100,22 +101,40 @@ export default function Editor({
 	}));
 
 	return (
-		<div className="editor">
+		<div
+			className="editor"
+			// The page's own measurements, handed to the stylesheet. `ch` is
+			// read against this element's font size, which is why the size is
+			// set here and not further down.
+			style={
+				{
+					"--measure": `${preferences.measure}ch`,
+					"--font-size": `${preferences.fontSize}px`,
+					"--line-height": `${preferences.lineHeight}`,
+				} as CSSProperties
+			}
+		>
 			<div className="editor__head">
 				<h2 className="editor__title">{title}</h2>
 				{/* The one way back once the bar is gone, so it stays on
 				    screen whichever way round it is. */}
-				<button
-					type="button"
-					className="editor__toggle"
-					aria-expanded={preferences.toolbar}
-					aria-label="Formatting bar"
-					title={`Formatting bar (${shortcutLabel(TOOLBAR)})`}
-					aria-keyshortcuts={shortcutLabel(TOOLBAR)}
-					onClick={toggle}
-				>
-					{preferences.toolbar ? "\u2304" : "\u203a"}
-				</button>
+				<div className="editor__tools">
+					<Typography
+						preferences={preferences}
+						onPreferences={onPreferences}
+					/>
+					<button
+						type="button"
+						className="editor__toggle"
+						aria-expanded={preferences.toolbar}
+						aria-label="Formatting bar"
+						title={`Formatting bar (${shortcutLabel(TOOLBAR)})`}
+						aria-keyshortcuts={shortcutLabel(TOOLBAR)}
+						onClick={toggle}
+					>
+						{preferences.toolbar ? "\u2304" : "\u203a"}
+					</button>
+				</div>
 			</div>
 			<LexicalComposer initialConfig={config}>
 				{preferences.toolbar && <Toolbar />}

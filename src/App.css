@@ -1030,8 +1030,12 @@ body,
 	flex-direction: column;
 	flex: 1;
 	width: 100%;
-	max-width: 40rem;
+	max-width: var(--measure);
 	min-height: 0;
+	/* Here rather than on the text, so the measure's `ch` is read against the
+	   size the writer chose. The chrome around it is sized in rem, so none of
+	   it moves. */
+	font-size: var(--font-size);
 }
 
 /* The title and the one control that is on screen whichever way round the bar
@@ -1048,6 +1052,15 @@ body,
 	margin: 0;
 	font-size: 1.25rem;
 	font-weight: 600;
+}
+
+/* The two controls for how the page looks, kept together and away from the
+   title. */
+.editor__tools {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 0.1rem;
 }
 
 .editor__toggle {
@@ -1081,7 +1094,7 @@ body,
 	min-height: 0;
 	padding: 0;
 	font: inherit;
-	line-height: 1.7;
+	line-height: var(--line-height);
 	color: inherit;
 	outline: none;
 	overflow-y: auto;
@@ -1448,6 +1461,62 @@ body,
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+}
+
+.typography {
+	position: relative;
+}
+
+.typography__panel {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 6;
+	/* One grid for every row at once, so the four columns line up without a
+	   wrapper per setting — no subgrid, which this webview's version is not
+	   worth betting on. */
+	display: grid;
+	grid-template-columns: auto auto minmax(2.5rem, auto) auto;
+	align-items: center;
+	gap: 0.15rem 0.5rem;
+	margin-top: 0.25rem;
+	padding: 0.4rem 0.5rem;
+	font-size: 0.85rem;
+	white-space: nowrap;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+}
+
+.typography__label {
+	color: var(--text-dim);
+}
+
+.typography__value {
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.typography__step {
+	min-width: 1.5rem;
+	padding: 0.1rem 0.3rem;
+	font: inherit;
+	line-height: 1;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.typography__step:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.typography__step:disabled {
+	color: var(--border);
+	cursor: default;
 }
 
 /* Always in the DOM, so the wording can change without moving the text above
