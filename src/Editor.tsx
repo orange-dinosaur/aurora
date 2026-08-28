@@ -9,7 +9,6 @@ import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { EditorThemeClasses } from "lexical";
 import { useState } from "react";
-import Bubble from "./Bubble";
 import {
 	$fromMarkdown,
 	$toMarkdown,
@@ -132,8 +131,6 @@ export default function Editor({
 						}
 					/>
 					<Shortcuts />
-					{/* Last, so it sits over the text rather than under it. */}
-					<Bubble />
 				</div>
 			</LexicalComposer>
 			<p
