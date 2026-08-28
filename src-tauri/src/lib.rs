@@ -23,6 +23,7 @@ pub fn run() {
 			document::section_overview,
 			document::create_document,
 			document::rename_document,
+			document::set_document_target,
 			document::delete_document,
 			document::list_trash,
 			document::restore_from_trash,

@@ -19,6 +19,11 @@ use crate::project::{
 pub struct Document {
 	pub id: Uuid,
 	pub path: String,
+	/// How many words the writer is aiming at, if they have said. Left out of
+	/// the manifest entirely when there is no target, so a project that never
+	/// uses them reads exactly as it did before.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub target: Option<u32>,
 }
 
 impl Document {
@@ -26,6 +31,7 @@ impl Document {
 		Self {
 			id: Uuid::new_v4(),
 			path: format!("{section}/{file_name}"),
+			target: None,
 		}
 	}
 
@@ -46,6 +52,9 @@ pub struct DocumentView {
 	pub path: String,
 	pub folder: String,
 	pub title: String,
+	/// Always present here, `null` when unset, so the front end has one shape
+	/// to read rather than a field that comes and goes.
+	pub target: Option<u32>,
 }
 
 impl From<&Document> for DocumentView {
@@ -55,6 +64,7 @@ impl From<&Document> for DocumentView {
 			path: document.path.clone(),
 			folder: section_of(&document.path).unwrap_or_default().to_owned(),
 			title: document.title(),
+			target: document.target,
 		}
 	}
 }
@@ -181,6 +191,7 @@ pub fn reconcile(manifest: &mut Manifest, found: &[String]) -> bool {
 			adopted.entry(section).or_default().push(Document {
 				id: Uuid::new_v4(),
 				path: path.clone(),
+				target: None,
 			});
 		}
 	}
@@ -497,6 +508,32 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 	manifest.documents[index].path = path;
 	write_json(&root.join(MANIFEST_FILE), &manifest)?;
 	Ok(DocumentView::from(&manifest.documents[index]))
+}
+
+/// Sets the word target a document is written towards, or clears it with
+/// `None`. Nothing on disk changes but the manifest: the target is the writer's
+/// intention, not part of the text.
+#[tauri::command]
+pub fn set_document_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Result<DocumentView> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	// Aiming at no words is the same as not aiming, and saying so here keeps
+	// the two apart everywhere above.
+	let target = target.filter(|words| *words > 0);
+
+	let mut manifest = read_manifest(&root)?;
+	let document = manifest
+		.documents
+		.iter_mut()
+		.find(|d| d.id == id)
+		.ok_or(Error::UnknownDocument)?;
+
+	document.target = target;
+	let view = DocumentView::from(&*document);
+	write_json(&root.join(MANIFEST_FILE), &manifest)?;
+	Ok(view)
 }
 
 /// One document in the project's trash, as the Trash view shows it.
@@ -925,6 +962,7 @@ mod tests {
 			.map(|path| Document {
 				id: Uuid::new_v4(),
 				path: (*path).to_owned(),
+				target: None,
 			})
 			.collect();
 		manifest
@@ -1923,6 +1961,90 @@ mod tests {
 			"Ithaca Falls".to_owned(),
 		)
 		.unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn a_target_is_kept_and_read_back() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		let view = set_document_target(root.clone(), id, Some(1_500)).unwrap();
+
+		assert_eq!(view.target, Some(1_500));
+		assert_eq!(first_document(&root).target, Some(1_500));
+		let listed = list_documents(root.clone()).unwrap();
+		assert_eq!(listed[0].documents[0].target, Some(1_500));
+		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+		assert_eq!(overview[0].document.target, Some(1_500));
+	}
+
+	#[test]
+	fn a_target_is_cleared_by_none_and_by_zero() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+
+		set_document_target(root.clone(), id, Some(1_500)).unwrap();
+		assert_eq!(
+			set_document_target(root.clone(), id, None).unwrap().target,
+			None
+		);
+
+		set_document_target(root.clone(), id, Some(1_500)).unwrap();
+		assert_eq!(
+			set_document_target(root.clone(), id, Some(0))
+				.unwrap()
+				.target,
+			None
+		);
+		assert_eq!(first_document(&root).target, None);
+	}
+
+	#[test]
+	fn a_document_without_a_target_writes_no_such_field() {
+		let document = Document::new("Manuscript", "Chapter 1.md");
+		let json = serde_json::to_value(&document).unwrap();
+		assert!(json.get("target").is_none());
+	}
+
+	#[test]
+	fn a_manifest_written_before_targets_still_loads() {
+		let json = serde_json::json!({
+			"id": Uuid::new_v4().to_string(),
+			"path": "Manuscript/Chapter 1.md",
+		});
+		let document: Document = serde_json::from_value(json).unwrap();
+		assert_eq!(document.target, None);
+	}
+
+	#[test]
+	fn a_target_survives_a_rename() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+		set_document_target(root.clone(), id, Some(900)).unwrap();
+
+		let renamed = rename_document(root, id, "Ithaca Falls".to_owned()).unwrap();
+
+		assert_eq!(renamed.target, Some(900));
+	}
+
+	#[test]
+	fn targeting_an_unknown_document_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = set_document_target(root, Uuid::new_v4(), Some(1_500)).unwrap_err();
+
+		assert!(matches!(err, Error::UnknownDocument));
+	}
+
+	#[test]
+	fn targeting_refuses_a_relative_path() {
+		let err = set_document_target(PathBuf::from("some/where"), Uuid::new_v4(), Some(1_500))
+			.unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
 	}
 
