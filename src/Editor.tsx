@@ -21,6 +21,7 @@ import Focus from "./Focus";
 import Links from "./Links";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
+import Target from "./Target";
 import Toolbar from "./Toolbar";
 import Typewriter from "./Typewriter";
 import Typography from "./Typography";
@@ -67,17 +68,13 @@ function counted(text: string) {
 	};
 }
 
-/** The status line's tally, in the order a writer scans it. */
+/** The rest of the status line. The words are `Target`'s to report. */
 function tallied(counts: ReturnType<typeof counted>): string {
-	return [
-		counts.words === 1
-			? "1 word"
-			: `${counts.words.toLocaleString()} words`,
+	const characters =
 		counts.characters === 1
 			? "1 character"
-			: `${counts.characters.toLocaleString()} characters`,
-		`${counts.tight.toLocaleString()} without spaces`,
-	].join(" · ");
+			: `${counts.characters.toLocaleString()} characters`;
+	return ` · ${characters} · ${counts.tight.toLocaleString()} without spaces`;
 }
 
 type Props = {
@@ -87,10 +84,12 @@ type Props = {
 	saving: boolean;
 	missing: boolean;
 	error: string | null;
+	target: number | null;
 	preferences: Preferences;
 	onChange: (text: string) => void;
 	onRestore: () => void;
 	onPreferences: (next: Preferences) => void;
+	onTarget: (target: number | null) => void;
 };
 
 export default function Editor({
@@ -100,10 +99,12 @@ export default function Editor({
 	saving,
 	missing,
 	error,
+	target,
 	preferences,
 	onChange,
 	onRestore,
 	onPreferences,
+	onTarget,
 }: Props) {
 	const toggle = useCallback(
 		() => onPreferences({ ...preferences, toolbar: !preferences.toolbar }),
@@ -253,7 +254,14 @@ export default function Editor({
 				</div>
 			</LexicalComposer>
 			<div className="editor__foot">
-				<p className="editor__count">{tallied(tally)}</p>
+				<p className="editor__count">
+					<Target
+						words={tally.words}
+						target={target}
+						onTarget={onTarget}
+					/>
+					{tallied(tally)}
+				</p>
 				<p
 					className={
 						error === null && !missing
@@ -278,6 +286,23 @@ export default function Editor({
 					)}
 				</p>
 			</div>
+			{/* The number above is the real report; this is only its shape,
+			    and there is nothing to draw until a target is set. */}
+			{target !== null && (
+				<div
+					className="editor__progress"
+					style={
+						{
+							"--progress": `${Math.min(100, (tally.words / target) * 100)}%`,
+						} as CSSProperties
+					}
+					role="progressbar"
+					aria-label="Progress towards the word target"
+					aria-valuenow={tally.words}
+					aria-valuemin={0}
+					aria-valuemax={target}
+				/>
+			)}
 		</div>
 	);
 }

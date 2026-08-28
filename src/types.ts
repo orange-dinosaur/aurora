@@ -34,6 +34,8 @@ export type ProjectDocument = {
 	path: string;
 	folder: string;
 	title: string;
+	/** How many words the writer is aiming at, or null if they have not said. */
+	target: number | null;
 };
 
 /**

@@ -41,8 +41,11 @@ type Props = {
 	onDelete: (id: string) => Promise<void>;
 };
 
-function counted(words: number) {
-	return words === 1 ? "1 word" : `${words} words`;
+function counted(words: number, target: number | null) {
+	if (target !== null) {
+		return `${words.toLocaleString()} of ${target.toLocaleString()} words`;
+	}
+	return words === 1 ? "1 word" : `${words.toLocaleString()} words`;
 }
 
 export default function SectionView({
@@ -181,7 +184,7 @@ export default function SectionView({
 								<span className="card__meta">
 									{document.modified === null
 										? "This document’s file is no longer there"
-										: `${counted(document.words)} · ${when(document.modified)}`}
+										: `${counted(document.words, document.target)} · ${when(document.modified)}`}
 								</span>
 							</button>
 							<DocumentMenu

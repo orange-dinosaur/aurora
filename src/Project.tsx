@@ -264,6 +264,25 @@ export default function Project({
 		setListing((version) => version + 1);
 	}
 
+	// A target is the writer's intention rather than their text, so nothing is
+	// saved but the manifest — and every listing of the document has to read it
+	// again to show the new one on its card.
+	async function retarget(id: string, target: number | null) {
+		try {
+			const document = await invoke<ProjectDocument>(
+				"set_document_target",
+				{ root, id, target },
+			);
+			patch(id, (tab) => ({ ...tab, document }));
+			setListing((version) => version + 1);
+		} catch (error) {
+			patch(id, (tab) => ({
+				...tab,
+				save: { kind: "failed", message: failure(error).message },
+			}));
+		}
+	}
+
 	function edit(id: string, text: string) {
 		patch(id, (tab) =>
 			tab.content.kind === "ready"
@@ -434,10 +453,14 @@ export default function Project({
 					saving={tab.save.kind === "saving"}
 					missing={tab.save.kind === "missing"}
 					error={tab.save.kind === "failed" ? tab.save.message : null}
+					target={tab.document.target}
 					preferences={preferences}
 					onChange={(text) => edit(tab.document.id, text)}
 					onRestore={() => void restore(tab.document.id)}
 					onPreferences={onPreferences}
+					onTarget={(target) =>
+						void retarget(tab.document.id, target)
+					}
 				/>
 			);
 		}

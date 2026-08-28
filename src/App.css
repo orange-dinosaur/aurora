@@ -1560,6 +1560,63 @@ body,
 	font-variant-numeric: tabular-nums;
 }
 
+/* The count is the control, so it carries no box of its own: only the cursor
+   and the underline on hover say it can be pressed. */
+.editor__target {
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.editor__target:hover,
+.editor__target:focus-visible {
+	color: var(--text);
+	text-decoration: underline;
+}
+
+.editor__aim {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35rem;
+}
+
+.editor__aim-input {
+	width: 6ch;
+	padding: 0 0.15rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	text-align: right;
+}
+
+.editor__aim-note {
+	color: var(--text-dim);
+}
+
+/* A hairline under the foot rather than a widget: the number says how far
+   along the writer is, and this only gives it a shape. */
+.editor__progress {
+	flex: none;
+	height: 2px;
+	margin-top: 0.4rem;
+	background: var(--border);
+	border-radius: 1px;
+	overflow: hidden;
+}
+
+.editor__progress::after {
+	content: "";
+	display: block;
+	width: var(--progress);
+	height: 100%;
+	background: var(--accent);
+}
+
 /* Always in the DOM, so the wording can change without moving the text above
    it. */
 .editor__status {
