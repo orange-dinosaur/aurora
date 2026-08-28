@@ -138,19 +138,22 @@ export default function Sidebar({
 
 	return (
 		<nav className="sidebar" aria-label="Documents">
-			<h1 className="sidebar__project" title={root}>
-				{name}
-			</h1>
-
 			<div className="sidebar__header">
-				<h2 className="sidebar__title">Documents</h2>
+				<h1 className="sidebar__project" title={root}>
+					{name}
+				</h1>
 				<button
 					type="button"
 					className="sidebar__refresh"
+					aria-label={
+						status.kind === "busy"
+							? "Refreshing…"
+							: "Refresh documents"
+					}
 					disabled={status.kind === "busy"}
 					onClick={() => void load("refresh_documents")}
 				>
-					{status.kind === "busy" ? "Refreshing…" : "Refresh"}
+					↻
 				</button>
 			</div>
 
@@ -313,15 +316,16 @@ export default function Sidebar({
 				</p>
 			</div>
 
+			<button
+				type="button"
+				className="sidebar__trash"
+				aria-current={selectedTrash ? "page" : undefined}
+				onClick={onOpenTrash}
+			>
+				Trash
+			</button>
+
 			<div className="sidebar__foot">
-				<button
-					type="button"
-					className="sidebar__trash"
-					aria-current={selectedTrash ? "page" : undefined}
-					onClick={onOpenTrash}
-				>
-					Trash
-				</button>
 				<button
 					type="button"
 					className="sidebar__close"
