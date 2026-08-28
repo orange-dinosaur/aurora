@@ -1130,6 +1130,15 @@ body,
 	border-radius: 4px;
 }
 
+/* Short and centred, the way a novel marks a change of scene, rather than a
+   full-width divider. */
+.editor__rule {
+	width: 6rem;
+	margin: 1.75rem auto;
+	border: 0;
+	border-top: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
+}
+
 .editor__link {
 	color: var(--accent);
 	text-decoration: underline;

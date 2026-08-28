@@ -37,6 +37,7 @@ const THEME: EditorThemeClasses = {
 		nested: { listitem: "editor__item--nested" },
 	},
 	code: "editor__code-block",
+	hr: "editor__rule",
 	link: "editor__link",
 	text: {
 		code: "editor__code",

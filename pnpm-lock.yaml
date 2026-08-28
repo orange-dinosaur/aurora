@@ -11,6 +11,9 @@ importers:
       '@lexical/code':
         specifier: 0.49.0
         version: 0.49.0(typescript@5.8.3)
+      '@lexical/extension':
+        specifier: 0.49.0
+        version: 0.49.0(typescript@5.8.3)
       '@lexical/headless':
         specifier: 0.49.0
         version: 0.49.0(typescript@5.8.3)
