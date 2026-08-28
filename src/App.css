@@ -136,21 +136,22 @@ body,
 
 .app {
 	display: flex;
-	/* Centring with auto margins rather than align-items: overflow past the top
-	   of a centred flex item cannot be scrolled to. */
 	align-items: flex-start;
-	justify-content: center;
 	height: 100%;
-	padding: 2rem;
 	background: var(--bg);
 	overflow-y: auto;
 }
 
+/* The shell runs edge to edge, so the welcome carries its own inset and its own
+   centring. Auto margins rather than align-items: overflow past the top of a
+   centred flex item cannot be scrolled to. */
 .welcome {
 	position: relative;
 	width: 100%;
-	max-width: 720px;
-	margin: auto 0;
+	/* The padding is inside the box, so the reading column is still 720px. */
+	max-width: calc(720px + 4rem);
+	padding: 2rem;
+	margin: auto;
 	text-align: center;
 }
 
@@ -373,13 +374,11 @@ body,
 	flex-direction: column;
 	align-self: stretch;
 	width: 100%;
-	max-width: 1100px;
 	min-height: 0;
 }
 
 .project__body {
 	display: flex;
-	gap: 1.5rem;
 	/* Without this the body grows to fit its content and the sidebar's own
 	   scrollbar never appears. */
 	min-height: 0;
@@ -411,6 +410,9 @@ body,
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	/* The inset that used to come from .app's padding. It sits here rather than
+	   on the main column so the tab strip above can run the full width. */
+	padding: 1.5rem;
 }
 
 .project__pane--hidden {
@@ -428,9 +430,10 @@ body,
 	display: flex;
 	flex-direction: column;
 	flex-shrink: 0;
-	width: 220px;
+	width: 252px;
 	min-height: 0;
-	padding-right: 1.5rem;
+	padding: 1rem 0.75rem;
+	background: var(--bg-chrome);
 	border-right: 1px solid var(--border);
 }
 
@@ -732,8 +735,12 @@ body,
 	color: var(--text);
 }
 
+/* Stands in for the editor while a document opens, so it sits where the editor
+   will. */
 .reader {
+	width: 100%;
 	max-width: 40rem;
+	margin-inline: auto;
 }
 
 /* The grid scrolls itself, the way the editor scrolls its own text, so the tab
@@ -1110,12 +1117,16 @@ body,
 	background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
+/* The measure column centres itself in the pane now that the project fills the
+   window. An auto cross-axis margin, not align-items on the pane, which would
+   pull the overview and the trash in with it. */
 .editor {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	width: 100%;
 	max-width: var(--measure);
+	margin-inline: auto;
 	min-height: 0;
 	/* Here rather than on the text, so the measure's `ch` is read against the
 	   size the writer chose. The chrome around it is sized in rem, so none of
