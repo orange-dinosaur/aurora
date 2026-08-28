@@ -774,13 +774,16 @@ body,
 }
 
 .tab__close {
-	padding: 0.25rem 0.4rem 0.25rem 0.15rem;
-	font: inherit;
-	font-size: 0.85rem;
-	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
+	border-radius: 5px;
 	cursor: pointer;
 }
 
@@ -1114,14 +1117,16 @@ body,
 }
 
 .menu__trigger {
-	padding: 0 0.3rem;
-	font: inherit;
-	font-size: 0.9rem;
-	line-height: 1.4;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: 5px;
 	cursor: pointer;
 }
 
@@ -1535,7 +1540,7 @@ body,
 }
 
 .controls__caret {
-	font-size: 0.7rem;
+	display: flex;
 	color: var(--text-dim);
 }
 
@@ -1651,10 +1656,6 @@ body,
 
 .controls__url:focus {
 	border-color: var(--accent);
-}
-
-.controls__mark--link {
-	font-size: 0.8rem;
 }
 
 .controls__mark--code {

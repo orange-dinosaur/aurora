@@ -11,6 +11,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { matches, type Match, type Run } from "./find";
 import { REPLACE, shortcutLabel } from "./formatting";
+import Icon from "./Icon";
 
 type Props = {
 	/** Counts the times find has been asked for, so a second ask can answer. */
@@ -268,7 +269,7 @@ export default function Find({
 					disabled={found.length === 0}
 					onClick={() => step(-1)}
 				>
-					{"‹"}
+					<Icon name="chevron-left" />
 				</button>
 				<button
 					type="button"
@@ -278,7 +279,7 @@ export default function Find({
 					disabled={found.length === 0}
 					onClick={() => step(1)}
 				>
-					{"›"}
+					<Icon name="chevron-right" />
 				</button>
 				{/* Replace is folded away until it is asked for: most searches
 				    are only looking. */}
@@ -291,7 +292,7 @@ export default function Find({
 					aria-keyshortcuts={shortcutLabel(REPLACE)}
 					onClick={() => onReplacing(!replacing)}
 				>
-					{"⇄"}
+					<Icon name="arrow-left-right" />
 				</button>
 				<button
 					type="button"
@@ -300,7 +301,7 @@ export default function Find({
 					title="Close find (Escape)"
 					onClick={close}
 				>
-					{"✕"}
+					<Icon name="x" />
 				</button>
 			</div>
 			{replacing && (

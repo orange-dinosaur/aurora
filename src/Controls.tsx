@@ -12,6 +12,7 @@ import {
 	type Action,
 	type Formatting,
 } from "./formatting";
+import Icon from "./Icon";
 
 // What the caret is sitting in, kept in step with the editor. The reading is
 // only replaced when the answer actually changes, so a bar does not redraw
@@ -141,8 +142,8 @@ export default function Controls({ hidden = false, onHold }: Props) {
 					onClick={() => setOpen((was) => !was)}
 				>
 					{name}
-					<span className="controls__caret" aria-hidden="true">
-						▾
+					<span className="controls__caret">
+						<Icon name="chevron-down" />
 					</span>
 				</button>
 
@@ -190,7 +191,7 @@ export default function Controls({ hidden = false, onHold }: Props) {
 			<div className="controls__link">
 				<button
 					type="button"
-					className="controls__mark controls__mark--link"
+					className="controls__mark"
 					aria-label="Link"
 					title="Link"
 					aria-expanded={address !== null}
@@ -202,7 +203,7 @@ export default function Controls({ hidden = false, onHold }: Props) {
 						address === null ? askForAddress() : closeAddress()
 					}
 				>
-					🔗
+					<Icon name="link" />
 				</button>
 
 				{address !== null && (

@@ -1,3 +1,5 @@
+import Icon from "./Icon";
+
 type Props = {
 	// One entry per open tab, whatever the tab holds. The key is what the
 	// strip hands back; only the project view knows what it means.
@@ -51,7 +53,7 @@ export default function Tabs({ tabs, activeKey, onActivate, onClose }: Props) {
 						aria-label={`Close ${tab.title}`}
 						onClick={() => onClose(tab.key)}
 					>
-						×
+						<Icon name="x" />
 					</button>
 				</li>
 			))}

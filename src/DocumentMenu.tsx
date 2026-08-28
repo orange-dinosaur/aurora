@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Icon from "./Icon";
 
 type Props = {
 	label: string;
@@ -77,7 +78,7 @@ export default function DocumentMenu({
 				aria-expanded={open}
 				onClick={() => setOpen((was) => !was)}
 			>
-				⋮
+				<Icon name="more-vertical" />
 			</button>
 
 			{open && (
