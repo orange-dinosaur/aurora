@@ -1018,6 +1018,14 @@ body,
 	font-weight: 600;
 }
 
+/* Holds the writing surface and the placeholder that sits over it. */
+.editor__surface {
+	position: relative;
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
 .editor__text {
 	flex: 1;
 	min-height: 0;
@@ -1025,15 +1033,27 @@ body,
 	font: inherit;
 	line-height: 1.7;
 	color: inherit;
-	background: none;
-	border: 0;
 	outline: none;
-	resize: none;
 	overflow-y: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
 }
 
-.editor__text::placeholder {
+.editor__text > p {
+	margin: 0 0 1rem;
+}
+
+/* Out of flow and over the first line, so it can come and go without the text
+   below it moving. */
+.editor__placeholder {
+	position: absolute;
+	top: 0;
+	left: 0;
+	margin: 0;
+	line-height: 1.7;
 	color: var(--text-dim);
+	pointer-events: none;
+	user-select: none;
 }
 
 /* Always in the DOM, so the wording can change without moving the text above
