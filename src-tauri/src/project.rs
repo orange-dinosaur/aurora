@@ -437,7 +437,7 @@ pub enum LastProject {
 	Missing { name: String, root: PathBuf },
 }
 
-fn store_path(app: &AppHandle) -> Result<PathBuf> {
+pub(crate) fn store_path(app: &AppHandle) -> Result<PathBuf> {
 	app.path()
 		.app_config_dir()
 		.map(|dir| dir.join("store.json"))

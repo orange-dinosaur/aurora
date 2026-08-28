@@ -5,12 +5,43 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use crate::project::{Error, Result, write_json};
+use tauri::AppHandle;
 
-pub const STORE_VERSION: u32 = 2;
+use crate::project::{Error, Result, store_path, write_json};
+
+pub const STORE_VERSION: u32 = 3;
 
 /// How many projects are worth offering on the welcome screen.
 const MAX_RECENT: usize = 10;
+
+/// How the writer likes to write, which follows them into every project rather
+/// than belonging to any one of them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Preferences {
+	/// Whether the bar under the document title is showing.
+	pub toolbar: bool,
+	/// Whether everything but the paragraph being written is dimmed.
+	pub focus: bool,
+	/// The width of the column of text, in characters.
+	pub measure: u32,
+	/// In pixels.
+	pub font_size: u32,
+	/// A multiple of the font size, as CSS takes it.
+	pub line_height: f32,
+}
+
+impl Default for Preferences {
+	fn default() -> Self {
+		Self {
+			toolbar: true,
+			focus: false,
+			measure: 68,
+			font_size: 16,
+			line_height: 1.7,
+		}
+	}
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +52,7 @@ pub struct RecentProject {
 	pub last_opened: OffsetDateTime,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Store {
 	pub version: u32,
@@ -32,6 +63,10 @@ pub struct Store {
 	#[serde(default)]
 	pub last: Option<PathBuf>,
 	pub recent: Vec<RecentProject>,
+	/// Absent from a store written before version 3, and defaulted rather than
+	/// migrated: there is nothing in an older store to derive them from.
+	#[serde(default)]
+	pub preferences: Preferences,
 }
 
 impl Default for Store {
@@ -40,6 +75,7 @@ impl Default for Store {
 			version: STORE_VERSION,
 			last: None,
 			recent: Vec::new(),
+			preferences: Preferences::default(),
 		}
 	}
 }
@@ -95,10 +131,14 @@ pub fn load(path: &Path) -> Result<Store> {
 
 /// Version 1 had no `last`: whatever was at the head of the list was what
 /// reopened. Adopting it here means an upgrade does not lose the open project.
+/// Version 2 had no preferences, and serde's defaults are the whole migration.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
 	if store.version < STORE_VERSION {
-		if store.last.is_none() {
+		// Version 1 only. Left ungated, every later version would adopt the
+		// head of the list too, turning a project the writer deliberately
+		// closed back into the one that reopens on launch.
+		if store.version < 2 && store.last.is_none() {
 			store.last = store.recent.first().map(|project| project.root.clone());
 		}
 		store.version = STORE_VERSION;
@@ -114,6 +154,27 @@ pub fn save(path: &Path, store: &Store) -> Result<()> {
 	}
 
 	write_json(path, store)
+}
+
+/// A damaged store reads as an empty one, so this always answers.
+fn preferences(path: &Path) -> Result<Preferences> {
+	Ok(load(path)?.preferences)
+}
+
+fn set_preferences(path: &Path, preferences: Preferences) -> Result<()> {
+	let mut store = load(path)?;
+	store.preferences = preferences;
+	save(path, &store)
+}
+
+#[tauri::command]
+pub fn read_preferences(app: AppHandle) -> Result<Preferences> {
+	preferences(&store_path(&app)?)
+}
+
+#[tauri::command]
+pub fn write_preferences(app: AppHandle, preferences: Preferences) -> Result<()> {
+	set_preferences(&store_path(&app)?, preferences)
 }
 
 #[cfg(test)]
@@ -184,7 +245,7 @@ mod tests {
 
 		let json = fs::read_to_string(&path).unwrap();
 		assert!(
-			json.contains("\n\t\"version\": 2"),
+			json.contains("\n\t\"version\": 3"),
 			"expected tab indentation"
 		);
 		assert!(json.contains("\"lastOpened\": \"2023-11-14T22:13:20Z\""));
@@ -300,6 +361,104 @@ mod tests {
 		let store = load(&path).unwrap();
 		assert_eq!(store.version, STORE_VERSION);
 		assert_eq!(store.reopen().unwrap().name, "Ithaca");
+	}
+
+	#[test]
+	fn a_version_two_store_gains_the_default_preferences() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(
+			&path,
+			r#"{
+				"version": 2,
+				"last": "/writing/Ithaca",
+				"recent": [
+					{
+						"name": "Ithaca",
+						"root": "/writing/Ithaca",
+						"lastOpened": "2023-11-14T22:13:20Z"
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+
+		let store = load(&path).unwrap();
+		assert_eq!(store.version, STORE_VERSION);
+		assert_eq!(store.preferences, Preferences::default());
+		assert_eq!(store.reopen().unwrap().name, "Ithaca");
+	}
+
+	// The version 1 rule adopts the head of the list as the project to reopen.
+	// Running it on a version 2 store would undo a close the writer meant.
+	#[test]
+	fn a_version_two_store_that_was_closed_stays_closed() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(
+			&path,
+			r#"{
+				"version": 2,
+				"recent": [
+					{
+						"name": "Ithaca",
+						"root": "/writing/Ithaca",
+						"lastOpened": "2023-11-14T22:13:20Z"
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+
+		let store = load(&path).unwrap();
+		assert!(store.reopen().is_none());
+		assert_eq!(store.recent.len(), 1);
+	}
+
+	#[test]
+	fn preferences_survive_a_save() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = store_path(&dir);
+		let wanted = Preferences {
+			toolbar: false,
+			focus: true,
+			measure: 80,
+			font_size: 19,
+			line_height: 2.0,
+		};
+
+		set_preferences(&path, wanted.clone()).unwrap();
+		assert_eq!(preferences(&path).unwrap(), wanted);
+	}
+
+	#[test]
+	fn changing_preferences_leaves_the_project_list_alone() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = store_path(&dir);
+		let mut store = Store::default();
+		store.remember("Ithaca", PathBuf::from("/writing/Ithaca"), at(1));
+		save(&path, &store).unwrap();
+
+		set_preferences(
+			&path,
+			Preferences {
+				toolbar: false,
+				..Preferences::default()
+			},
+		)
+		.unwrap();
+
+		let read_back = load(&path).unwrap();
+		assert_eq!(read_back.reopen().unwrap().name, "Ithaca");
+		assert!(!read_back.preferences.toolbar);
+	}
+
+	#[test]
+	fn a_damaged_store_still_answers_for_preferences() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(&path, "{ this is not json").unwrap();
+		assert_eq!(preferences(&path).unwrap(), Preferences::default());
 	}
 
 	#[test]
