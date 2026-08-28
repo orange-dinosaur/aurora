@@ -1196,6 +1196,148 @@ body,
 	user-select: none;
 }
 
+/* The bar that floats over a selection. Out of flow, so it can never move the
+   writing it is sitting on top of, and placed from JavaScript because it
+   follows the words rather than the layout. */
+.bubble {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	gap: 0.1rem;
+	padding: 0.2rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+	white-space: nowrap;
+}
+
+/* Hidden rather than removed: the bar has to be measured to be centred, and
+   visibility also takes it out of the tab order. */
+.bubble--hidden {
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.bubble__block {
+	position: relative;
+}
+
+.bubble__turn {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.25rem 0.4rem;
+	font: inherit;
+	font-size: 0.85rem;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.bubble__turn:hover,
+.bubble__turn[aria-expanded="true"] {
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.bubble__caret {
+	font-size: 0.7rem;
+	color: var(--text-dim);
+}
+
+.bubble__list {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	min-width: 9rem;
+	margin-top: 0.25rem;
+	padding: 0.2rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+}
+
+.bubble__option {
+	padding: 0.3rem 0.5rem;
+	font: inherit;
+	font-size: 0.85rem;
+	text-align: left;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.bubble__option:hover {
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.bubble__option[aria-checked="true"] {
+	color: var(--accent);
+}
+
+.bubble__divider {
+	align-self: stretch;
+	width: 1px;
+	margin: 0.15rem 0.25rem;
+	background: var(--border);
+}
+
+/* Each button is drawn in the style it applies, so it needs no label. */
+.bubble__mark {
+	min-width: 1.8rem;
+	padding: 0.25rem 0.35rem;
+	font: inherit;
+	font-size: 0.85rem;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.bubble__mark:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.bubble__mark[aria-pressed="true"] {
+	color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.bubble__mark--bold {
+	font-weight: 700;
+}
+
+.bubble__mark--italic {
+	font-family: Georgia, "Times New Roman", serif;
+	font-style: italic;
+}
+
+.bubble__mark--strikethrough {
+	text-decoration: line-through;
+}
+
+.bubble__mark--highlight {
+	font-size: 0.95rem;
+}
+
+.bubble__mark--code {
+	font-family: var(--mono);
+	font-size: 0.75rem;
+}
+
 /* Always in the DOM, so the wording can change without moving the text above
    it. */
 .editor__status {
