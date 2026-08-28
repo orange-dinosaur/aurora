@@ -5,6 +5,7 @@ import Editor from "./Editor";
 import SectionView from "./SectionView";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
+import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import type { Preferences, ProjectDocument } from "./types";
 import { deleteDocument } from "./documents";
@@ -99,6 +100,7 @@ export default function Project({
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
+	const [sidebar, setSidebar] = useState(true);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
 
 	// A tab's key is its own, handed out when it opens and never derived from
@@ -481,9 +483,17 @@ export default function Project({
 
 	return (
 		<section className="project">
+			<Titlebar
+				name={name}
+				root={root}
+				sidebar={sidebar}
+				onSidebar={setSidebar}
+				onRefreshed={() => setListing((version) => version + 1)}
+			/>
+
 			<div className="project__body">
 				<Sidebar
-					name={name}
+					hidden={!sidebar}
 					root={root}
 					reload={listing}
 					selectedId={

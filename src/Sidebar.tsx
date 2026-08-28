@@ -27,7 +27,9 @@ type Renaming =
 	| { kind: "refused"; id: string; message: string };
 
 type Props = {
-	name: string;
+	// Styled out rather than unmounted, so a half-typed section name and the
+	// sections already read are still there when it comes back.
+	hidden: boolean;
 	root: string;
 	// Changes when the project view has altered the manifest.
 	reload: number;
@@ -47,7 +49,7 @@ type Props = {
 };
 
 export default function Sidebar({
-	name,
+	hidden,
 	root,
 	reload,
 	selectedId,
@@ -68,25 +70,22 @@ export default function Sidebar({
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
 	const reorder = useReorder((id, index) => void move(id, index));
 
-	// `list_documents` reads the manifest; `refresh_documents` looks at the
-	// folder again first, for anything changed outside Aurora.
-	const load = useCallback(
-		async (command: "list_documents" | "refresh_documents") => {
-			setStatus({ kind: "busy" });
-			try {
-				setSections(
-					await invoke<SectionDocuments[]>(command, { root }),
-				);
-				setStatus({ kind: "idle" });
-			} catch (error) {
-				setStatus({ kind: "error", message: failure(error).message });
-			}
-		},
-		[root],
-	);
+	// Reads the manifest as it stands. Looking at the folder again is the
+	// titlebar's refresh, which bumps `reload` once it has done so.
+	const load = useCallback(async () => {
+		setStatus({ kind: "busy" });
+		try {
+			setSections(
+				await invoke<SectionDocuments[]>("list_documents", { root }),
+			);
+			setStatus({ kind: "idle" });
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
+		}
+	}, [root]);
 
 	useEffect(() => {
-		void load("list_documents");
+		void load();
 	}, [load, reload]);
 
 	async function move(id: string, index: number) {
@@ -137,26 +136,10 @@ export default function Sidebar({
 	}
 
 	return (
-		<nav className="sidebar" aria-label="Documents">
-			<div className="sidebar__header">
-				<h1 className="sidebar__project" title={root}>
-					{name}
-				</h1>
-				<button
-					type="button"
-					className="sidebar__refresh"
-					aria-label={
-						status.kind === "busy"
-							? "Refreshing…"
-							: "Refresh documents"
-					}
-					disabled={status.kind === "busy"}
-					onClick={() => void load("refresh_documents")}
-				>
-					↻
-				</button>
-			</div>
-
+		<nav
+			className={hidden ? "sidebar sidebar--hidden" : "sidebar"}
+			aria-label="Documents"
+		>
 			<div className="sidebar__list">
 				<div className="sidebar__sections">
 					{sections.map((section) => (

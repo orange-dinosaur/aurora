@@ -377,6 +377,86 @@ body,
 	min-height: 0;
 }
 
+/* Aurora's own row, directly beneath the window frame the desktop draws. */
+.titlebar {
+	position: relative;
+	flex: none;
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	height: 40px;
+	padding: 0 0.75rem;
+	background: var(--bg-chrome);
+	border-bottom: 1px solid var(--border);
+}
+
+.titlebar__name {
+	flex: none;
+	margin: 0;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	line-height: 40px;
+	white-space: nowrap;
+}
+
+/* Takes what is left and gives it back first, so a deep folder never pushes
+   the buttons off the row. */
+.titlebar__path {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.titlebar__button {
+	flex: none;
+	align-self: center;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	font: inherit;
+	font-size: 0.9rem;
+	line-height: 1;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 5px;
+	cursor: pointer;
+	transition:
+		color 120ms ease-out,
+		background-color 120ms ease-out;
+}
+
+.titlebar__button:hover:not(:disabled) {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.titlebar__button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Always in the DOM and out of flow, so a failed refresh appears without
+   moving the row or the writing below it. */
+.titlebar__message {
+	position: absolute;
+	top: 100%;
+	left: 0.75rem;
+	right: 0.75rem;
+	z-index: 1;
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--danger);
+	background: var(--bg);
+	overflow-wrap: anywhere;
+}
+
 .project__body {
 	display: flex;
 	/* Without this the body grows to fit its content and the sidebar's own
@@ -437,44 +517,10 @@ body,
 	border-right: 1px solid var(--border);
 }
 
-.sidebar__project {
-	margin: 0;
-	min-width: 0;
-	font-size: 1.05rem;
-	font-weight: 600;
-	letter-spacing: -0.01em;
-	overflow-wrap: anywhere;
-}
-
-.sidebar__header {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 0.5rem;
-	margin-bottom: 1.25rem;
-}
-
-.sidebar__refresh {
-	flex: none;
-	padding: 0.1rem 0.3rem;
-	font: inherit;
-	font-size: 0.95rem;
-	line-height: 1.2;
-	color: var(--text-dim);
-	background: none;
-	border: 0;
-	border-radius: 6px;
-	cursor: pointer;
-}
-
-.sidebar__refresh:hover:not(:disabled) {
-	color: var(--text);
-	background: var(--bg-card);
-}
-
-.sidebar__refresh:disabled {
-	opacity: 0.5;
-	cursor: default;
+/* Out of the layout altogether rather than hidden in place: the point of the
+   toggle is to give the writing those 252px. */
+.sidebar--hidden {
+	display: none;
 }
 
 .sidebar__list {
