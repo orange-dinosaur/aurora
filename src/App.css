@@ -1282,7 +1282,8 @@ body,
 	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
-.controls__option {
+.controls__option,
+.slash__option {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
@@ -1298,7 +1299,8 @@ body,
 	cursor: pointer;
 }
 
-.controls__option:hover {
+.controls__option:hover,
+.slash__option[aria-selected="true"] {
 	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
@@ -1400,6 +1402,24 @@ body,
 .controls__mark--code {
 	font-family: var(--mono);
 	font-size: 0.75rem;
+}
+
+/* The menu a slash raises. The plugin hangs an anchor off the caret and gives
+   it the caret's own size, so the menu itself is taken out of that box and
+   only has to lay itself out. */
+.slash {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	min-width: 11rem;
+	padding: 0.2rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
 /* Always in the DOM, so the wording can change without moving the text above

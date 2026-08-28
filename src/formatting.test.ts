@@ -1,7 +1,12 @@
 import { createHeadlessEditor } from "@lexical/headless";
 import { registerList } from "@lexical/list";
 import { registerRichText } from "@lexical/rich-text";
-import { $getRoot, $getSelection, $isRangeSelection } from "lexical";
+import {
+	$getRoot,
+	$getSelection,
+	$isElementNode,
+	$isRangeSelection,
+} from "lexical";
 import { beforeEach, describe, expect, test } from "vitest";
 import {
 	$blockOf,
@@ -9,6 +14,7 @@ import {
 	$linkAt,
 	ACTIONS,
 	BLOCKS,
+	INSERTS,
 	MARKS,
 	linkTarget,
 	openable,
@@ -71,6 +77,44 @@ describe("turning a paragraph into another kind of block", () => {
 		const editor = editorWith("She ran.");
 		find(id).run(editor);
 		expect(markdownOf(editor)).toBe(expected);
+	});
+});
+
+describe("putting a scene break into the text", () => {
+	const [sceneBreak] = INSERTS;
+
+	// The empty line after the break is the paragraph the caret is left in.
+	test("an empty block becomes the break", () => {
+		const editor = editorWith("");
+		sceneBreak.run(editor);
+		expect(markdownOf(editor)).toBe("---\n");
+	});
+
+	test("words are kept and the break goes below them", () => {
+		const editor = editorWith("She ran.");
+		sceneBreak.run(editor);
+		expect(markdownOf(editor)).toBe("She ran.\n\n---\n");
+	});
+
+	// What the slash menu does: what was typed is taken out and the action
+	// runs on the block it leaves empty, both in the one update.
+	test("it lands once the slash that asked for it is taken away", () => {
+		const editor = editorWith("");
+		editor.update(
+			() => {
+				const block = $getRoot().getFirstChild();
+				if ($isElementNode(block)) {
+					const selection = $getSelection();
+					if ($isRangeSelection(selection)) {
+						selection.insertText("/scene");
+					}
+					block.getFirstChild()?.remove();
+				}
+				sceneBreak.run(editor);
+			},
+			{ discrete: true },
+		);
+		expect(markdownOf(editor)).toBe("---\n");
 	});
 });
 

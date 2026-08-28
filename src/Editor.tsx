@@ -17,6 +17,7 @@ import {
 } from "./markdown";
 import Links from "./Links";
 import Shortcuts from "./Shortcuts";
+import SlashMenu from "./SlashMenu";
 import Toolbar from "./Toolbar";
 
 // Lexical puts these class names on the elements it renders; App.css styles
@@ -131,6 +132,7 @@ export default function Editor({
 						}
 					/>
 					<Shortcuts />
+					<SlashMenu />
 				</div>
 			</LexicalComposer>
 			<p

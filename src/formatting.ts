@@ -3,6 +3,7 @@
 // and the slash menu — so none of them can offer different things, or disagree
 // about what the caret is already inside.
 
+import { $createHorizontalRuleNode } from "@lexical/extension";
 import {
 	$createLinkNode,
 	$isLinkNode,
@@ -171,8 +172,46 @@ export const BLOCKS: Action[] = [
 	list("number", "Numbered list", "6", INSERT_ORDERED_LIST_COMMAND),
 ];
 
+// Not something a paragraph is turned into but something dropped between two
+// of them, so it is kept apart from the blocks: the bar's dropdown names what
+// the caret is inside, and a scene break is never that.
+
+/** What can be put into the text rather than made out of it. */
+export const INSERTS: Action[] = [
+	{
+		id: "rule",
+		label: "Scene break",
+		keys: { key: "7", shift: true },
+		// Nothing to report: a break is inserted, never a thing the caret is
+		// already in.
+		isActive: () => false,
+		run: (editor) =>
+			editor.update(() => {
+				const selection = $getSelection();
+				if (!$isRangeSelection(selection)) {
+					return;
+				}
+				const block = selection.anchor.getNode().getTopLevelElement();
+				if (block === null) {
+					return;
+				}
+				const rule = $createHorizontalRuleNode();
+				if (block.getTextContent() === "") {
+					// The empty block the caret is in slides below the break,
+					// so there is still somewhere to carry on writing.
+					block.insertBefore(rule);
+					return;
+				}
+				const room = $createParagraphNode();
+				block.insertAfter(rule);
+				rule.insertAfter(room);
+				room.selectStart();
+			}),
+	},
+];
+
 /** Everything a key press could be asking for, marks first. */
-export const ACTIONS: Action[] = [...MARKS, ...BLOCKS];
+export const ACTIONS: Action[] = [...MARKS, ...BLOCKS, ...INSERTS];
 
 /** Whether a key press is asking for this shortcut, and nothing else. */
 export function pressed(event: KeyboardEvent, keys: Keys): boolean {
