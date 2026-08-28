@@ -992,6 +992,39 @@ body,
 	border-color: var(--danger);
 }
 
+/* Every surface that floats over the page is the same box, wherever it is
+   raised from. Sizes are in rem rather than em: these open inside the editor,
+   which carries the writer's own font size, and a popover should not grow with
+   the manuscript. */
+.menu__items,
+.bubble,
+.slash,
+.controls__list,
+.controls__address,
+.typography__panel,
+.editor__find {
+	padding: 0.5rem;
+	font-size: 0.75rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	box-shadow: var(--shadow-pop);
+}
+
+/* And every square control inside one is the same button: the glyph changes,
+   the box does not. */
+.controls__mark,
+.typography__step,
+.editor__find-step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border-radius: 5px;
+}
+
 .menu {
 	position: absolute;
 }
@@ -1046,17 +1079,11 @@ body,
 	display: flex;
 	flex-direction: column;
 	min-width: 8rem;
-	padding: 0.2rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
 .menu__item {
 	padding: 0.3rem 0.5rem;
 	font: inherit;
-	font-size: 0.85rem;
 	text-align: left;
 	color: var(--text);
 	background: none;
@@ -1406,11 +1433,6 @@ body,
 	top: 0;
 	left: 0;
 	z-index: 5;
-	padding: 0.2rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
 /* Hidden rather than removed: the bar has to be measured to be centred, and
@@ -1457,11 +1479,6 @@ body,
 	flex-direction: column;
 	min-width: 9rem;
 	margin-top: 0.25rem;
-	padding: 0.2rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
 .controls__option,
@@ -1472,7 +1489,6 @@ body,
 	gap: 1.5rem;
 	padding: 0.3rem 0.5rem;
 	font: inherit;
-	font-size: 0.85rem;
 	text-align: left;
 	color: var(--text);
 	background: none;
@@ -1492,7 +1508,7 @@ body,
 
 /* Quiet enough to ignore while reading the names, there to be noticed once. */
 .controls__keys {
-	font-size: 0.75rem;
+	font-size: 0.9em;
 	color: var(--text-dim);
 }
 
@@ -1505,14 +1521,11 @@ body,
 
 /* Each button is drawn in the style it applies, so it needs no label. */
 .controls__mark {
-	min-width: 1.8rem;
-	padding: 0.25rem 0.35rem;
 	font: inherit;
 	font-size: 0.85rem;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
 	cursor: pointer;
 }
 
@@ -1554,18 +1567,12 @@ body,
 	right: 0;
 	z-index: 6;
 	margin-top: 0.25rem;
-	padding: 0.2rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
 .controls__url {
 	width: 16rem;
 	padding: 0.25rem 0.4rem;
 	font: inherit;
-	font-size: 0.85rem;
 	color: var(--text);
 	background: none;
 	border: 1px solid var(--border);
@@ -1599,12 +1606,6 @@ body,
 	display: flex;
 	flex-direction: column;
 	gap: 0.3rem;
-	padding: 0.3rem 0.4rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
-	font-size: 0.85rem;
 }
 
 /* The replace row lines up under the find row, so the two fields share an
@@ -1634,17 +1635,15 @@ body,
 }
 
 .editor__find-step {
-	padding: 0.1rem 0.4rem;
 	font: inherit;
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 4px;
 	cursor: pointer;
 }
 
 .editor__find-step:hover:not(:disabled) {
-	background: var(--bg);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .editor__find-step:disabled {
@@ -1692,11 +1691,6 @@ body,
 	display: flex;
 	flex-direction: column;
 	min-width: 11rem;
-	padding: 0.2rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
 .typography {
@@ -1716,13 +1710,7 @@ body,
 	align-items: center;
 	gap: 0.15rem 0.5rem;
 	margin-top: 0.25rem;
-	padding: 0.4rem 0.5rem;
-	font-size: 0.85rem;
 	white-space: nowrap;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 }
 
 .typography__label {
@@ -1735,14 +1723,11 @@ body,
 }
 
 .typography__step {
-	min-width: 1.5rem;
-	padding: 0.1rem 0.3rem;
 	font: inherit;
 	line-height: 1;
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 6px;
 	cursor: pointer;
 }
 
