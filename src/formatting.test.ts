@@ -22,6 +22,7 @@ import {
 	sameFormatting,
 	setLink,
 	shortcutLabel,
+	TOOLBAR,
 	type Action,
 	type Keys,
 } from "./formatting";
@@ -327,6 +328,15 @@ describe("what a key press is asking for", () => {
 	test("no two actions answer to the same keys", () => {
 		const all = ACTIONS.map((action) => shortcutLabel(action.keys));
 		expect(new Set(all).size).toBe(all.length);
+	});
+
+	test("no action claims the key that shows and hides the bar", () => {
+		expect(
+			ACTIONS.some(
+				(action) =>
+					shortcutLabel(action.keys) === shortcutLabel(TOOLBAR),
+			),
+		).toBe(false);
 	});
 
 	test("no action claims the underline key markdown cannot keep", () => {

@@ -1034,10 +1034,38 @@ body,
 	min-height: 0;
 }
 
-.editor__title {
+/* The title and the one control that is on screen whichever way round the bar
+   is, so hiding it is never a one-way door. */
+.editor__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
 	margin: 0 0 0.5rem;
+}
+
+.editor__title {
+	margin: 0;
 	font-size: 1.25rem;
 	font-weight: 600;
+}
+
+.editor__toggle {
+	flex: none;
+	padding: 0.1rem 0.35rem;
+	font: inherit;
+	font-size: 0.9rem;
+	line-height: 1;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.editor__toggle:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 /* Holds the writing surface and the placeholder that sits over it. */

@@ -1,7 +1,11 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { COMMAND_PRIORITY_NORMAL, KEY_DOWN_COMMAND } from "lexical";
 import { useEffect } from "react";
-import { ACTIONS, pressed } from "./formatting";
+import { ACTIONS, pressed, TOOLBAR } from "./formatting";
+
+type Props = {
+	onToolbar: () => void;
+};
 
 // Ctrl+U is one of three shortcuts Lexical answers for itself. The other two
 // are bold and italic, which Aurora wants; this one makes an underline, and
@@ -12,7 +16,7 @@ const UNDERLINE = { key: "u", shift: false };
 // The keyboard reaches the same actions as the two bars, so a shortcut cannot
 // come to mean something the buttons do not do. Registered on the editor rather
 // than on a bar, so hiding the toolbar does not take the keys with it.
-export default function Shortcuts() {
+export default function Shortcuts({ onToolbar }: Props) {
 	const [editor] = useLexicalComposerContext();
 
 	useEffect(
@@ -22,6 +26,12 @@ export default function Shortcuts() {
 				(event) => {
 					if (pressed(event, UNDERLINE)) {
 						event.preventDefault();
+						return true;
+					}
+
+					if (pressed(event, TOOLBAR)) {
+						event.preventDefault();
+						onToolbar();
 						return true;
 					}
 
@@ -41,7 +51,7 @@ export default function Shortcuts() {
 				// bold, italic and underline live.
 				COMMAND_PRIORITY_NORMAL,
 			),
-		[editor],
+		[editor, onToolbar],
 	);
 
 	return null;

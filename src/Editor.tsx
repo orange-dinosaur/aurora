@@ -8,13 +8,15 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { EditorThemeClasses } from "lexical";
-import { useState } from "react";
+import type { Preferences } from "./types";
+import { useCallback, useState } from "react";
 import {
 	$fromMarkdown,
 	$toMarkdown,
 	EDITOR_NODES,
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
+import { shortcutLabel, TOOLBAR } from "./formatting";
 import Links from "./Links";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
@@ -60,8 +62,10 @@ type Props = {
 	saving: boolean;
 	missing: boolean;
 	error: string | null;
+	preferences: Preferences;
 	onChange: (text: string) => void;
 	onRestore: () => void;
+	onPreferences: (next: Preferences) => void;
 };
 
 export default function Editor({
@@ -71,9 +75,15 @@ export default function Editor({
 	saving,
 	missing,
 	error,
+	preferences,
 	onChange,
 	onRestore,
+	onPreferences,
 }: Props) {
+	const toggle = useCallback(
+		() => onPreferences({ ...preferences, toolbar: !preferences.toolbar }),
+		[preferences, onPreferences],
+	);
 	const note = error ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
 
 	// The editor owns its text from here on, so the document seeds it once and
@@ -91,9 +101,24 @@ export default function Editor({
 
 	return (
 		<div className="editor">
-			<h2 className="editor__title">{title}</h2>
+			<div className="editor__head">
+				<h2 className="editor__title">{title}</h2>
+				{/* The one way back once the bar is gone, so it stays on
+				    screen whichever way round it is. */}
+				<button
+					type="button"
+					className="editor__toggle"
+					aria-expanded={preferences.toolbar}
+					aria-label="Formatting bar"
+					title={`Formatting bar (${shortcutLabel(TOOLBAR)})`}
+					aria-keyshortcuts={shortcutLabel(TOOLBAR)}
+					onClick={toggle}
+				>
+					{preferences.toolbar ? "\u2304" : "\u203a"}
+				</button>
+			</div>
 			<LexicalComposer initialConfig={config}>
-				<Toolbar />
+				{preferences.toolbar && <Toolbar />}
 				<div className="editor__surface">
 					<RichTextPlugin
 						contentEditable={
@@ -131,7 +156,7 @@ export default function Editor({
 							onChange(state.read(() => $toMarkdown()))
 						}
 					/>
-					<Shortcuts />
+					<Shortcuts onToolbar={toggle} />
 					<SlashMenu />
 				</div>
 			</LexicalComposer>

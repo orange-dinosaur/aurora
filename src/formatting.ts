@@ -229,6 +229,11 @@ export function pressed(event: KeyboardEvent, keys: Keys): boolean {
 	);
 }
 
+/** Showing and hiding the bar. Not an action: it changes what Aurora looks
+ * like rather than what the text says, so nothing runs it on the document. It
+ * is declared here so it cannot quietly come to mean the same as one. */
+export const TOOLBAR: Keys = { key: "t", shift: true };
+
 const COMMAND_KEY = IS_APPLE ? "⌘" : "Ctrl+";
 const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift+";
 

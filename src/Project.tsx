@@ -6,14 +6,16 @@ import SectionView from "./SectionView";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
 import Trash from "./Trash";
-import type { ProjectDocument } from "./types";
+import type { Preferences, ProjectDocument } from "./types";
 import { deleteDocument } from "./documents";
 import { failure } from "./errors";
 
 type Props = {
 	name: string;
 	root: string;
+	preferences: Preferences;
 	onClose: () => void;
+	onPreferences: (next: Preferences) => void;
 };
 
 type Content =
@@ -85,7 +87,13 @@ async function read(root: string, id: string): Promise<Content> {
 	}
 }
 
-export default function Project({ name, root, onClose }: Props) {
+export default function Project({
+	name,
+	root,
+	preferences,
+	onClose,
+	onPreferences,
+}: Props) {
 	const [tabs, setTabs] = useState<Tab[]>([]);
 	const [activeKey, setActiveKey] = useState<string | null>(null);
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
@@ -426,8 +434,10 @@ export default function Project({ name, root, onClose }: Props) {
 					saving={tab.save.kind === "saving"}
 					missing={tab.save.kind === "missing"}
 					error={tab.save.kind === "failed" ? tab.save.message : null}
+					preferences={preferences}
 					onChange={(text) => edit(tab.document.id, text)}
 					onRestore={() => void restore(tab.document.id)}
+					onPreferences={onPreferences}
 				/>
 			);
 		}

@@ -62,3 +62,17 @@ export type TrashEntry = {
 	/** RFC 3339, or null when the name carries no moment Aurora recognises. */
 	deleted: string | null;
 };
+
+/** `store::Preferences` — how the writer likes to write, kept in `store.json`
+ * rather than in a project, so it follows them into all of them. */
+export type Preferences = {
+	/** Whether the bar under the document title is showing. */
+	toolbar: boolean;
+	focus: boolean;
+	/** The width of the column of text, in characters. */
+	measure: number;
+	/** In pixels. */
+	fontSize: number;
+	/** A multiple of the font size, as CSS takes it. */
+	lineHeight: number;
+};
