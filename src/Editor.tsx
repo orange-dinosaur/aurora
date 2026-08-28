@@ -2,10 +2,50 @@ import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
+import { ListPlugin } from "@lexical/react/LexicalListPlugin";
+import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
+import type { EditorThemeClasses } from "lexical";
 import { useState } from "react";
-import { $fromMarkdown, $toMarkdown, EDITOR_NODES } from "./markdown";
+import {
+	$fromMarkdown,
+	$toMarkdown,
+	EDITOR_NODES,
+	MARKDOWN_TRANSFORMERS,
+} from "./markdown";
+
+// Lexical puts these class names on the elements it renders; App.css styles
+// them. Bold and italic are left out because they come out as <strong> and
+// <em>, but a strikethrough or an underline has no tag of its own and would be
+// invisible without a class.
+const THEME: EditorThemeClasses = {
+	paragraph: "editor__paragraph",
+	heading: {
+		h1: "editor__heading editor__heading--1",
+		h2: "editor__heading editor__heading--2",
+		h3: "editor__heading editor__heading--3",
+		h4: "editor__heading editor__heading--4",
+		h5: "editor__heading editor__heading--5",
+		h6: "editor__heading editor__heading--6",
+	},
+	quote: "editor__quote",
+	list: {
+		ul: "editor__list",
+		ol: "editor__list",
+		listitem: "editor__item",
+		nested: { listitem: "editor__item--nested" },
+	},
+	code: "editor__code-block",
+	link: "editor__link",
+	text: {
+		code: "editor__code",
+		highlight: "editor__mark",
+		strikethrough: "editor__struck",
+		underline: "editor__underlined",
+		underlineStrikethrough: "editor__underlined editor__struck",
+	},
+};
 
 type Props = {
 	title: string;
@@ -36,6 +76,7 @@ export default function Editor({
 	const [config] = useState(() => ({
 		namespace: "aurora",
 		nodes: EDITOR_NODES,
+		theme: THEME,
 		editorState: () => $fromMarkdown(text),
 		onError: (failed: Error) => {
 			throw failed;
@@ -64,6 +105,13 @@ export default function Editor({
 						ErrorBoundary={LexicalErrorBoundary}
 					/>
 					<HistoryPlugin />
+					{/* The same transformer list the file is read and written
+					    with, so what converts as you type is exactly what
+					    survives a save. */}
+					<MarkdownShortcutPlugin
+						transformers={MARKDOWN_TRANSFORMERS}
+					/>
+					<ListPlugin />
 					{/* Moving the caret is not an edit, or every click would
 					    mark the document unsaved. */}
 					<OnChangePlugin
