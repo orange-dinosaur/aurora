@@ -2,6 +2,7 @@ import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
+import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
@@ -15,6 +16,8 @@ import {
 	EDITOR_NODES,
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
+import Links from "./Links";
+import Shortcuts from "./Shortcuts";
 import Toolbar from "./Toolbar";
 
 // Lexical puts these class names on the elements it renders; App.css styles
@@ -116,6 +119,10 @@ export default function Editor({
 						transformers={MARKDOWN_TRANSFORMERS}
 					/>
 					<ListPlugin />
+					{/* Keeps link nodes tidy as they are edited, as well as
+					    answering for the toggle command. */}
+					<LinkPlugin />
+					<Links />
 					{/* Moving the caret is not an edit, or every click would
 					    mark the document unsaved. */}
 					<OnChangePlugin
@@ -124,6 +131,7 @@ export default function Editor({
 							onChange(state.read(() => $toMarkdown()))
 						}
 					/>
+					<Shortcuts />
 					{/* Last, so it sits over the text rather than under it. */}
 					<Bubble />
 				</div>

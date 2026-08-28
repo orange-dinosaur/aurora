@@ -6,10 +6,18 @@ import { beforeEach, describe, expect, test } from "vitest";
 import {
 	$blockOf,
 	$formattingOf,
+	$linkAt,
+	ACTIONS,
 	BLOCKS,
 	MARKS,
+	linkTarget,
+	openable,
+	pressed,
 	sameFormatting,
+	setLink,
+	shortcutLabel,
 	type Action,
+	type Keys,
 } from "./formatting";
 import { $fromMarkdown, $toMarkdown, EDITOR_NODES } from "./markdown";
 
@@ -193,7 +201,192 @@ describe("comparing two readings of the selection", () => {
 			sameFormatting(plain, {
 				block: plain.block,
 				marks: new Set(["bold"]),
+				link: null,
 			}),
 		).toBe(false);
+	});
+});
+
+// Only the fields the matcher looks at. The tests run as they would on this
+// machine, where the command key is Ctrl.
+function press(
+	key: string,
+	held: {
+		shift?: boolean;
+		ctrl?: boolean;
+		alt?: boolean;
+		meta?: boolean;
+	} = {},
+	code = "",
+): KeyboardEvent {
+	return {
+		key,
+		code,
+		shiftKey: held.shift ?? false,
+		ctrlKey: held.ctrl ?? true,
+		altKey: held.alt ?? false,
+		metaKey: held.meta ?? false,
+	} as KeyboardEvent;
+}
+
+function keysOf(id: string): Keys {
+	const action = ACTIONS.find((each) => each.id === id);
+	if (action === undefined) {
+		throw new Error(`no action ${id}`);
+	}
+	return action.keys;
+}
+
+describe("what a key press is asking for", () => {
+	test("Ctrl+B is bold", () => {
+		expect(pressed(press("b"), keysOf("bold"))).toBe(true);
+	});
+
+	test("a shifted digit is recognised by the key on the keyboard", () => {
+		// Shift+1 types "!", so nothing about the character says "one".
+		expect(
+			pressed(press("!", { shift: true }, "Digit1"), keysOf("h1")),
+		).toBe(true);
+	});
+
+	test("a layout that types the digit itself is recognised too", () => {
+		expect(pressed(press("1", { shift: true }), keysOf("h1"))).toBe(true);
+	});
+
+	test("a letter is recognised by what it types, not where it sits", () => {
+		expect(
+			pressed(
+				press("S", { shift: true }, "KeyO"),
+				keysOf("strikethrough"),
+			),
+		).toBe(true);
+	});
+
+	test("the shift must match exactly", () => {
+		expect(pressed(press("b", { shift: true }), keysOf("bold"))).toBe(
+			false,
+		);
+		expect(pressed(press("s"), keysOf("strikethrough"))).toBe(false);
+	});
+
+	test("holding anything else is a different shortcut", () => {
+		expect(pressed(press("b", { alt: true }), keysOf("bold"))).toBe(false);
+		expect(pressed(press("b", { meta: true }), keysOf("bold"))).toBe(false);
+	});
+
+	test("without the command key it is just typing", () => {
+		expect(pressed(press("b", { ctrl: false }), keysOf("bold"))).toBe(
+			false,
+		);
+	});
+
+	test("no two actions answer to the same keys", () => {
+		const all = ACTIONS.map((action) => shortcutLabel(action.keys));
+		expect(new Set(all).size).toBe(all.length);
+	});
+
+	test("no action claims the underline key markdown cannot keep", () => {
+		expect(ACTIONS.some((action) => pressed(press("u"), action.keys))).toBe(
+			false,
+		);
+	});
+});
+
+describe("putting an address on words", () => {
+	function selecting(markdown: string, upTo: number) {
+		const editor = editorWith(markdown);
+		editor.update(
+			() => {
+				$getRoot().getFirstChild()?.selectStart();
+				const selection = $getSelection();
+				if ($isRangeSelection(selection)) {
+					selection.focus.offset = upTo;
+				}
+			},
+			{ discrete: true },
+		);
+		return editor;
+	}
+
+	test("selected words become a link", () => {
+		const editor = selecting("She unfolded the map.", 3);
+		setLink(editor, "https://example.com/map");
+		expect(markdownOf(editor)).toBe(
+			"[She](https://example.com/map) unfolded the map.",
+		);
+	});
+
+	test("an address on an existing link replaces it", () => {
+		const editor = selecting("[She](https://old.example) ran.", 3);
+		setLink(editor, "https://new.example");
+		expect(markdownOf(editor)).toBe("[She](https://new.example) ran.");
+	});
+
+	test("no address takes the link off and leaves the words", () => {
+		const editor = selecting("[She](https://example.com) ran.", 3);
+		setLink(editor, null);
+		expect(markdownOf(editor)).toBe("She ran.");
+	});
+
+	test("with nothing selected the address becomes its own words", () => {
+		const editor = editorWith("");
+		setLink(editor, "https://example.com");
+		expect(markdownOf(editor)).toBe(
+			"[https://example.com](https://example.com)",
+		);
+	});
+
+	test("the caret inside a link reports where it points", () => {
+		const editor = selecting("[She](https://example.com) ran.", 1);
+		const url = editor.getEditorState().read(() => {
+			const selection = $getSelection();
+			return $isRangeSelection(selection) ? $linkAt(selection) : "";
+		});
+		expect(url).toBe("https://example.com");
+	});
+
+	test("plain words report no link", () => {
+		const editor = selecting("She ran.", 1);
+		const url = editor.getEditorState().read(() => {
+			const selection = $getSelection();
+			return $isRangeSelection(selection) ? $linkAt(selection) : "";
+		});
+		expect(url).toBeNull();
+	});
+});
+
+describe("what the writer typed, made into an address", () => {
+	test.each([
+		["a bare domain gains a scheme", "example.com", "https://example.com"],
+		[
+			"one that has a scheme is left alone",
+			"http://example.com",
+			"http://example.com",
+		],
+		[
+			"an address becomes mail",
+			"her@example.com",
+			"mailto:her@example.com",
+		],
+		["a relative path is left alone", "../notes/map.md", "../notes/map.md"],
+		["an anchor is left alone", "#the-map", "#the-map"],
+		["an empty field stays empty", "  ", ""],
+	])("%s", (_what, typed, expected) => {
+		expect(linkTarget(typed)).toBe(expected);
+	});
+});
+
+describe("what may be handed to the desktop", () => {
+	test.each([
+		["https://example.com", true],
+		["http://example.com", true],
+		["mailto:her@example.com", true],
+		["tel:+441234567890", true],
+		["../notes/map.md", false],
+		["#the-map", false],
+		["file:///etc/passwd", false],
+		["javascript:alert(1)", false],
+	])("%s", (url, allowed) => {
+		expect(openable(url)).toBe(allowed);
 	});
 });

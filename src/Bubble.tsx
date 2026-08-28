@@ -19,8 +19,20 @@ export default function Bubble() {
 	const [editor] = useLexicalComposerContext();
 	const [at, setAt] = useState<Anchor | null>(null);
 	const bubble = useRef<HTMLDivElement>(null);
+	// Set while an address is being typed. A ref rather than state, so holding
+	// the bar still does not re-register the listeners that move it.
+	const held = useRef(false);
+
+	const hold = useCallback((holding: boolean) => {
+		held.current = holding;
+	}, []);
 
 	const place = useCallback(() => {
+		// Typing an address takes the focus, and with it the selection this
+		// would be measured from. The bar stays where the writer left it.
+		if (held.current) {
+			return;
+		}
 		const box = bubble.current;
 		const surface = box?.parentElement ?? null;
 		const root = editor.getRootElement();
@@ -96,7 +108,7 @@ export default function Bubble() {
 			ref={bubble}
 			className={at === null ? "bubble bubble--hidden" : "bubble"}
 		>
-			<Controls hidden={at === null} />
+			<Controls hidden={at === null} onHold={hold} />
 		</div>
 	);
 }

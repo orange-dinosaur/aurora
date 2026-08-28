@@ -1283,6 +1283,10 @@ body,
 }
 
 .controls__option {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1.5rem;
 	padding: 0.3rem 0.5rem;
 	font: inherit;
 	font-size: 0.85rem;
@@ -1300,6 +1304,12 @@ body,
 
 .controls__option[aria-checked="true"] {
 	color: var(--accent);
+}
+
+/* Quiet enough to ignore while reading the names, there to be noticed once. */
+.controls__keys {
+	font-size: 0.75rem;
+	color: var(--text-dim);
 }
 
 .controls__divider {
@@ -1347,6 +1357,44 @@ body,
 
 .controls__mark--highlight {
 	font-size: 0.95rem;
+}
+
+/* Holds the address field under the button that opens it. */
+.controls__link {
+	position: relative;
+}
+
+.controls__address {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 6;
+	margin-top: 0.25rem;
+	padding: 0.2rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+}
+
+.controls__url {
+	width: 16rem;
+	padding: 0.25rem 0.4rem;
+	font: inherit;
+	font-size: 0.85rem;
+	color: var(--text);
+	background: none;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	outline: none;
+}
+
+.controls__url:focus {
+	border-color: var(--accent);
+}
+
+.controls__mark--link {
+	font-size: 0.8rem;
 }
 
 .controls__mark--code {
