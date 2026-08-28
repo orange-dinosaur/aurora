@@ -73,6 +73,8 @@ export type Preferences = {
 	focus: boolean;
 	/** Whether the caret's line is held in place and the page moves under it. */
 	typewriter: boolean;
+	/** Whether the headings are listed in a column beside the text. */
+	outline: boolean;
 	/** The width of the column of text, in characters. */
 	measure: number;
 	/** In pixels. */

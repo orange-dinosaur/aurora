@@ -1039,6 +1039,17 @@ body,
 	   size the writer chose. The chrome around it is sized in rem, so none of
 	   it moves. */
 	font-size: var(--font-size);
+	/* In rem, like the rest of the chrome, so the column of headings is the
+	   same width whatever size the writer sets the text at. */
+	--outline-width: 14rem;
+}
+
+/* The outline is drawn beside the text rather than taken out of it: the frame
+   grows by the column's width, so the measure is still the width the writer
+   asked for. Where the window is too narrow for both, the text gives way
+   rather than anything being cut off. */
+.editor--outline {
+	max-width: calc(var(--measure) + var(--outline-width));
 }
 
 /* The title and the one control that is on screen whichever way round the bar
@@ -1242,6 +1253,67 @@ body,
 	color: var(--text-dim);
 	pointer-events: none;
 	user-select: none;
+}
+
+/* The placeholder is positioned against the surface, so it has to step across
+   by the whole column when one is there. */
+.editor--outline .editor__placeholder {
+	left: var(--outline-width);
+}
+
+/* The gap between the column and the text is the column's own padding rather
+   than a gap on the row, so its box is exactly one --outline-width and the
+   rule above needs no second number. */
+.editor__outline {
+	flex: none;
+	width: var(--outline-width);
+	padding-right: 1.5rem;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	font-size: 0.85rem;
+	line-height: 1.4;
+}
+
+.editor__outline-none {
+	margin: 0;
+	color: var(--text-dim);
+}
+
+.editor__outline-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.editor__outline-item {
+	display: block;
+	width: 100%;
+	padding: 0.15rem 0.3rem;
+	/* Indented by how deep the heading sits, not by its level. */
+	padding-left: calc(0.3rem + var(--depth) * 0.7rem);
+	font: inherit;
+	text-align: left;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-left: 2px solid transparent;
+	border-radius: 4px;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.editor__outline-item:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Where the caret is, so the list says where the writer is as well as where
+   they could go. */
+.editor__outline-item--here {
+	color: var(--text);
+	border-left-color: var(--accent);
 }
 
 /* The same row of buttons in both bars, so the two can never look like they do

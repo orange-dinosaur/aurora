@@ -16,10 +16,11 @@ import {
 	EDITOR_NODES,
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
-import { FIND, shortcutLabel, TOOLBAR } from "./formatting";
+import { FIND, OUTLINE, shortcutLabel, TOOLBAR } from "./formatting";
 import Find from "./Find";
 import Focus from "./Focus";
 import Links from "./Links";
+import Outline from "./Outline";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
 import Target from "./Target";
@@ -111,6 +112,10 @@ export default function Editor({
 		() => onPreferences({ ...preferences, toolbar: !preferences.toolbar }),
 		[preferences, onPreferences],
 	);
+	const outline = useCallback(
+		() => onPreferences({ ...preferences, outline: !preferences.outline }),
+		[preferences, onPreferences],
+	);
 	const note = error ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
 	// Counted from the markdown the editor would save, which is the same text
 	// the Rust side counts when it summarises the file. The three numbers are
@@ -140,6 +145,11 @@ export default function Editor({
 		[onChange],
 	);
 	const look = ["editor"];
+	if (preferences.outline) {
+		// The column is drawn beside the text rather than out of it, so the
+		// frame grows by its width and the measure is left alone.
+		look.push("editor--outline");
+	}
 	if (preferences.focus) {
 		look.push("editor--focus");
 	}
@@ -195,6 +205,17 @@ export default function Editor({
 					>
 						{"\u2315"}
 					</button>
+					<button
+						type="button"
+						className="editor__toggle"
+						aria-pressed={preferences.outline}
+						aria-label="Outline"
+						title={`Outline (${shortcutLabel(OUTLINE)})`}
+						aria-keyshortcuts={shortcutLabel(OUTLINE)}
+						onClick={outline}
+					>
+						{"\u2261"}
+					</button>
 					{/* Turned on and off while writing rather than set once,
 					    so it stays in reach instead of going in the panel
 					    above. */}
@@ -246,6 +267,7 @@ export default function Editor({
 			<LexicalComposer initialConfig={config}>
 				{preferences.toolbar && <Toolbar />}
 				<div className="editor__surface">
+					{preferences.outline && <Outline />}
 					<RichTextPlugin
 						contentEditable={
 							<ContentEditable
@@ -279,6 +301,7 @@ export default function Editor({
 					<OnChangePlugin ignoreSelectionChange onChange={edited} />
 					<Shortcuts
 						onToolbar={toggle}
+						onOutline={outline}
 						onFind={find}
 						onReplace={replace}
 					/>

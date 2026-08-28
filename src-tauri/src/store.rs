@@ -28,6 +28,10 @@ pub struct Preferences {
 	/// existed still reads rather than falling back to an empty one.
 	#[serde(default)]
 	pub typewriter: bool,
+	/// Whether the document's headings are listed in a column beside the text.
+	/// Defaulted for the same reason as the field above it.
+	#[serde(default)]
+	pub outline: bool,
 	/// The width of the column of text, in characters.
 	pub measure: u32,
 	/// In pixels.
@@ -42,6 +46,7 @@ impl Default for Preferences {
 			toolbar: true,
 			focus: false,
 			typewriter: false,
+			outline: false,
 			measure: 68,
 			font_size: 16,
 			line_height: 1.7,
@@ -446,6 +451,7 @@ mod tests {
 		let store = load(&path).unwrap();
 		assert!(!store.preferences.toolbar);
 		assert!(!store.preferences.typewriter);
+		assert!(!store.preferences.outline);
 		assert_eq!(store.preferences.measure, 80);
 	}
 
@@ -457,6 +463,7 @@ mod tests {
 			toolbar: false,
 			focus: true,
 			typewriter: true,
+			outline: true,
 			measure: 80,
 			font_size: 19,
 			line_height: 2.0,

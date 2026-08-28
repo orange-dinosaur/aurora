@@ -18,6 +18,7 @@ import {
 	MARKS,
 	linkTarget,
 	openable,
+	OUTLINE,
 	pressed,
 	sameFormatting,
 	setLink,
@@ -335,6 +336,15 @@ describe("what a key press is asking for", () => {
 			ACTIONS.some(
 				(action) =>
 					shortcutLabel(action.keys) === shortcutLabel(TOOLBAR),
+			),
+		).toBe(false);
+	});
+
+	test("no action claims the key that shows and hides the outline", () => {
+		expect(
+			ACTIONS.some(
+				(action) =>
+					shortcutLabel(action.keys) === shortcutLabel(OUTLINE),
 			),
 		).toBe(false);
 	});

@@ -1,10 +1,18 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { COMMAND_PRIORITY_NORMAL, KEY_DOWN_COMMAND } from "lexical";
 import { useEffect } from "react";
-import { ACTIONS, FIND, pressed, REPLACE, TOOLBAR } from "./formatting";
+import {
+	ACTIONS,
+	FIND,
+	OUTLINE,
+	pressed,
+	REPLACE,
+	TOOLBAR,
+} from "./formatting";
 
 type Props = {
 	onToolbar: () => void;
+	onOutline: () => void;
 	onFind: () => void;
 	onReplace: () => void;
 };
@@ -18,7 +26,12 @@ const UNDERLINE = { key: "u", shift: false };
 // The keyboard reaches the same actions as the two bars, so a shortcut cannot
 // come to mean something the buttons do not do. Registered on the editor rather
 // than on a bar, so hiding the toolbar does not take the keys with it.
-export default function Shortcuts({ onToolbar, onFind, onReplace }: Props) {
+export default function Shortcuts({
+	onToolbar,
+	onOutline,
+	onFind,
+	onReplace,
+}: Props) {
 	const [editor] = useLexicalComposerContext();
 
 	useEffect(
@@ -34,6 +47,12 @@ export default function Shortcuts({ onToolbar, onFind, onReplace }: Props) {
 					if (pressed(event, TOOLBAR)) {
 						event.preventDefault();
 						onToolbar();
+						return true;
+					}
+
+					if (pressed(event, OUTLINE)) {
+						event.preventDefault();
+						onOutline();
 						return true;
 					}
 
@@ -65,7 +84,7 @@ export default function Shortcuts({ onToolbar, onFind, onReplace }: Props) {
 				// bold, italic and underline live.
 				COMMAND_PRIORITY_NORMAL,
 			),
-		[editor, onToolbar, onFind, onReplace],
+		[editor, onToolbar, onOutline, onFind, onReplace],
 	);
 
 	return null;

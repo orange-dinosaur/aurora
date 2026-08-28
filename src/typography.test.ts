@@ -14,6 +14,7 @@ const DEFAULTS: Preferences = {
 	toolbar: true,
 	focus: false,
 	typewriter: false,
+	outline: false,
 	measure: 68,
 	fontSize: 16,
 	lineHeight: 1.7,

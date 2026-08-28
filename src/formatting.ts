@@ -240,6 +240,9 @@ export const FIND: Keys = { key: "f", shift: false };
 /** The same panel, with replace already unfolded. */
 export const REPLACE: Keys = { key: "h", shift: false };
 
+/** Showing and hiding the column of headings. Like the bar, not an action. */
+export const OUTLINE: Keys = { key: "o", shift: true };
+
 const COMMAND_KEY = IS_APPLE ? "⌘" : "Ctrl+";
 const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift+";
 
