@@ -34,6 +34,10 @@ type Props = {
 	root: string;
 	// Changes when the project view has altered the manifest.
 	reload: number;
+	// The open documents with unwritten changes. The project view already
+	// knows which those are; working it out again here would mean a second
+	// answer that could disagree with the tab strip.
+	unsaved: string[];
 	selectedId: string | null;
 	selectedFolder: string | null;
 	selectedTrash: boolean;
@@ -53,6 +57,7 @@ export default function Sidebar({
 	hidden,
 	root,
 	reload,
+	unsaved,
 	selectedId,
 	selectedFolder,
 	selectedTrash,
@@ -162,6 +167,9 @@ export default function Sidebar({
 										{section.folder}
 									</button>
 								</h3>
+								<span className="section__count">
+									{section.documents.length}
+								</span>
 								<button
 									type="button"
 									className="section__new"
@@ -261,7 +269,30 @@ export default function Sidebar({
 														onSelect(doc)
 													}
 												>
-													{doc.title}
+													<span className="document__at">
+														{String(
+															at + 1,
+														).padStart(2, "0")}
+													</span>
+													<span className="document__title">
+														{doc.title}
+													</span>
+													{/* Always in the row and
+													    faded when there is
+													    nothing to say, so the
+													    title never shifts as
+													    the writer types. */}
+													<span
+														className="document__dirty"
+														data-dirty={
+															unsaved.includes(
+																doc.id,
+															)
+																? ""
+																: undefined
+														}
+														aria-hidden="true"
+													/>
 												</button>
 												<DocumentMenu
 													label={`Actions for ${doc.title}`}
@@ -300,21 +331,22 @@ export default function Sidebar({
 				</p>
 			</div>
 
-			<button
-				type="button"
-				className="sidebar__trash"
-				aria-current={selectedTrash ? "page" : undefined}
-				onClick={onOpenTrash}
-			>
-				Trash
-			</button>
-
 			<div className="sidebar__foot">
 				<button
 					type="button"
-					className="sidebar__close"
+					className="sidebar__leave"
+					aria-current={selectedTrash ? "page" : undefined}
+					onClick={onOpenTrash}
+				>
+					<Icon name="trash" />
+					Trash
+				</button>
+				<button
+					type="button"
+					className="sidebar__leave"
 					onClick={onClose}
 				>
+					<Icon name="log-out" />
 					Close project
 				</button>
 			</div>

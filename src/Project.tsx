@@ -497,6 +497,11 @@ export default function Project({
 					hidden={!preferences.sidebar}
 					root={root}
 					reload={listing}
+					unsaved={tabs.flatMap((tab) =>
+						tab.kind === "document" && tab.save.kind !== "clean"
+							? [tab.document.id]
+							: [],
+					)}
 					selectedId={
 						active?.kind === "document" ? active.document.id : null
 					}

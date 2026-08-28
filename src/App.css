@@ -544,48 +544,43 @@ body,
 	padding-bottom: 2rem;
 }
 
-.sidebar__trash {
+/* The two ways out of the writing, kept together below a rule so neither can
+   be taken for another section. */
+.sidebar__foot {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
 	margin-top: 0.75rem;
-	padding: 0.35rem 0.5rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--border);
+}
+
+.sidebar__leave {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	height: 28px;
+	padding: 0 0.375rem;
 	font: inherit;
-	font-size: 0.8rem;
-	text-align: left;
+	font-size: 0.75rem;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: 4px;
 	cursor: pointer;
+	white-space: nowrap;
 }
 
-.sidebar__trash:hover {
+.sidebar__leave:hover {
 	color: var(--text);
-	background: var(--bg-card);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
-.sidebar__trash[aria-current="page"] {
+.sidebar__leave[aria-current="page"] {
 	color: var(--text);
 	background: var(--accent-wash);
-}
-
-.sidebar__foot {
-	display: flex;
-	margin-top: 1rem;
-}
-
-.sidebar__close {
-	padding: 0.35rem 0.7rem;
-	font: inherit;
-	font-size: 0.8rem;
-	color: var(--text-dim);
-	background: none;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	cursor: pointer;
-}
-
-.sidebar__close:hover {
-	color: var(--text);
-	border-color: var(--accent);
 }
 
 .section + .section {
@@ -595,16 +590,31 @@ body,
 .section__header {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	gap: 0.25rem;
-	margin-bottom: 0.35rem;
+	margin-bottom: 0.25rem;
 }
 
+/* An eyebrow rather than a heading: the sidebar is an index of the writing,
+   and its own labels should be the quietest thing in it. */
 .section__title {
-	margin: 0;
 	min-width: 0;
-	font-size: 0.9rem;
+	margin: 0;
+	font-size: 0.6875rem;
 	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.section__count {
+	flex: none;
+	/* Takes the slack, so the count sits by its section and the + stays at the
+	   far edge whatever the section is called. */
+	margin-right: auto;
+	font-size: 0.6875rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+	opacity: 0.7;
 }
 
 .section__new {
@@ -624,7 +634,7 @@ body,
 
 .section__new:hover {
 	color: var(--text);
-	background: var(--bg-card);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 /* A field opened in the sidebar sits where the button that opened it was, and
@@ -635,19 +645,24 @@ body,
 }
 
 .section__open {
-	padding: 0.1rem 0.4rem;
-	margin-left: -0.4rem;
+	display: block;
+	max-width: 100%;
+	padding: 0.1rem 0.25rem;
+	margin-left: -0.25rem;
 	font: inherit;
 	color: inherit;
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: 4px;
 	cursor: pointer;
-	overflow-wrap: anywhere;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .section__open:hover {
-	background: var(--bg-card);
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .section__open[aria-current="page"] {
@@ -685,23 +700,58 @@ body,
 }
 
 .document {
-	display: block;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
 	width: 100%;
-	padding: 0.2rem 1.4rem 0.2rem 0.4rem;
+	height: 28px;
+	/* The right-hand room is the row menu's, which is painted over the row. */
+	padding: 0 1.4rem 0 0.25rem;
 	font: inherit;
-	font-size: 0.9rem;
+	font-size: 0.8125rem;
 	text-align: left;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: 4px;
 	cursor: pointer;
-	overflow-wrap: anywhere;
+}
+
+/* Fixed rather than fitted, so the titles line up down the column however far
+   the count has run. */
+.document__at {
+	flex: none;
+	width: 18px;
+	font-size: 0.6875rem;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	opacity: 0.6;
+}
+
+.document__title {
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.document__dirty {
+	flex: none;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--accent);
+	opacity: 0;
+}
+
+.document__dirty[data-dirty] {
+	opacity: 1;
 }
 
 .document:hover {
 	color: var(--text);
-	background: var(--bg-card);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .document[aria-current="page"] {
