@@ -419,12 +419,7 @@ export default function Project({ name, root, onClose }: Props) {
 	function documentBody(tab: DocumentTab) {
 		if (tab.content.kind === "ready") {
 			return (
-				// Keyed by the tab, so switching tabs gives the textarea a
-				// fresh element rather than one carrying the last document's
-				// scroll position and selection — and renaming or restoring
-				// this one does not, since the tab is the same tab.
 				<Editor
-					key={tab.key}
 					title={tab.document.title}
 					text={tab.content.text}
 					dirty={tab.save.kind !== "clean"}
@@ -482,37 +477,67 @@ export default function Project({ name, root, onClose }: Props) {
 						onClose={closeTab}
 					/>
 
-					{active === null ? (
-						<p className="project__empty">
-							Choose a document to open.
-						</p>
-					) : active.kind === "section" ? (
-						// Keyed, so moving between two overviews starts the
-						// new one empty rather than showing the previous
-						// section's cards until its read comes back.
-						<SectionView
-							key={active.key}
-							root={root}
-							folder={active.folder}
-							reload={listing}
-							onSelect={(document) => void openDocument(document)}
-							onCreated={created}
-							onRenamed={renamed}
-							onReordered={reordered}
-							onDelete={remove}
-						/>
-					) : active.kind === "trash" ? (
-						<Trash
-							key={active.key}
-							root={root}
-							reload={listing}
-							onChanged={() =>
-								setListing((version) => version + 1)
-							}
-						/>
-					) : (
-						documentBody(active)
-					)}
+					<div className="project__panes">
+						{/* Every open document stays mounted and all but one
+						    is hidden. An editor torn down on a tab switch
+						    takes its undo history, its selection and its
+						    scroll position with it. Hiding is by visibility
+						    rather than display, which would drop the layout
+						    box and with it the scroll position. */}
+						{tabs.map((tab) =>
+							tab.kind === "document" ? (
+								<div
+									key={tab.key}
+									className={
+										tab.key === activeKey
+											? "project__pane"
+											: "project__pane project__pane--hidden"
+									}
+								>
+									{documentBody(tab)}
+								</div>
+							) : null,
+						)}
+
+						{active === null ? (
+							<div className="project__pane">
+								<p className="project__empty">
+									Choose a document to open.
+								</p>
+							</div>
+						) : active.kind === "section" ? (
+							<div className="project__pane">
+								{/* Keyed, so moving between two overviews
+								    starts the new one empty rather than
+								    showing the previous section's cards
+								    until its read comes back. */}
+								<SectionView
+									key={active.key}
+									root={root}
+									folder={active.folder}
+									reload={listing}
+									onSelect={(document) =>
+										void openDocument(document)
+									}
+									onCreated={created}
+									onRenamed={renamed}
+									onReordered={reordered}
+									onDelete={remove}
+								/>
+							</div>
+						) : active.kind === "trash" ? (
+							<div className="project__pane">
+								<Trash
+									key={active.key}
+									root={root}
+									reload={listing}
+									onChanged={() =>
+										setListing((version) => version + 1)
+									}
+								/>
+							</div>
+						) : null}
+					</div>
 				</div>
 			</div>
 		</section>

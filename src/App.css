@@ -308,6 +308,27 @@ body,
 	overflow: hidden;
 }
 
+/* The panes are stacked on top of each other rather than swapped, so an open
+   document that is not being looked at keeps its layout box — and with it the
+   scroll position and selection its editor would otherwise lose. */
+.project__panes {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+}
+
+.project__pane {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.project__pane--hidden {
+	visibility: hidden;
+}
+
 .project__empty {
 	margin: 3rem 0 0;
 	color: var(--text-dim);
