@@ -17,6 +17,7 @@ import {
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
 import { shortcutLabel, TOOLBAR } from "./formatting";
+import Focus from "./Focus";
 import Links from "./Links";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
@@ -102,7 +103,7 @@ export default function Editor({
 
 	return (
 		<div
-			className="editor"
+			className={preferences.focus ? "editor editor--focus" : "editor"}
 			// The page's own measurements, handed to the stylesheet. `ch` is
 			// read against this element's font size, which is why the size is
 			// set here and not further down.
@@ -116,13 +117,13 @@ export default function Editor({
 		>
 			<div className="editor__head">
 				<h2 className="editor__title">{title}</h2>
-				{/* The one way back once the bar is gone, so it stays on
-				    screen whichever way round it is. */}
 				<div className="editor__tools">
 					<Typography
 						preferences={preferences}
 						onPreferences={onPreferences}
 					/>
+					{/* The one way back once the bar is gone, so it stays on
+					    screen whichever way round it is. */}
 					<button
 						type="button"
 						className="editor__toggle"
@@ -176,6 +177,7 @@ export default function Editor({
 						}
 					/>
 					<Shortcuts onToolbar={toggle} />
+					<Focus on={preferences.focus} />
 					<SlashMenu />
 				</div>
 			</LexicalComposer>

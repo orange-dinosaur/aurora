@@ -96,6 +96,20 @@ export default function Typography({ preferences, onPreferences }: Props) {
 							</button>
 						</Fragment>
 					))}
+
+					<label className="typography__switch">
+						<input
+							type="checkbox"
+							checked={preferences.focus}
+							onChange={(event) =>
+								onPreferences({
+									...preferences,
+									focus: event.target.checked,
+								})
+							}
+						/>
+						Dim other paragraphs
+					</label>
 				</div>
 			)}
 		</div>
