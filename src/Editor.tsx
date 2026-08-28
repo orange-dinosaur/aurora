@@ -122,6 +122,24 @@ export default function Editor({
 						preferences={preferences}
 						onPreferences={onPreferences}
 					/>
+					{/* Turned on and off while writing rather than set once,
+					    so it stays in reach instead of going in the panel
+					    above. */}
+					<button
+						type="button"
+						className="editor__toggle"
+						aria-pressed={preferences.focus}
+						aria-label="Focus mode"
+						title="Dim other paragraphs"
+						onClick={() =>
+							onPreferences({
+								...preferences,
+								focus: !preferences.focus,
+							})
+						}
+					>
+						{"\u25d0"}
+					</button>
 					{/* The one way back once the bar is gone, so it stays on
 					    screen whichever way round it is. */}
 					<button

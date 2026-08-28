@@ -1081,6 +1081,10 @@ body,
 	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+.editor__toggle[aria-pressed="true"] {
+	color: var(--accent);
+}
+
 /* Holds the writing surface and the placeholder that sits over it. */
 .editor__surface {
 	position: relative;
@@ -1517,17 +1521,6 @@ body,
 .typography__step:disabled {
 	color: var(--border);
 	cursor: default;
-}
-
-.typography__switch {
-	grid-column: 1 / -1;
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
-	margin-top: 0.2rem;
-	padding-top: 0.35rem;
-	border-top: 1px solid var(--border);
-	cursor: pointer;
 }
 
 /* Focus mode. Nothing inside a block has to escape it, so the stacking context
