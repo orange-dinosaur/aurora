@@ -1,11 +1,12 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { COMMAND_PRIORITY_NORMAL, KEY_DOWN_COMMAND } from "lexical";
 import { useEffect } from "react";
-import { ACTIONS, FIND, pressed, TOOLBAR } from "./formatting";
+import { ACTIONS, FIND, pressed, REPLACE, TOOLBAR } from "./formatting";
 
 type Props = {
 	onToolbar: () => void;
 	onFind: () => void;
+	onReplace: () => void;
 };
 
 // Ctrl+U is one of three shortcuts Lexical answers for itself. The other two
@@ -17,7 +18,7 @@ const UNDERLINE = { key: "u", shift: false };
 // The keyboard reaches the same actions as the two bars, so a shortcut cannot
 // come to mean something the buttons do not do. Registered on the editor rather
 // than on a bar, so hiding the toolbar does not take the keys with it.
-export default function Shortcuts({ onToolbar, onFind }: Props) {
+export default function Shortcuts({ onToolbar, onFind, onReplace }: Props) {
 	const [editor] = useLexicalComposerContext();
 
 	useEffect(
@@ -42,6 +43,12 @@ export default function Shortcuts({ onToolbar, onFind }: Props) {
 						return true;
 					}
 
+					if (pressed(event, REPLACE)) {
+						event.preventDefault();
+						onReplace();
+						return true;
+					}
+
 					const action = ACTIONS.find((each) =>
 						pressed(event, each.keys),
 					);
@@ -58,7 +65,7 @@ export default function Shortcuts({ onToolbar, onFind }: Props) {
 				// bold, italic and underline live.
 				COMMAND_PRIORITY_NORMAL,
 			),
-		[editor, onToolbar, onFind],
+		[editor, onToolbar, onFind, onReplace],
 	);
 
 	return null;

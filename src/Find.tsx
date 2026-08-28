@@ -4,15 +4,19 @@ import {
 	$getNodeByKey,
 	$getRoot,
 	$setSelection,
+	HISTORY_PUSH_TAG,
 	TextNode,
 	type LexicalEditor,
 } from "lexical";
 import { useEffect, useRef, useState } from "react";
 import { matches, type Match, type Run } from "./find";
+import { REPLACE, shortcutLabel } from "./formatting";
 
 type Props = {
 	/** Counts the times find has been asked for, so a second ask can answer. */
 	asked: number;
+	replacing: boolean;
+	onReplacing: (on: boolean) => void;
 	onClose: () => void;
 };
 
@@ -79,6 +83,25 @@ function paint(editor: LexicalEditor, found: Match[], at: number): boolean {
 	return true;
 }
 
+/**
+ * Selects a match and types over it. Selecting first is what makes a match
+ * that runs across two runs of text — a bold word in mid-sentence — replace as
+ * one thing rather than as its pieces.
+ */
+function $put(match: Match, text: string) {
+	const from = $getNodeByKey(match.fromKey);
+	const to = $getNodeByKey(match.toKey);
+	if (!(from instanceof TextNode) || !(to instanceof TextNode)) {
+		return;
+	}
+
+	const selection = $createRangeSelection();
+	selection.anchor.set(match.fromKey, match.fromOffset, "text");
+	selection.focus.set(match.toKey, match.toOffset, "text");
+	$setSelection(selection);
+	selection.insertText(text);
+}
+
 /** Puts the caret on a match, which is where the writer carries on from. */
 function land(editor: LexicalEditor, match: Match) {
 	editor.update(() => {
@@ -101,9 +124,15 @@ function land(editor: LexicalEditor, match: Match) {
  * steps through the matches, and lands on the one they were on when the panel
  * closes.
  */
-export default function Find({ asked, onClose }: Props) {
+export default function Find({
+	asked,
+	replacing,
+	onReplacing,
+	onClose,
+}: Props) {
 	const [editor] = useLexicalComposerContext();
 	const [query, setQuery] = useState("");
+	const [into, setInto] = useState("");
 	const [found, setFound] = useState<Match[]>([]);
 	const [at, setAt] = useState(0);
 	const input = useRef<HTMLInputElement>(null);
@@ -163,6 +192,34 @@ export default function Find({ asked, onClose }: Props) {
 		}
 	}
 
+	// One update, so one undo takes the whole thing back — a replace-all is a
+	// single thing the writer did, however many words it touched.
+	function replace(all: boolean) {
+		const doing = all
+			? [...found].reverse()
+			: match === undefined
+				? []
+				: [match];
+		if (doing.length === 0) {
+			return;
+		}
+
+		editor.update(
+			() => {
+				// Backwards through the document, so replacing one match
+				// cannot move the ones still to be replaced.
+				for (const each of doing) {
+					$put(each, into);
+				}
+			},
+			{ tag: HISTORY_PUSH_TAG },
+		);
+
+		if (all) {
+			setAt(0);
+		}
+	}
+
 	function close() {
 		if (match !== undefined) {
 			land(editor, match);
@@ -172,65 +229,119 @@ export default function Find({ asked, onClose }: Props) {
 
 	return (
 		<div className="editor__find">
-			<input
-				ref={input}
-				className="editor__find-input"
-				value={query}
-				aria-label="Find in this document"
-				placeholder="Find"
-				onChange={(event) => {
-					setQuery(event.target.value);
-					setAt(0);
-				}}
-				onKeyDown={(event) => {
-					if (event.key === "Escape") {
-						event.preventDefault();
-						close();
-					}
-					if (event.key === "Enter") {
-						event.preventDefault();
-						step(event.shiftKey ? -1 : 1);
-					}
-				}}
-			/>
-			{/* Always in the DOM, so counting up as the writer types cannot
-			    move the buttons under their hand. */}
-			<span className="editor__find-count" role="status">
-				{query === ""
-					? ""
-					: found.length === 0
-						? "None"
-						: `${here + 1} of ${found.length}`}
-			</span>
-			<button
-				type="button"
-				className="editor__find-step"
-				aria-label="Previous match"
-				title="Previous match (Shift+Enter)"
-				disabled={found.length === 0}
-				onClick={() => step(-1)}
-			>
-				{"‹"}
-			</button>
-			<button
-				type="button"
-				className="editor__find-step"
-				aria-label="Next match"
-				title="Next match (Enter)"
-				disabled={found.length === 0}
-				onClick={() => step(1)}
-			>
-				{"›"}
-			</button>
-			<button
-				type="button"
-				className="editor__find-step"
-				aria-label="Close find"
-				title="Close find (Escape)"
-				onClick={close}
-			>
-				{"✕"}
-			</button>
+			<div className="editor__find-row">
+				<input
+					ref={input}
+					className="editor__find-input"
+					value={query}
+					aria-label="Find in this document"
+					placeholder="Find"
+					onChange={(event) => {
+						setQuery(event.target.value);
+						setAt(0);
+					}}
+					onKeyDown={(event) => {
+						if (event.key === "Escape") {
+							event.preventDefault();
+							close();
+						}
+						if (event.key === "Enter") {
+							event.preventDefault();
+							step(event.shiftKey ? -1 : 1);
+						}
+					}}
+				/>
+				{/* Always in the DOM, so counting up as the writer types
+				    cannot move the buttons under their hand. */}
+				<span className="editor__find-count" role="status">
+					{query === ""
+						? ""
+						: found.length === 0
+							? "None"
+							: `${here + 1} of ${found.length}`}
+				</span>
+				<button
+					type="button"
+					className="editor__find-step"
+					aria-label="Previous match"
+					title="Previous match (Shift+Enter)"
+					disabled={found.length === 0}
+					onClick={() => step(-1)}
+				>
+					{"‹"}
+				</button>
+				<button
+					type="button"
+					className="editor__find-step"
+					aria-label="Next match"
+					title="Next match (Enter)"
+					disabled={found.length === 0}
+					onClick={() => step(1)}
+				>
+					{"›"}
+				</button>
+				{/* Replace is folded away until it is asked for: most searches
+				    are only looking. */}
+				<button
+					type="button"
+					className="editor__find-step"
+					aria-expanded={replacing}
+					aria-label="Replace"
+					title={`Replace (${shortcutLabel(REPLACE)})`}
+					aria-keyshortcuts={shortcutLabel(REPLACE)}
+					onClick={() => onReplacing(!replacing)}
+				>
+					{"⇄"}
+				</button>
+				<button
+					type="button"
+					className="editor__find-step"
+					aria-label="Close find"
+					title="Close find (Escape)"
+					onClick={close}
+				>
+					{"✕"}
+				</button>
+			</div>
+			{replacing && (
+				<div className="editor__find-row">
+					<input
+						className="editor__find-input"
+						value={into}
+						aria-label="Replace matches with"
+						placeholder="Replace with"
+						onChange={(event) => setInto(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key === "Escape") {
+								event.preventDefault();
+								close();
+							}
+							if (event.key === "Enter") {
+								event.preventDefault();
+								replace(event.shiftKey);
+							}
+						}}
+					/>
+					<button
+						type="button"
+						className="editor__find-do"
+						disabled={found.length === 0}
+						title="Replace this match (Enter)"
+						onClick={() => replace(false)}
+					>
+						Replace
+					</button>
+					<button
+						type="button"
+						className="editor__find-do"
+						disabled={found.length === 0}
+						title="Replace every match (Shift+Enter)"
+						onClick={() => replace(true)}
+					>
+						All
+					</button>
+				</div>
+			)}
 		</div>
 	);
 }

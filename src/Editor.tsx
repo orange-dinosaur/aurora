@@ -120,8 +120,15 @@ export default function Editor({
 	// Bumped rather than just set, so asking for find while the panel is
 	// already open takes the caret back to the field instead of doing nothing.
 	const [asked, setAsked] = useState(0);
+	const [replacing, setReplacing] = useState(false);
 	const find = useCallback(() => {
 		setFinding(true);
+		setAsked((times) => times + 1);
+	}, []);
+	// The same panel, opened at the other end of the job.
+	const replace = useCallback(() => {
+		setFinding(true);
+		setReplacing(true);
 		setAsked((times) => times + 1);
 	}, []);
 	const edited = useCallback(
@@ -270,9 +277,21 @@ export default function Editor({
 					{/* Moving the caret is not an edit, or every click would
 					    mark the document unsaved. */}
 					<OnChangePlugin ignoreSelectionChange onChange={edited} />
-					<Shortcuts onToolbar={toggle} onFind={find} />
+					<Shortcuts
+						onToolbar={toggle}
+						onFind={find}
+						onReplace={replace}
+					/>
 					{finding && (
-						<Find asked={asked} onClose={() => setFinding(false)} />
+						<Find
+							asked={asked}
+							replacing={replacing}
+							onReplacing={setReplacing}
+							onClose={() => {
+								setFinding(false);
+								setReplacing(false);
+							}}
+						/>
 					)}
 					<Focus on={preferences.focus} />
 					<Typewriter on={preferences.typewriter} />

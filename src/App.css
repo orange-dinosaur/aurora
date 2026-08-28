@@ -1463,7 +1463,7 @@ body,
 	right: 0;
 	z-index: 6;
 	display: flex;
-	align-items: center;
+	flex-direction: column;
 	gap: 0.3rem;
 	padding: 0.3rem 0.4rem;
 	background: var(--bg-card);
@@ -1471,6 +1471,14 @@ body,
 	border-radius: 8px;
 	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
 	font-size: 0.85rem;
+}
+
+/* The replace row lines up under the find row, so the two fields share an
+   edge and the buttons sit where the arrows are. */
+.editor__find-row {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
 }
 
 .editor__find-input {
@@ -1506,6 +1514,27 @@ body,
 }
 
 .editor__find-step:disabled {
+	color: var(--text-dim);
+	cursor: default;
+}
+
+/* Worded rather than drawn: replacing is not something to press by accident. */
+.editor__find-do {
+	flex: 1;
+	padding: 0.2rem 0.5rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.editor__find-do:hover:not(:disabled) {
+	border-color: var(--accent);
+}
+
+.editor__find-do:disabled {
 	color: var(--text-dim);
 	cursor: default;
 }

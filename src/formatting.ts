@@ -237,6 +237,9 @@ export const TOOLBAR: Keys = { key: "t", shift: true };
 /** Opens find. The webview binds this itself, so the editor has to take it. */
 export const FIND: Keys = { key: "f", shift: false };
 
+/** The same panel, with replace already unfolded. */
+export const REPLACE: Keys = { key: "h", shift: false };
+
 const COMMAND_KEY = IS_APPLE ? "⌘" : "Ctrl+";
 const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift+";
 
