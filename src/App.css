@@ -644,20 +644,19 @@ body,
 	margin-bottom: 0.35rem;
 }
 
+/* Wraps rather than ellipsising: the eyebrow has no fixed height to keep, so a
+   long section name should be readable in full. */
 .section__open {
-	display: block;
-	max-width: 100%;
 	padding: 0.1rem 0.25rem;
 	margin-left: -0.25rem;
 	font: inherit;
+	text-align: left;
 	color: inherit;
 	background: none;
 	border: 0;
 	border-radius: 4px;
 	cursor: pointer;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	overflow-wrap: anywhere;
 }
 
 .section__open:hover {
