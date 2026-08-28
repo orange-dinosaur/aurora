@@ -8,6 +8,7 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { EditorState, EditorThemeClasses } from "lexical";
+import Icon from "./Icon";
 import type { Preferences } from "./types";
 import { useCallback, useState, type CSSProperties } from "react";
 import {
@@ -203,7 +204,7 @@ export default function Editor({
 						aria-keyshortcuts={shortcutLabel(FIND)}
 						onClick={find}
 					>
-						{"\u2315"}
+						<Icon name="search" />
 					</button>
 					<button
 						type="button"
@@ -214,7 +215,7 @@ export default function Editor({
 						aria-keyshortcuts={shortcutLabel(OUTLINE)}
 						onClick={outline}
 					>
-						{"\u2261"}
+						<Icon name="list" />
 					</button>
 					{/* Turned on and off while writing rather than set once,
 					    so it stays in reach instead of going in the panel
@@ -232,7 +233,7 @@ export default function Editor({
 							})
 						}
 					>
-						{"\u25d0"}
+						<Icon name="contrast" />
 					</button>
 					<button
 						type="button"
@@ -247,7 +248,7 @@ export default function Editor({
 							})
 						}
 					>
-						{"\u2195"}
+						<Icon name="arrows-vertical" />
 					</button>
 					{/* The one way back once the bar is gone, so it stays on
 					    screen whichever way round it is. */}
@@ -260,7 +261,13 @@ export default function Editor({
 						aria-keyshortcuts={shortcutLabel(TOOLBAR)}
 						onClick={toggle}
 					>
-						{preferences.toolbar ? "\u2304" : "\u203a"}
+						<Icon
+							name={
+								preferences.toolbar
+									? "chevron-down"
+									: "chevron-right"
+							}
+						/>
 					</button>
 				</div>
 			</div>

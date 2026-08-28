@@ -127,6 +127,13 @@
 	box-sizing: border-box;
 }
 
+/* Drawn in whatever colour the button carrying it is, and a block so the line
+   box around it cannot add a descender's worth of height. */
+.icon {
+	display: block;
+	flex: none;
+}
+
 html,
 body,
 #root {
@@ -419,9 +426,7 @@ body,
 	justify-content: center;
 	width: 24px;
 	height: 24px;
-	font: inherit;
-	font-size: 0.9rem;
-	line-height: 1;
+	padding: 0;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
@@ -604,14 +609,16 @@ body,
 
 .section__new {
 	flex: none;
-	padding: 0 0.35rem;
-	font: inherit;
-	font-size: 1rem;
-	line-height: 1.2;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: 5px;
 	cursor: pointer;
 }
 
@@ -1213,6 +1220,9 @@ body,
    title. */
 .editor__tools {
 	flex: none;
+	/* The head aligns on baselines, and a row of icon buttons has no text to
+	   put one on. */
+	align-self: center;
 	display: flex;
 	align-items: center;
 	gap: 0.1rem;
@@ -1220,14 +1230,16 @@ body,
 
 .editor__toggle {
 	flex: none;
-	padding: 0.1rem 0.35rem;
-	font: inherit;
-	font-size: 0.9rem;
-	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: 5px;
 	cursor: pointer;
 }
 

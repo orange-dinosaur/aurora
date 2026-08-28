@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import Icon from "./Icon";
 import { failure } from "./errors";
 
 type Props = {
@@ -51,7 +52,7 @@ export default function Titlebar({
 				disabled={busy}
 				onClick={() => void refresh()}
 			>
-				↻
+				<Icon name="refresh" />
 			</button>
 			<button
 				type="button"
@@ -60,7 +61,7 @@ export default function Titlebar({
 				aria-pressed={sidebar}
 				onClick={() => onSidebar(!sidebar)}
 			>
-				◧
+				<Icon name="panel-left" />
 			</button>
 
 			{/* Out of flow, so a failed refresh cannot push the writing down. */}

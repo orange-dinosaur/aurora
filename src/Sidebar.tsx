@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
+import Icon from "./Icon";
 import NameField from "./NameField";
 import type { ProjectDocument, SectionDocuments } from "./types";
 import { createDocument, renameDocument, reorderDocument } from "./documents";
@@ -172,7 +173,7 @@ export default function Sidebar({
 										})
 									}
 								>
-									+
+									<Icon name="plus" />
 								</button>
 							</div>
 
