@@ -11,6 +11,7 @@ import { failure } from "./errors";
 const DEFAULTS: Preferences = {
 	toolbar: true,
 	focus: false,
+	typewriter: false,
 	measure: 68,
 	fontSize: 16,
 	lineHeight: 1.7,

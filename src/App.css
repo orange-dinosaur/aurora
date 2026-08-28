@@ -1534,6 +1534,14 @@ body,
 	opacity: 1;
 }
 
+/* Room below the last line, or the caret could not be held part-way down the
+   page once the writer reached the end of the document. There is deliberately
+   no matching room above: the opening lines should sit where they are rather
+   than start half-way down. */
+.editor--typewriter .editor__text {
+	padding-bottom: 60vh;
+}
+
 /* Always in the DOM, so the wording can change without moving the text above
    it. */
 .editor__status {

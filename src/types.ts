@@ -69,6 +69,8 @@ export type Preferences = {
 	/** Whether the bar under the document title is showing. */
 	toolbar: boolean;
 	focus: boolean;
+	/** Whether the caret's line is held in place and the page moves under it. */
+	typewriter: boolean;
 	/** The width of the column of text, in characters. */
 	measure: number;
 	/** In pixels. */

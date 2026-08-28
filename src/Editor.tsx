@@ -22,6 +22,7 @@ import Links from "./Links";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
 import Toolbar from "./Toolbar";
+import Typewriter from "./Typewriter";
 import Typography from "./Typography";
 
 // Lexical puts these class names on the elements it renders; App.css styles
@@ -87,6 +88,13 @@ export default function Editor({
 		[preferences, onPreferences],
 	);
 	const note = error ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
+	const look = ["editor"];
+	if (preferences.focus) {
+		look.push("editor--focus");
+	}
+	if (preferences.typewriter) {
+		look.push("editor--typewriter");
+	}
 
 	// The editor owns its text from here on, so the document seeds it once and
 	// is never pushed in again — doing that on every render would drag the
@@ -103,7 +111,7 @@ export default function Editor({
 
 	return (
 		<div
-			className={preferences.focus ? "editor editor--focus" : "editor"}
+			className={look.join(" ")}
 			// The page's own measurements, handed to the stylesheet. `ch` is
 			// read against this element's font size, which is why the size is
 			// set here and not further down.
@@ -139,6 +147,21 @@ export default function Editor({
 						}
 					>
 						{"\u25d0"}
+					</button>
+					<button
+						type="button"
+						className="editor__toggle"
+						aria-pressed={preferences.typewriter}
+						aria-label="Typewriter scrolling"
+						title="Hold the line being written on"
+						onClick={() =>
+							onPreferences({
+								...preferences,
+								typewriter: !preferences.typewriter,
+							})
+						}
+					>
+						{"\u2195"}
 					</button>
 					{/* The one way back once the bar is gone, so it stays on
 					    screen whichever way round it is. */}
@@ -196,6 +219,7 @@ export default function Editor({
 					/>
 					<Shortcuts onToolbar={toggle} />
 					<Focus on={preferences.focus} />
+					<Typewriter on={preferences.typewriter} />
 					<SlashMenu />
 				</div>
 			</LexicalComposer>

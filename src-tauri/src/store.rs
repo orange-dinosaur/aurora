@@ -23,6 +23,11 @@ pub struct Preferences {
 	pub toolbar: bool,
 	/// Whether everything but the paragraph being written is dimmed.
 	pub focus: bool,
+	/// Whether the line the caret is on is held in place and the page moves
+	/// under it. Defaulted on its own, so a store written before this field
+	/// existed still reads rather than falling back to an empty one.
+	#[serde(default)]
+	pub typewriter: bool,
 	/// The width of the column of text, in characters.
 	pub measure: u32,
 	/// In pixels.
@@ -36,6 +41,7 @@ impl Default for Preferences {
 		Self {
 			toolbar: true,
 			focus: false,
+			typewriter: false,
 			measure: 68,
 			font_size: 16,
 			line_height: 1.7,
@@ -415,6 +421,34 @@ mod tests {
 		assert_eq!(store.recent.len(), 1);
 	}
 
+	// A field added to Preferences without a default would fail the whole
+	// Store's deserialization, and the recents list would be lost with it.
+	#[test]
+	fn preferences_written_before_a_field_existed_still_read() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(
+			&path,
+			r#"{
+				"version": 3,
+				"recent": [],
+				"preferences": {
+					"toolbar": false,
+					"focus": true,
+					"measure": 80,
+					"fontSize": 19,
+					"lineHeight": 2.0
+				}
+			}"#,
+		)
+		.unwrap();
+
+		let store = load(&path).unwrap();
+		assert!(!store.preferences.toolbar);
+		assert!(!store.preferences.typewriter);
+		assert_eq!(store.preferences.measure, 80);
+	}
+
 	#[test]
 	fn preferences_survive_a_save() {
 		let dir = tempfile::tempdir().unwrap();
@@ -422,6 +456,7 @@ mod tests {
 		let wanted = Preferences {
 			toolbar: false,
 			focus: true,
+			typewriter: true,
 			measure: 80,
 			font_size: 19,
 			line_height: 2.0,
