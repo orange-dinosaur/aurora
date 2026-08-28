@@ -5,6 +5,8 @@
 	--text: #1c1a17;
 	--text-dim: #6d675f;
 	--accent: #7a5cff;
+	/* The tint on a match that is not the one being read. */
+	--find: #ffe9a8;
 	--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
 	font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
@@ -27,6 +29,7 @@
 		--text: #ece9f0;
 		--text-dim: #918c9c;
 		--accent: #a48cff;
+		--find: #4c421f;
 	}
 }
 
@@ -1452,6 +1455,72 @@ body,
 /* The menu a slash raises. The plugin hangs an anchor off the caret and gives
    it the caret's own size, so the menu itself is taken out of that box and
    only has to lay itself out. */
+/* Over the text rather than above it: the page keeps its place while a search
+   is going on, and the panel gives it back when it closes. */
+.editor__find {
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.3rem 0.4rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+	font-size: 0.85rem;
+}
+
+.editor__find-input {
+	width: 12rem;
+	padding: 0.2rem 0.35rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+}
+
+/* Wide enough for "12 of 34" so the buttons hold still as the count changes. */
+.editor__find-count {
+	min-width: 5rem;
+	color: var(--text-dim);
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.editor__find-step {
+	padding: 0.1rem 0.4rem;
+	font: inherit;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.editor__find-step:hover:not(:disabled) {
+	background: var(--bg);
+}
+
+.editor__find-step:disabled {
+	color: var(--text-dim);
+	cursor: default;
+}
+
+/* The two paint layers. Only a handful of properties are allowed here, which
+   is why the current match is told apart by colour alone. */
+::highlight(aurora-find) {
+	background-color: var(--find);
+}
+
+::highlight(aurora-find-current) {
+	background-color: var(--accent);
+	color: #ffffff;
+}
+
 .slash {
 	position: absolute;
 	top: 0;

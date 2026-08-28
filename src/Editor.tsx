@@ -16,7 +16,8 @@ import {
 	EDITOR_NODES,
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
-import { shortcutLabel, TOOLBAR } from "./formatting";
+import { FIND, shortcutLabel, TOOLBAR } from "./formatting";
+import Find from "./Find";
 import Focus from "./Focus";
 import Links from "./Links";
 import Shortcuts from "./Shortcuts";
@@ -115,6 +116,14 @@ export default function Editor({
 	// the Rust side counts when it summarises the file. The three numbers are
 	// taken from one draft together, so they cannot describe different text.
 	const [tally, setTally] = useState(() => counted(text));
+	const [finding, setFinding] = useState(false);
+	// Bumped rather than just set, so asking for find while the panel is
+	// already open takes the caret back to the field instead of doing nothing.
+	const [asked, setAsked] = useState(0);
+	const find = useCallback(() => {
+		setFinding(true);
+		setAsked((times) => times + 1);
+	}, []);
 	const edited = useCallback(
 		(state: EditorState) => {
 			const markdown = state.read(() => $toMarkdown());
@@ -165,6 +174,20 @@ export default function Editor({
 						preferences={preferences}
 						onPreferences={onPreferences}
 					/>
+					{/* The only way to the panel that does not need the caret
+					    to be in the text: Ctrl+F is the editor's own key, so
+					    it cannot answer when the focus is elsewhere. */}
+					<button
+						type="button"
+						className="editor__toggle"
+						aria-expanded={finding}
+						aria-label="Find in this document"
+						title={`Find (${shortcutLabel(FIND)})`}
+						aria-keyshortcuts={shortcutLabel(FIND)}
+						onClick={find}
+					>
+						{"\u2315"}
+					</button>
 					{/* Turned on and off while writing rather than set once,
 					    so it stays in reach instead of going in the panel
 					    above. */}
@@ -247,7 +270,10 @@ export default function Editor({
 					{/* Moving the caret is not an edit, or every click would
 					    mark the document unsaved. */}
 					<OnChangePlugin ignoreSelectionChange onChange={edited} />
-					<Shortcuts onToolbar={toggle} />
+					<Shortcuts onToolbar={toggle} onFind={find} />
+					{finding && (
+						<Find asked={asked} onClose={() => setFinding(false)} />
+					)}
 					<Focus on={preferences.focus} />
 					<Typewriter on={preferences.typewriter} />
 					<SlashMenu />
