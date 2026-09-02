@@ -28,6 +28,15 @@ export type RecentProject = {
 	lastOpened: string;
 };
 
+/**
+ * `project::RecentSummary` — the store's record of a project with the size of
+ * its writing flattened onto it, which is how Rust serializes it.
+ */
+export type RecentSummary = RecentProject & {
+	/** null when the project's manifest could not be read. */
+	words: number | null;
+};
+
 /** `document::DocumentView` */
 export type ProjectDocument = {
 	id: string;

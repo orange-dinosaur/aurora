@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
@@ -562,14 +562,64 @@ fn available_recents(store_path: &Path) -> Result<Vec<store::RecentProject>> {
 		.collect())
 }
 
+/// A remembered project as the welcome screen shows it: what the store holds,
+/// with the size of the writing counted from the files themselves.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentSummary {
+	#[serde(flatten)]
+	pub project: store::RecentProject,
+	/// None when the manifest could not be read, so the screen can leave the
+	/// count off rather than report a project as empty.
+	pub words: Option<usize>,
+}
+
+/// Every word in a project. Nothing caches this, so it opens each document
+/// once and keeps only the count.
+fn count_words(root: &Path) -> Option<usize> {
+	let manifest = read_manifest(root).ok()?;
+	Some(
+		manifest
+			.documents
+			.iter()
+			.map(|document| {
+				// The manifest is a file in the writer's project and could
+				// have been edited by hand, so a path that climbs out of the
+				// project is passed over rather than read.
+				let relative = Path::new(&document.path);
+				if !relative
+					.components()
+					.all(|part| matches!(part, Component::Normal(_)))
+				{
+					return 0;
+				}
+
+				fs::read_to_string(root.join(relative))
+					.map(|text| text.split_whitespace().count())
+					.unwrap_or(0)
+			})
+			.sum(),
+	)
+}
+
+fn summarise_recents(store_path: &Path) -> Result<Vec<RecentSummary>> {
+	Ok(available_recents(store_path)?
+		.into_iter()
+		.map(|project| RecentSummary {
+			words: count_words(&project.root),
+			project,
+		})
+		.collect())
+}
+
 #[tauri::command]
 pub fn open_project(app: AppHandle, root: PathBuf) -> Result<OpenedProject> {
 	open_and_remember(&store_path(&app)?, &root, OffsetDateTime::now_utc())
 }
 
 #[tauri::command]
-pub fn recent_projects(app: AppHandle) -> Result<Vec<store::RecentProject>> {
-	available_recents(&store_path(&app)?)
+pub fn recent_projects(app: AppHandle) -> Result<Vec<RecentSummary>> {
+	summarise_recents(&store_path(&app)?)
 }
 
 #[tauri::command]
@@ -1411,5 +1461,39 @@ mod tests {
 		let recents = available_recents(&store).unwrap();
 		assert_eq!(recents.len(), 1);
 		assert_eq!(recents[0].name, "Penelope");
+	}
+
+	#[test]
+	fn the_recent_list_counts_every_document_in_a_project() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		let manuscript = root.join("Manuscript");
+		fs::write(manuscript.join("Chapter 1.md"), "one two three").unwrap();
+		fs::write(manuscript.join("Chapter 2.md"), "four five").unwrap();
+		refresh(&root).unwrap();
+
+		let recents = summarise_recents(&store).unwrap();
+		assert_eq!(recents.len(), 1);
+		assert_eq!(recents[0].words, Some(5));
+	}
+
+	#[test]
+	fn a_document_pointing_out_of_the_project_is_not_counted() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		fs::write(parent.path().join("elsewhere.md"), "one two three").unwrap();
+		let mut manifest = read_manifest(&root).unwrap();
+		manifest.documents[0].path = "../elsewhere.md".into();
+		write_json(&root.join(MANIFEST_FILE), &manifest).unwrap();
+
+		assert_eq!(summarise_recents(&store).unwrap()[0].words, Some(0));
 	}
 }

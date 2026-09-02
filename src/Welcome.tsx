@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { FormatLayout, OpenProject, RecentProject } from "./types";
+import type { FormatLayout, OpenProject, RecentSummary } from "./types";
 import { when } from "./dates";
 import { failure } from "./errors";
 
@@ -45,6 +45,15 @@ function describe({ format, folders, available }: FormatLayout): Format {
 	};
 }
 
+// How big a project is and when it was last open. A project whose manifest
+// could not be read shows only the date, rather than a made-up count.
+function size(project: RecentSummary) {
+	const opened = when(project.lastOpened);
+	return project.words === null
+		? opened
+		: `${project.words.toLocaleString()} words · ${opened}`;
+}
+
 type Status =
 	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
 
@@ -61,7 +70,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 	const [formats, setFormats] = useState<Format[]>([]);
 	const [name, setName] = useState("");
 	const [parent, setParent] = useState<string | null>(null);
-	const [recents, setRecents] = useState<RecentProject[]>([]);
+	const [recents, setRecents] = useState<RecentSummary[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 
 	const chosen = formats.find((format) => format.id === selectedId) ?? null;
@@ -77,7 +86,7 @@ export default function Welcome({ notice, onOpened }: Props) {
 	}, []);
 
 	useEffect(() => {
-		invoke<RecentProject[]>("recent_projects")
+		invoke<RecentSummary[]>("recent_projects")
 			.then(setRecents)
 			.catch(() => setRecents([]));
 	}, []);
@@ -286,13 +295,11 @@ export default function Welcome({ notice, onOpened }: Props) {
 										void openProject(project.root)
 									}
 								>
-									<span className="recent__head">
-										<span className="recent__name">
-											{project.name}
-										</span>
-										<span className="recent__when">
-											{when(project.lastOpened)}
-										</span>
+									<span className="recent__name">
+										{project.name}
+									</span>
+									<span className="recent__size">
+										{size(project)}
 									</span>
 									<span className="recent__path">
 										{project.root}
