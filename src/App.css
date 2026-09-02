@@ -1215,6 +1215,62 @@ body,
 	font-variant-numeric: tabular-nums;
 }
 
+/* Indented, so the eye can run down the column of document names without the
+   lines under them getting in the way. */
+.search__hits {
+	display: flex;
+	flex-direction: column;
+	max-width: 40rem;
+	margin: 0.2rem 0 0;
+	padding: 0 0 0 0.9rem;
+	list-style: none;
+}
+
+.search__hit {
+	display: flex;
+	align-items: baseline;
+	gap: 0.45rem;
+	min-width: 0;
+	padding: 0.1rem 0;
+}
+
+/* One line each, whatever the paragraph behind it is doing. The text has
+   already been cut to a window around the match; the clipping here is only for
+   a window too narrow to hold even that. */
+.search__line {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-dim);
+	font-family: var(--serif);
+	font-size: 0.9375rem;
+	line-height: 1.4;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+/* A name reads as itself rather than as an excerpt of something longer. */
+.search__hit--title .search__line {
+	color: var(--text);
+}
+
+/* The same yellow Find paints on the page, so a hit looks like the thing it
+   will become once it is clicked through. */
+.search__match {
+	color: var(--text);
+	background: var(--find);
+	border-radius: 2px;
+}
+
+/* A name is not a position in any text, so its row says so rather than
+   pretending to be a line of the writing. */
+.search__kind {
+	flex: none;
+	color: var(--text-dim);
+	font-size: 0.7rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
 /* Out of flow wherever it appears; each surface says where. */
 .trash {
 	display: flex;

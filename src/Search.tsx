@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { contextOf, type Context } from "./context";
 import { failure } from "./errors";
 import { runsOf } from "./runs";
 import { MIN_QUERY, search, type Searchable } from "./search";
@@ -27,6 +28,30 @@ type Corpus =
  * first query waits: typing `Wren` should sweep once, not four times.
  */
 const SWEEP_MS = 250;
+
+/**
+ * A document's name with the query picked out of it. Search has already said
+ * the name matches, so the query is in there; if it somehow is not, the name
+ * is shown plain rather than nothing at all.
+ */
+function inTitle(title: string, query: string): Context {
+	const at = title.toLowerCase().indexOf(query.toLowerCase());
+
+	return at === -1
+		? { before: title, match: "", after: "" }
+		: contextOf(title, at, at + query.length);
+}
+
+/** One line of a document, with the match in it emphasised. */
+function Line({ before, match, after }: Context) {
+	return (
+		<>
+			{before}
+			<mark className="search__match">{match}</mark>
+			{after}
+		</>
+	);
+}
 
 export default function Search({ root, asked }: Props) {
 	const [query, setQuery] = useState("");
@@ -121,6 +146,38 @@ export default function Search({ root, asked }: Props) {
 									{group.count}
 								</span>
 							</p>
+
+							<ul className="search__hits">
+								{group.titleHit && (
+									<li className="search__hit search__hit--title">
+										<span className="search__kind">
+											Title
+										</span>
+										<span className="search__line">
+											<Line
+												{...inTitle(group.title, query)}
+											/>
+										</span>
+									</li>
+								)}
+
+								{group.hits.map((hit) => (
+									<li
+										key={hit.ordinal}
+										className="search__hit"
+									>
+										<span className="search__line">
+											<Line
+												{...contextOf(
+													hit.line,
+													hit.from,
+													hit.to,
+												)}
+											/>
+										</span>
+									</li>
+								))}
+							</ul>
 						</li>
 					))}
 				</ul>
