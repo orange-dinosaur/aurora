@@ -2,12 +2,14 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "./Icon";
 import { failure } from "./errors";
+import { SEARCH, shortcutLabel } from "./formatting";
 
 type Props = {
 	name: string;
 	root: string;
 	sidebar: boolean;
 	onSidebar: (open: boolean) => void;
+	onSearch: () => void;
 	// The manifest has been read again, so whatever is showing it should look
 	// at it afresh.
 	onRefreshed: () => void;
@@ -18,6 +20,7 @@ export default function Titlebar({
 	root,
 	sidebar,
 	onSidebar,
+	onSearch,
 	onRefreshed,
 }: Props) {
 	const [busy, setBusy] = useState(false);
@@ -45,6 +48,18 @@ export default function Titlebar({
 				{root}
 			</span>
 
+			{/* The one place search is reachable from in every configuration:
+			    the toolbar and the sidebar can both be hidden, and this
+			    cannot. */}
+			<button
+				type="button"
+				className="titlebar__button"
+				aria-label="Search this project"
+				title={`Search (${shortcutLabel(SEARCH)})`}
+				onClick={onSearch}
+			>
+				<Icon name="search" />
+			</button>
 			<button
 				type="button"
 				className="titlebar__button"

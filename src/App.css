@@ -1136,6 +1136,33 @@ body,
 	background: var(--bg);
 }
 
+.search {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	flex: 1;
+	min-height: 0;
+	padding: 1rem 0 0.5rem;
+	overflow-y: auto;
+}
+
+/* Wide enough for a phrase rather than a word: this is the field a whole line
+   of dialogue gets pasted into. */
+.search__field {
+	max-width: 32rem;
+	padding: 0.4rem 0.6rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+
+.search__note {
+	margin: 0;
+	color: var(--text-dim);
+}
+
 /* Out of flow wherever it appears; each surface says where. */
 .trash {
 	display: flex;

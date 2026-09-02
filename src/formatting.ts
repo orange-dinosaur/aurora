@@ -240,6 +240,11 @@ export const FIND: Keys = { key: "f", shift: false };
 /** The same panel, with replace already unfolded. */
 export const REPLACE: Keys = { key: "h", shift: false };
 
+/** Opens search across the whole project. Bound on the window rather than on
+ * an editor, the way the keys above are: the Search tab has no editor to hold
+ * it, and neither does the trash. */
+export const SEARCH: Keys = { key: "f", shift: true };
+
 /** Showing and hiding the column of headings. Like the bar, not an action. */
 export const OUTLINE: Keys = { key: "o", shift: true };
 

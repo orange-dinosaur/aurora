@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
+import Search from "./Search";
 import SectionView from "./SectionView";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
@@ -10,6 +11,7 @@ import Trash from "./Trash";
 import type { Preferences, ProjectDocument } from "./types";
 import { deleteDocument } from "./documents";
 import { failure } from "./errors";
+import { pressed, SEARCH } from "./formatting";
 
 type Props = {
 	name: string;
@@ -52,7 +54,12 @@ type TrashTab = {
 	key: string;
 };
 
-type Tab = DocumentTab | SectionTab | TrashTab;
+type SearchTab = {
+	kind: "search";
+	key: string;
+};
+
+type Tab = DocumentTab | SectionTab | TrashTab | SearchTab;
 
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
@@ -76,6 +83,13 @@ function strip(tab: Tab) {
 			};
 		case "trash":
 			return { key: tab.key, folder: null, title: "Trash", dirty: false };
+		case "search":
+			return {
+				key: tab.key,
+				folder: null,
+				title: "Search",
+				dirty: false,
+			};
 	}
 }
 
@@ -100,6 +114,9 @@ export default function Project({
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
+	// Bumped every time search is asked for, so asking again while its tab is
+	// already open reaches the field rather than doing nothing.
+	const [asked, setAsked] = useState(0);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
 
 	// A tab's key is its own, handed out when it opens and never derived from
@@ -243,6 +260,36 @@ export default function Project({
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
 	}
+
+	// Reached from the window as well as from the titlebar, so it reads the
+	// tabs through the ref rather than closing over them.
+	function openSearch() {
+		const already = latest.current.find((tab) => tab.kind === "search");
+		if (already === undefined) {
+			const opening: SearchTab = { kind: "search", key: freshKey() };
+			setTabs((open) => [...open, opening]);
+			setActiveKey(opening.key);
+		} else {
+			setActiveKey(already.key);
+		}
+		// Asking a second time is asking for the field, not for another tab.
+		setAsked((times) => times + 1);
+	}
+
+	// Bound on the window, unlike every other shortcut in Aurora. The ones in
+	// `Shortcuts` are registered on the editor and so are silent whenever no
+	// editor has focus — which is the trash, the overviews, and search itself.
+	useEffect(() => {
+		function onKeyDown(event: KeyboardEvent) {
+			if (pressed(event, SEARCH)) {
+				event.preventDefault();
+				openSearch();
+			}
+		}
+
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, []);
 
 	// A new document is opened for writing in, and every listing of it has to
 	// be read again.
@@ -489,6 +536,7 @@ export default function Project({
 				onSidebar={(open) =>
 					onPreferences({ ...preferences, sidebar: open })
 				}
+				onSearch={openSearch}
 				onRefreshed={() => setListing((version) => version + 1)}
 			/>
 
@@ -532,9 +580,15 @@ export default function Project({
 						    takes its undo history, its selection and its
 						    scroll position with it. Hiding is by visibility
 						    rather than display, which would drop the layout
-						    box and with it the scroll position. */}
+						    box and with it the scroll position.
+
+						    Search is here for the same reason and not the
+						    same one: going to a hit and coming back is the
+						    whole point of it being a tab, and a Search
+						    unmounted on the way out would come back with an
+						    empty field. */}
 						{tabs.map((tab) =>
-							tab.kind === "document" ? (
+							tab.kind === "document" || tab.kind === "search" ? (
 								<div
 									key={tab.key}
 									className={
@@ -543,7 +597,11 @@ export default function Project({
 											: "project__pane project__pane--hidden"
 									}
 								>
-									{documentBody(tab)}
+									{tab.kind === "document" ? (
+										documentBody(tab)
+									) : (
+										<Search asked={asked} />
+									)}
 								</div>
 							) : null,
 						)}
