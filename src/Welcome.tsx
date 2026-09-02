@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { FormatLayout, OpenProject, RecentProject } from "./types";
+import { when } from "./dates";
 import { failure } from "./errors";
 
 type Format = {
@@ -133,170 +134,184 @@ export default function Welcome({ notice, onOpened }: Props) {
 
 	return (
 		<section className="welcome">
-			<h1 className="welcome__title">Aurora</h1>
+			<div className="welcome__main">
+				<h1 className="welcome__title">Aurora</h1>
 
-			{stage === "format" ? (
-				<>
-					<p className="welcome__subtitle">
-						Choose a format and create a new writing project.
-					</p>
+				{stage === "format" ? (
+					<>
+						<p className="welcome__subtitle">
+							Choose a format and create a new writing project.
+						</p>
 
-					<fieldset className="formats">
-						<legend className="visually-hidden">Format</legend>
-						{formats.map((format) => (
-							<label key={format.id} className="format">
-								<input
-									type="radio"
-									name="format"
-									className="visually-hidden"
-									value={format.id}
-									checked={format.id === selectedId}
-									disabled={!format.available}
-									onChange={() => setSelectedId(format.id)}
-								/>
-								<span className="format__name">
-									{format.name}
-									{!format.available && (
-										<span className="format__soon">
-											Soon
+						<fieldset className="formats">
+							<legend className="visually-hidden">Format</legend>
+							{formats.map((format) => (
+								<label key={format.id} className="format">
+									<input
+										type="radio"
+										name="format"
+										className="visually-hidden"
+										value={format.id}
+										checked={format.id === selectedId}
+										disabled={!format.available}
+										onChange={() =>
+											setSelectedId(format.id)
+										}
+									/>
+									<span className="format__name">
+										{format.name}
+										{!format.available && (
+											<span className="format__soon">
+												Soon
+											</span>
+										)}
+									</span>
+									<span className="format__description">
+										{format.description}
+									</span>
+									{format.folders.length > 0 && (
+										<span className="format__files">
+											{format.folders.join(" · ")}
 										</span>
 									)}
-								</span>
-								<span className="format__description">
-									{format.description}
-								</span>
-								{format.folders.length > 0 && (
-									<span className="format__files">
-										{format.folders.join(" · ")}
-									</span>
-								)}
-							</label>
-						))}
-					</fieldset>
-
-					<button
-						type="button"
-						className="welcome__create"
-						disabled={chosen === null || busy}
-						onClick={() => {
-							setStage("details");
-							setReason(null);
-						}}
-					>
-						Continue
-					</button>
-
-					<div className="existing">
-						<h2 className="existing__title">
-							Or open an existing project
-						</h2>
-
-						{recents.length > 0 && (
-							<ul className="recents">
-								{recents.map((project) => (
-									<li key={project.root}>
-										<button
-											type="button"
-											className="recent"
-											disabled={busy}
-											onClick={() =>
-												void openProject(project.root)
-											}
-										>
-											<span className="recent__name">
-												{project.name}
-											</span>
-											<span className="recent__path">
-												{project.root}
-											</span>
-										</button>
-									</li>
-								))}
-							</ul>
-						)}
+								</label>
+							))}
+						</fieldset>
 
 						<button
 							type="button"
-							className="welcome__back"
-							disabled={busy}
-							onClick={() => void browseForProject()}
-						>
-							Select folder…
-						</button>
-					</div>
-				</>
-			) : (
-				chosen && (
-					<>
-						<p className="welcome__subtitle">
-							Name your {chosen.name.toLowerCase()} and choose
-							where it should live.
-						</p>
-
-						<form
-							className="setup"
-							onSubmit={(event) => {
-								event.preventDefault();
-								void createProject();
+							className="welcome__create"
+							disabled={chosen === null || busy}
+							onClick={() => {
+								setStage("details");
+								setReason(null);
 							}}
 						>
-							<label
-								className="setup__label"
-								htmlFor="project-name"
-							>
-								Project name
-							</label>
-							<input
-								id="project-name"
-								className="setup__input"
-								value={name}
-								placeholder="Ithaca"
-								autoComplete="off"
-								autoFocus
-								spellCheck={false}
-								onChange={(event) => {
-									setName(event.target.value);
-									setStatus({ kind: "idle" });
-								}}
-							/>
-
-							<span className="setup__label">Location</span>
-							<button
-								type="button"
-								className="setup__folder"
-								onClick={() => void chooseFolder()}
-							>
-								{parent ?? "Choose a folder…"}
-							</button>
-
-							<p className="setup__note">
-								Aurora will create {chosen.folders.join(", ")}.
+							Continue
+						</button>
+					</>
+				) : (
+					chosen && (
+						<>
+							<p className="welcome__subtitle">
+								Name your {chosen.name.toLowerCase()} and choose
+								where it should live.
 							</p>
 
-							<div className="setup__actions">
-								<button
-									type="submit"
-									className="welcome__create"
-									disabled={!ready}
+							<form
+								className="setup"
+								onSubmit={(event) => {
+									event.preventDefault();
+									void createProject();
+								}}
+							>
+								<label
+									className="setup__label"
+									htmlFor="project-name"
 								>
-									{busy ? "Creating…" : "Create project"}
-								</button>
-								<button
-									type="button"
-									className="welcome__back"
-									disabled={busy}
-									onClick={() => {
-										setStage("format");
+									Project name
+								</label>
+								<input
+									id="project-name"
+									className="setup__input"
+									value={name}
+									placeholder="Ithaca"
+									autoComplete="off"
+									autoFocus
+									spellCheck={false}
+									onChange={(event) => {
+										setName(event.target.value);
 										setStatus({ kind: "idle" });
 									}}
+								/>
+
+								<span className="setup__label">Location</span>
+								<button
+									type="button"
+									className="setup__folder"
+									onClick={() => void chooseFolder()}
 								>
-									Back
+									{parent ?? "Choose a folder…"}
 								</button>
-							</div>
-						</form>
-					</>
-				)
-			)}
+
+								<p className="setup__note">
+									Aurora will create{" "}
+									{chosen.folders.join(", ")}.
+								</p>
+
+								<div className="setup__actions">
+									<button
+										type="submit"
+										className="welcome__create"
+										disabled={!ready}
+									>
+										{busy ? "Creating…" : "Create project"}
+									</button>
+									<button
+										type="button"
+										className="welcome__back"
+										disabled={busy}
+										onClick={() => {
+											setStage("format");
+											setStatus({ kind: "idle" });
+										}}
+									>
+										Back
+									</button>
+								</div>
+							</form>
+						</>
+					)
+				)}
+			</div>
+
+			{/* Outside the stage, so choosing a format never takes the
+			    writer's own projects off the screen. */}
+			<aside className="opening">
+				<h2 className="opening__title">Open a project</h2>
+
+				{recents.length === 0 ? (
+					<p className="opening__none">
+						Nothing has been opened yet.
+					</p>
+				) : (
+					<ul className="recents">
+						{recents.map((project) => (
+							<li key={project.root}>
+								<button
+									type="button"
+									className="recent"
+									disabled={busy}
+									onClick={() =>
+										void openProject(project.root)
+									}
+								>
+									<span className="recent__head">
+										<span className="recent__name">
+											{project.name}
+										</span>
+										<span className="recent__when">
+											{when(project.lastOpened)}
+										</span>
+									</span>
+									<span className="recent__path">
+										{project.root}
+									</span>
+								</button>
+							</li>
+						))}
+					</ul>
+				)}
+
+				<button
+					type="button"
+					className="welcome__back"
+					disabled={busy}
+					onClick={() => void browseForProject()}
+				>
+					Select folder…
+				</button>
+			</aside>
 
 			<p
 				className={

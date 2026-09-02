@@ -154,12 +154,25 @@ body,
    centred flex item cannot be scrolled to. */
 .welcome {
 	position: relative;
+	display: grid;
+	grid-template-columns: 1.35fr 1fr;
+	align-items: start;
+	gap: 2rem;
 	width: 100%;
-	/* The padding is inside the box, so the reading column is still 720px. */
-	max-width: calc(720px + 4rem);
+	/* The padding is inside the box, so the two columns still have 1000px. */
+	max-width: calc(1000px + 4rem);
 	padding: 2rem;
 	margin: auto;
-	text-align: center;
+	text-align: left;
+}
+
+/* One column under a window too narrow to hold both. The panel goes below the
+   create flow rather than above it: what is on screen first should be the
+   thing this screen exists to do. */
+@media (max-width: 60rem) {
+	.welcome {
+		grid-template-columns: 1fr;
+	}
 }
 
 .welcome__title {
@@ -190,7 +203,8 @@ body,
 
 .formats {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	/* Two across the left column, one when the panel has dropped below. */
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 	gap: 1rem;
 	margin: 0 0 2rem;
 	padding: 0;
@@ -270,7 +284,7 @@ body,
 	padding: 0.6rem 1.5rem;
 	font: inherit;
 	font-weight: 500;
-	color: #fff;
+	color: var(--bg);
 	background: var(--accent);
 	border: none;
 	border-radius: 8px;
@@ -288,7 +302,7 @@ body,
 	align-items: center;
 	gap: 0.75rem 1rem;
 	max-width: 520px;
-	margin: 0 auto;
+	margin: 0;
 	text-align: left;
 }
 
@@ -361,12 +375,15 @@ body,
 	cursor: not-allowed;
 }
 
-/* Out of flow, so a message appearing cannot re-centre the screen above it. */
+/* Out of flow at the foot of the screen, so a message appearing cannot move
+   either column. Anchored by its bottom edge, it grows upward into the inset
+   rather than pushing the page taller. */
 .welcome__message {
 	position: absolute;
-	right: 0;
-	left: 0;
-	margin: 1.25rem 0 0;
+	bottom: 0.5rem;
+	right: 2rem;
+	left: 2rem;
+	margin: 0;
 	font-size: 0.9rem;
 	color: var(--text-dim);
 	overflow-wrap: anywhere;
@@ -2113,18 +2130,27 @@ body,
 	overflow-wrap: anywhere;
 }
 
-.existing {
-	margin-top: 2.5rem;
-	padding-top: 1.5rem;
-	border-top: 1px solid var(--border);
+/* Chrome rather than paper: the panel is a way back into work that already
+   exists, not part of the decision being made beside it. */
+.opening {
+	padding: 1.25rem;
+	background: var(--bg-chrome);
+	border: 1px solid var(--border);
+	border-radius: 12px;
 }
 
-.existing__title {
+.opening__title {
 	margin: 0 0 1rem;
-	font-size: 0.8rem;
-	font-weight: 500;
-	letter-spacing: 0.06em;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
 	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.opening__none {
+	margin: 0 0 1rem;
+	font-size: 0.85rem;
 	color: var(--text-dim);
 }
 
@@ -2161,9 +2187,28 @@ body,
 	cursor: not-allowed;
 }
 
+.recent__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
 .recent__name {
 	font-family: var(--serif);
-	font-weight: 500;
+	font-size: 1.0625rem;
+	line-height: 1.3;
+	font-weight: 400;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.recent__when {
+	flex: none;
+	font-size: 0.6875rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+	opacity: 0.7;
 }
 
 .recent__path {
