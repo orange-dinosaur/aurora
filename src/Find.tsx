@@ -2,16 +2,16 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import {
 	$createRangeSelection,
 	$getNodeByKey,
-	$getRoot,
 	$setSelection,
 	HISTORY_PUSH_TAG,
 	TextNode,
 	type LexicalEditor,
 } from "lexical";
 import { useEffect, useRef, useState } from "react";
-import { matches, type Match, type Run } from "./find";
+import { matches, type Match } from "./find";
 import { REPLACE, shortcutLabel } from "./formatting";
 import Icon from "./Icon";
+import { $runs } from "./runs";
 
 type Props = {
 	/** Counts the times find has been asked for, so a second ask can answer. */
@@ -25,17 +25,6 @@ type Props = {
 // stand out from the others without anything in the document changing.
 const OTHERS = "aurora-find";
 const CURRENT = "aurora-find-current";
-
-/** The runs of text the document is made of, in reading order. */
-function $runs(): Run[] {
-	return $getRoot()
-		.getAllTextNodes()
-		.map((node) => ({
-			key: node.getKey(),
-			text: node.getTextContent(),
-			block: node.getTopLevelElementOrThrow().getKey(),
-		}));
-}
 
 // Lexical renders every run of text as a span with a single text node inside
 // it, which is what a Range has to be built from.
