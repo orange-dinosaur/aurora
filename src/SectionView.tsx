@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
+import Icon from "./Icon";
 import NameField from "./NameField";
 import type { DocumentSummary, ProjectDocument } from "./types";
 import { createDocument, renameDocument, reorderDocument } from "./documents";
@@ -46,6 +48,14 @@ function counted(words: number, target: number | null) {
 		return `${words.toLocaleString()} of ${target.toLocaleString()} words`;
 	}
 	return words === 1 ? "1 word" : `${words.toLocaleString()} words`;
+}
+
+// What the folder amounts to, for the line under its name.
+function summarised(documents: DocumentSummary[]) {
+	const words = documents.reduce((total, one) => total + one.words, 0);
+	const kept =
+		documents.length === 1 ? "1 document" : `${documents.length} documents`;
+	return `${kept} · ${words.toLocaleString()} words`;
 }
 
 export default function SectionView({
@@ -129,7 +139,9 @@ export default function SectionView({
 	if (status.kind === "busy" && documents.length === 0) {
 		return (
 			<div className="overview">
-				<h2 className="overview__title">{folder}</h2>
+				<header className="overview__header">
+					<h2 className="overview__title">{folder}</h2>
+				</header>
 				<p className="overview__note">Reading…</p>
 			</div>
 		);
@@ -137,7 +149,20 @@ export default function SectionView({
 
 	return (
 		<div className="overview">
-			<h2 className="overview__title">{folder}</h2>
+			<header className="overview__header">
+				<div className="overview__heading">
+					<h2 className="overview__title">{folder}</h2>
+					<p className="overview__count">{summarised(documents)}</p>
+				</div>
+				<button
+					type="button"
+					className="overview__new"
+					onClick={() => setNaming({ kind: "open" })}
+				>
+					<Icon name="plus" />
+					New document
+				</button>
+			</header>
 
 			<ul className="cards">
 				{documents.map((document, at) =>
@@ -175,6 +200,9 @@ export default function SectionView({
 								className="card"
 								onClick={() => onSelect(document)}
 							>
+								<span className="card__ordinal">
+									{String(at + 1).padStart(2, "0")}
+								</span>
 								<span className="card__title">
 									{document.title}
 								</span>
@@ -186,6 +214,19 @@ export default function SectionView({
 										? "This document’s file is no longer there"
 										: `${counted(document.words, document.target)} · ${when(document.modified)}`}
 								</span>
+								{/* The line above is the real report; this is
+								    only its shape, and there is nothing to
+								    draw until a target is set. */}
+								{document.target !== null && (
+									<span
+										className="editor__progress card__progress"
+										style={
+											{
+												"--progress": `${Math.min(100, (document.words / document.target) * 100)}%`,
+											} as CSSProperties
+										}
+									/>
+								)}
 							</button>
 							<DocumentMenu
 								label={`Actions for ${document.title}`}
