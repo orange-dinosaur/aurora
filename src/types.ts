@@ -58,6 +58,15 @@ export type DocumentSummary = ProjectDocument & {
 	modified: string | null;
 };
 
+/**
+ * `document::DocumentText` — a document with the whole of its text flattened
+ * onto it, which is how Rust serializes it.
+ */
+export type DocumentText = ProjectDocument & {
+	/** null when the file could not be read, which search reports. */
+	text: string | null;
+};
+
 /** `document::SectionDocuments` */
 export type SectionDocuments = {
 	folder: string;

@@ -18,6 +18,7 @@ pub fn run() {
 			document::list_documents,
 			document::refresh_documents,
 			document::read_document,
+			document::read_all_documents,
 			document::write_document,
 			document::restore_document,
 			document::section_overview,

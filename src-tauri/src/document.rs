@@ -109,6 +109,17 @@ pub struct SectionDocuments {
 	pub documents: Vec<DocumentView>,
 }
 
+/// A document and the whole of its text, for reading the project in one go.
+/// The text is `None` when the file could not be read, which the front end
+/// shows rather than swallows: a document nobody could look at must not read
+/// as a document with nothing in it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DocumentText {
+	#[serde(flatten)]
+	pub document: DocumentView,
+	pub text: Option<String>,
+}
+
 /// The `.md` files in each of the project's sections, as paths relative to the
 /// root. Sections keep the order they are given and files within one are
 /// sorted. Anything else is ignored: other extensions, nested folders, symlinks
@@ -832,6 +843,32 @@ pub fn section_overview(root: PathBuf, section: String) -> Result<Vec<DocumentSu
 			Ok(path) => summarise(document, &path),
 			// A vanished file, or one the manifest points outside the project.
 			Err(_) => DocumentSummary::blank(document),
+		})
+		.collect())
+}
+
+/// Every document in the project with its text, in manifest order. One call
+/// rather than one per document: the search reads the whole project on the
+/// first query, and a round trip per file would be the bulk of that cost.
+#[tauri::command]
+pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+
+	Ok(manifest
+		.documents
+		.iter()
+		.map(|document| DocumentText {
+			document: document.into(),
+			// A file that has vanished, is not UTF-8, or that the manifest
+			// points outside the project, costs that one document rather than
+			// the whole search.
+			text: resolve(&manifest, &root, document.id)
+				.and_then(|path| String::from_utf8(fs::read(path)?).map_err(|_| Error::NotText))
+				.ok(),
 		})
 		.collect())
 }
@@ -2592,6 +2629,70 @@ mod tests {
 	fn writing_refuses_a_relative_path() {
 		let err =
 			write_document(PathBuf::from("some/where"), Uuid::new_v4(), String::new()).unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn every_document_comes_back_with_its_text() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(root.join("Manuscript/Chapter 1.md"), "Wren went down.").unwrap();
+		fs::write(root.join("Notes/Notes.md"), "Ask about Wren.").unwrap();
+
+		let all = read_all_documents(root.clone()).unwrap();
+
+		assert_eq!(
+			all.iter()
+				.map(|d| d.document.path.as_str())
+				.collect::<Vec<_>>(),
+			[
+				"Manuscript/Chapter 1.md",
+				"Outline/Outline.md",
+				"Characters/Characters.md",
+				"Locations/Locations.md",
+				"Notes/Notes.md",
+			],
+			"manifest order, which is the order the sidebar shows"
+		);
+		assert_eq!(all[0].text.as_deref(), Some("Wren went down."));
+		assert_eq!(all[4].text.as_deref(), Some("Ask about Wren."));
+		assert_eq!(all[0].document.title, "Chapter 1");
+		assert_eq!(all[0].document.folder, "Manuscript");
+	}
+
+	#[test]
+	fn a_document_whose_file_has_gone_comes_back_without_text() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(root.join("Notes/Notes.md"), "still here").unwrap();
+		fs::remove_file(root.join("Manuscript/Chapter 1.md")).unwrap();
+
+		let all = read_all_documents(root).unwrap();
+
+		assert_eq!(all.len(), 5, "it is still listed, so search can name it");
+		assert!(all[0].text.is_none());
+		assert_eq!(
+			all[4].text.as_deref(),
+			Some("still here"),
+			"one unreadable file does not cost the rest"
+		);
+	}
+
+	#[test]
+	fn reading_everything_does_not_read_a_document_outside_the_project() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(parent.path().join("secrets.md"), "not yours").unwrap();
+		set_document_path(&root, 0, "../secrets.md");
+
+		let all = read_all_documents(root).unwrap();
+
+		assert!(all[0].text.is_none());
+	}
+
+	#[test]
+	fn reading_everything_refuses_a_relative_path() {
+		let err = read_all_documents(PathBuf::from("some/where")).unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
 	}
 }
