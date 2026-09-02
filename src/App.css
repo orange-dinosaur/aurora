@@ -2187,11 +2187,13 @@ body,
 	cursor: not-allowed;
 }
 
+/* Sans, unlike the card and trash titles it is otherwise built like. Those
+   name a piece of writing; this names a folder on disk, and it sits among the
+   sans of the formats beside it. */
 .recent__name {
-	font-family: var(--serif);
-	font-size: 1.0625rem;
+	font-size: 0.9375rem;
 	line-height: 1.3;
-	font-weight: 400;
+	font-weight: 500;
 	overflow-wrap: anywhere;
 }
 
