@@ -1,6 +1,7 @@
 pub mod document;
 pub mod project;
 pub mod store;
+pub mod tree;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
