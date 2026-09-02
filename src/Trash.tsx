@@ -53,7 +53,9 @@ export default function Trash({ root, reload, onChanged }: Props) {
 	if (status.kind === "busy" && entries.length === 0) {
 		return (
 			<div className="overview">
-				<h2 className="overview__title">Trash</h2>
+				<header className="overview__header">
+					<h2 className="overview__title">Trash</h2>
+				</header>
 				<p className="overview__note">Reading…</p>
 			</div>
 		);
@@ -61,7 +63,9 @@ export default function Trash({ root, reload, onChanged }: Props) {
 
 	return (
 		<div className="overview">
-			<h2 className="overview__title">Trash</h2>
+			<header className="overview__header">
+				<h2 className="overview__title">Trash</h2>
+			</header>
 
 			{entries.length === 0 ? (
 				<p className="overview__note">Nothing has been deleted.</p>
