@@ -1174,24 +1174,65 @@ body,
 }
 
 /* The scroller is here rather than on .search, so nothing clips the field's
-   focus ring. */
+   focus ring, and it holds the unreadable documents as well so they scroll
+   with the results instead of pinning themselves to the foot of the tab. */
+.search__results {
+	min-height: 0;
+	padding: 0 0 0.5rem;
+	overflow-y: auto;
+}
+
 .search__groups {
 	display: flex;
 	flex-direction: column;
 	gap: 0.4rem;
-	min-height: 0;
 	margin: 0;
-	padding: 0 0 0.5rem;
+	padding: 0;
 	list-style: none;
-	overflow-y: auto;
 }
 
+/* A row that opens and closes the hits under it. It has to be a button to be
+   reachable by keyboard, and has to look like a line of a list rather than a
+   control. */
 .search__document {
 	display: flex;
 	align-items: baseline;
 	gap: 0.6rem;
+	width: 100%;
 	max-width: 40rem;
 	margin: 0;
+	padding: 0.15rem 0.25rem;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	background: none;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.search__document:hover {
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.search__document:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+/* An unreadable document takes the shape of a row without the behaviour: there
+   is nothing under it to open. */
+.search__document--plain,
+.search__document--plain:hover {
+	cursor: default;
+	background: none;
+}
+
+/* Sitting with the line rather than on its baseline. */
+.search__document .icon {
+	flex: none;
+	align-self: center;
+	color: var(--text-dim);
 }
 
 /* Serif, because it names a piece of writing. The folder beside it does not. */
@@ -1215,14 +1256,14 @@ body,
 	font-variant-numeric: tabular-nums;
 }
 
-/* Indented, so the eye can run down the column of document names without the
-   lines under them getting in the way. */
+/* Indented to under the document's name, past its chevron, so the eye can run
+   down the column of names without the lines under them getting in the way. */
 .search__hits {
 	display: flex;
 	flex-direction: column;
 	max-width: 40rem;
 	margin: 0.2rem 0 0;
-	padding: 0 0 0 0.9rem;
+	padding: 0 0 0 1.85rem;
 	list-style: none;
 }
 
@@ -1269,6 +1310,45 @@ body,
 	font-size: 0.7rem;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
+}
+
+/* Reads as one more row of the list rather than as a call to action. */
+.search__more {
+	padding: 0.1rem 0.3rem;
+	color: var(--text-dim);
+	font: inherit;
+	font-size: 0.85rem;
+	background: none;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.search__more:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.search__more:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+/* Below the results and after a gap of its own, so a document turning out to
+   be unreadable moves nothing above it. */
+.search__unreadable {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	margin-top: 1.25rem;
+}
+
+.search__unread {
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 /* Out of flow wherever it appears; each surface says where. */
