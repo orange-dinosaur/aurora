@@ -2,15 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { contextOf, type Context } from "./context";
 import { failure } from "./errors";
+import type { Seed } from "./find";
 import Icon from "./Icon";
 import { runsOf } from "./runs";
 import { MIN_QUERY, search, type Searchable } from "./search";
-import type { DocumentText } from "./types";
+import type { DocumentText, ProjectDocument } from "./types";
 
 type Props = {
 	root: string;
 	/** Counts the times search has been asked for, so a second ask can answer. */
 	asked: number;
+	/** Opens a document, on a hit when there is one to open it on. */
+	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 };
 
 /**
@@ -21,7 +24,16 @@ type Props = {
 type Corpus =
 	| { kind: "unread" }
 	| { kind: "reading" }
-	| { kind: "ready"; documents: Searchable[] }
+	| {
+			kind: "ready";
+			documents: Searchable[];
+			/**
+			 * The documents themselves, by id. A result row knows an id; what
+			 * it takes to open a tab is the whole document, and this is where
+			 * the read that found it left one.
+			 */
+			known: Map<string, ProjectDocument>;
+	  }
 	| { kind: "failed"; message: string };
 
 /**
@@ -86,7 +98,7 @@ function Line({ before, match, after }: Context) {
 	);
 }
 
-export default function Search({ root, asked }: Props) {
+export default function Search({ root, asked, onOpen }: Props) {
 	const [query, setQuery] = useState("");
 	const [corpus, setCorpus] = useState<Corpus>({ kind: "unread" });
 	const [opened, setOpened] = useState<Opened>(FRESH);
@@ -120,6 +132,12 @@ export default function Search({ root, asked }: Props) {
 								runs: text === null ? null : runsOf(text),
 							}),
 						),
+						known: new Map(
+							documents.map(({ text: _text, ...document }) => [
+								document.id,
+								document,
+							]),
+						),
 					});
 				})
 				.catch((error: unknown) => {
@@ -148,6 +166,16 @@ export default function Search({ root, asked }: Props) {
 
 	function showAll(id: string) {
 		setOpened({ ...view, query, full: new Set(view.full).add(id) });
+	}
+
+	// A row that is on screen came out of the corpus, so its document is in
+	// hand; nothing happens if it somehow is not.
+	function openTab(id: string, seed: Seed | null) {
+		const known =
+			corpus.kind === "ready" ? corpus.known.get(id) : undefined;
+		if (known !== undefined) {
+			onOpen(known, seed);
+		}
 	}
 
 	return (
@@ -215,18 +243,33 @@ export default function Search({ root, asked }: Props) {
 									{open && (
 										<ul className="search__hits">
 											{group.titleHit && (
-												<li className="search__hit search__hit--title">
-													<span className="search__kind">
-														Title
-													</span>
-													<span className="search__line">
-														<Line
-															{...inTitle(
-																group.title,
-																query,
-															)}
-														/>
-													</span>
+												<li>
+													{/* A name is nowhere in
+													    the text, so this one
+													    opens the document and
+													    seeds nothing. */}
+													<button
+														type="button"
+														className="search__hit search__hit--title"
+														onClick={() =>
+															openTab(
+																group.id,
+																null,
+															)
+														}
+													>
+														<span className="search__kind">
+															Title
+														</span>
+														<span className="search__line">
+															<Line
+																{...inTitle(
+																	group.title,
+																	query,
+																)}
+															/>
+														</span>
+													</button>
 												</li>
 											)}
 
@@ -234,24 +277,33 @@ export default function Search({ root, asked }: Props) {
 												? group.hits.slice(0, CAP)
 												: group.hits
 											).map((hit) => (
-												<li
-													key={hit.ordinal}
-													className="search__hit"
-												>
-													<span className="search__line">
-														<Line
-															{...contextOf(
-																hit.line,
-																hit.from,
-																hit.to,
-															)}
-														/>
-													</span>
+												<li key={hit.ordinal}>
+													<button
+														type="button"
+														className="search__hit"
+														onClick={() =>
+															openTab(group.id, {
+																query,
+																ordinal:
+																	hit.ordinal,
+															})
+														}
+													>
+														<span className="search__line">
+															<Line
+																{...contextOf(
+																	hit.line,
+																	hit.from,
+																	hit.to,
+																)}
+															/>
+														</span>
+													</button>
 												</li>
 											))}
 
 											{capped && (
-												<li className="search__hit">
+												<li>
 													<button
 														type="button"
 														className="search__more"
@@ -279,16 +331,21 @@ export default function Search({ root, asked }: Props) {
 							</p>
 							<ul className="search__unread">
 								{results.unreadable.map((document) => (
-									<li
-										key={document.id}
-										className="search__document search__document--plain"
-									>
-										<span className="search__title">
-											{document.title}
-										</span>
-										<span className="search__folder">
-											{document.folder}
-										</span>
+									<li key={document.id}>
+										<button
+											type="button"
+											className="search__document"
+											onClick={() =>
+												openTab(document.id, null)
+											}
+										>
+											<span className="search__title">
+												{document.title}
+											</span>
+											<span className="search__folder">
+												{document.folder}
+											</span>
+										</button>
 									</li>
 								))}
 							</ul>

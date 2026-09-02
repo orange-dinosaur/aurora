@@ -8,7 +8,7 @@ import {
 	type LexicalEditor,
 } from "lexical";
 import { useEffect, useRef, useState } from "react";
-import { matches, type Match } from "./find";
+import { matches, type Match, type Seed } from "./find";
 import { REPLACE, shortcutLabel } from "./formatting";
 import Icon from "./Icon";
 import { $runs } from "./runs";
@@ -16,6 +16,8 @@ import { $runs } from "./runs";
 type Props = {
 	/** Counts the times find has been asked for, so a second ask can answer. */
 	asked: number;
+	/** What a hit clicked in search asked to be found, or null for a plain open. */
+	seed: Seed | null;
 	replacing: boolean;
 	onReplacing: (on: boolean) => void;
 	onClose: () => void;
@@ -116,6 +118,7 @@ function land(editor: LexicalEditor, match: Match) {
  */
 export default function Find({
 	asked,
+	seed,
 	replacing,
 	onReplacing,
 	onClose,
@@ -133,6 +136,17 @@ export default function Find({
 		input.current?.focus();
 		input.current?.select();
 	}, [asked]);
+
+	// A hit clicked in search. Each click is a new seed, so clicking the same
+	// hit twice puts the panel back on it after the writer has wandered off.
+	useEffect(() => {
+		if (seed === null) {
+			return;
+		}
+
+		setQuery(seed.query);
+		setAt(seed.ordinal);
+	}, [seed]);
 
 	// Matches are read from the document rather than kept: an edit, an undo or
 	// a document arriving from disk all have to be answered the same way.

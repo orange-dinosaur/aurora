@@ -10,6 +10,7 @@ import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import type { Preferences, ProjectDocument } from "./types";
 import { deleteDocument } from "./documents";
+import type { Seed } from "./find";
 import { failure } from "./errors";
 import { pressed, SEARCH } from "./formatting";
 
@@ -41,6 +42,8 @@ type DocumentTab = {
 	document: ProjectDocument;
 	content: Content;
 	save: Save;
+	/** What search asked Find to open on here, or null if nothing did. */
+	seed: Seed | null;
 };
 
 type SectionTab = {
@@ -208,10 +211,18 @@ export default function Project({
 		);
 	}
 
-	async function openDocument(document: ProjectDocument) {
+	async function openDocument(
+		document: ProjectDocument,
+		seed: Seed | null = null,
+	) {
 		const already = documentTab(document.id);
 		if (already !== undefined) {
 			setActiveKey(already.key);
+			// The tab was already here, so the seed is the only news: the
+			// editor is mounted and Find answers it where it stands.
+			if (seed !== null) {
+				patch(document.id, (tab) => ({ ...tab, seed }));
+			}
 			return;
 		}
 
@@ -221,6 +232,7 @@ export default function Project({
 			document,
 			content: { kind: "loading" },
 			save: { kind: "clean" },
+			seed,
 		};
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
@@ -502,6 +514,7 @@ export default function Project({
 					missing={tab.save.kind === "missing"}
 					error={tab.save.kind === "failed" ? tab.save.message : null}
 					target={tab.document.target}
+					seed={tab.seed}
 					preferences={preferences}
 					onChange={(text) => edit(tab.document.id, text)}
 					onRestore={() => void restore(tab.document.id)}
@@ -600,7 +613,16 @@ export default function Project({
 									{tab.kind === "document" ? (
 										documentBody(tab)
 									) : (
-										<Search root={root} asked={asked} />
+										<Search
+											root={root}
+											asked={asked}
+											onOpen={(document, seed) =>
+												void openDocument(
+													document,
+													seed,
+												)
+											}
+										/>
 									)}
 								</div>
 							) : null,

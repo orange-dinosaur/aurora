@@ -10,13 +10,14 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { EditorState, EditorThemeClasses } from "lexical";
 import Icon from "./Icon";
 import type { Preferences } from "./types";
-import { useCallback, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import {
 	$fromMarkdown,
 	$toMarkdown,
 	EDITOR_NODES,
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
+import type { Seed } from "./find";
 import { FIND, OUTLINE, shortcutLabel, TOOLBAR } from "./formatting";
 import Find from "./Find";
 import Focus from "./Focus";
@@ -88,6 +89,8 @@ type Props = {
 	missing: boolean;
 	error: string | null;
 	target: number | null;
+	/** A hit clicked in search, which opens Find on that word. */
+	seed: Seed | null;
 	preferences: Preferences;
 	onChange: (text: string) => void;
 	onRestore: () => void;
@@ -103,6 +106,7 @@ export default function Editor({
 	missing,
 	error,
 	target,
+	seed,
 	preferences,
 	onChange,
 	onRestore,
@@ -137,6 +141,18 @@ export default function Editor({
 		setReplacing(true);
 		setAsked((times) => times + 1);
 	}, []);
+	// A hit clicked in search opens the panel on that word. The seed is a new
+	// object per click, so this answers a second click on the same hit as well
+	// as the first, and it fires on mount for a document that search opened.
+	useEffect(() => {
+		if (seed === null) {
+			return;
+		}
+
+		setFinding(true);
+		setAsked((times) => times + 1);
+	}, [seed]);
+
 	const edited = useCallback(
 		(state: EditorState) => {
 			const markdown = state.read(() => $toMarkdown());
@@ -315,6 +331,7 @@ export default function Editor({
 					{finding && (
 						<Find
 							asked={asked}
+							seed={seed}
 							replacing={replacing}
 							onReplacing={setReplacing}
 							onClose={() => {

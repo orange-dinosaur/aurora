@@ -1220,14 +1220,6 @@ body,
 	outline-offset: 1px;
 }
 
-/* An unreadable document takes the shape of a row without the behaviour: there
-   is nothing under it to open. */
-.search__document--plain,
-.search__document--plain:hover {
-	cursor: default;
-	background: none;
-}
-
 /* Sitting with the line rather than on its baseline. */
 .search__document .icon {
 	flex: none;
@@ -1263,16 +1255,35 @@ body,
 	flex-direction: column;
 	max-width: 40rem;
 	margin: 0.2rem 0 0;
-	padding: 0 0 0 1.85rem;
+	padding: 0 0 0 1.6rem;
 	list-style: none;
 }
 
+/* A button, because clicking it opens the document on this hit, and it lines
+   up under the document's name as though it were still just a line. */
 .search__hit {
 	display: flex;
 	align-items: baseline;
 	gap: 0.45rem;
+	width: 100%;
 	min-width: 0;
-	padding: 0.1rem 0;
+	padding: 0.1rem 0.25rem;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	background: none;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.search__hit:hover {
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.search__hit:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 /* One line each, whatever the paragraph behind it is doing. The text has
@@ -2120,6 +2131,15 @@ body,
 .editor__find-do:disabled {
 	color: var(--text-dim);
 	cursor: default;
+}
+
+/* Nothing in the panel had a ring of its own, so every control in it took the
+   webview's blue. The panel's own padding leaves room for this. */
+.editor__find-input:focus-visible,
+.editor__find-step:focus-visible,
+.editor__find-do:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 /* The two paint layers. Only a handful of properties are allowed here, which

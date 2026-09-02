@@ -12,6 +12,19 @@ export type Run = {
 	block: string;
 };
 
+/**
+ * What Find is opened on when the writer clicks a hit in project-wide search.
+ * A position in the file would not survive the trip — Find works in the
+ * editor's nodes, and the search that found this one worked on a different
+ * editor's — so the hit travels as the query and which occurrence of it this
+ * is. Find counts the matches itself and steps to that one.
+ */
+export type Seed = {
+	query: string;
+	/** Counting from zero, in reading order, as `matches` returns them. */
+	ordinal: number;
+};
+
 /** Where one match starts and ends, in the editor's own terms. */
 export type Match = {
 	fromKey: string;
