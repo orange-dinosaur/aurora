@@ -1136,14 +1136,15 @@ body,
 	background: var(--bg);
 }
 
+/* No scrolling here: an overflow on one axis makes the browser clip the other
+   as well, which would cut the field's focus ring off against the left edge.
+   The results below get their own scroller. */
 .search {
 	display: flex;
 	flex-direction: column;
 	gap: 0.75rem;
 	flex: 1;
 	min-height: 0;
-	padding: 1rem 0 0.5rem;
-	overflow-y: auto;
 }
 
 /* Wide enough for a phrase rather than a word: this is the field a whole line
@@ -1156,6 +1157,11 @@ body,
 	background: var(--bg);
 	border: 1px solid var(--border);
 	border-radius: 6px;
+}
+
+.search__field:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 .search__note {
