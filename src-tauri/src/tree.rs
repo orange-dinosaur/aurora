@@ -50,12 +50,22 @@ pub enum Node {
 }
 
 impl Node {
-	fn folder(name: &str) -> Self {
+	/// A new folder of no particular kind, holding whatever is passed.
+	pub(crate) fn folder(name: &str, children: Vec<Node>) -> Self {
 		Node::Folder {
 			id: Uuid::new_v4(),
 			name: name.to_owned(),
 			kind: None,
-			children: Vec::new(),
+			children,
+		}
+	}
+
+	/// A new document with no target set.
+	pub(crate) fn document(name: &str) -> Self {
+		Node::Document {
+			id: Uuid::new_v4(),
+			name: name.to_owned(),
+			target: None,
 		}
 	}
 
@@ -82,7 +92,10 @@ impl Node {
 /// document. Folders had no identity before this, so theirs are new on every
 /// read until the tree is written back.
 pub fn tree_from_flat(folders: &[String], documents: &[Document]) -> Vec<Node> {
-	let mut nodes: Vec<Node> = folders.iter().map(|name| Node::folder(name)).collect();
+	let mut nodes: Vec<Node> = folders
+		.iter()
+		.map(|name| Node::folder(name, Vec::new()))
+		.collect();
 
 	for document in documents {
 		let mut segments: Vec<&str> = document
@@ -108,7 +121,7 @@ pub fn tree_from_flat(folders: &[String], documents: &[Document]) -> Vec<Node> {
 			let at = match found {
 				Some(at) => at,
 				None => {
-					level.push(Node::folder(folder));
+					level.push(Node::folder(folder, Vec::new()));
 					level.len() - 1
 				}
 			};
@@ -213,6 +226,78 @@ pub fn children(nodes: &[Node], id: Uuid) -> Option<&[Node]> {
 		Node::Folder { children, .. } => Some(children),
 		Node::Document { .. } => None,
 	}
+}
+
+/// Every document in the tree, in the order a walk meets them, each with the
+/// path it sits at. This is the flat list a project used to record, derived
+/// from the tree rather than kept alongside it.
+pub fn documents(nodes: &[Node]) -> Vec<Document> {
+	let mut documents = Vec::new();
+	gather(nodes, "", &mut documents);
+	documents
+}
+
+fn gather(nodes: &[Node], prefix: &str, documents: &mut Vec<Document>) {
+	for node in nodes {
+		match node {
+			Node::Document { id, name, target } => documents.push(Document {
+				id: *id,
+				path: format!("{prefix}{name}"),
+				target: *target,
+			}),
+			Node::Folder { name, children, .. } => {
+				gather(children, &format!("{prefix}{name}/"), documents)
+			}
+		}
+	}
+}
+
+/// The node with this id, to be changed in place.
+pub fn find_mut(nodes: &mut [Node], id: Uuid) -> Option<&mut Node> {
+	for node in nodes {
+		if node.id() == id {
+			return Some(node);
+		}
+		if let Node::Folder { children, .. } = node
+			&& let Some(found) = find_mut(children, id)
+		{
+			return Some(found);
+		}
+	}
+	None
+}
+
+/// Takes a node out of the tree, whatever it holds with it.
+pub fn remove(nodes: &mut Vec<Node>, id: Uuid) -> Option<Node> {
+	if let Some(at) = nodes.iter().position(|node| node.id() == id) {
+		return Some(nodes.remove(at));
+	}
+	for node in nodes {
+		if let Node::Folder { children, .. } = node
+			&& let Some(taken) = remove(children, id)
+		{
+			return Some(taken);
+		}
+	}
+	None
+}
+
+/// Moves a node to a given place among the ones it already sits beside. An
+/// index past the end means the end. `false` when the tree does not have it.
+pub fn move_to(nodes: &mut Vec<Node>, id: Uuid, index: usize) -> bool {
+	if let Some(from) = nodes.iter().position(|node| node.id() == id) {
+		let moving = nodes.remove(from);
+		nodes.insert(index.min(nodes.len()), moving);
+		return true;
+	}
+	for node in nodes {
+		if let Node::Folder { children, .. } = node
+			&& move_to(children, id, index)
+		{
+			return true;
+		}
+	}
+	false
 }
 
 #[cfg(test)]

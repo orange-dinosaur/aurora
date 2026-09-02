@@ -4,12 +4,13 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 
 use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tauri::{AppHandle, Manager};
 use time::OffsetDateTime;
 
 use crate::document::{Document, refresh};
 use crate::store;
+use crate::tree::{self, Node, tree_from_flat};
 
 /// A folder inside a project, together with the document it starts life with.
 pub struct Section {
@@ -99,10 +100,10 @@ pub fn format_layouts() -> Vec<FormatLayout> {
 }
 
 /// Bumped when the on-disk shape changes in a way older builds cannot read.
-pub const MANIFEST_VERSION: u32 = 2;
+pub const MANIFEST_VERSION: u32 = 3;
 
 /// The contents of `aurora.json`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
 	pub version: u32,
@@ -110,13 +111,11 @@ pub struct Manifest {
 	pub format: Format,
 	#[serde(with = "time::serde::rfc3339")]
 	pub created_at: OffsetDateTime,
-	/// The section folders as they were at creation, so a project keeps its own
-	/// layout even if the format's definition changes later.
-	pub folders: Vec<String>,
-	/// Every document Aurora knows about, in the order it shows them. Absent
-	/// from manifests written before version 2.
-	#[serde(default)]
-	pub documents: Vec<Document>,
+	/// Everything the project holds: its sections in the order it was made
+	/// with, and under each of them the folders and documents the writer put
+	/// there. A project keeps its own sections even if the format's definition
+	/// changes later.
+	pub nodes: Vec<Node>,
 }
 
 impl Manifest {
@@ -129,15 +128,67 @@ impl Manifest {
 			created_at: created_at
 				.replace_nanosecond(0)
 				.expect("zero nanoseconds is always in range"),
-			folders: format
+			// A section is a folder like any other, so a new project is one
+			// empty folder per section. The seed documents are attached by
+			// `fill`, which is also what puts them on disk.
+			nodes: format
 				.layout()
 				.iter()
-				.map(|s| s.folder.to_owned())
+				.map(|s| Node::folder(s.folder, Vec::new()))
 				.collect(),
-			// Ids are random, so the seed documents are attached by `fill`,
-			// leaving this deterministic.
-			documents: Vec::new(),
 		}
+	}
+
+	/// The project's sections, in order: the folders at the top of the tree.
+	pub fn folders(&self) -> Vec<String> {
+		self.nodes
+			.iter()
+			.filter_map(|node| match node {
+				Node::Folder { name, .. } => Some(name.clone()),
+				Node::Document { .. } => None,
+			})
+			.collect()
+	}
+
+	/// Every document in the project, with the path it sits at, in the order a
+	/// walk meets them. Derived from the tree rather than recorded beside it.
+	pub fn documents(&self) -> Vec<Document> {
+		tree::documents(&self.nodes)
+	}
+}
+
+/// A manifest as it might be found on disk, of any version Aurora has written.
+/// Version 2 recorded a list of section names and a flat list of documents;
+/// version 3 records one tree. Which fields are there decides how it is read,
+/// rather than the version number, because that number is a line in a file the
+/// writer can edit.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Stored {
+	version: u32,
+	name: String,
+	format: Format,
+	#[serde(with = "time::serde::rfc3339")]
+	created_at: OffsetDateTime,
+	#[serde(default)]
+	folders: Vec<String>,
+	#[serde(default)]
+	documents: Vec<Document>,
+	nodes: Option<Vec<Node>>,
+}
+
+impl<'de> Deserialize<'de> for Manifest {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+		let stored = Stored::deserialize(deserializer)?;
+		Ok(Self {
+			version: stored.version,
+			name: stored.name,
+			format: stored.format,
+			created_at: stored.created_at,
+			nodes: stored
+				.nodes
+				.unwrap_or_else(|| tree_from_flat(&stored.folders, &stored.documents)),
+		})
 	}
 }
 
@@ -414,16 +465,19 @@ fn fill(
 	sections: &[Section],
 	created_at: OffsetDateTime,
 ) -> Result<()> {
-	let mut documents = Vec::new();
+	let mut nodes = Vec::new();
 	for section in sections {
 		let folder = root.join(section.folder);
 		fs::create_dir(&folder)?;
 		fs::write(folder.join(section.seed), "")?;
-		documents.push(Document::new(section.folder, section.seed));
+		nodes.push(Node::folder(
+			section.folder,
+			vec![Node::document(section.seed)],
+		));
 	}
 
 	let mut manifest = Manifest::new(name, format, created_at);
-	manifest.documents = documents;
+	manifest.nodes = nodes;
 	fs::write(root.join(MANIFEST_FILE), to_json(&manifest)?)?;
 	Ok(())
 }
@@ -533,6 +587,13 @@ pub fn read_manifest(root: &Path) -> Result<Manifest> {
 	Ok(manifest)
 }
 
+/// Writes the manifest back, at the current version whatever version it was
+/// read as: what goes to disk from here is always a tree.
+pub(crate) fn write_manifest(root: &Path, manifest: &mut Manifest) -> Result<()> {
+	manifest.version = MANIFEST_VERSION;
+	write_json(&root.join(MANIFEST_FILE), manifest)
+}
+
 fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Result<OpenedProject> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
@@ -580,7 +641,7 @@ fn count_words(root: &Path) -> Option<usize> {
 	let manifest = read_manifest(root).ok()?;
 	Some(
 		manifest
-			.documents
+			.documents()
 			.iter()
 			.map(|document| {
 				// The manifest is a file in the writer's project and could
@@ -643,9 +704,14 @@ pub fn close_project(app: AppHandle) -> Result<()> {
 mod tests {
 	use super::*;
 	use std::collections::HashSet;
+	use uuid::Uuid;
 
-	fn paths_of(manifest: &Manifest) -> Vec<&str> {
-		manifest.documents.iter().map(|d| d.path.as_str()).collect()
+	fn paths_of(manifest: &Manifest) -> Vec<String> {
+		manifest
+			.documents()
+			.into_iter()
+			.map(|document| document.path)
+			.collect()
 	}
 
 	#[test]
@@ -741,7 +807,7 @@ mod tests {
 		let manifest = Manifest::new("Wuthering Heights", Format::Novel, fixed_time());
 		assert_eq!(manifest.version, MANIFEST_VERSION);
 		assert_eq!(
-			manifest.folders,
+			manifest.folders(),
 			["Manuscript", "Outline", "Characters", "Locations", "Notes"]
 		);
 	}
@@ -907,13 +973,17 @@ mod tests {
 
 		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
 		let manifest: Manifest = serde_json::from_str(&json).unwrap();
-		// The seed documents carry random ids and are checked on their own.
+		// Every node carries a random id, so the tree is checked on its own.
+		let fresh = Manifest::new("Ithaca", Format::Novel, fixed_time());
 		assert_eq!(
 			Manifest {
-				documents: Vec::new(),
+				nodes: Vec::new(),
 				..manifest
 			},
-			Manifest::new("Ithaca", Format::Novel, fixed_time())
+			Manifest {
+				nodes: Vec::new(),
+				..fresh
+			}
 		);
 	}
 
@@ -936,7 +1006,8 @@ mod tests {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		let manifest = read_manifest(&root).unwrap();
 
-		let paths: Vec<_> = manifest.documents.iter().map(|d| d.path.as_str()).collect();
+		let documents = manifest.documents();
+		let paths: Vec<_> = documents.iter().map(|d| d.path.as_str()).collect();
 		assert_eq!(
 			paths,
 			[
@@ -948,8 +1019,8 @@ mod tests {
 			]
 		);
 
-		let ids: HashSet<_> = manifest.documents.iter().map(|d| d.id).collect();
-		assert_eq!(ids.len(), manifest.documents.len(), "ids must be unique");
+		let ids: HashSet<_> = documents.iter().map(|d| d.id).collect();
+		assert_eq!(ids.len(), documents.len(), "ids must be unique");
 	}
 
 	#[test]
@@ -957,7 +1028,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		for document in read_manifest(&root).unwrap().documents {
+		for document in read_manifest(&root).unwrap().documents() {
 			assert!(
 				root.join(&document.path).is_file(),
 				"{} is recorded but missing",
@@ -978,7 +1049,82 @@ mod tests {
 
 		let manifest = read_manifest(dir.path()).unwrap();
 		assert_eq!(manifest.version, 1);
-		assert!(manifest.documents.is_empty());
+		assert!(manifest.documents().is_empty());
+	}
+
+	/// A project written by the Aurora before this one: section names and a flat
+	/// list of documents, with no tree in sight.
+	fn version_two_project(dir: &Path, id: Uuid) {
+		fs::write(
+			dir.join(MANIFEST_FILE),
+			format!(
+				r#"{{"version":2,"name":"Ithaca","format":"novel",
+				   "createdAt":"2023-11-14T22:13:20Z",
+				   "folders":["Manuscript","Notes"],
+				   "documents":[
+				     {{"id":"{id}","path":"Manuscript/Chapter 1.md","target":1200}},
+				     {{"id":"{}","path":"Notes/Notes.md"}}
+				   ]}}"#,
+				Uuid::new_v4()
+			),
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn a_version_two_manifest_opens_as_a_tree() {
+		let dir = tempfile::tempdir().unwrap();
+		let chapter_one = Uuid::new_v4();
+		version_two_project(dir.path(), chapter_one);
+
+		let manifest = read_manifest(dir.path()).unwrap();
+
+		assert_eq!(manifest.folders(), ["Manuscript", "Notes"]);
+		let documents = manifest.documents();
+		assert_eq!(
+			paths_of(&manifest),
+			["Manuscript/Chapter 1.md", "Notes/Notes.md"]
+		);
+		assert_eq!(
+			documents[0].id, chapter_one,
+			"a document keeps the id the project already gave it"
+		);
+		assert_eq!(documents[0].target, Some(1200), "and what it is aiming at");
+	}
+
+	#[test]
+	fn reading_an_old_manifest_does_not_rewrite_it() {
+		let dir = tempfile::tempdir().unwrap();
+		version_two_project(dir.path(), Uuid::new_v4());
+
+		read_manifest(dir.path()).unwrap();
+
+		let json = fs::read_to_string(dir.path().join(MANIFEST_FILE)).unwrap();
+		assert!(
+			json.contains("\"documents\"") && !json.contains("\"nodes\""),
+			"the file is left as it was until something changes it"
+		);
+	}
+
+	#[test]
+	fn writing_an_old_manifest_back_makes_it_a_tree() {
+		let dir = tempfile::tempdir().unwrap();
+		version_two_project(dir.path(), Uuid::new_v4());
+		let mut manifest = read_manifest(dir.path()).unwrap();
+
+		write_manifest(dir.path(), &mut manifest).unwrap();
+
+		let json = fs::read_to_string(dir.path().join(MANIFEST_FILE)).unwrap();
+		assert!(json.contains("\"nodes\""));
+		assert!(
+			!json.contains("\"documents\"") && !json.contains("\"folders\""),
+			"what version 2 recorded is gone: {json}"
+		);
+		assert_eq!(
+			read_manifest(dir.path()).unwrap().version,
+			MANIFEST_VERSION,
+			"and it says which version it now is"
+		);
 	}
 
 	#[test]
@@ -1089,7 +1235,11 @@ mod tests {
 		open_and_remember(&store, &root, fixed_time()).unwrap();
 
 		let manifest = read_manifest(&root).unwrap();
-		assert!(paths_of(&manifest).contains(&"Manuscript/Chapter 2.md"));
+		assert!(
+			paths_of(&manifest)
+				.iter()
+				.any(|p| p == "Manuscript/Chapter 2.md")
+		);
 	}
 
 	#[test]
@@ -1104,7 +1254,7 @@ mod tests {
 		open_and_remember(&store, &root, fixed_time()).unwrap();
 
 		let manifest = read_manifest(&root).unwrap();
-		assert!(!paths_of(&manifest).contains(&"Notes/Notes.md"));
+		assert!(!paths_of(&manifest).iter().any(|p| p == "Notes/Notes.md"));
 	}
 
 	#[test]
@@ -1490,9 +1640,11 @@ mod tests {
 				.unwrap();
 
 		fs::write(parent.path().join("elsewhere.md"), "one two three").unwrap();
+		// A path that climbs out of the project can only be written by hand,
+		// and only at the top of the tree: a name under a folder is one part.
 		let mut manifest = read_manifest(&root).unwrap();
-		manifest.documents[0].path = "../elsewhere.md".into();
-		write_json(&root.join(MANIFEST_FILE), &manifest).unwrap();
+		manifest.nodes.insert(0, Node::document("../elsewhere.md"));
+		write_manifest(&root, &mut manifest).unwrap();
 
 		assert_eq!(summarise_recents(&store).unwrap()[0].words, Some(0));
 	}

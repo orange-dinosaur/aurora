@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::io::Read;
@@ -9,9 +9,9 @@ use time::{Date, Month, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::project::{
-	Error, MANIFEST_FILE, Manifest, Result, read_manifest, validate_name, write_atomic, write_json,
+	Error, Manifest, Result, read_manifest, validate_name, write_atomic, write_manifest,
 };
-use crate::tree::Node;
+use crate::tree::{self, Node};
 
 /// A document inside a project. The path is relative to the project root and
 /// always uses forward slashes, so a manifest written on one platform still
@@ -28,6 +28,9 @@ pub struct Document {
 }
 
 impl Document {
+	/// A document at a path, for tests that want one without a project around
+	/// it. Everywhere else a document comes out of the tree.
+	#[cfg(test)]
 	pub(crate) fn new(section: &str, file_name: &str) -> Self {
 		Self {
 			id: Uuid::new_v4(),
@@ -192,25 +195,6 @@ fn read_level(dir: &Path) -> Result<Option<Vec<Node>>> {
 	Ok(Some(found))
 }
 
-/// The documents in a scanned tree, as paths relative to the root it was
-/// scanned from, which is the shape the manifest still records them in.
-fn document_paths(nodes: &[Node]) -> Vec<String> {
-	let mut paths = Vec::new();
-	collect_paths(nodes, "", &mut paths);
-	paths
-}
-
-fn collect_paths(nodes: &[Node], prefix: &str, paths: &mut Vec<String>) {
-	for node in nodes {
-		match node {
-			Node::Document { name, .. } => paths.push(format!("{prefix}{name}")),
-			Node::Folder { name, children, .. } => {
-				collect_paths(children, &format!("{prefix}{name}/"), paths)
-			}
-		}
-	}
-}
-
 fn is_markdown(name: &str) -> bool {
 	Path::new(name)
 		.extension()
@@ -222,63 +206,108 @@ fn section_of(path: &str) -> Option<&str> {
 	path.split_once('/').map(|(section, _)| section)
 }
 
-/// Brings the manifest's document list back in step with what `scan` found.
-/// Documents that are still there keep their id and their relative order,
-/// vanished ones are dropped, and unrecorded files are adopted at the end of
-/// their section. The list is regrouped into section order, since that is the
-/// order the sidebar reads it in. Returns whether anything changed.
-pub fn reconcile(manifest: &mut Manifest, found: &[String]) -> bool {
-	let on_disk: HashSet<&str> = found.iter().map(String::as_str).collect();
-
+/// Brings the manifest's tree back in step with what `scan` found. The
+/// project's sections are its own and stay whether or not their folders are
+/// still on disk; under them, a node whose file or directory is still there
+/// keeps its id and its place, a vanished one is dropped, and anything the
+/// project has not seen is adopted at the end of the level it was found in.
+/// Returns whether anything changed.
+pub fn reconcile(manifest: &mut Manifest, found: &[Node]) -> bool {
+	let mut sections = Vec::new();
 	let mut seen: HashSet<&str> = HashSet::new();
-	let mut kept: HashMap<&str, Vec<Document>> = HashMap::new();
-	for document in &manifest.documents {
-		// A path recorded twice — only a hand-edited manifest can manage it —
-		// would otherwise open as two documents over one file.
-		if !on_disk.contains(document.path.as_str()) || !seen.insert(&document.path) {
+
+	for section in &manifest.nodes {
+		// Only folders belong at the top of a project. A document up there is
+		// something hand-editing put in, and it is not carried over.
+		let Node::Folder {
+			id,
+			name,
+			kind,
+			children,
+		} = section
+		else {
+			continue;
+		};
+		// A section recorded twice — again only by hand — would otherwise show
+		// twice in the sidebar over the one folder.
+		if !seen.insert(name.as_str()) {
 			continue;
 		}
-		if let Some(section) = section_of(&document.path) {
-			kept.entry(section).or_default().push(document.clone());
-		}
+
+		// A section folder the writer deleted keeps its place in the project.
+		// What was inside it has gone, which reads the same as an empty one.
+		let below = match found.iter().find(|node| node.name() == name) {
+			Some(Node::Folder { children, .. }) => children.as_slice(),
+			_ => &[],
+		};
+
+		sections.push(Node::Folder {
+			id: *id,
+			name: name.clone(),
+			kind: *kind,
+			children: merge(children, below),
+		});
 	}
 
-	let mut adopted: HashMap<&str, Vec<Document>> = HashMap::new();
-	for path in found {
-		if seen.contains(path.as_str()) {
-			continue;
-		}
-		if let Some(section) = section_of(path) {
-			adopted.entry(section).or_default().push(Document {
-				id: Uuid::new_v4(),
-				path: path.clone(),
-				target: None,
-			});
-		}
-	}
-
-	let mut documents = Vec::new();
-	for folder in &manifest.folders {
-		if let Some(existing) = kept.remove(folder.as_str()) {
-			documents.extend(existing);
-		}
-		if let Some(new) = adopted.remove(folder.as_str()) {
-			documents.extend(new);
-		}
-	}
-
-	let changed = documents != manifest.documents;
-	manifest.documents = documents;
+	let changed = sections != manifest.nodes;
+	manifest.nodes = sections;
 	changed
+}
+
+/// One level of the project against the same level on disk.
+fn merge(known: &[Node], found: &[Node]) -> Vec<Node> {
+	let mut merged = Vec::new();
+	let mut seen: HashSet<&str> = HashSet::new();
+
+	for node in known {
+		// A name recorded twice would otherwise be two nodes over one file.
+		if !seen.insert(node.name()) {
+			continue;
+		}
+		let Some(on_disk) = found.iter().find(|other| other.name() == node.name()) else {
+			continue;
+		};
+
+		merged.push(match (node, on_disk) {
+			(
+				Node::Folder {
+					id,
+					name,
+					kind,
+					children,
+				},
+				Node::Folder {
+					children: below, ..
+				},
+			) => Node::Folder {
+				id: *id,
+				name: name.clone(),
+				kind: *kind,
+				children: merge(children, below),
+			},
+			(Node::Document { .. }, Node::Document { .. }) => node.clone(),
+			// A name that was a file and is now a directory, or the other way
+			// about, is a new thing under an old name. What is on disk wins.
+			_ => on_disk.clone(),
+		});
+	}
+
+	for node in found {
+		if seen.insert(node.name()) {
+			merged.push(node.clone());
+		}
+	}
+
+	merged
 }
 
 /// Reads the manifest and brings it back in step with the folder, writing it
 /// back only when reconciliation actually changed something.
 pub fn refresh(root: &Path) -> Result<Manifest> {
 	let mut manifest = read_manifest(root)?;
-	let found = document_paths(&scan(root, &manifest.folders)?);
+	let found = scan(root, &manifest.folders())?;
 	if reconcile(&mut manifest, &found) {
-		write_json(&root.join(MANIFEST_FILE), &manifest)?;
+		write_manifest(root, &mut manifest)?;
 	}
 	Ok(manifest)
 }
@@ -287,17 +316,17 @@ pub fn refresh(root: &Path) -> Result<Manifest> {
 /// project records both. Sections are fixed by the format, so an empty one is
 /// still listed.
 fn sections(manifest: &Manifest) -> Vec<SectionDocuments> {
+	let documents = manifest.documents();
 	manifest
-		.folders
-		.iter()
+		.folders()
+		.into_iter()
 		.map(|folder| SectionDocuments {
-			folder: folder.clone(),
-			documents: manifest
-				.documents
+			documents: documents
 				.iter()
 				.filter(|d| section_of(&d.path) == Some(folder.as_str()))
 				.map(DocumentView::from)
 				.collect(),
+			folder,
 		})
 		.collect()
 }
@@ -364,15 +393,17 @@ fn summarise(document: &Document, path: &Path) -> DocumentSummary {
 /// end up inside the project. `aurora.json` is an ordinary file a writer can
 /// edit, so the path it records is not to be trusted.
 fn resolve(manifest: &Manifest, root: &Path, id: Uuid) -> Result<PathBuf> {
-	let document = manifest
-		.documents
-		.iter()
-		.find(|d| d.id == id)
-		.ok_or(Error::UnknownDocument)?;
+	let relative = match tree::find(&manifest.nodes, id) {
+		Some(Node::Document { .. }) => {
+			tree::path(&manifest.nodes, id).ok_or(Error::UnknownDocument)?
+		}
+		// A folder is not a document, and neither is an id nothing carries.
+		_ => return Err(Error::UnknownDocument),
+	};
 
 	// Canonicalising both sides resolves `..` and follows symlinks, so the
 	// comparison is between two real locations.
-	let path = root.join(&document.path);
+	let path = root.join(relative);
 	let path = path.canonicalize().map_err(|e| match e.kind() {
 		io::ErrorKind::NotFound => Error::DocumentMissing,
 		_ => Error::Io(e),
@@ -411,31 +442,34 @@ pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
 	write_atomic(&path, text.as_bytes())
 }
 
-/// Turns a path offered by the frontend into somewhere this project is willing
-/// to keep a document: one of the format's sections, and a Markdown file
-/// directly inside it. `base` is the project root, or the trash inside it,
-/// which is laid out the same way.
+/// Turns a relative path into somewhere this project is willing to keep a
+/// document: a Markdown file under one of the format's sections, at whatever
+/// depth. `base` is the project root, or the trash inside it, which is laid out
+/// the same way. The path may come from the frontend or be walked out of the
+/// manifest, and neither is trusted.
 fn document_path(manifest: &Manifest, base: &Path, path: &str) -> Result<PathBuf> {
-	let Some((section, name)) = path.split_once('/') else {
+	let Some((section, rest)) = path.split_once('/') else {
 		return Err(Error::BadDocumentPath);
 	};
 
-	let ordinary = |part: &str| {
-		!part.is_empty()
-			&& part != "."
-			&& part != ".."
-			&& !part.contains('/')
-			&& !part.contains('\\')
-	};
+	let ordinary =
+		|part: &str| !part.is_empty() && part != "." && part != ".." && !part.contains('\\');
 
-	if !ordinary(section) || !ordinary(name) || !is_markdown(name) {
-		return Err(Error::BadDocumentPath);
-	}
-	if !manifest.folders.iter().any(|folder| folder == section) {
+	let mut parts = rest.split('/').peekable();
+	let mut file = base.join(section);
+	if !ordinary(section) || !manifest.folders().iter().any(|folder| folder == section) {
 		return Err(Error::BadDocumentPath);
 	}
 
-	Ok(base.join(section).join(name))
+	while let Some(part) = parts.next() {
+		// Only the last part is the file, and only it has to be Markdown.
+		if !ordinary(part) || (parts.peek().is_none() && !is_markdown(part)) {
+			return Err(Error::BadDocumentPath);
+		}
+		file.push(part);
+	}
+
+	Ok(file)
 }
 
 /// Puts a document that has gone missing back on disk and brings the manifest
@@ -474,7 +508,7 @@ fn add_document(root: &Path, manifest: &Manifest, path: &str, text: &str) -> Res
 	write_atomic(&file, text.as_bytes())?;
 
 	refresh(root)?
-		.documents
+		.documents()
 		.iter()
 		.find(|d| d.path == path)
 		.map(DocumentView::from)
@@ -503,7 +537,7 @@ pub fn create_document(root: PathBuf, section: String, name: String) -> Result<D
 	validate_name(name)?;
 
 	let manifest = read_manifest(&root)?;
-	if !manifest.folders.contains(&section) {
+	if !manifest.folders().contains(&section) {
 		return Err(Error::UnknownSection);
 	}
 
@@ -543,18 +577,28 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 	let mut manifest = read_manifest(&root)?;
 	let from = resolve(&manifest, &root, id)?;
 
-	let index = manifest
-		.documents
-		.iter()
-		.position(|d| d.id == id)
-		.ok_or(Error::UnknownDocument)?;
-	let section = section_of(&manifest.documents[index].path).ok_or(Error::BadDocumentPath)?;
-	let path = format!("{section}/{name}.md");
+	let was = tree::path(&manifest.nodes, id).ok_or(Error::UnknownDocument)?;
+	let file = format!("{name}.md");
+	// A document is renamed where it stands, so its path is the one it has
+	// with the last part swapped.
+	let path = match was.rfind('/') {
+		Some(slash) => format!("{}/{file}", &was[..slash]),
+		None => return Err(Error::BadDocumentPath),
+	};
+
+	let view = |manifest: &Manifest| {
+		manifest
+			.documents()
+			.iter()
+			.find(|d| d.id == id)
+			.map(DocumentView::from)
+			.ok_or(Error::UnknownDocument)
+	};
 
 	// Being renamed to what it is already called is not a collision with
 	// itself.
-	if path == manifest.documents[index].path {
-		return Ok(DocumentView::from(&manifest.documents[index]));
+	if path == was {
+		return view(&manifest);
 	}
 
 	let to = document_path(&manifest, &root, &path)?;
@@ -566,9 +610,12 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 	// refresh adopts the renamed file under a new id rather than losing it.
 	fs::rename(&from, &to)?;
 
-	manifest.documents[index].path = path;
-	write_json(&root.join(MANIFEST_FILE), &manifest)?;
-	Ok(DocumentView::from(&manifest.documents[index]))
+	match tree::find_mut(&mut manifest.nodes, id) {
+		Some(Node::Document { name, .. }) => *name = file,
+		_ => return Err(Error::UnknownDocument),
+	}
+	write_manifest(&root, &mut manifest)?;
+	view(&manifest)
 }
 
 /// Sets the word target a document is written towards, or clears it with
@@ -585,16 +632,18 @@ pub fn set_document_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Resu
 	let target = target.filter(|words| *words > 0);
 
 	let mut manifest = read_manifest(&root)?;
-	let document = manifest
-		.documents
-		.iter_mut()
-		.find(|d| d.id == id)
-		.ok_or(Error::UnknownDocument)?;
+	match tree::find_mut(&mut manifest.nodes, id) {
+		Some(Node::Document { target: aim, .. }) => *aim = target,
+		_ => return Err(Error::UnknownDocument),
+	}
 
-	document.target = target;
-	let view = DocumentView::from(&*document);
-	write_json(&root.join(MANIFEST_FILE), &manifest)?;
-	Ok(view)
+	write_manifest(&root, &mut manifest)?;
+	manifest
+		.documents()
+		.iter()
+		.find(|d| d.id == id)
+		.map(DocumentView::from)
+		.ok_or(Error::UnknownDocument)
 }
 
 /// One document in the project's trash, as the Trash view shows it.
@@ -633,15 +682,11 @@ fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
 	let mut manifest = read_manifest(root)?;
 	let from = resolve(&manifest, root, id)?;
 
-	let index = manifest
-		.documents
-		.iter()
-		.position(|d| d.id == id)
-		.ok_or(Error::UnknownDocument)?;
-	let (section, file_name) = manifest.documents[index]
-		.path
-		.split_once('/')
-		.ok_or(Error::BadDocumentPath)?;
+	// The trash is laid out in sections, so a document deleted from deeper in
+	// the tree lands in the one it belongs to, under its own file name.
+	let path = tree::path(&manifest.nodes, id).ok_or(Error::UnknownDocument)?;
+	let (section, rest) = path.split_once('/').ok_or(Error::BadDocumentPath)?;
+	let file_name = rest.rsplit('/').next().unwrap_or(rest);
 
 	let folder = root.join(TRASH_DIR).join(section);
 	fs::create_dir_all(&folder)?;
@@ -667,8 +712,8 @@ fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
 	// section.
 	fs::rename(&from, &to)?;
 
-	manifest.documents.remove(index);
-	write_json(&root.join(MANIFEST_FILE), &manifest)
+	tree::remove(&mut manifest.nodes, id);
+	write_manifest(root, &mut manifest)
 }
 
 /// Deletes a document, which is to say puts it in the project's trash.
@@ -685,41 +730,11 @@ pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
 /// whose file has gone can still be moved, since where it sits in the list is
 /// not a question about the disk.
 fn reorder(manifest: &mut Manifest, id: Uuid, index: usize) -> Result<()> {
-	let section = manifest
-		.documents
-		.iter()
-		.find(|d| d.id == id)
-		.ok_or(Error::UnknownDocument)
-		.and_then(|d| section_of(&d.path).ok_or(Error::BadDocumentPath))?
-		.to_owned();
-
-	// Which places in the list belong to this section. Taken as positions
-	// rather than assuming the section's documents sit together, which only
-	// holds while nothing has hand-edited the manifest.
-	let slots: Vec<usize> = manifest
-		.documents
-		.iter()
-		.enumerate()
-		.filter(|(_, d)| section_of(&d.path) == Some(section.as_str()))
-		.map(|(at, _)| at)
-		.collect();
-
-	let mut order: Vec<Document> = slots
-		.iter()
-		.map(|&at| manifest.documents[at].clone())
-		.collect();
-	let from = order
-		.iter()
-		.position(|d| d.id == id)
-		.expect("the document is in its own section");
-
-	let moving = order.remove(from);
-	order.insert(index.min(order.len()), moving);
-
-	for (&slot, document) in slots.iter().zip(order) {
-		manifest.documents[slot] = document;
+	if tree::move_to(&mut manifest.nodes, id, index) {
+		Ok(())
+	} else {
+		Err(Error::UnknownDocument)
 	}
-	Ok(())
 }
 
 /// Puts a document at a given place among the others in its section. An index
@@ -732,7 +747,7 @@ pub fn reorder_document(root: PathBuf, id: Uuid, index: usize) -> Result<()> {
 
 	let mut manifest = read_manifest(&root)?;
 	reorder(&mut manifest, id, index)?;
-	write_json(&root.join(MANIFEST_FILE), &manifest)
+	write_manifest(&root, &mut manifest)
 }
 
 /// Reads a trash file's name back: the moment it was deleted, and the name it
@@ -784,9 +799,10 @@ pub fn list_trash(root: PathBuf) -> Result<Vec<TrashEntry>> {
 	// The trash is laid out in sections exactly as the project is, so the same
 	// scan reads it.
 	let mut entries: Vec<TrashEntry> =
-		document_paths(&scan(&root.join(TRASH_DIR), &manifest.folders)?)
+		tree::documents(&scan(&root.join(TRASH_DIR), &manifest.folders())?)
 			.iter()
-			.map(|path| {
+			.map(|document| {
+				let path = &document.path;
 				let file = path.split_once('/').map_or(path.as_str(), |(_, file)| file);
 				let (deleted, was) = match unstamp(file) {
 					Some((at, was)) => (Some(at), was),
@@ -854,7 +870,7 @@ pub fn restore_from_trash(root: PathBuf, path: String) -> Result<DocumentView> {
 	fs::rename(&from, &to)?;
 
 	refresh(&root)?
-		.documents
+		.documents()
 		.iter()
 		.find(|d| d.path == back)
 		.map(DocumentView::from)
@@ -882,12 +898,12 @@ pub fn section_overview(root: PathBuf, section: String) -> Result<Vec<DocumentSu
 	}
 
 	let manifest = read_manifest(&root)?;
-	if !manifest.folders.contains(&section) {
+	if !manifest.folders().contains(&section) {
 		return Err(Error::UnknownSection);
 	}
 
 	Ok(manifest
-		.documents
+		.documents()
 		.iter()
 		.filter(|d| section_of(&d.path) == Some(section.as_str()))
 		.map(|document| match resolve(&manifest, &root, document.id) {
@@ -910,7 +926,7 @@ pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
 	let manifest = read_manifest(&root)?;
 
 	Ok(manifest
-		.documents
+		.documents()
 		.iter()
 		.map(|document| DocumentText {
 			document: document.into(),
@@ -928,7 +944,7 @@ pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
 mod tests {
 	use super::*;
 	use crate::project::{Format, NameError, create};
-	use crate::tree;
+	use crate::tree::{self, tree_from_flat};
 	use time::OffsetDateTime;
 
 	fn fixed_time() -> OffsetDateTime {
@@ -954,7 +970,10 @@ mod tests {
 
 	/// The documents a scan found, in the flat shape the older tests read.
 	fn scan_paths(root: &Path) -> Vec<String> {
-		document_paths(&scan(root, &novel_folders()).unwrap())
+		tree::documents(&scan(root, &novel_folders()).unwrap())
+			.into_iter()
+			.map(|document| document.path)
+			.collect()
 	}
 
 	#[test]
@@ -1114,47 +1133,59 @@ mod tests {
 		assert!(!scan_paths(&root).iter().any(|p| p.starts_with("Scraps/")));
 	}
 
-	fn manifest_with(paths: &[&str]) -> Manifest {
-		let mut manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
-		manifest.documents = paths
+	fn flat_documents(paths: &[&str]) -> Vec<Document> {
+		paths
 			.iter()
 			.map(|path| Document {
 				id: Uuid::new_v4(),
 				path: (*path).to_owned(),
 				target: None,
 			})
-			.collect();
+			.collect()
+	}
+
+	fn manifest_with(paths: &[&str]) -> Manifest {
+		let mut manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		manifest.nodes = tree_from_flat(&novel_folders(), &flat_documents(paths));
 		manifest
 	}
 
-	fn paths_of(manifest: &Manifest) -> Vec<&str> {
-		manifest.documents.iter().map(|d| d.path.as_str()).collect()
+	fn paths_of(manifest: &Manifest) -> Vec<String> {
+		manifest
+			.documents()
+			.into_iter()
+			.map(|document| document.path)
+			.collect()
 	}
 
-	fn owned(paths: &[&str]) -> Vec<String> {
-		paths.iter().map(|p| (*p).to_owned()).collect()
+	/// What `scan` would report for these paths: a tree, holding only what
+	/// sits under one of the project's sections.
+	fn found(paths: &[&str]) -> Vec<Node> {
+		let mut nodes = tree_from_flat(&novel_folders(), &flat_documents(paths));
+		nodes.retain(|node| novel_folders().iter().any(|folder| folder == node.name()));
+		nodes
 	}
 
 	#[test]
 	fn reconcile_leaves_a_manifest_that_already_agrees_alone() {
 		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
-		let before = manifest.documents.clone();
+		let before = manifest.documents();
 
 		assert!(!reconcile(
 			&mut manifest,
-			&owned(&["Manuscript/Chapter 1.md", "Notes/Notes.md"])
+			&found(&["Manuscript/Chapter 1.md", "Notes/Notes.md"])
 		));
-		assert_eq!(manifest.documents, before);
+		assert_eq!(manifest.documents(), before);
 	}
 
 	#[test]
 	fn a_new_file_is_adopted_at_the_end_of_its_section() {
 		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
-		let chapter_one = manifest.documents[0].id;
+		let chapter_one = manifest.documents()[0].id;
 
 		assert!(reconcile(
 			&mut manifest,
-			&owned(&[
+			&found(&[
 				"Manuscript/Chapter 1.md",
 				"Manuscript/Chapter 2.md",
 				"Notes/Notes.md",
@@ -1169,7 +1200,8 @@ mod tests {
 			]
 		);
 		assert_eq!(
-			manifest.documents[0].id, chapter_one,
+			manifest.documents()[0].id,
+			chapter_one,
 			"an existing document keeps its id"
 		);
 	}
@@ -1178,7 +1210,7 @@ mod tests {
 	fn a_vanished_file_is_dropped() {
 		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
 
-		assert!(reconcile(&mut manifest, &owned(&["Notes/Notes.md"])));
+		assert!(reconcile(&mut manifest, &found(&["Notes/Notes.md"])));
 		assert_eq!(paths_of(&manifest), ["Notes/Notes.md"]);
 	}
 
@@ -1188,7 +1220,7 @@ mod tests {
 
 		assert!(!reconcile(
 			&mut manifest,
-			&owned(&["Manuscript/Chapter 1.md", "Manuscript/Chapter 2.md"])
+			&found(&["Manuscript/Chapter 1.md", "Manuscript/Chapter 2.md"])
 		));
 		assert_eq!(
 			paths_of(&manifest),
@@ -1199,51 +1231,30 @@ mod tests {
 	#[test]
 	fn a_manifest_without_documents_adopts_everything() {
 		let mut manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
-		let found = owned(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
-
-		assert!(reconcile(&mut manifest, &found));
-		assert_eq!(paths_of(&manifest), found.as_slice());
-		let ids: HashSet<_> = manifest.documents.iter().map(|d| d.id).collect();
-		assert_eq!(ids.len(), 2, "each adopted file gets its own id");
-	}
-
-	#[test]
-	fn documents_are_regrouped_into_section_order() {
-		let mut manifest = manifest_with(&[
-			"Notes/Notes.md",
-			"Manuscript/Chapter 1.md",
-			"Notes/Ideas.md",
-		]);
 
 		assert!(reconcile(
 			&mut manifest,
-			&owned(&[
-				"Manuscript/Chapter 1.md",
-				"Notes/Notes.md",
-				"Notes/Ideas.md",
-			])
+			&found(&["Manuscript/Chapter 1.md", "Notes/Notes.md"])
 		));
 		assert_eq!(
 			paths_of(&manifest),
-			[
-				"Manuscript/Chapter 1.md",
-				"Notes/Notes.md",
-				"Notes/Ideas.md"
-			]
+			["Manuscript/Chapter 1.md", "Notes/Notes.md"]
 		);
+		let ids: HashSet<_> = manifest.documents().iter().map(|d| d.id).collect();
+		assert_eq!(ids.len(), 2, "each adopted file gets its own id");
 	}
 
 	#[test]
 	fn a_path_recorded_twice_is_collapsed() {
 		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Manuscript/Chapter 1.md"]);
-		let first = manifest.documents[0].id;
+		let first = manifest.documents()[0].id;
 
 		assert!(reconcile(
 			&mut manifest,
-			&owned(&["Manuscript/Chapter 1.md"])
+			&found(&["Manuscript/Chapter 1.md"])
 		));
 		assert_eq!(paths_of(&manifest), ["Manuscript/Chapter 1.md"]);
-		assert_eq!(manifest.documents[0].id, first, "the first id wins");
+		assert_eq!(manifest.documents()[0].id, first, "the first id wins");
 	}
 
 	#[test]
@@ -1252,8 +1263,24 @@ mod tests {
 
 		assert!(reconcile(
 			&mut manifest,
-			&owned(&["Scraps/Offcut.md", "Notes/Notes.md"])
+			&found(&["Scraps/Offcut.md", "Notes/Notes.md"])
 		));
+		assert_eq!(paths_of(&manifest), ["Notes/Notes.md"]);
+	}
+
+	#[test]
+	fn a_section_whose_folder_has_gone_keeps_its_place_and_loses_what_was_in_it() {
+		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+		let mut on_disk = found(&["Notes/Notes.md"]);
+		on_disk.retain(|node| node.name() != "Manuscript");
+
+		assert!(reconcile(&mut manifest, &on_disk));
+
+		assert_eq!(
+			manifest.folders(),
+			["Manuscript", "Outline", "Characters", "Locations", "Notes"],
+			"the project's sections are its own, on disk or not"
+		);
 		assert_eq!(paths_of(&manifest), ["Notes/Notes.md"]);
 	}
 
@@ -1329,17 +1356,28 @@ mod tests {
 	}
 
 	/// Rewrites one document's recorded path, the way a hand-edited manifest
-	/// could.
+	/// could. The node is lifted to the top of the tree, where its whole path
+	/// is its name: a name under a folder cannot say `..`.
 	fn set_document_path(root: &Path, index: usize, path: &str) {
-		let file = root.join(MANIFEST_FILE);
-		let mut value: serde_json::Value =
-			serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
-		value["documents"][index]["path"] = path.into();
-		fs::write(&file, serde_json::to_vec(&value).unwrap()).unwrap();
+		let mut manifest = read_manifest(root).unwrap();
+		let id = manifest.documents()[index].id;
+		let Some(Node::Document { target, .. }) = tree::remove(&mut manifest.nodes, id) else {
+			panic!("no document at {index}")
+		};
+
+		manifest.nodes.insert(
+			0,
+			Node::Document {
+				id,
+				name: path.to_owned(),
+				target,
+			},
+		);
+		write_manifest(root, &mut manifest).unwrap();
 	}
 
 	fn first_document(root: &Path) -> Document {
-		read_manifest(root).unwrap().documents[0].clone()
+		read_manifest(root).unwrap().documents()[0].clone()
 	}
 
 	#[test]
@@ -2250,7 +2288,7 @@ mod tests {
 		assert!(
 			!read_manifest(&root)
 				.unwrap()
-				.documents
+				.documents()
 				.iter()
 				.any(|d| d.id == id)
 		);
@@ -2268,7 +2306,7 @@ mod tests {
 		refresh(&root).unwrap();
 
 		assert_eq!(scan_paths(&root).len(), 4);
-		assert_eq!(read_manifest(&root).unwrap().documents.len(), 4);
+		assert_eq!(read_manifest(&root).unwrap().documents().len(), 4);
 		assert!(trashed(&root, "Manuscript").len() == 1, "it is still there");
 	}
 
@@ -2596,7 +2634,7 @@ mod tests {
 	fn chapter(root: &Path, title: &str) -> Uuid {
 		read_manifest(root)
 			.unwrap()
-			.documents
+			.documents()
 			.iter()
 			.find(|d| d.path == format!("Manuscript/{title}.md"))
 			.unwrap()
@@ -2663,7 +2701,7 @@ mod tests {
 		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
 
 		assert_eq!(order_of(&root, "Notes"), notes);
-		assert_eq!(read_manifest(&root).unwrap().documents.len(), 8);
+		assert_eq!(read_manifest(&root).unwrap().documents().len(), 8);
 	}
 
 	#[test]
@@ -2722,14 +2760,13 @@ mod tests {
 	}
 
 	#[test]
-	fn a_section_whose_documents_are_scattered_is_still_reordered() {
-		// Only a hand-edited manifest can interleave two sections like this.
+	fn reordering_leaves_the_other_sections_where_they_were() {
 		let mut manifest = manifest_with(&[
 			"Manuscript/Chapter 1.md",
 			"Notes/Notes.md",
 			"Manuscript/Chapter 2.md",
 		]);
-		let second = manifest.documents[2].id;
+		let second = manifest.documents()[1].id;
 
 		reorder(&mut manifest, second, 0).unwrap();
 
@@ -2737,10 +2774,10 @@ mod tests {
 			paths_of(&manifest),
 			[
 				"Manuscript/Chapter 2.md",
-				"Notes/Notes.md",
-				"Manuscript/Chapter 1.md"
+				"Manuscript/Chapter 1.md",
+				"Notes/Notes.md"
 			],
-			"the section's own places keep their contents, in the new order"
+			"a document moves among the ones it sits beside and nowhere else"
 		);
 	}
 
