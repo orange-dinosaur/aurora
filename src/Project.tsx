@@ -600,7 +600,7 @@ export default function Project({
 									{tab.kind === "document" ? (
 										documentBody(tab)
 									) : (
-										<Search asked={asked} />
+										<Search root={root} asked={asked} />
 									)}
 								</div>
 							) : null,
