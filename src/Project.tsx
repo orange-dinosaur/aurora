@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
@@ -120,6 +120,9 @@ export default function Project({
 	// Bumped every time search is asked for, so asking again while its tab is
 	// already open reaches the field rather than doing nothing.
 	const [asked, setAsked] = useState(0);
+	// Bumped whenever a document reaches disk, which is the other way the
+	// project changes under anything holding a copy of it.
+	const [written, setWritten] = useState(0);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
 
 	// A tab's key is its own, handed out when it opens and never derived from
@@ -371,6 +374,7 @@ export default function Project({
 		try {
 			await invoke("write_document", { root, id, text });
 			result = { kind: "clean" };
+			setWritten((times) => times + 1);
 		} catch (error) {
 			const { kind, message } = failure(error);
 			// The file going missing is the one failure the writer can do
@@ -503,6 +507,20 @@ export default function Project({
 		setListing((version) => version + 1);
 	}
 
+	// What every open document says right now, which is ahead of its file for
+	// the 800 ms after a keystroke and ahead of anything search read earlier.
+	const live = useMemo(
+		() =>
+			new Map(
+				tabs.flatMap((tab) =>
+					tab.kind === "document" && tab.content.kind === "ready"
+						? [[tab.document.id, tab.content.text] as const]
+						: [],
+				),
+			),
+		[tabs],
+	);
+
 	function documentBody(tab: DocumentTab) {
 		if (tab.content.kind === "ready") {
 			return (
@@ -616,6 +634,9 @@ export default function Project({
 										<Search
 											root={root}
 											asked={asked}
+											active={tab.key === activeKey}
+											changed={listing + written}
+											live={live}
 											onOpen={(document, seed) =>
 												void openDocument(
 													document,

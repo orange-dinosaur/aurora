@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { contextOf, type Context } from "./context";
 import { failure } from "./errors";
-import type { Seed } from "./find";
+import type { Run, Seed } from "./find";
 import Icon from "./Icon";
 import { runsOf } from "./runs";
 import { MIN_QUERY, search, type Searchable } from "./search";
@@ -12,6 +12,19 @@ type Props = {
 	root: string;
 	/** Counts the times search has been asked for, so a second ask can answer. */
 	asked: number;
+	/** Whether this tab is the one on screen. */
+	active: boolean;
+	/**
+	 * Counts the times the project has changed under what search read: a
+	 * document written to disk, or the manifest itself changing.
+	 */
+	changed: number;
+	/**
+	 * The text of every open document as its tab holds it, by id. Newer than
+	 * the file for the 800 ms after a keystroke, and newer than anything the
+	 * sweep read for as long as the tab is open.
+	 */
+	live: Map<string, string>;
 	/** Opens a document, on a hit when there is one to open it on. */
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 };
@@ -26,6 +39,8 @@ type Corpus =
 	| { kind: "reading" }
 	| {
 			kind: "ready";
+			/** The value of `changed` this was read at, which is how it knows it is old. */
+			at: number;
 			documents: Searchable[];
 			/**
 			 * The documents themselves, by id. A result row knows an id; what
@@ -41,6 +56,34 @@ type Corpus =
  * first query waits: typing `Wren` should sweep once, not four times.
  */
 const SWEEP_MS = 250;
+
+/** Reads every document in the project and parses it, or says why it could not. */
+async function sweep(root: string, at: number): Promise<Corpus> {
+	try {
+		const documents = await invoke<DocumentText[]>("read_all_documents", {
+			root,
+		});
+
+		return {
+			kind: "ready",
+			at,
+			documents: documents.map(({ id, title, folder, text }) => ({
+				id,
+				title,
+				folder,
+				runs: text === null ? null : runsOf(text),
+			})),
+			known: new Map(
+				documents.map(({ text: _text, ...document }) => [
+					document.id,
+					document,
+				]),
+			),
+		};
+	} catch (error) {
+		return { kind: "failed", message: failure(error).message };
+	}
+}
 
 /**
  * How many of a document's hits are drawn before the rest are held back. A
@@ -98,9 +141,21 @@ function Line({ before, match, after }: Context) {
 	);
 }
 
-export default function Search({ root, asked, onOpen }: Props) {
+export default function Search({
+	root,
+	asked,
+	active,
+	changed,
+	live,
+	onOpen,
+}: Props) {
 	const [query, setQuery] = useState("");
 	const [corpus, setCorpus] = useState<Corpus>({ kind: "unread" });
+	// A re-read of a corpus that is already on screen, kept apart from the
+	// corpus itself so the results can stay up while it is in flight.
+	const [refreshing, setRefreshing] = useState(false);
+	/** The runs of every open document, which beat the ones read from disk. */
+	const [open, setOpen] = useState<Map<string, Run[]>>(new Map());
 	const [opened, setOpened] = useState<Opened>(FRESH);
 	const field = useRef<HTMLInputElement>(null);
 
@@ -112,6 +167,14 @@ export default function Search({ root, asked, onOpen }: Props) {
 		field.current?.select();
 	}, [asked]);
 
+	// A sweep that failed is not retried on its own. Asking for search again is
+	// asking for another go at it.
+	useEffect(() => {
+		setCorpus((held) =>
+			held.kind === "failed" ? { kind: "unread" } : held,
+		);
+	}, [asked]);
+
 	useEffect(() => {
 		if (query.length < MIN_QUERY || corpus.kind !== "unread") {
 			return;
@@ -119,43 +182,62 @@ export default function Search({ root, asked, onOpen }: Props) {
 
 		const timer = window.setTimeout(() => {
 			setCorpus({ kind: "reading" });
-
-			invoke<DocumentText[]>("read_all_documents", { root })
-				.then((documents) => {
-					setCorpus({
-						kind: "ready",
-						documents: documents.map(
-							({ id, title, folder, text }) => ({
-								id,
-								title,
-								folder,
-								runs: text === null ? null : runsOf(text),
-							}),
-						),
-						known: new Map(
-							documents.map(({ text: _text, ...document }) => [
-								document.id,
-								document,
-							]),
-						),
-					});
-				})
-				.catch((error: unknown) => {
-					setCorpus({
-						kind: "failed",
-						message: failure(error).message,
-					});
-				});
+			void sweep(root, changed).then(setCorpus);
 		}, SWEEP_MS);
 
 		return () => window.clearTimeout(timer);
-	}, [query, corpus.kind, root]);
+	}, [query, corpus.kind, changed, root]);
 
-	const results = useMemo(
-		() =>
-			corpus.kind === "ready" ? search(corpus.documents, query) : null,
-		[corpus, query],
-	);
+	// The project has moved on since the corpus was read: a document was
+	// written and its tab closed, or the manifest changed. Read it again as
+	// the writer comes back to look, and leave the old results up while that
+	// happens — they came here to read them, not to watch them go away.
+	useEffect(() => {
+		if (
+			!active ||
+			refreshing ||
+			corpus.kind !== "ready" ||
+			corpus.at === changed
+		) {
+			return;
+		}
+
+		setRefreshing(true);
+		void sweep(root, changed).then((next) => {
+			setCorpus(next);
+			setRefreshing(false);
+		});
+	}, [active, refreshing, corpus, changed, root]);
+
+	// What the open tabs hold, parsed when this tab comes forward. Nothing else
+	// can be typed into while search is on screen, so one reading per visit is
+	// as fresh as reading continuously — and reading continuously would parse a
+	// chapter on every keystroke the writer makes somewhere else.
+	useEffect(() => {
+		if (!active) {
+			return;
+		}
+
+		setOpen(
+			new Map([...live].map(([id, text]) => [id, runsOf(text)] as const)),
+		);
+	}, [active, live]);
+
+	const results = useMemo(() => {
+		if (corpus.kind !== "ready") {
+			return null;
+		}
+
+		// An open tab beats the file it came from: a word typed a moment ago
+		// is not on disk yet, and search would otherwise say it is not there.
+		return search(
+			corpus.documents.map((document) => {
+				const runs = open.get(document.id);
+				return runs === undefined ? document : { ...document, runs };
+			}),
+			query,
+		);
+	}, [corpus, open, query]);
 
 	// Choices made against an older query are not choices about these results.
 	const view = opened.query === query ? opened : FRESH;
