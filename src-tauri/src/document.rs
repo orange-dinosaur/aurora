@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::project::{
 	Error, MANIFEST_FILE, Manifest, Result, read_manifest, validate_name, write_atomic, write_json,
 };
+use crate::tree::Node;
 
 /// A document inside a project. The path is relative to the project root and
 /// always uses forward slashes, so a manifest written on one platform still
@@ -120,45 +121,94 @@ pub struct DocumentText {
 	pub text: Option<String>,
 }
 
-/// The `.md` files in each of the project's sections, as paths relative to the
-/// root. Sections keep the order they are given and files within one are
-/// sorted. Anything else is ignored: other extensions, nested folders, symlinks
-/// and names that are not valid UTF-8.
-pub fn scan(root: &Path, folders: &[String]) -> Result<Vec<String>> {
-	let mut found = Vec::new();
+/// What each of the project's sections holds, as a tree: every `.md` file
+/// under it and every directory on the way to one, however deep. Sections keep
+/// the order they are given and what a directory holds is sorted by name.
+/// Anything else is ignored: other extensions, symlinks, hidden names and names
+/// that are not valid UTF-8.
+///
+/// The disk has no ids to give, so every node comes back with a fresh one.
+/// Matching what is here against what the project already knows is
+/// `reconcile`'s job.
+pub fn scan(root: &Path, folders: &[String]) -> Result<Vec<Node>> {
+	let mut sections = Vec::new();
 
 	for folder in folders {
-		let entries = match fs::read_dir(root.join(folder)) {
-			Ok(entries) => entries,
-			// A section the writer deleted is not an error; it simply holds
-			// nothing.
-			Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
-			Err(e) => return Err(e.into()),
+		// A section the writer deleted is not an error; it simply is not there.
+		let Some(children) = read_level(&root.join(folder))? else {
+			continue;
 		};
-
-		let mut files = Vec::new();
-		for entry in entries {
-			let entry = entry?;
-			if !entry.file_type()?.is_file() {
-				continue;
-			}
-
-			let name = entry.file_name();
-			let Some(name) = name.to_str() else {
-				continue;
-			};
-			if !is_markdown(name) {
-				continue;
-			}
-
-			files.push(format!("{folder}/{name}"));
-		}
-
-		files.sort();
-		found.append(&mut files);
+		sections.push(Node::Folder {
+			id: Uuid::new_v4(),
+			name: folder.clone(),
+			kind: None,
+			children,
+		});
 	}
 
-	Ok(found)
+	Ok(sections)
+}
+
+/// What one directory holds, or `None` when there is no such directory.
+fn read_level(dir: &Path) -> Result<Option<Vec<Node>>> {
+	let entries = match fs::read_dir(dir) {
+		Ok(entries) => entries,
+		Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+		Err(e) => return Err(e.into()),
+	};
+
+	let mut found = Vec::new();
+	for entry in entries {
+		let entry = entry?;
+		let name = entry.file_name();
+		let Some(name) = name.to_str() else {
+			continue;
+		};
+		// The trash lives inside the project without being part of it, and
+		// nothing else hidden is the writer's work either.
+		if name.starts_with('.') {
+			continue;
+		}
+
+		// A symlink is neither, so it is passed over as it always has been.
+		let entry_type = entry.file_type()?;
+		if entry_type.is_dir() {
+			found.push(Node::Folder {
+				id: Uuid::new_v4(),
+				name: name.to_owned(),
+				kind: None,
+				children: read_level(&entry.path())?.unwrap_or_default(),
+			});
+		} else if entry_type.is_file() && is_markdown(name) {
+			found.push(Node::Document {
+				id: Uuid::new_v4(),
+				name: name.to_owned(),
+				target: None,
+			});
+		}
+	}
+
+	found.sort_by(|a, b| a.name().cmp(b.name()));
+	Ok(Some(found))
+}
+
+/// The documents in a scanned tree, as paths relative to the root it was
+/// scanned from, which is the shape the manifest still records them in.
+fn document_paths(nodes: &[Node]) -> Vec<String> {
+	let mut paths = Vec::new();
+	collect_paths(nodes, "", &mut paths);
+	paths
+}
+
+fn collect_paths(nodes: &[Node], prefix: &str, paths: &mut Vec<String>) {
+	for node in nodes {
+		match node {
+			Node::Document { name, .. } => paths.push(format!("{prefix}{name}")),
+			Node::Folder { name, children, .. } => {
+				collect_paths(children, &format!("{prefix}{name}/"), paths)
+			}
+		}
+	}
 }
 
 fn is_markdown(name: &str) -> bool {
@@ -226,7 +276,7 @@ pub fn reconcile(manifest: &mut Manifest, found: &[String]) -> bool {
 /// back only when reconciliation actually changed something.
 pub fn refresh(root: &Path) -> Result<Manifest> {
 	let mut manifest = read_manifest(root)?;
-	let found = scan(root, &manifest.folders)?;
+	let found = document_paths(&scan(root, &manifest.folders)?);
 	if reconcile(&mut manifest, &found) {
 		write_json(&root.join(MANIFEST_FILE), &manifest)?;
 	}
@@ -733,28 +783,29 @@ pub fn list_trash(root: PathBuf) -> Result<Vec<TrashEntry>> {
 	let manifest = read_manifest(&root)?;
 	// The trash is laid out in sections exactly as the project is, so the same
 	// scan reads it.
-	let mut entries: Vec<TrashEntry> = scan(&root.join(TRASH_DIR), &manifest.folders)?
-		.iter()
-		.map(|path| {
-			let file = path.split_once('/').map_or(path.as_str(), |(_, file)| file);
-			let (deleted, was) = match unstamp(file) {
-				Some((at, was)) => (Some(at), was),
-				// A file somebody put there by hand is still shown, so it can
-				// at least be got rid of.
-				None => (None, file),
-			};
-			TrashEntry {
-				path: path.clone(),
-				folder: section_of(path).unwrap_or_default().to_owned(),
-				title: Path::new(was)
-					.file_stem()
-					.and_then(|stem| stem.to_str())
-					.unwrap_or(was)
-					.to_owned(),
-				deleted,
-			}
-		})
-		.collect();
+	let mut entries: Vec<TrashEntry> =
+		document_paths(&scan(&root.join(TRASH_DIR), &manifest.folders)?)
+			.iter()
+			.map(|path| {
+				let file = path.split_once('/').map_or(path.as_str(), |(_, file)| file);
+				let (deleted, was) = match unstamp(file) {
+					Some((at, was)) => (Some(at), was),
+					// A file somebody put there by hand is still shown, so it can
+					// at least be got rid of.
+					None => (None, file),
+				};
+				TrashEntry {
+					path: path.clone(),
+					folder: section_of(path).unwrap_or_default().to_owned(),
+					title: Path::new(was)
+						.file_stem()
+						.and_then(|stem| stem.to_str())
+						.unwrap_or(was)
+						.to_owned(),
+					deleted,
+				}
+			})
+			.collect();
 
 	// Newest first, with anything undated behind the rest.
 	entries.sort_by(|a, b| b.deleted.cmp(&a.deleted).then_with(|| a.path.cmp(&b.path)));
@@ -877,6 +928,7 @@ pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
 mod tests {
 	use super::*;
 	use crate::project::{Format, NameError, create};
+	use crate::tree;
 	use time::OffsetDateTime;
 
 	fn fixed_time() -> OffsetDateTime {
@@ -900,13 +952,18 @@ mod tests {
 			.collect()
 	}
 
+	/// The documents a scan found, in the flat shape the older tests read.
+	fn scan_paths(root: &Path) -> Vec<String> {
+		document_paths(&scan(root, &novel_folders()).unwrap())
+	}
+
 	#[test]
 	fn scan_finds_the_seed_files_in_section_order() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
 		assert_eq!(
-			scan(&root, &novel_folders()).unwrap(),
+			scan_paths(&root),
 			[
 				"Manuscript/Chapter 1.md",
 				"Outline/Outline.md",
@@ -925,7 +982,7 @@ mod tests {
 			fs::write(root.join("Manuscript").join(name), "").unwrap();
 		}
 
-		let found = scan(&root, &novel_folders()).unwrap();
+		let found = scan_paths(&root);
 		assert_eq!(
 			&found[..3],
 			[
@@ -943,10 +1000,8 @@ mod tests {
 		let manuscript = root.join("Manuscript");
 		fs::write(manuscript.join("cover.png"), "").unwrap();
 		fs::write(manuscript.join("notes.txt"), "").unwrap();
-		fs::create_dir(manuscript.join("Part One")).unwrap();
-		fs::write(manuscript.join("Part One").join("Chapter 2.md"), "").unwrap();
 
-		let found = scan(&root, &novel_folders()).unwrap();
+		let found = scan_paths(&root);
 		assert_eq!(
 			found
 				.iter()
@@ -958,16 +1013,80 @@ mod tests {
 	}
 
 	#[test]
+	fn a_file_inside_a_directory_is_found() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = root.join("Manuscript").join("Part One");
+		fs::create_dir(&part).unwrap();
+		fs::write(part.join("Chapter 2.md"), "").unwrap();
+
+		assert_eq!(
+			scan_paths(&root)
+				.iter()
+				.filter(|p| p.starts_with("Manuscript/"))
+				.collect::<Vec<_>>(),
+			[
+				"Manuscript/Chapter 1.md",
+				"Manuscript/Part One/Chapter 2.md"
+			],
+			"a directory sorts among the files beside it"
+		);
+	}
+
+	#[test]
+	fn a_file_three_levels_down_is_found() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let chapter = root.join("Manuscript").join("Part One").join("Chapter 3");
+		fs::create_dir_all(&chapter).unwrap();
+		fs::write(chapter.join("Scene 2.md"), "").unwrap();
+
+		assert!(
+			scan_paths(&root).contains(&"Manuscript/Part One/Chapter 3/Scene 2.md".to_owned()),
+			"the walk goes as deep as the writer does"
+		);
+	}
+
+	#[test]
+	fn an_empty_directory_is_a_folder_holding_nothing() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::create_dir(root.join("Manuscript").join("Part Two")).unwrap();
+
+		let found = scan(&root, &novel_folders()).unwrap();
+
+		let manuscript = &found[0];
+		let Some([_, Node::Folder { name, children, .. }]) =
+			tree::children(&found, manuscript.id())
+		else {
+			panic!("the seed chapter and the new directory, in that order")
+		};
+		assert_eq!(name, "Part Two");
+		assert!(children.is_empty(), "nothing is in it yet");
+		assert!(
+			!scan_paths(&root).iter().any(|p| p.contains("Part Two")),
+			"and it holds no documents to speak of"
+		);
+	}
+
+	#[test]
+	fn a_hidden_directory_is_passed_over() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let hidden = root.join("Manuscript").join(".drafts");
+		fs::create_dir(&hidden).unwrap();
+		fs::write(hidden.join("Chapter 1.md"), "").unwrap();
+
+		assert!(!scan_paths(&root).iter().any(|p| p.contains(".drafts")));
+	}
+
+	#[test]
 	fn an_uppercase_extension_is_still_markdown() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::write(root.join("Notes").join("Ideas.MD"), "").unwrap();
 
-		assert!(
-			scan(&root, &novel_folders())
-				.unwrap()
-				.contains(&"Notes/Ideas.MD".to_owned())
-		);
+		assert!(scan_paths(&root).contains(&"Notes/Ideas.MD".to_owned()));
 	}
 
 	#[test]
@@ -977,8 +1096,12 @@ mod tests {
 		fs::remove_dir_all(root.join("Outline")).unwrap();
 
 		let found = scan(&root, &novel_folders()).unwrap();
-		assert!(!found.iter().any(|p| p.starts_with("Outline/")));
-		assert_eq!(found.len(), 4);
+
+		assert!(
+			!found.iter().any(|node| node.name() == "Outline"),
+			"a section that is not there is not a folder either"
+		);
+		assert_eq!(scan_paths(&root).len(), 4);
 	}
 
 	#[test]
@@ -988,8 +1111,7 @@ mod tests {
 		fs::create_dir(root.join("Scraps")).unwrap();
 		fs::write(root.join("Scraps").join("Offcut.md"), "").unwrap();
 
-		let found = scan(&root, &novel_folders()).unwrap();
-		assert!(!found.iter().any(|p| p.starts_with("Scraps/")));
+		assert!(!scan_paths(&root).iter().any(|p| p.starts_with("Scraps/")));
 	}
 
 	fn manifest_with(paths: &[&str]) -> Manifest {
@@ -1338,7 +1460,7 @@ mod tests {
 			.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
 			.collect();
 		assert_eq!(left, ["Chapter 1.md"]);
-		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 5);
+		assert_eq!(scan_paths(&root).len(), 5);
 	}
 
 	#[test]
@@ -1762,7 +1884,7 @@ mod tests {
 			);
 		}
 
-		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 5);
+		assert_eq!(scan_paths(&root).len(), 5);
 	}
 
 	#[test]
@@ -1847,7 +1969,7 @@ mod tests {
 		let err = create_document(root.clone(), "Notes".to_owned(), ".md".to_owned()).unwrap_err();
 
 		assert!(matches!(err, Error::InvalidName(NameError::Empty)));
-		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 5);
+		assert_eq!(scan_paths(&root).len(), 5);
 	}
 
 	#[test]
@@ -1888,10 +2010,7 @@ mod tests {
 		rename_document(root.clone(), id, "Ithaca Falls".to_owned()).unwrap();
 
 		assert!(!root.join("Manuscript").join("Chapter 1.md").exists());
-		assert_eq!(
-			scan(&root, &novel_folders()).unwrap()[0],
-			"Manuscript/Ithaca Falls.md"
-		);
+		assert_eq!(scan_paths(&root)[0], "Manuscript/Ithaca Falls.md");
 	}
 
 	#[test]
@@ -2148,7 +2267,7 @@ mod tests {
 		trash(&root, id, fixed_time()).unwrap();
 		refresh(&root).unwrap();
 
-		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 4);
+		assert_eq!(scan_paths(&root).len(), 4);
 		assert_eq!(read_manifest(&root).unwrap().documents.len(), 4);
 		assert!(trashed(&root, "Manuscript").len() == 1, "it is still there");
 	}
@@ -2378,7 +2497,7 @@ mod tests {
 		purge_trash_entry(root.clone(), entry.path).unwrap();
 
 		assert!(list_trash(root.clone()).unwrap().is_empty());
-		assert_eq!(scan(&root, &novel_folders()).unwrap().len(), 4);
+		assert_eq!(scan_paths(&root).len(), 4);
 	}
 
 	#[test]
@@ -2565,11 +2684,11 @@ mod tests {
 	fn reordering_touches_no_files() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_three_chapters(&parent);
-		let before = scan(&root, &novel_folders()).unwrap();
+		let before = scan_paths(&root);
 
 		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
 
-		assert_eq!(scan(&root, &novel_folders()).unwrap(), before);
+		assert_eq!(scan_paths(&root), before);
 	}
 
 	#[test]
