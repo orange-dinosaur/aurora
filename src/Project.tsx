@@ -10,6 +10,7 @@ import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import type { Preferences, ProjectDocument } from "./types";
+import type { FolderRef } from "./tree";
 import { deleteDocument } from "./documents";
 import type { Seed } from "./find";
 import { failure } from "./errors";
@@ -50,9 +51,8 @@ type DocumentTab = {
 type FolderTab = {
 	kind: "folder";
 	key: string;
-	/** The folder the overview is of, which is what the command takes. */
-	id: string;
-	name: string;
+	/** The folder the overview is of, and what may be made inside it. */
+	folder: FolderRef;
 };
 
 type TrashTab = {
@@ -91,7 +91,7 @@ function strip(tab: Tab): TabView {
 				key: tab.key,
 				kind: "folder",
 				folder: null,
-				title: tab.name,
+				title: tab.folder.name,
 				dirty: false,
 			};
 		case "trash":
@@ -263,9 +263,9 @@ export default function Project({
 		patch(document.id, (tab) => ({ ...tab, content }));
 	}
 
-	function openFolder(id: string, name: string) {
+	function openFolder(folder: FolderRef) {
 		const already = tabs.find(
-			(tab) => tab.kind === "folder" && tab.id === id,
+			(tab) => tab.kind === "folder" && tab.folder.id === folder.id,
 		);
 		if (already !== undefined) {
 			setActiveKey(already.key);
@@ -275,8 +275,7 @@ export default function Project({
 		const opening: FolderTab = {
 			kind: "folder",
 			key: freshKey(),
-			id,
-			name,
+			folder,
 		};
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
@@ -331,9 +330,9 @@ export default function Project({
 		setListing((version) => version + 1);
 	}
 
-	// Ordering lives in the manifest, so nothing here changes except what every
-	// listing of it has to be told to read again.
-	function reordered() {
+	// Reordering, and making a folder, change the manifest and nothing else,
+	// so every listing of it is told to read it again and nothing is opened.
+	function changed() {
 		setListing((version) => version + 1);
 	}
 
@@ -603,7 +602,7 @@ export default function Project({
 						active?.kind === "document" ? active.document.id : null
 					}
 					selectedFolder={
-						active?.kind === "folder" ? active.id : null
+						active?.kind === "folder" ? active.folder.id : null
 					}
 					selectedTrash={active?.kind === "trash"}
 					onSelect={(document) => void openDocument(document)}
@@ -611,7 +610,7 @@ export default function Project({
 					onOpenTrash={openTrash}
 					onCreated={created}
 					onRenamed={renamed}
-					onReordered={reordered}
+					onChanged={changed}
 					onDelete={remove}
 					onClose={onClose}
 				/>
@@ -682,8 +681,7 @@ export default function Project({
 								<FolderView
 									key={active.key}
 									root={root}
-									id={active.id}
-									folder={active.name}
+									folder={active.folder}
 									reload={listing}
 									onSelect={(document) =>
 										void openDocument(document)
@@ -691,7 +689,7 @@ export default function Project({
 									onOpenFolder={openFolder}
 									onCreated={created}
 									onRenamed={renamed}
-									onReordered={reordered}
+									onChanged={changed}
 									onDelete={remove}
 								/>
 							</div>

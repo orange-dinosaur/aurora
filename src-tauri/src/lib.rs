@@ -25,6 +25,7 @@ pub fn run() {
 			document::restore_document,
 			document::folder_overview,
 			document::create_document,
+			document::create_folder,
 			document::rename_document,
 			document::set_document_target,
 			document::delete_document,

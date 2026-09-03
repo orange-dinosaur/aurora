@@ -49,6 +49,23 @@ pub enum Node {
 	},
 }
 
+/// Whether a folder of this kind may be made inside a folder that is itself
+/// `parent`, where `in_manuscript` says whether that folder is the Manuscript
+/// or sits somewhere under it.
+///
+/// The Manuscript is the only place a folder has a kind at all. A part goes
+/// directly in it, a chapter goes in it or in a part, and a chapter holds
+/// documents rather than folders. Everywhere else a folder is just a folder,
+/// at any depth.
+pub fn may_hold(in_manuscript: bool, parent: Option<FolderKind>, kind: Option<FolderKind>) -> bool {
+	match (in_manuscript, parent) {
+		(false, _) => kind.is_none(),
+		(true, None) => kind.is_some(),
+		(true, Some(FolderKind::Part)) => kind == Some(FolderKind::Chapter),
+		(true, Some(FolderKind::Chapter)) => false,
+	}
+}
+
 impl Node {
 	/// A new folder of no particular kind, holding whatever is passed.
 	pub(crate) fn folder(name: &str, children: Vec<Node>) -> Self {
@@ -634,5 +651,45 @@ mod tests {
 	#[test]
 	fn walking_an_empty_tree_yields_nothing() {
 		assert_eq!(walk(&[]).count(), 0);
+	}
+
+	const PART: Option<FolderKind> = Some(FolderKind::Part);
+	const CHAPTER: Option<FolderKind> = Some(FolderKind::Chapter);
+	const PLAIN: Option<FolderKind> = None;
+
+	#[test]
+	fn the_manuscript_takes_a_part_or_a_chapter() {
+		assert!(may_hold(true, PLAIN, PART));
+		assert!(may_hold(true, PLAIN, CHAPTER));
+	}
+
+	#[test]
+	fn a_part_takes_a_chapter_and_nothing_else() {
+		assert!(may_hold(true, PART, CHAPTER));
+		assert!(!may_hold(true, PART, PART), "a part inside a part");
+		assert!(!may_hold(true, PART, PLAIN), "a plain folder inside a part");
+	}
+
+	#[test]
+	fn a_chapter_holds_no_folder_at_all() {
+		assert!(!may_hold(true, CHAPTER, PART));
+		assert!(!may_hold(true, CHAPTER, CHAPTER));
+		assert!(!may_hold(true, CHAPTER, PLAIN));
+	}
+
+	#[test]
+	fn the_manuscript_takes_no_folder_without_a_kind() {
+		assert!(!may_hold(true, PLAIN, PLAIN));
+	}
+
+	#[test]
+	fn a_kind_means_nothing_outside_the_manuscript() {
+		assert!(may_hold(false, PLAIN, PLAIN), "a folder in Notes");
+		assert!(
+			may_hold(false, PLAIN, PLAIN),
+			"and a folder inside that one, however deep"
+		);
+		assert!(!may_hold(false, PLAIN, PART));
+		assert!(!may_hold(false, PLAIN, CHAPTER));
 	}
 }

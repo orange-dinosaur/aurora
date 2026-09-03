@@ -4,11 +4,19 @@ import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
 import Icon from "./Icon";
 import NameField from "./NameField";
+import NewMenu from "./NewMenu";
 import type { ProjectDocument, TreeNode } from "./types";
-import { createDocument, renameDocument, reorderDocument } from "./documents";
+import type { Making } from "./kinds";
+import {
+	createDocument,
+	createFolder,
+	renameDocument,
+	reorderDocument,
+} from "./documents";
 import { failure } from "./errors";
 import { useReorder } from "./reorder";
 import { documentsIn, rows, sections } from "./tree";
+import type { FolderRef } from "./tree";
 
 // How far in a row sits, as the stylesheet reads it.
 function indent(depth: number) {
@@ -18,13 +26,13 @@ function indent(depth: number) {
 type Status =
 	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
 
-// At most one section is being named at a time, so the folder rides along with
-// the state rather than sitting beside it.
+// At most one thing is being named at a time, so where it is going and what it
+// is ride along with the state rather than sitting beside it.
 type Naming =
 	| { kind: "closed" }
-	| { kind: "open"; folder: string }
-	| { kind: "creating"; folder: string }
-	| { kind: "refused"; folder: string; message: string };
+	| { kind: "open"; at: string; making: Making }
+	| { kind: "creating"; at: string; making: Making }
+	| { kind: "refused"; at: string; making: Making; message: string };
 
 // The document the writer is retitling, and what Rust made of the last name
 // they tried.
@@ -50,11 +58,12 @@ type Props = {
 	selectedFolder: string | null;
 	selectedTrash: boolean;
 	onSelect: (document: ProjectDocument) => void;
-	onOpenFolder: (id: string, name: string) => void;
+	onOpenFolder: (folder: FolderRef) => void;
 	onOpenTrash: () => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
-	onReordered: () => void;
+	/** The manifest changed in a way every listing of it has to read again. */
+	onChanged: () => void;
 	// The project view owns this one: it has to write down what the writer
 	// last typed before the file moves, and close the tab afterwards.
 	onDelete: (id: string) => Promise<void>;
@@ -74,7 +83,7 @@ export default function Sidebar({
 	onOpenTrash,
 	onCreated,
 	onRenamed,
-	onReordered,
+	onChanged,
 	onDelete,
 	onClose,
 }: Props) {
@@ -103,7 +112,7 @@ export default function Sidebar({
 	async function move(id: string, index: number) {
 		try {
 			await reorderDocument(root, id, index);
-			onReordered();
+			onChanged();
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
@@ -131,17 +140,25 @@ export default function Sidebar({
 		}
 	}
 
-	async function create(folder: string, name: string) {
-		setNaming({ kind: "creating", folder });
+	async function create(at: string, making: Making, name: string) {
+		setNaming({ kind: "creating", at, making });
 		try {
-			onCreated(await createDocument(root, folder, name));
+			if (making.what === "document") {
+				onCreated(await createDocument(root, at, name));
+			} else {
+				await createFolder(root, at, name, making.kind);
+				// Nothing to open: a new folder is empty, so the listings
+				// simply read it again.
+				onChanged();
+			}
 			setNaming({ kind: "closed" });
 		} catch (error) {
 			// A name Rust would not take leaves the field open, holding what
 			// was typed, so it can be corrected rather than typed again.
 			setNaming({
 				kind: "refused",
-				folder,
+				at,
+				making,
 				message: failure(error).message,
 			});
 		}
@@ -170,10 +187,12 @@ export default function Sidebar({
 													: undefined
 											}
 											onClick={() =>
-												onOpenFolder(
-													section.id,
-													section.name,
-												)
+												onOpenFolder({
+													id: section.id,
+													name: section.name,
+													kind: section.kind,
+													section: section.name,
+												})
 											}
 										>
 											{section.name}
@@ -182,27 +201,28 @@ export default function Sidebar({
 									<span className="section__count">
 										{documentsIn(section.children)}
 									</span>
-									<button
-										type="button"
-										className="section__new"
-										aria-label={`New document in ${section.name}`}
-										onClick={() =>
+									<NewMenu
+										label={`New in ${section.name}`}
+										kind={section.kind}
+										section={section.name}
+										onChoose={(making) =>
 											setNaming({
 												kind: "open",
-												folder: section.name,
+												at: section.id,
+												making,
 											})
 										}
-									>
-										<Icon name="plus" />
-									</button>
+									/>
 								</div>
 
 								{naming.kind !== "closed" &&
-									naming.folder === section.name && (
+									naming.at === section.id && (
 										<div className="sidebar__field">
 											<NameField
-												label={`Name of the new document in ${section.name}`}
-												placeholder="Chapter 2"
+												label={`Name of the new ${naming.making.noun} in ${section.name}`}
+												placeholder={
+													naming.making.placeholder
+												}
 												busy={
 													naming.kind === "creating"
 												}
@@ -213,7 +233,8 @@ export default function Sidebar({
 												}
 												onSubmit={(name) =>
 													void create(
-														section.name,
+														section.id,
+														naming.making,
 														name,
 													)
 												}
@@ -237,9 +258,27 @@ export default function Sidebar({
 															row.depth,
 														)}
 													>
-														<span className="folder">
+														<button
+															type="button"
+															className="folder"
+															aria-current={
+																row.id ===
+																selectedFolder
+																	? "page"
+																	: undefined
+															}
+															onClick={() =>
+																onOpenFolder({
+																	id: row.id,
+																	name: row.name,
+																	kind: row.folderKind,
+																	section:
+																		section.name,
+																})
+															}
+														>
 															{row.name}
-														</span>
+														</button>
 													</li>
 												);
 											}

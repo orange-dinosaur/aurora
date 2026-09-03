@@ -9,7 +9,7 @@ use time::{Date, Month, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::project::{
-	Error, Manifest, Result, read_manifest, validate_name, write_atomic, write_manifest,
+	Error, MANUSCRIPT, Manifest, Result, read_manifest, validate_name, write_atomic, write_manifest,
 };
 use crate::tree::{self, FolderKind, Node};
 
@@ -145,6 +145,16 @@ pub enum NodeView {
 		children: Vec<NodeView>,
 	},
 	Document(DocumentView),
+}
+
+impl NodeView {
+	/// The node's id, whichever kind it is.
+	pub fn id(&self) -> Uuid {
+		match self {
+			NodeView::Folder { id, .. } => *id,
+			NodeView::Document(document) => document.id,
+		}
+	}
 }
 
 /// The tree under `prefix`, ready to send. The prefix is how far down the walk
@@ -511,6 +521,16 @@ pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
 /// the same way. The path may come from the frontend or be walked out of the
 /// manifest, and neither is trusted.
 fn document_path(manifest: &Manifest, base: &Path, path: &str) -> Result<PathBuf> {
+	project_path(manifest, base, path, true)
+}
+
+/// The same walk for a directory, whose last part is a folder name rather than
+/// a file and so is not Markdown.
+fn folder_path(manifest: &Manifest, base: &Path, path: &str) -> Result<PathBuf> {
+	project_path(manifest, base, path, false)
+}
+
+fn project_path(manifest: &Manifest, base: &Path, path: &str, markdown: bool) -> Result<PathBuf> {
 	let Some((section, rest)) = path.split_once('/') else {
 		return Err(Error::BadDocumentPath);
 	};
@@ -526,7 +546,7 @@ fn document_path(manifest: &Manifest, base: &Path, path: &str) -> Result<PathBuf
 
 	while let Some(part) = parts.next() {
 		// Only the last part is the file, and only it has to be Markdown.
-		if !ordinary(part) || (parts.peek().is_none() && !is_markdown(part)) {
+		if !ordinary(part) || (markdown && parts.peek().is_none() && !is_markdown(part)) {
 			return Err(Error::BadDocumentPath);
 		}
 		file.push(part);
@@ -588,10 +608,11 @@ fn without_extension(name: &str) -> &str {
 	}
 }
 
-/// Starts a new, empty document in one of the project's sections. The name is
-/// the title.
+/// Starts a new, empty document inside a folder. The name is the title, and a
+/// document may sit at any level: `parent_id` is a section as readily as a
+/// chapter three folders down.
 #[tauri::command]
-pub fn create_document(root: PathBuf, section: String, name: String) -> Result<DocumentView> {
+pub fn create_document(root: PathBuf, parent_id: Uuid, name: String) -> Result<DocumentView> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
@@ -600,11 +621,80 @@ pub fn create_document(root: PathBuf, section: String, name: String) -> Result<D
 	validate_name(name)?;
 
 	let manifest = read_manifest(&root)?;
-	if !manifest.folders().contains(&section) {
-		return Err(Error::UnknownSection);
+	let inside = folder_at(&manifest, parent_id)?.0;
+
+	add_document(&root, &manifest, &format!("{inside}/{name}.md"), "")
+}
+
+/// The path of the folder with this id, and its kind. An id naming a document,
+/// or nothing at all, is not somewhere to put anything.
+fn folder_at(manifest: &Manifest, id: Uuid) -> Result<(String, Option<FolderKind>)> {
+	match tree::find(&manifest.nodes, id) {
+		Some(Node::Folder { kind, .. }) => {
+			Ok((tree::path(&manifest.nodes, id).unwrap_or_default(), *kind))
+		}
+		_ => Err(Error::UnknownFolder),
+	}
+}
+
+/// Makes a folder inside another one, on disk and in the manifest. What it may
+/// be is [`tree::may_hold`]: the front end only offers the kinds that fit, and
+/// this is what makes that true rather than polite.
+#[tauri::command]
+pub fn create_folder(
+	root: PathBuf,
+	parent_id: Uuid,
+	name: String,
+	kind: Option<FolderKind>,
+) -> Result<NodeView> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	validate_name(&name)?;
+
+	let mut manifest = read_manifest(&root)?;
+	let chain = tree::trail(&manifest.nodes, parent_id).ok_or(Error::UnknownFolder)?;
+	let (inside, parent) = folder_at(&manifest, parent_id)?;
+
+	// The section at the head of the chain is what decides whether kinds mean
+	// anything here at all.
+	if !tree::may_hold(chain[0].name() == MANUSCRIPT, parent, kind) {
+		return Err(Error::FolderNotAllowed);
+	}
+	if tree::children(&manifest.nodes, parent_id)
+		.unwrap_or_default()
+		.iter()
+		.any(|node| node.name() == name)
+	{
+		return Err(Error::AlreadyExists);
 	}
 
-	add_document(&root, &manifest, &format!("{section}/{name}.md"), "")
+	let directory = folder_path(&manifest, &root, &format!("{inside}/{name}"))?;
+	// Where the folder above actually leads is what decides whether this stays
+	// inside the project: a section folder can be a symlink the writer made.
+	let above = directory.parent().ok_or(Error::BadDocumentPath)?;
+	if !above.canonicalize()?.starts_with(root.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+	fs::create_dir(&directory)?;
+
+	let made = Node::Folder {
+		id: Uuid::new_v4(),
+		name,
+		kind,
+		children: Vec::new(),
+	};
+	let view = views(std::slice::from_ref(&made), &format!("{inside}/"))
+		.pop()
+		.expect("one node in, one out");
+
+	let Some(Node::Folder { children, .. }) = tree::find_mut(&mut manifest.nodes, parent_id) else {
+		unreachable!("the parent was a folder a moment ago")
+	};
+	children.push(made);
+	write_manifest(&root, &mut manifest)?;
+
+	Ok(view)
 }
 
 /// The sidebar's view of the project, straight from the manifest.
@@ -1838,6 +1928,13 @@ mod tests {
 			.id()
 	}
 
+	/// `create_document` addressed by section name, which is how most of these
+	/// tests were written before a parent was an id.
+	fn create_in(root: PathBuf, section: &str, name: &str) -> Result<DocumentView> {
+		let id = section_id(&root, section);
+		create_document(root, id, name.to_owned())
+	}
+
 	/// A section's overview as the document cards it used to be, which is all
 	/// a project with no folders in it can hold.
 	fn cards(root: PathBuf, section: &str) -> Vec<DocumentSummary> {
@@ -2096,12 +2193,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		let created = create_document(
-			root.clone(),
-			"Manuscript".to_owned(),
-			"Chapter 2".to_owned(),
-		)
-		.unwrap();
+		let created = create_in(root.clone(), "Manuscript", "Chapter 2").unwrap();
 
 		assert_eq!(created.title, "Chapter 2");
 		assert_eq!(created.folder, "Manuscript");
@@ -2118,8 +2210,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		let created =
-			create_document(root.clone(), "Notes".to_owned(), "Ideas".to_owned()).unwrap();
+		let created = create_in(root.clone(), "Notes", "Ideas").unwrap();
 		write_document(root.clone(), created.id, "Begin in the middle.".to_owned()).unwrap();
 
 		assert_eq!(
@@ -2138,12 +2229,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let err = create_document(
-			root.clone(),
-			"Manuscript".to_owned(),
-			"Chapter 1".to_owned(),
-		)
-		.unwrap_err();
+		let err = create_in(root.clone(), "Manuscript", "Chapter 1").unwrap_err();
 
 		assert!(matches!(err, Error::DocumentExists));
 		assert_eq!(
@@ -2158,7 +2244,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		create_document(root.clone(), "Notes".to_owned(), "Chapter 1".to_owned()).unwrap();
+		create_in(root.clone(), "Notes", "Chapter 1").unwrap();
 
 		assert!(root.join("Notes").join("Chapter 1.md").exists());
 	}
@@ -2177,8 +2263,7 @@ mod tests {
 			"NUL",
 			"Chapter ",
 		] {
-			let err = create_document(root.clone(), "Manuscript".to_owned(), name.to_owned())
-				.unwrap_err();
+			let err = create_in(root.clone(), "Manuscript", name).unwrap_err();
 			assert!(
 				matches!(err, Error::InvalidName(_)),
 				"{name:?} should not be a document name"
@@ -2189,15 +2274,311 @@ mod tests {
 	}
 
 	#[test]
-	fn creating_in_a_section_the_project_does_not_have_is_refused() {
+	fn creating_somewhere_the_project_does_not_have_is_refused() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		let err =
-			create_document(root.clone(), "Scraps".to_owned(), "Offcut".to_owned()).unwrap_err();
+		let err = create_document(root.clone(), Uuid::new_v4(), "Offcut".to_owned()).unwrap_err();
 
-		assert!(matches!(err, Error::UnknownSection));
-		assert!(!root.join("Scraps").exists());
+		assert!(matches!(err, Error::UnknownFolder));
+		assert_eq!(scan_paths(&root).len(), 5, "nothing was written");
+	}
+
+	/// The id of a folder at a path, for the tests that build a hierarchy.
+	fn folder_id(root: &Path, path: &str) -> Uuid {
+		let manifest = read_manifest(root).unwrap();
+		tree::walk(&manifest.nodes)
+			.find(|node| tree::path(&manifest.nodes, node.id()).as_deref() == Some(path))
+			.expect("the project has that folder")
+			.id()
+	}
+
+	#[test]
+	fn a_part_and_a_chapter_inside_it_reach_the_folder_and_the_manifest() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let part = create_folder(
+			root.clone(),
+			section_id(&root, "Manuscript"),
+			"Part One".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap();
+		let NodeView::Folder { id, kind, .. } = part else {
+			panic!("a folder was made");
+		};
+		assert_eq!(kind, Some(FolderKind::Part));
+
+		create_folder(
+			root.clone(),
+			id,
+			"Chapter 2".to_owned(),
+			Some(FolderKind::Chapter),
+		)
+		.unwrap();
+
+		assert!(root.join("Manuscript/Part One/Chapter 2").is_dir());
+		let manifest = read_manifest(&root).unwrap();
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+		assert_eq!(
+			tree::path(&manifest.nodes, chapter).as_deref(),
+			Some("Manuscript/Part One/Chapter 2")
+		);
+		assert_eq!(
+			tree::parent(&manifest.nodes, chapter).map(Node::id),
+			Some(id),
+			"it sits inside the part, not beside it"
+		);
+	}
+
+	#[test]
+	fn a_document_can_be_made_inside_a_chapter() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let chapter = create_folder(
+			root.clone(),
+			section_id(&root, "Manuscript"),
+			"Chapter 2".to_owned(),
+			Some(FolderKind::Chapter),
+		)
+		.unwrap();
+		let NodeView::Folder { id, .. } = chapter else {
+			panic!("a folder was made");
+		};
+
+		let scene = create_document(root.clone(), id, "Scene 1".to_owned()).unwrap();
+
+		assert_eq!(scene.path, "Manuscript/Chapter 2/Scene 1.md");
+		assert!(root.join("Manuscript/Chapter 2/Scene 1.md").is_file());
+	}
+
+	#[test]
+	fn a_created_folder_keeps_its_kind_and_its_id_through_a_refresh() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let made = create_folder(
+			root.clone(),
+			section_id(&root, "Manuscript"),
+			"Part One".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap();
+		let NodeView::Folder { id, .. } = made else {
+			panic!("a folder was made");
+		};
+
+		let manifest = refresh(&root).unwrap();
+
+		let Some(Node::Folder { kind, .. }) = tree::find(&manifest.nodes, id) else {
+			panic!("the scan did not adopt it as something new");
+		};
+		assert_eq!(*kind, Some(FolderKind::Part));
+	}
+
+	/// Every combination the kind rules refuse, through the command that
+	/// enforces them, with nothing left on disk afterwards.
+	#[test]
+	fn a_part_outside_the_manuscript_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = create_folder(
+			root.clone(),
+			section_id(&root, "Notes"),
+			"Part One".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::FolderNotAllowed));
+		assert!(!root.join("Notes/Part One").exists());
+	}
+
+	#[test]
+	fn a_chapter_outside_the_manuscript_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = create_folder(
+			root.clone(),
+			section_id(&root, "Notes"),
+			"Chapter 2".to_owned(),
+			Some(FolderKind::Chapter),
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::FolderNotAllowed));
+	}
+
+	#[test]
+	fn a_folder_with_no_kind_inside_the_manuscript_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = create_folder(
+			root.clone(),
+			section_id(&root, "Manuscript"),
+			"Scraps".to_owned(),
+			None,
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::FolderNotAllowed));
+	}
+
+	#[test]
+	fn a_part_inside_a_part_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = a_part(&root);
+
+		let err = create_folder(
+			root.clone(),
+			part,
+			"Part Two".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::FolderNotAllowed));
+	}
+
+	#[test]
+	fn a_folder_with_no_kind_inside_a_part_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = a_part(&root);
+
+		let err = create_folder(root.clone(), part, "Scraps".to_owned(), None).unwrap_err();
+
+		assert!(matches!(err, Error::FolderNotAllowed));
+	}
+
+	#[test]
+	fn nothing_at_all_goes_inside_a_chapter() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = a_part(&root);
+		let chapter = create_folder(
+			root.clone(),
+			part,
+			"Chapter 2".to_owned(),
+			Some(FolderKind::Chapter),
+		)
+		.unwrap()
+		.id();
+
+		for kind in [Some(FolderKind::Part), Some(FolderKind::Chapter), None] {
+			let err = create_folder(root.clone(), chapter, "Inside".to_owned(), kind).unwrap_err();
+			assert!(matches!(err, Error::FolderNotAllowed), "{kind:?}");
+		}
+		assert!(!root.join("Manuscript/Part One/Chapter 2/Inside").exists());
+	}
+
+	#[test]
+	fn a_folder_beside_one_of_the_same_name_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		a_part(&root);
+
+		let err = create_folder(
+			root.clone(),
+			section_id(&root, "Manuscript"),
+			"Part One".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::AlreadyExists));
+	}
+
+	#[test]
+	fn a_folder_inside_a_folder_is_allowed_outside_the_manuscript() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let research = create_folder(
+			root.clone(),
+			section_id(&root, "Notes"),
+			"Research".to_owned(),
+			None,
+		)
+		.unwrap()
+		.id();
+
+		create_folder(root.clone(), research, "Ships".to_owned(), None).unwrap();
+
+		assert!(root.join("Notes/Research/Ships").is_dir());
+	}
+
+	#[test]
+	fn a_folder_somewhere_the_project_does_not_have_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let chapter = first_document(&root).id;
+
+		assert!(matches!(
+			create_folder(root.clone(), Uuid::new_v4(), "Part One".to_owned(), None).unwrap_err(),
+			Error::UnknownFolder
+		));
+		let inside_a_document =
+			create_folder(root.clone(), chapter, "Part One".to_owned(), None).unwrap_err();
+		assert!(
+			matches!(inside_a_document, Error::UnknownFolder),
+			"a document is not somewhere to put a folder"
+		);
+		assert!(matches!(
+			create_folder(
+				PathBuf::from("some/where"),
+				Uuid::new_v4(),
+				"Part One".to_owned(),
+				None
+			)
+			.unwrap_err(),
+			Error::RelativePath
+		));
+	}
+
+	#[test]
+	fn a_folder_name_is_held_to_the_same_rules_as_a_document() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = create_folder(
+			root.clone(),
+			section_id(&root, "Notes"),
+			"Rese/arch".to_owned(),
+			None,
+		)
+		.unwrap_err();
+
+		assert!(matches!(
+			err,
+			Error::InvalidName(NameError::IllegalCharacter('/'))
+		));
+	}
+
+	/// A part in the Manuscript, which most of the refusals need one of.
+	fn a_part(root: &Path) -> Uuid {
+		create_folder(
+			root.to_path_buf(),
+			section_id(root, "Manuscript"),
+			"Part One".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap()
+		.id()
+	}
+
+	#[test]
+	fn creating_inside_a_document_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let chapter = first_document(&root).id;
+
+		let err = create_document(root.clone(), chapter, "Offcut".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::UnknownFolder));
 	}
 
 	#[test]
@@ -2206,12 +2587,7 @@ mod tests {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::remove_dir_all(root.join("Manuscript")).unwrap();
 
-		let created = create_document(
-			root.clone(),
-			"Manuscript".to_owned(),
-			"Chapter 2".to_owned(),
-		)
-		.unwrap();
+		let created = create_in(root.clone(), "Manuscript", "Chapter 2").unwrap();
 
 		assert_eq!(created.path, "Manuscript/Chapter 2.md");
 		assert_eq!(read_document(root, created.id).unwrap(), "");
@@ -2227,7 +2603,7 @@ mod tests {
 		fs::remove_dir_all(root.join("Notes")).unwrap();
 		std::os::unix::fs::symlink(&elsewhere, root.join("Notes")).unwrap();
 
-		let err = create_document(root, "Notes".to_owned(), "Ideas".to_owned()).unwrap_err();
+		let err = create_in(root, "Notes", "Ideas").unwrap_err();
 
 		assert!(matches!(err, Error::OutsideProject));
 		assert!(!elsewhere.join("Ideas.md").exists());
@@ -2237,7 +2613,7 @@ mod tests {
 	fn creating_refuses_a_relative_path() {
 		let err = create_document(
 			PathBuf::from("some/where"),
-			"Notes".to_owned(),
+			Uuid::new_v4(),
 			"Ideas".to_owned(),
 		)
 		.unwrap_err();
@@ -2255,8 +2631,7 @@ mod tests {
 			("Chapter 4.markdown", "Chapter 4.markdown"),
 			("Chapter 5", "Chapter 5"),
 		] {
-			let created =
-				create_document(root.clone(), "Manuscript".to_owned(), typed.to_owned()).unwrap();
+			let created = create_in(root.clone(), "Manuscript", typed).unwrap();
 			assert_eq!(created.title, title, "typed {typed:?}");
 			assert_eq!(created.path, format!("Manuscript/{title}.md"));
 		}
@@ -2267,7 +2642,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		let err = create_document(root.clone(), "Notes".to_owned(), ".md".to_owned()).unwrap_err();
+		let err = create_in(root.clone(), "Notes", ".md").unwrap_err();
 
 		assert!(matches!(err, Error::InvalidName(NameError::Empty)));
 		assert_eq!(scan_paths(&root).len(), 5);
@@ -2277,12 +2652,7 @@ mod tests {
 	fn a_renamed_document_keeps_its_id_its_text_and_its_place() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
-		create_document(
-			root.clone(),
-			"Manuscript".to_owned(),
-			"Chapter 2".to_owned(),
-		)
-		.unwrap();
+		create_in(root.clone(), "Manuscript", "Chapter 2").unwrap();
 		let id = first_document(&root).id;
 		write_document(root.clone(), id, "Sing to me of the man, Muse.".to_owned()).unwrap();
 
@@ -2331,12 +2701,7 @@ mod tests {
 	fn renaming_onto_another_document_is_refused() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
-		let other = create_document(
-			root.clone(),
-			"Manuscript".to_owned(),
-			"Chapter 2".to_owned(),
-		)
-		.unwrap();
+		let other = create_in(root.clone(), "Manuscript", "Chapter 2").unwrap();
 		write_document(root.clone(), other.id, "the second chapter".to_owned()).unwrap();
 		let id = first_document(&root).id;
 
@@ -2579,8 +2944,7 @@ mod tests {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
 		for text in ["the first one", "the second one"] {
-			let made =
-				create_document(root.clone(), "Notes".to_owned(), "Ideas".to_owned()).unwrap();
+			let made = create_in(root.clone(), "Notes", "Ideas").unwrap();
 			write_document(root.clone(), made.id, text.to_owned()).unwrap();
 			// The same instant both times, which is what forces the collision.
 			trash(&root, made.id, fixed_time()).unwrap();
@@ -2596,8 +2960,7 @@ mod tests {
 	fn documents_deleted_from_different_sections_do_not_meet() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
-		let notes =
-			create_document(root.clone(), "Notes".to_owned(), "Chapter 1".to_owned()).unwrap();
+		let notes = create_in(root.clone(), "Notes", "Chapter 1").unwrap();
 		let manuscript = first_document(&root).id;
 
 		trash(&root, manuscript, fixed_time()).unwrap();
@@ -2726,7 +3089,7 @@ mod tests {
 
 		let first = first_document(&root).id;
 		trash(&root, first, fixed_time()).unwrap();
-		let second = create_document(root.clone(), "Notes".to_owned(), "Ideas".to_owned()).unwrap();
+		let second = create_in(root.clone(), "Notes", "Ideas").unwrap();
 		trash(&root, second.id, later).unwrap();
 		// Something a writer dropped in by hand.
 		fs::write(root.join(TRASH_DIR).join("Notes").join("Stray.md"), "").unwrap();
@@ -2759,12 +3122,7 @@ mod tests {
 	fn putting_one_back_over_a_document_of_that_name_is_refused() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_chapter_one_deleted(&parent);
-		create_document(
-			root.clone(),
-			"Manuscript".to_owned(),
-			"Chapter 1".to_owned(),
-		)
-		.unwrap();
+		create_in(root.clone(), "Manuscript", "Chapter 1").unwrap();
 		let entry = list_trash(root.clone()).unwrap().remove(0);
 
 		let err = restore_from_trash(root.clone(), entry.path).unwrap_err();
@@ -2877,7 +3235,7 @@ mod tests {
 	fn with_three_chapters(parent: &tempfile::TempDir) -> PathBuf {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		for name in ["Chapter 2", "Chapter 3"] {
-			create_document(root.clone(), "Manuscript".to_owned(), name.to_owned()).unwrap();
+			create_in(root.clone(), "Manuscript", name).unwrap();
 		}
 		root
 	}
@@ -2958,7 +3316,7 @@ mod tests {
 	fn reordering_one_section_leaves_the_others_alone() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_three_chapters(&parent);
-		create_document(root.clone(), "Notes".to_owned(), "Ideas".to_owned()).unwrap();
+		create_in(root.clone(), "Notes", "Ideas").unwrap();
 		let notes = order_of(&root, "Notes");
 
 		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();

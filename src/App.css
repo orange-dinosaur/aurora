@@ -634,24 +634,12 @@ body,
 	opacity: 0.7;
 }
 
-.section__new {
+/* The + on a section header is a menu of what may be made there. It sits in
+   the header's flex row rather than over it, which is what every other menu
+   in the interface does. */
+.section__header .menu {
+	position: relative;
 	flex: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	padding: 0;
-	color: var(--text-dim);
-	background: none;
-	border: 0;
-	border-radius: 5px;
-	cursor: pointer;
-}
-
-.section__new:hover {
-	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 /* A field opened in the sidebar sits where the button that opened it was, and
@@ -734,15 +722,33 @@ body,
 	cursor: pointer;
 }
 
-/* A folder in the list is a name and nothing else so far. Nothing can make one
-   until folders can be created, so this only says where it sits. */
+/* A folder in the list opens its overview and says nothing else so far: its
+   own menu and its chevron are still to come. */
 .folder {
 	display: flex;
 	align-items: center;
+	width: 100%;
 	height: 28px;
 	padding: 0 1.4rem 0 calc(0.25rem + var(--depth, 0) * 0.75rem);
+	font: inherit;
 	font-size: 0.8125rem;
+	font-weight: 500;
+	text-align: left;
 	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.folder:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.folder[aria-current="page"] {
+	color: var(--text);
+	background: var(--accent-wash);
 }
 
 /* Fixed rather than fitted, so the titles line up down the column however far
@@ -961,7 +967,14 @@ body,
 /* The only filled button in the application: making a document is the one
    thing this screen is for, and the dashed card in the grid is the same act
    said quietly. */
-.overview__new {
+/* The overview's + is a menu trigger, so its own shape has to outrank the
+   plain trigger's. The menu opens below it rather than over the cards. */
+.overview__header .menu {
+	position: relative;
+	flex: none;
+}
+
+.menu .overview__new {
 	flex: none;
 	display: inline-flex;
 	align-items: center;
@@ -977,7 +990,10 @@ body,
 	transition: opacity 120ms ease-out;
 }
 
-.overview__new:hover {
+.menu .overview__new:hover,
+.menu .overview__new[aria-expanded="true"] {
+	color: var(--bg);
+	background: var(--accent);
 	opacity: 0.85;
 }
 

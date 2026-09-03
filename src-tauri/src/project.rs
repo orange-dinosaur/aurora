@@ -27,6 +27,10 @@ pub enum Format {
 	StagePlay,
 }
 
+/// The one section with a hierarchy of its own. A folder anywhere else is a
+/// folder and nothing more.
+pub const MANUSCRIPT: &str = "Manuscript";
+
 const NOVEL: &[Section] = &[
 	Section {
 		folder: "Manuscript",
@@ -203,6 +207,8 @@ pub enum Error {
 	UnsupportedVersion { found: u32, supported: u32 },
 	UnknownDocument,
 	UnknownSection,
+	UnknownFolder,
+	FolderNotAllowed,
 	DocumentMissing,
 	DocumentExists,
 	BadDocumentPath,
@@ -230,6 +236,14 @@ impl fmt::Display for Error {
 			),
 			Error::UnknownDocument => write!(f, "that document is not part of this project"),
 			Error::UnknownSection => write!(f, "that section is not part of this project"),
+			Error::UnknownFolder => write!(f, "that folder is not part of this project"),
+			Error::FolderNotAllowed => {
+				write!(
+					f,
+					"a part belongs in the Manuscript and a chapter in the Manuscript or a \
+					 part, and a chapter holds documents rather than folders"
+				)
+			}
 			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
 			Error::DocumentExists => {
 				write!(f, "a document of that name is already there")
@@ -263,6 +277,8 @@ impl Error {
 			Error::UnsupportedVersion { .. } => "unsupportedVersion",
 			Error::UnknownDocument => "unknownDocument",
 			Error::UnknownSection => "unknownSection",
+			Error::UnknownFolder => "unknownFolder",
+			Error::FolderNotAllowed => "folderNotAllowed",
 			Error::DocumentMissing => "documentMissing",
 			Error::DocumentExists => "documentExists",
 			Error::BadDocumentPath => "badDocumentPath",
@@ -297,6 +313,8 @@ impl std::error::Error for Error {
 			| Error::UnsupportedVersion { .. }
 			| Error::UnknownDocument
 			| Error::UnknownSection
+			| Error::UnknownFolder
+			| Error::FolderNotAllowed
 			| Error::DocumentMissing
 			| Error::DocumentExists
 			| Error::BadDocumentPath

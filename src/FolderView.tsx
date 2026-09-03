@@ -2,11 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
-import Icon from "./Icon";
 import NameField from "./NameField";
+import NewMenu from "./NewMenu";
 import type { OverviewCard, ProjectDocument } from "./types";
+import { NEW_DOCUMENT } from "./kinds";
+import type { Making } from "./kinds";
+import type { FolderRef } from "./tree";
 import { counted, described, summarised } from "./cards";
-import { createDocument, renameDocument, reorderDocument } from "./documents";
+import {
+	createDocument,
+	createFolder,
+	renameDocument,
+	reorderDocument,
+} from "./documents";
 import { when } from "./dates";
 import { useReorder } from "./reorder";
 import { failure } from "./errors";
@@ -14,13 +22,14 @@ import { failure } from "./errors";
 type Status =
 	{ kind: "busy" } | { kind: "idle" } | { kind: "error"; message: string };
 
-// The `+ New` card: a button until the writer presses it, then the field, and
-// whatever Rust made of the last name they tried.
+// The `+ New` card: a menu until the writer chooses from it, then the field
+// asking what to call what they chose, and whatever Rust made of the last name
+// they tried.
 type Naming =
 	| { kind: "closed" }
-	| { kind: "open" }
-	| { kind: "creating" }
-	| { kind: "refused"; message: string };
+	| { kind: "open"; making: Making }
+	| { kind: "creating"; making: Making }
+	| { kind: "refused"; making: Making; message: string };
 
 // The card the writer is retitling, and what Rust made of the last name they
 // tried.
@@ -32,17 +41,17 @@ type Renaming =
 
 type Props = {
 	root: string;
-	id: string;
-	// The folder's own name, which the tab already knows. Only the cards are
-	// worth a read.
-	folder: string;
+	// What the tab already knows about the folder. Only the cards are worth a
+	// read.
+	folder: FolderRef;
 	// Changes when the project view has altered the manifest.
 	reload: number;
 	onSelect: (document: ProjectDocument) => void;
-	onOpenFolder: (id: string, name: string) => void;
+	onOpenFolder: (folder: FolderRef) => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
-	onReordered: () => void;
+	/** The manifest changed in a way every listing of it has to read again. */
+	onChanged: () => void;
 	// The project view owns this one: it has to write down what the writer
 	// last typed before the file moves, and close the tab afterwards.
 	onDelete: (id: string) => Promise<void>;
@@ -50,14 +59,13 @@ type Props = {
 
 export default function FolderView({
 	root,
-	id,
 	folder,
 	reload,
 	onSelect,
 	onOpenFolder,
 	onCreated,
 	onRenamed,
-	onReordered,
+	onChanged,
 	onDelete,
 }: Props) {
 	const [cards, setCards] = useState<OverviewCard[]>([]);
@@ -70,27 +78,41 @@ export default function FolderView({
 		setStatus({ kind: "busy" });
 		try {
 			setCards(
-				await invoke<OverviewCard[]>("folder_overview", { root, id }),
+				await invoke<OverviewCard[]>("folder_overview", {
+					root,
+					id: folder.id,
+				}),
 			);
 			setStatus({ kind: "idle" });
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
-	}, [root, id]);
+	}, [root, folder.id]);
 
 	useEffect(() => {
 		void load();
 	}, [load, reload]);
 
-	async function create(name: string) {
-		setNaming({ kind: "creating" });
+	async function create(making: Making, name: string) {
+		setNaming({ kind: "creating", making });
 		try {
-			onCreated(await createDocument(root, folder, name));
+			if (making.what === "document") {
+				onCreated(await createDocument(root, folder.id, name));
+			} else {
+				await createFolder(root, folder.id, name, making.kind);
+				// Nothing to open: a new folder is empty, so the listings
+				// simply read it again.
+				onChanged();
+			}
 			setNaming({ kind: "closed" });
 		} catch (error) {
 			// A name Rust would not take leaves the field open, holding what
 			// was typed, so it can be corrected rather than typed again.
-			setNaming({ kind: "refused", message: failure(error).message });
+			setNaming({
+				kind: "refused",
+				making,
+				message: failure(error).message,
+			});
 		}
 	}
 
@@ -111,7 +133,7 @@ export default function FolderView({
 	async function move(id: string, index: number) {
 		try {
 			await reorderDocument(root, id, index);
-			onReordered();
+			onChanged();
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
@@ -129,7 +151,7 @@ export default function FolderView({
 		return (
 			<div className="overview">
 				<header className="overview__header">
-					<h2 className="overview__title">{folder}</h2>
+					<h2 className="overview__title">{folder.name}</h2>
 				</header>
 				<p className="overview__note">Reading…</p>
 			</div>
@@ -140,17 +162,17 @@ export default function FolderView({
 		<div className="overview">
 			<header className="overview__header">
 				<div className="overview__heading">
-					<h2 className="overview__title">{folder}</h2>
+					<h2 className="overview__title">{folder.name}</h2>
 					<p className="overview__count">{summarised(cards)}</p>
 				</div>
-				<button
-					type="button"
+				<NewMenu
+					label={`New in ${folder.name}`}
+					kind={folder.kind}
+					section={folder.section}
+					text="New"
 					className="overview__new"
-					onClick={() => setNaming({ kind: "open" })}
-				>
-					<Icon name="plus" />
-					New document
-				</button>
+					onChoose={(making) => setNaming({ kind: "open", making })}
+				/>
 			</header>
 
 			<ul className="cards">
@@ -160,13 +182,18 @@ export default function FolderView({
 							<li
 								key={card.id}
 								className="cards__item"
-								{...reorder.item(card.id, at, id)}
+								{...reorder.item(card.id, at, folder.id)}
 							>
 								<button
 									type="button"
 									className="card card--folder"
 									onClick={() =>
-										onOpenFolder(card.id, card.name)
+										onOpenFolder({
+											id: card.id,
+											name: card.name,
+											kind: card.kind,
+											section: folder.section,
+										})
 									}
 								>
 									<span className="card__ordinal">
@@ -211,7 +238,7 @@ export default function FolderView({
 						<li
 							key={document.id}
 							className="cards__item"
-							{...reorder.item(document.id, at, id)}
+							{...reorder.item(document.id, at, folder.id)}
 						>
 							<button
 								type="button"
@@ -265,25 +292,34 @@ export default function FolderView({
 
 				<li className="cards__item">
 					{naming.kind === "closed" ? (
+						// The shortcut for the common case. Anything else is
+						// made from the + above, which offers the lot.
 						<button
 							type="button"
 							className="card card--new"
-							onClick={() => setNaming({ kind: "open" })}
+							onClick={() =>
+								setNaming({
+									kind: "open",
+									making: NEW_DOCUMENT,
+								})
+							}
 						>
 							+ New document
 						</button>
 					) : (
 						<div className="card card--naming">
 							<NameField
-								label={`Name of the new document in ${folder}`}
-								placeholder="Chapter 2"
+								label={`Name of the new ${naming.making.noun} in ${folder.name}`}
+								placeholder={naming.making.placeholder}
 								busy={naming.kind === "creating"}
 								error={
 									naming.kind === "refused"
 										? naming.message
 										: null
 								}
-								onSubmit={(name) => void create(name)}
+								onSubmit={(name) =>
+									void create(naming.making, name)
+								}
 								onCancel={() => setNaming({ kind: "closed" })}
 							/>
 						</div>

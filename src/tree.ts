@@ -3,7 +3,20 @@
 // it sits, keeps the drawing in one place and the walking here, where it can
 // be tested without a screen.
 
-import type { ProjectDocument, TreeNode } from "./types";
+import type { FolderKind, ProjectDocument, TreeNode } from "./types";
+
+/**
+ * Enough about a folder to open it and to know what may be made inside it. A
+ * tab holds one of these, since the overview it opens has no other way to
+ * learn what it is looking at.
+ */
+export type FolderRef = {
+	id: string;
+	name: string;
+	kind: FolderKind | null;
+	/** The top-level folder it lives under, which decides the kind rules. */
+	section: string;
+};
 
 // Where a row sits, which is everything the sidebar needs that the node itself
 // does not say.
@@ -26,7 +39,12 @@ type Place = {
 };
 
 export type Row =
-	| (Place & { kind: "folder"; id: string; name: string })
+	| (Place & {
+			kind: "folder";
+			id: string;
+			name: string;
+			folderKind: FolderKind | null;
+	  })
 	| (Place & { kind: "document"; document: ProjectDocument });
 
 /**
@@ -55,6 +73,7 @@ export function rows(nodes: TreeNode[], group: string, depth = 0): Row[] {
 			...place,
 			id: node.id,
 			name: node.name,
+			folderKind: node.kind,
 		};
 		return [row, ...rows(node.children, node.id, depth + 1)];
 	});
