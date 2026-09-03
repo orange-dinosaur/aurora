@@ -17,9 +17,9 @@ import { folderPlaceholder } from "./kinds";
 import {
 	createDocument,
 	createFolder,
+	moveNode,
 	renameDocument,
 	renameFolder,
-	reorderDocument,
 } from "./documents";
 import { failure } from "./errors";
 import { useReorder } from "./reorder";
@@ -89,6 +89,8 @@ type Props = {
 	onFolderRenamed: (folder: FolderNode) => void;
 	/** The manifest changed in a way every listing of it has to read again. */
 	onChanged: () => void;
+	/** The same, plus the paths of open documents may have changed under them. */
+	onMoved: () => void;
 	// The project view owns this one: it has to write down what the writer
 	// last typed before the file moves, and close the tab afterwards.
 	onDelete: (id: string) => Promise<void>;
@@ -110,6 +112,7 @@ export default function Sidebar({
 	onRenamed,
 	onFolderRenamed,
 	onChanged,
+	onMoved,
 	onDelete,
 	onClose,
 }: Props) {
@@ -117,7 +120,9 @@ export default function Sidebar({
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
-	const reorder = useReorder((id, index) => void move(id, index));
+	const reorder = useReorder(
+		(id, parentId, index) => void move(id, parentId, index),
+	);
 
 	// Reads the manifest as it stands. Looking at the folder again is the
 	// titlebar's refresh, which bumps `reload` once it has done so.
@@ -135,10 +140,10 @@ export default function Sidebar({
 		void load();
 	}, [load, reload]);
 
-	async function move(id: string, index: number) {
+	async function move(id: string, parentId: string, index: number) {
 		try {
-			await reorderDocument(root, id, index);
-			onChanged();
+			await moveNode(root, id, parentId, index);
+			onMoved();
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
@@ -391,6 +396,25 @@ export default function Sidebar({
 																	/>
 																	<FolderMenu
 																		label={`Actions for ${row.name}`}
+																		root={
+																			root
+																		}
+																		moving={{
+																			id: row.id,
+																			kind: row.folderKind,
+																			folder: true,
+																			from: row.group,
+																		}}
+																		onMove={(
+																			parentId,
+																			at,
+																		) =>
+																			void move(
+																				row.id,
+																				parentId,
+																				at,
+																			)
+																		}
 																		onRename={() =>
 																			setRenaming(
 																				{
@@ -513,11 +537,22 @@ export default function Sidebar({
 													</button>
 													<DocumentMenu
 														label={`Actions for ${doc.title}`}
+														root={root}
 														index={row.index}
 														count={row.siblings}
-														onMove={(to) =>
+														moving={{
+															id: doc.id,
+															kind: null,
+															folder: false,
+															from: row.group,
+														}}
+														onMove={(
+															parentId,
+															to,
+														) =>
 															void move(
 																doc.id,
+																parentId,
 																to,
 															)
 														}

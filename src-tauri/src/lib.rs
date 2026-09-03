@@ -33,7 +33,7 @@ pub fn run() {
 			document::list_trash,
 			document::restore_from_trash,
 			document::purge_trash_entry,
-			document::reorder_document,
+			document::move_node,
 			store::read_preferences,
 			store::write_preferences
 		])

@@ -84,25 +84,50 @@ export function folderPlaceholder(kind: FolderKind | null): string {
 }
 
 /**
+ * Whether a folder of this kind may sit inside a folder that is itself
+ * `parent`, where `inManuscript` says whether that folder is the Manuscript or
+ * sits somewhere under it. Rust holds the same rules in `tree::may_hold` and
+ * refuses anything else, whether it is being made there or moved there.
+ *
+ * The Manuscript is the only place a folder has a kind at all. A part goes
+ * directly in it, a chapter goes in it or in a part, and a chapter holds
+ * documents rather than folders. Everywhere else a folder is just a folder, at
+ * any depth.
+ */
+export function mayHold(
+	inManuscript: boolean,
+	parent: FolderKind | null,
+	kind: FolderKind | null,
+): boolean {
+	if (!inManuscript) {
+		return kind === null;
+	}
+
+	switch (parent) {
+		case null:
+			return kind !== null;
+		case "part":
+			return kind === "chapter";
+		case "chapter":
+			return false;
+	}
+}
+
+/**
  * What may be made inside a folder. `kind` is that folder's own kind and
  * `section` is the top-level folder it lives under.
  *
- * A document may sit at any level, so it is always on offer. The folders are
- * the Manuscript's rules: a part directly in the Manuscript, a chapter in the
- * Manuscript or in a part, nothing inside a chapter, and no kind at all
- * anywhere else.
+ * A document may sit at any level, so it is always on offer, called a scene in
+ * the Manuscript and a document elsewhere. Which folders follow it is
+ * `mayHold`, so the + and a move answer to the same rules.
  */
 export function creatable(kind: FolderKind | null, section: string): Making[] {
-	if (section !== MANUSCRIPT) {
-		return [DOCUMENT, FOLDER];
-	}
+	const inManuscript = section === MANUSCRIPT;
 
-	switch (kind) {
-		case null:
-			return [SCENE, PART, CHAPTER];
-		case "part":
-			return [SCENE, CHAPTER];
-		case "chapter":
-			return [SCENE];
-	}
+	return [
+		inManuscript ? SCENE : DOCUMENT,
+		...[PART, CHAPTER, FOLDER].filter((making) =>
+			mayHold(inManuscript, kind, making.kind),
+		),
+	];
 }

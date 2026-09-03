@@ -1687,8 +1687,19 @@ body,
 	min-width: 8rem;
 }
 
+/* A menu listing folders can run past the window, so it scrolls rather than
+   growing off the bottom of a deep project. */
+.menu__items {
+	max-height: 60vh;
+	overflow-y: auto;
+	scrollbar-width: none;
+}
+
 .menu__item {
 	padding: 0.3rem 0.5rem;
+	/* Set in only where a menu draws a tree; the custom property is nought
+	   everywhere else. */
+	padding-left: calc(0.5rem + var(--depth, 0) * 0.7rem);
 	font: inherit;
 	text-align: left;
 	color: var(--text);
@@ -1696,6 +1707,37 @@ body,
 	border: 0;
 	border-radius: 6px;
 	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* The way back to the actions, above the folders it opened over. */
+.menu__back {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	margin-bottom: 0.25rem;
+	padding-bottom: 0.4rem;
+	color: var(--text-dim);
+	border-bottom: 1px solid var(--border);
+	border-radius: 0;
+}
+
+.menu__back:hover {
+	color: var(--text);
+}
+
+.menu__back svg {
+	width: 13px;
+	height: 13px;
+}
+
+/* What the menu says while it has nothing to list yet. */
+.menu__note {
+	margin: 0;
+	padding: 0.3rem 0.5rem;
+	color: var(--text-dim);
 }
 
 .menu__item:hover:not(:disabled) {

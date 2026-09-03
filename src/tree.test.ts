@@ -1,9 +1,14 @@
 import { describe, expect, test } from "vitest";
-import { documentsIn, rows, sections } from "./tree";
-import type { TreeNode } from "./types";
+import { destinations, documentsIn, documentsOf, rows, sections } from "./tree";
+import type { Moving } from "./tree";
+import type { FolderKind, TreeNode } from "./types";
 
-function folder(name: string, children: TreeNode[] = []): TreeNode {
-	return { node: "folder", id: `id-${name}`, name, kind: null, children };
+function folder(
+	name: string,
+	children: TreeNode[] = [],
+	kind: FolderKind | null = null,
+): TreeNode {
+	return { node: "folder", id: `id-${name}`, name, kind, children };
 }
 
 /** A document written as the path it sits at, the way Rust sends it. */
@@ -134,5 +139,154 @@ describe("reading the top of the tree", () => {
 		];
 
 		expect(documentsIn(section)).toBe(3);
+	});
+});
+
+describe("choosing somewhere to move to", () => {
+	// A Manuscript with a part, a chapter inside it and a chapter beside it,
+	// plus a plain folder in another section.
+	const project: TreeNode[] = [
+		folder("Manuscript", [
+			folder("Part One", [folder("Chapter 1", [], "chapter")], "part"),
+			folder("Chapter 9", [], "chapter"),
+			document("Manuscript/Prologue.md"),
+		]),
+		folder("Notes", [folder("Research")]),
+	];
+
+	/** Each destination as `name` or `name (no)` when it is refused. */
+	function offered(moving: Moving) {
+		return destinations(project, moving).map(
+			(where) =>
+				`${"  ".repeat(where.depth)}${where.name}${where.allowed ? "" : " (no)"}`,
+		);
+	}
+
+	test("every folder is listed, in the order the tree holds them", () => {
+		expect(
+			offered({
+				id: "id-Manuscript/Prologue.md",
+				kind: null,
+				folder: false,
+				from: "id-Manuscript",
+			}),
+		).toEqual([
+			"Manuscript (no)",
+			"  Part One",
+			"    Chapter 1",
+			"  Chapter 9",
+			"Notes",
+			"  Research",
+		]);
+	});
+
+	test("a document may go anywhere but the folder it is already in", () => {
+		const where = destinations(project, {
+			id: "id-Manuscript/Prologue.md",
+			kind: null,
+			folder: false,
+			from: "id-Chapter 9",
+		});
+
+		expect(
+			where.filter((one) => !one.allowed).map((one) => one.name),
+		).toEqual(["Chapter 9"]);
+	});
+
+	test("a part may only go directly in the Manuscript", () => {
+		expect(
+			offered({
+				id: "id-Part One",
+				kind: "part",
+				folder: true,
+				from: "id-Manuscript",
+			}),
+		).toEqual([
+			// Its own subtree is gone, and the Manuscript is where it already
+			// sits.
+			"Manuscript (no)",
+			"  Chapter 9 (no)",
+			"Notes (no)",
+			"  Research (no)",
+		]);
+	});
+
+	test("a chapter may go in the Manuscript or in a part", () => {
+		expect(
+			offered({
+				id: "id-Chapter 9",
+				kind: "chapter",
+				folder: true,
+				from: "id-Part One",
+			}),
+		).toEqual([
+			"Manuscript",
+			// Where it already is, and a chapter holds no folders.
+			"  Part One (no)",
+			"    Chapter 1 (no)",
+			"Notes (no)",
+			"  Research (no)",
+		]);
+	});
+
+	test("a folder with no kind is refused by the whole Manuscript", () => {
+		expect(
+			offered({
+				id: "id-Research",
+				kind: null,
+				folder: true,
+				from: "id-Notes",
+			}),
+		).toEqual([
+			"Manuscript (no)",
+			"  Part One (no)",
+			"    Chapter 1 (no)",
+			"  Chapter 9 (no)",
+			"Notes (no)",
+		]);
+	});
+
+	test("a folder is never offered itself or anything it holds", () => {
+		expect(
+			destinations(project, {
+				id: "id-Part One",
+				kind: "part",
+				folder: true,
+				from: "id-Manuscript",
+			}).map((where) => where.name),
+		).not.toContain("Chapter 1");
+	});
+
+	test("a destination says how many nodes it holds, which is the end of it", () => {
+		const where = destinations(project, {
+			id: "id-Research",
+			kind: null,
+			folder: true,
+			from: "id-Notes",
+		});
+
+		expect(where.find((one) => one.name === "Manuscript")?.children).toBe(
+			3,
+		);
+	});
+});
+
+describe("every document in the tree", () => {
+	test("they come back in the order a walk meets them, however deep", () => {
+		const tree = [
+			folder("Manuscript", [
+				document("Manuscript/Scene 1.md"),
+				folder("Part One", [
+					document("Manuscript/Part One/Landfall.md"),
+				]),
+			]),
+			folder("Notes", [document("Notes/Ideas.md")]),
+		];
+
+		expect(documentsOf(tree).map((doc) => doc.path)).toEqual([
+			"Manuscript/Scene 1.md",
+			"Manuscript/Part One/Landfall.md",
+			"Notes/Ideas.md",
+		]);
 	});
 });

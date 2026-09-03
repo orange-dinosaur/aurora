@@ -13,9 +13,9 @@ import { counted, described, summarised } from "./cards";
 import {
 	createDocument,
 	createFolder,
+	moveNode,
 	renameDocument,
 	renameFolder,
-	reorderDocument,
 } from "./documents";
 import { when } from "./dates";
 import { useReorder } from "./reorder";
@@ -56,6 +56,8 @@ type Props = {
 	onFolderRenamed: (folder: FolderNode) => void;
 	/** The manifest changed in a way every listing of it has to read again. */
 	onChanged: () => void;
+	/** The same, plus the paths of open documents may have changed under them. */
+	onMoved: () => void;
 	// The project view owns this one: it has to write down what the writer
 	// last typed before the file moves, and close the tab afterwards.
 	onDelete: (id: string) => Promise<void>;
@@ -71,13 +73,16 @@ export default function FolderView({
 	onRenamed,
 	onFolderRenamed,
 	onChanged,
+	onMoved,
 	onDelete,
 }: Props) {
 	const [cards, setCards] = useState<OverviewCard[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
-	const reorder = useReorder((id, index) => void move(id, index));
+	const reorder = useReorder(
+		(id, parentId, index) => void move(id, parentId, index),
+	);
 
 	const load = useCallback(async () => {
 		setStatus({ kind: "busy" });
@@ -139,10 +144,10 @@ export default function FolderView({
 		}
 	}
 
-	async function move(id: string, index: number) {
+	async function move(id: string, parentId: string, index: number) {
 		try {
-			await reorderDocument(root, id, index);
-			onChanged();
+			await moveNode(root, id, parentId, index);
+			onMoved();
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
@@ -242,6 +247,16 @@ export default function FolderView({
 								</button>
 								<FolderMenu
 									label={`Actions for ${card.name}`}
+									root={root}
+									moving={{
+										id: card.id,
+										kind: card.kind,
+										folder: true,
+										from: folder.id,
+									}}
+									onMove={(parentId, to) =>
+										void move(card.id, parentId, to)
+									}
 									onRename={() =>
 										setRenaming({
 											kind: "open",
@@ -322,9 +337,18 @@ export default function FolderView({
 							</button>
 							<DocumentMenu
 								label={`Actions for ${document.title}`}
+								root={root}
 								index={at}
 								count={cards.length}
-								onMove={(to) => void move(document.id, to)}
+								moving={{
+									id: document.id,
+									kind: null,
+									folder: false,
+									from: folder.id,
+								}}
+								onMove={(parentId, to) =>
+									void move(document.id, parentId, to)
+								}
 								onRename={() =>
 									setRenaming({
 										kind: "open",

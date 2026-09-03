@@ -971,28 +971,104 @@ pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
 	trash(&root, id, OffsetDateTime::now_utc())
 }
 
-/// Moves a document to a different place in its own section. Ordering lives in
-/// the manifest and nowhere else, so this touches no files — and a document
-/// whose file has gone can still be moved, since where it sits in the list is
-/// not a question about the disk.
-fn reorder(manifest: &mut Manifest, id: Uuid, index: usize) -> Result<()> {
-	if tree::move_to(&mut manifest.nodes, id, index) {
-		Ok(())
-	} else {
-		Err(Error::UnknownDocument)
-	}
-}
-
-/// Puts a document at a given place among the others in its section. An index
-/// past the end means the end.
+/// Puts a node at a given place inside a folder, which may be the one it is
+/// already in. An index past the end means the end.
+///
+/// Reordering and moving are one operation because they are one thing: where a
+/// node sits is its parent and its place among that parent's children, and
+/// changing either is the same edit. Staying put touches no files, so a
+/// document whose file has gone can still be reordered; going somewhere else
+/// takes the file, or the whole directory, with it.
+///
+/// The kind rules of [`tree::may_hold`] apply, and two rules of their own: a
+/// section stays where it is, and nothing may be moved inside itself.
 #[tauri::command]
-pub fn reorder_document(root: PathBuf, id: Uuid, index: usize) -> Result<()> {
+pub fn move_node(root: PathBuf, id: Uuid, parent_id: Uuid, index: usize) -> Result<()> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
 
 	let mut manifest = read_manifest(&root)?;
-	reorder(&mut manifest, id, index)?;
+
+	let (folder, kind, name) = match tree::find(&manifest.nodes, id) {
+		Some(Node::Folder { kind, name, .. }) => (true, *kind, name.clone()),
+		Some(Node::Document { name, .. }) => (false, None, name.clone()),
+		None => return Err(Error::UnknownDocument),
+	};
+
+	let held = tree::parent(&manifest.nodes, id).map(Node::id);
+	// The top level is the project's shape rather than something in it, and the
+	// Manuscript is known by its name.
+	let Some(held) = held else {
+		return Err(Error::SectionFixed);
+	};
+
+	let chain = tree::trail(&manifest.nodes, parent_id).ok_or(Error::UnknownFolder)?;
+	// A node cannot be put inside itself, and everything it holds is inside it.
+	if chain.iter().any(|node| node.id() == id) {
+		return Err(Error::MoveInsideItself);
+	}
+	// The section at the head of the chain is what decides whether kinds mean
+	// anything where this is going.
+	let in_manuscript = chain[0].name() == MANUSCRIPT;
+	let (into, parent) = folder_at(&manifest, parent_id)?;
+	if folder && !tree::may_hold(in_manuscript, parent, kind) {
+		return Err(Error::FolderNotAllowed);
+	}
+
+	// The disk only comes into it when the node changes hands. A name that
+	// collides is refused before anything moves.
+	if parent_id != held {
+		let taken = if folder {
+			Error::AlreadyExists
+		} else {
+			Error::DocumentExists
+		};
+		if tree::children(&manifest.nodes, parent_id)
+			.unwrap_or_default()
+			.iter()
+			.any(|node| node.name() == name)
+		{
+			return Err(taken);
+		}
+
+		let was = tree::path(&manifest.nodes, id).ok_or(Error::UnknownDocument)?;
+		let path = format!("{into}/{name}");
+		let (from, to) = if folder {
+			(
+				folder_path(&manifest, &root, &was)?,
+				folder_path(&manifest, &root, &path)?,
+			)
+		} else {
+			(
+				document_path(&manifest, &root, &was)?,
+				document_path(&manifest, &root, &path)?,
+			)
+		};
+
+		// Where the folder above actually leads is what decides whether this
+		// stays inside the project, the same as when something is made.
+		let over = to.parent().ok_or(Error::BadDocumentPath)?;
+		if !over.canonicalize()?.starts_with(root.canonicalize()?) {
+			return Err(Error::OutsideProject);
+		}
+		if to.exists() {
+			return Err(taken);
+		}
+		// Reordering a document whose file has gone is fine; carrying it to
+		// another folder is not, because there is nothing to carry.
+		if !folder && !from.exists() {
+			return Err(Error::DocumentMissing);
+		}
+
+		fs::rename(&from, &to)?;
+	}
+
+	let moving = tree::remove(&mut manifest.nodes, id).ok_or(Error::UnknownDocument)?;
+	let Some(Node::Folder { children, .. }) = tree::find_mut(&mut manifest.nodes, parent_id) else {
+		unreachable!("the destination was a folder a moment ago")
+	};
+	children.insert(index.min(children.len()), moving);
 	write_manifest(&root, &mut manifest)
 }
 
@@ -3543,6 +3619,15 @@ mod tests {
 			.collect()
 	}
 
+	/// `move_node` inside a node's own folder, which is what reordering is.
+	fn reorder_in(root: &Path, id: Uuid, index: usize) -> Result<()> {
+		let manifest = read_manifest(root).unwrap();
+		let parent = tree::parent(&manifest.nodes, id)
+			.map(Node::id)
+			.expect("the node sits in a folder");
+		move_node(root.to_path_buf(), id, parent, index)
+	}
+
 	fn chapter(root: &Path, title: &str) -> Uuid {
 		read_manifest(root)
 			.unwrap()
@@ -3558,7 +3643,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_three_chapters(&parent);
 
-		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
+		reorder_in(&root, chapter(&root, "Chapter 3"), 0).unwrap();
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
@@ -3571,7 +3656,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_three_chapters(&parent);
 
-		reorder_document(root.clone(), chapter(&root, "Scene 1"), 1).unwrap();
+		reorder_in(&root, chapter(&root, "Scene 1"), 1).unwrap();
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
@@ -3584,7 +3669,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_three_chapters(&parent);
 
-		reorder_document(root.clone(), chapter(&root, "Scene 1"), 99).unwrap();
+		reorder_in(&root, chapter(&root, "Scene 1"), 99).unwrap();
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
@@ -3598,7 +3683,7 @@ mod tests {
 		let root = with_three_chapters(&parent);
 		let before = read_manifest(&root).unwrap();
 
-		reorder_document(root.clone(), chapter(&root, "Chapter 2"), 1).unwrap();
+		reorder_in(&root, chapter(&root, "Chapter 2"), 1).unwrap();
 
 		assert_eq!(read_manifest(&root).unwrap(), before);
 	}
@@ -3610,7 +3695,7 @@ mod tests {
 		create_in(root.clone(), "Notes", "Ideas").unwrap();
 		let notes = order_of(&root, "Notes");
 
-		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
+		reorder_in(&root, chapter(&root, "Chapter 3"), 0).unwrap();
 
 		assert_eq!(order_of(&root, "Notes"), notes);
 		assert_eq!(read_manifest(&root).unwrap().documents().len(), 8);
@@ -3621,7 +3706,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_three_chapters(&parent);
 
-		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
+		reorder_in(&root, chapter(&root, "Chapter 3"), 0).unwrap();
 		refresh(&root).unwrap();
 
 		assert_eq!(
@@ -3636,7 +3721,7 @@ mod tests {
 		let root = with_three_chapters(&parent);
 		let before = scan_paths(&root);
 
-		reorder_document(root.clone(), chapter(&root, "Chapter 3"), 0).unwrap();
+		reorder_in(&root, chapter(&root, "Chapter 3"), 0).unwrap();
 
 		assert_eq!(scan_paths(&root), before);
 	}
@@ -3648,7 +3733,7 @@ mod tests {
 		let id = chapter(&root, "Chapter 3");
 		fs::remove_file(root.join("Manuscript").join("Chapter 3.md")).unwrap();
 
-		reorder_document(root.clone(), id, 0).unwrap();
+		reorder_in(&root, id, 0).unwrap();
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
@@ -3657,17 +3742,28 @@ mod tests {
 	}
 
 	#[test]
-	fn reordering_an_unknown_document_is_refused() {
+	fn moving_an_unknown_node_is_refused() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = section_id(&root, "Manuscript");
 
-		let err = reorder_document(root, Uuid::new_v4(), 0).unwrap_err();
+		let err = move_node(root.clone(), Uuid::new_v4(), manuscript, 0).unwrap_err();
 		assert!(matches!(err, Error::UnknownDocument));
+
+		let scene = first_document(&root).id;
+		let err = move_node(root, scene, Uuid::new_v4(), 0).unwrap_err();
+		assert!(matches!(err, Error::UnknownFolder));
 	}
 
 	#[test]
-	fn reordering_refuses_a_relative_path() {
-		let err = reorder_document(PathBuf::from("some/where"), Uuid::new_v4(), 0).unwrap_err();
+	fn moving_refuses_a_relative_path() {
+		let err = move_node(
+			PathBuf::from("some/where"),
+			Uuid::new_v4(),
+			Uuid::new_v4(),
+			0,
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
 	}
 
@@ -3680,7 +3776,7 @@ mod tests {
 		]);
 		let second = manifest.documents()[1].id;
 
-		reorder(&mut manifest, second, 0).unwrap();
+		assert!(tree::move_to(&mut manifest.nodes, second, 0));
 
 		assert_eq!(
 			paths_of(&manifest),
@@ -3690,6 +3786,205 @@ mod tests {
 				"Notes/Notes.md"
 			],
 			"a document moves among the ones it sits beside and nowhere else"
+		);
+	}
+
+	#[test]
+	fn a_scene_moves_between_chapters_and_takes_its_file() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+		let scene = document_id(&root, "Manuscript/Part One/Chapter 2/Landfall.md");
+		write_document(root.clone(), scene, "The ship came in at dusk.".to_owned()).unwrap();
+
+		move_node(root.clone(), scene, part, 0).unwrap();
+
+		assert_eq!(
+			tree::path(&read_manifest(&root).unwrap().nodes, scene).as_deref(),
+			Some("Manuscript/Part One/Landfall.md"),
+			"it sits in the part now, first"
+		);
+		assert!(
+			!root
+				.join("Manuscript/Part One/Chapter 2/Landfall.md")
+				.exists()
+		);
+		assert_eq!(
+			read_document(root.clone(), scene).unwrap(),
+			"The ship came in at dusk.",
+			"the file went with it"
+		);
+		assert!(
+			tree::children(&read_manifest(&root).unwrap().nodes, chapter)
+				.unwrap()
+				.is_empty()
+		);
+	}
+
+	#[test]
+	fn a_chapter_moves_into_a_part_with_everything_under_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = section_id(&root, "Manuscript");
+		let part = with_a_part(&root);
+		let loose = create_folder(
+			root.clone(),
+			manuscript,
+			"Chapter 9".to_owned(),
+			Some(FolderKind::Chapter),
+		)
+		.unwrap()
+		.id();
+		create_document(root.clone(), loose, "Storm".to_owned()).unwrap();
+		let scene = document_id(&root, "Manuscript/Chapter 9/Storm.md");
+
+		move_node(root.clone(), loose, part, 0).unwrap();
+
+		let manifest = read_manifest(&root).unwrap();
+		assert_eq!(
+			tree::path(&manifest.nodes, loose).as_deref(),
+			Some("Manuscript/Part One/Chapter 9")
+		);
+		assert_eq!(
+			tree::path(&manifest.nodes, scene).as_deref(),
+			Some("Manuscript/Part One/Chapter 9/Storm.md"),
+			"the scene inside it kept its id and came along"
+		);
+		assert!(
+			root.join("Manuscript/Part One/Chapter 9/Storm.md")
+				.is_file()
+		);
+		assert!(!root.join("Manuscript/Chapter 9").exists());
+	}
+
+	#[test]
+	fn a_document_moves_between_sections() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let note = create_in(root.clone(), "Notes", "Wren").unwrap().id;
+
+		move_node(root.clone(), note, section_id(&root, "Characters"), 0).unwrap();
+
+		assert_eq!(
+			tree::path(&read_manifest(&root).unwrap().nodes, note).as_deref(),
+			Some("Characters/Wren.md")
+		);
+		assert!(root.join("Characters/Wren.md").is_file());
+		assert!(!root.join("Notes/Wren.md").exists());
+	}
+
+	#[test]
+	fn a_folder_cannot_be_moved_inside_itself_or_what_it_holds() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+
+		for into in [part, chapter] {
+			let err = move_node(root.clone(), part, into, 0).unwrap_err();
+			assert!(matches!(err, Error::MoveInsideItself));
+		}
+
+		assert!(root.join("Manuscript/Part One/Chapter 2").is_dir());
+	}
+
+	#[test]
+	fn the_kind_rules_hold_when_a_folder_moves() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+		let research = create_folder(
+			root.clone(),
+			section_id(&root, "Notes"),
+			"Research".to_owned(),
+			None,
+		)
+		.unwrap()
+		.id();
+
+		// A part belongs directly in the Manuscript and nowhere else, a chapter
+		// holds no folders, and a folder with no kind cannot enter the
+		// Manuscript at all.
+		for (node, into) in [
+			(part, section_id(&root, "Notes")),
+			(chapter, chapter),
+			(research, section_id(&root, "Manuscript")),
+			(research, part),
+		] {
+			let err = move_node(root.clone(), node, into, 0).unwrap_err();
+			assert!(
+				matches!(err, Error::FolderNotAllowed | Error::MoveInsideItself),
+				"{err:?}"
+			);
+		}
+	}
+
+	#[test]
+	fn a_section_cannot_be_moved() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = move_node(
+			root.clone(),
+			section_id(&root, "Notes"),
+			section_id(&root, "Manuscript"),
+			0,
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::SectionFixed));
+		assert!(root.join("Notes").is_dir());
+	}
+
+	#[test]
+	fn moving_onto_a_name_already_there_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let manuscript = section_id(&root, "Manuscript");
+		let other = create_document(root.clone(), manuscript, "Prologue".to_owned()).unwrap();
+		let loose = document_id(&root, "Manuscript/Prologue.md");
+		write_document(root.clone(), loose, "the other one".to_owned()).unwrap();
+
+		let err = move_node(root.clone(), loose, part, 0).unwrap_err();
+
+		assert!(matches!(err, Error::DocumentExists));
+		assert_eq!(
+			read_document(root, other.id).unwrap(),
+			"the other one",
+			"neither file was written over"
+		);
+	}
+
+	#[test]
+	fn a_document_whose_file_has_gone_cannot_be_carried_elsewhere() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let scene = first_document(&root).id;
+		fs::remove_file(root.join("Manuscript/Scene 1.md")).unwrap();
+
+		let err = move_node(root.clone(), scene, part, 0).unwrap_err();
+
+		assert!(matches!(err, Error::DocumentMissing));
+	}
+
+	#[test]
+	fn a_move_survives_a_refresh() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let scene = first_document(&root).id;
+
+		move_node(root.clone(), scene, part, 0).unwrap();
+		let manifest = refresh(&root).unwrap();
+
+		assert_eq!(
+			tree::path(&manifest.nodes, scene).as_deref(),
+			Some("Manuscript/Part One/Scene 1.md"),
+			"looking at the folder again found what the manifest already said"
 		);
 	}
 

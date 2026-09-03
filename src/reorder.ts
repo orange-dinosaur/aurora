@@ -1,13 +1,17 @@
 // Drag-to-reorder, shared by the two surfaces that list documents. The
-// vocabulary is the same one the menu uses: a drop asks for the index the
-// document should end up at, which is what `reorder_document` takes.
+// vocabulary is the same one the menu uses: a drop asks for the folder and the
+// index the node should end up at, which is what `move_node` takes. A drag
+// only ever stays inside one folder, so the folder it names is the one the
+// node is already in.
 
 import { useState } from "react";
 import type { DragEvent } from "react";
 
 type Dragging = { id: string; from: number; group: string } | null;
 
-export function useReorder(move: (id: string, index: number) => void) {
+export function useReorder(
+	move: (id: string, parentId: string, index: number) => void,
+) {
 	const [dragging, setDragging] = useState<Dragging>(null);
 	const [over, setOver] = useState<number | null>(null);
 
@@ -55,7 +59,7 @@ export function useReorder(move: (id: string, index: number) => void) {
 				const from = dragging;
 				stop();
 				if (landing && from !== null && from.from !== at) {
-					move(from.id, at);
+					move(from.id, group, at);
 				}
 			},
 			onDragEnd: stop,

@@ -9,8 +9,14 @@ import Tabs from "./Tabs";
 import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
-import type { FolderNode, Preferences, ProjectDocument } from "./types";
+import type {
+	FolderNode,
+	Preferences,
+	ProjectDocument,
+	TreeNode,
+} from "./types";
 import type { FolderRef } from "./tree";
+import { documentsOf } from "./tree";
 import { deleteDocument } from "./documents";
 import type { Seed } from "./find";
 import { failure } from "./errors";
@@ -344,6 +350,32 @@ export default function Project({
 		setListing((version) => version + 1);
 	}
 
+	// A move changes the path of everything under what moved, which can be a
+	// whole chapter of open scenes. Rather than work out which, the tabs are
+	// re-pointed from the tree: ids are what a tab holds on to, and a move
+	// changes none of them.
+	async function moved() {
+		setListing((version) => version + 1);
+		try {
+			const tree = await invoke<TreeNode[]>("document_tree", { root });
+			const now = new Map(documentsOf(tree).map((doc) => [doc.id, doc]));
+			setTabs((open) =>
+				open.map((tab) => {
+					if (tab.kind !== "document") {
+						return tab;
+					}
+					const fresh = now.get(tab.document.id);
+					return fresh === undefined
+						? tab
+						: { ...tab, document: fresh };
+				}),
+			);
+		} catch {
+			// The listing above reads the same manifest and shows whatever went
+			// wrong with it, so there is nothing to say twice.
+		}
+	}
+
 	// A renamed folder keeps its id, so an overview of it is re-pointed where
 	// it stands. Nothing under it moved, so the tabs holding its documents are
 	// left alone: what a document is called is its own name, not its folder's.
@@ -626,6 +658,7 @@ export default function Project({
 					onRenamed={renamed}
 					onFolderRenamed={renamedFolder}
 					onChanged={changed}
+					onMoved={() => void moved()}
 					onDelete={remove}
 					onClose={onClose}
 				/>
@@ -706,6 +739,7 @@ export default function Project({
 									onRenamed={renamed}
 									onFolderRenamed={renamedFolder}
 									onChanged={changed}
+									onMoved={() => void moved()}
 									onDelete={remove}
 								/>
 							</div>

@@ -3,7 +3,7 @@
 // makes something new.
 
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -104,11 +104,14 @@ export default function Menu({
 export function MenuItem({
 	danger,
 	disabled,
+	depth,
 	onSelect,
 	children,
 }: {
 	danger?: boolean;
 	disabled?: boolean;
+	/** How far in to set it, for a menu that lists a tree. */
+	depth?: number;
 	onSelect: () => void;
 	children: ReactNode;
 }) {
@@ -118,6 +121,11 @@ export function MenuItem({
 			role="menuitem"
 			className={
 				danger === true ? "menu__item menu__item--danger" : "menu__item"
+			}
+			style={
+				depth === undefined
+					? undefined
+					: ({ "--depth": depth } as CSSProperties)
 			}
 			disabled={disabled}
 			onClick={onSelect}

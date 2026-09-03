@@ -60,15 +60,18 @@ export function renameFolder(
 }
 
 /**
- * Puts a document at a given place among the others in its section. An index
- * past the end means the end.
+ * Puts a node at a given place inside a folder, which may be the one it is
+ * already in: reordering and moving are the same call. An index past the end
+ * means the end. Staying put touches no files; going elsewhere takes the file,
+ * or the whole directory, with it.
  */
-export function reorderDocument(
+export function moveNode(
 	root: string,
 	id: string,
+	parentId: string,
 	index: number,
 ): Promise<void> {
-	return invoke<void>("reorder_document", { root, id, index });
+	return invoke<void>("move_node", { root, id, parentId, index });
 }
 
 /** Moves a document into the project's trash. */

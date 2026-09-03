@@ -210,6 +210,7 @@ pub enum Error {
 	UnknownFolder,
 	FolderNotAllowed,
 	SectionFixed,
+	MoveInsideItself,
 	DocumentMissing,
 	DocumentExists,
 	BadDocumentPath,
@@ -248,8 +249,11 @@ impl fmt::Display for Error {
 			Error::SectionFixed => {
 				write!(
 					f,
-					"a section is part of the project's shape and cannot be renamed"
+					"a section is part of the project's shape and cannot be renamed or moved"
 				)
+			}
+			Error::MoveInsideItself => {
+				write!(f, "a folder cannot be moved inside itself")
 			}
 			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
 			Error::DocumentExists => {
@@ -287,6 +291,7 @@ impl Error {
 			Error::UnknownFolder => "unknownFolder",
 			Error::FolderNotAllowed => "folderNotAllowed",
 			Error::SectionFixed => "sectionFixed",
+			Error::MoveInsideItself => "moveInsideItself",
 			Error::DocumentMissing => "documentMissing",
 			Error::DocumentExists => "documentExists",
 			Error::BadDocumentPath => "badDocumentPath",
@@ -324,6 +329,7 @@ impl std::error::Error for Error {
 			| Error::UnknownFolder
 			| Error::FolderNotAllowed
 			| Error::SectionFixed
+			| Error::MoveInsideItself
 			| Error::DocumentMissing
 			| Error::DocumentExists
 			| Error::BadDocumentPath
@@ -1548,6 +1554,7 @@ mod tests {
 			Error::UnknownFolder,
 			Error::FolderNotAllowed,
 			Error::SectionFixed,
+			Error::MoveInsideItself,
 			Error::DocumentMissing,
 			Error::DocumentExists,
 			Error::BadDocumentPath,
@@ -1581,6 +1588,7 @@ mod tests {
 			Error::UnknownFolder,
 			Error::FolderNotAllowed,
 			Error::SectionFixed,
+			Error::MoveInsideItself,
 			Error::DocumentMissing,
 			Error::DocumentExists,
 			Error::BadDocumentPath,
