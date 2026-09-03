@@ -1,19 +1,12 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
-import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import DocumentMenu from "./DocumentMenu";
-import FolderMenu from "./FolderMenu";
+import DocumentRow from "./DocumentRow";
+import FolderRow from "./FolderRow";
 import Icon from "./Icon";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
-import type {
-	FolderKind,
-	FolderNode,
-	ProjectDocument,
-	TreeNode,
-} from "./types";
+import type { FolderNode, ProjectDocument, TreeNode } from "./types";
 import type { Making } from "./kinds";
-import { folderPlaceholder } from "./kinds";
 import {
 	createDocument,
 	createFolder,
@@ -23,28 +16,10 @@ import {
 } from "./documents";
 import { failure } from "./errors";
 import { useReorder } from "./reorder";
+import type { Renaming } from "./rows";
+import { indent, retitling } from "./rows";
 import { documentsIn, rows, sections } from "./tree";
 import type { FolderRef } from "./tree";
-
-// How far in a row sits, as the stylesheet reads it.
-function indent(depth: number) {
-	return { "--depth": depth } as CSSProperties;
-}
-
-// What stands in a folder's left-hand slot, where a document carries its
-// number. Without one the name starts at the edge of the column and reads as
-// the smaller thing, which a folder is not. The Manuscript's folders say which
-// they are; a folder anywhere else is only a folder, so it wears the glyph.
-function mark(kind: FolderKind | null) {
-	switch (kind) {
-		case "part":
-			return "PT";
-		case "chapter":
-			return "CH";
-		case null:
-			return <Icon name="folder" className="folder__glyph" />;
-	}
-}
 
 type Status =
 	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
@@ -56,15 +31,6 @@ type Naming =
 	| { kind: "open"; at: string; making: Making }
 	| { kind: "creating"; at: string; making: Making }
 	| { kind: "refused"; at: string; making: Making; message: string };
-
-// The document or folder the writer is retitling, and what Rust made of the
-// last name they tried. Which of the two it is rides with the row that opened
-// the field rather than with the state, since only that row draws it.
-type Renaming =
-	| { kind: "closed" }
-	| { kind: "open"; id: string }
-	| { kind: "saving"; id: string }
-	| { kind: "refused"; id: string; message: string };
 
 type Props = {
 	// Styled out rather than unmounted, so a half-typed section name and the
@@ -276,310 +242,150 @@ export default function Sidebar({
 								{naming.kind !== "closed" &&
 									naming.at === section.id &&
 									field(section.id, section.name)}
+
 								{list.length > 0 ? (
 									<ul className="documents">
-										{list.map((row) => {
-											if (row.kind === "folder") {
-												return (
-													<Fragment key={row.id}>
-														{renaming.kind !==
-															"closed" &&
-														renaming.id ===
-															row.id ? (
-															<li
-																className="documents__item"
-																style={indent(
-																	row.depth,
-																)}
-															>
-																<div className="sidebar__field">
-																	<NameField
-																		label={`New name for ${row.name}`}
-																		placeholder={folderPlaceholder(
-																			row.folderKind,
-																		)}
-																		initial={
-																			row.name
-																		}
-																		busy={
-																			renaming.kind ===
-																			"saving"
-																		}
-																		error={
-																			renaming.kind ===
-																			"refused"
-																				? renaming.message
-																				: null
-																		}
-																		onSubmit={(
-																			name,
-																		) =>
-																			void rename(
-																				row.id,
-																				name,
-																				"folder",
-																			)
-																		}
-																		onCancel={() =>
-																			setRenaming(
-																				{
-																					kind: "closed",
-																				},
-																			)
-																		}
-																	/>
-																</div>
-															</li>
-														) : (
-															<li
-																className="documents__item"
-																style={indent(
-																	row.depth,
-																)}
-															>
-																<button
-																	type="button"
-																	className="folder"
-																	aria-current={
-																		row.id ===
-																		selectedFolder
-																			? "page"
-																			: undefined
-																	}
-																	onClick={() =>
-																		onOpenFolder(
-																			{
-																				id: row.id,
-																				name: row.name,
-																				kind: row.folderKind,
-																				section:
-																					section.name,
-																			},
-																		)
-																	}
-																>
-																	<span className="folder__at">
-																		{mark(
-																			row.folderKind,
-																		)}
-																	</span>
-																	<span className="folder__name">
-																		{
-																			row.name
-																		}
-																	</span>
-																</button>
-																{/* Two menus share the
-																    right-hand end of a
-																    folder's row, so they
-																    sit in a slot rather
-																    than both reaching for
-																    the same edge. */}
-																<div className="documents__actions">
-																	<NewMenu
-																		label={`New in ${row.name}`}
-																		kind={
-																			row.folderKind
-																		}
-																		section={
-																			section.name
-																		}
-																		onChoose={(
-																			making,
-																		) =>
-																			setNaming(
-																				{
-																					kind: "open",
-																					at: row.id,
-																					making,
-																				},
-																			)
-																		}
-																	/>
-																	<FolderMenu
-																		label={`Actions for ${row.name}`}
-																		root={
-																			root
-																		}
-																		moving={{
-																			id: row.id,
-																			kind: row.folderKind,
-																			folder: true,
-																			from: row.group,
-																		}}
-																		onMove={(
-																			parentId,
-																			at,
-																		) =>
-																			void move(
-																				row.id,
-																				parentId,
-																				at,
-																			)
-																		}
-																		onRename={() =>
-																			setRenaming(
-																				{
-																					kind: "open",
-																					id: row.id,
-																				},
-																			)
-																		}
-																		onDelete={() =>
-																			void remove(
-																				row.id,
-																				"folder",
-																			)
-																		}
-																	/>
-																</div>
-															</li>
-														)}
-														{naming.kind !==
-															"closed" &&
-															naming.at ===
-																row.id && (
-																<li
-																	className="documents__item"
-																	style={indent(
-																		row.depth +
-																			1,
-																	)}
-																>
-																	{field(
-																		row.id,
-																		row.name,
-																	)}
-																</li>
-															)}
-													</Fragment>
-												);
-											}
-
-											const doc = row.document;
-											return renaming.kind !== "closed" &&
-												renaming.id === doc.id ? (
-												<li
-													key={doc.id}
-													className="documents__item"
-													style={indent(row.depth)}
-												>
-													<div className="sidebar__field">
-														<NameField
-															label={`New name for ${doc.title}`}
-															placeholder="Chapter 2"
-															initial={doc.title}
-															busy={
-																renaming.kind ===
-																"saving"
-															}
-															error={
-																renaming.kind ===
-																"refused"
-																	? renaming.message
-																	: null
-															}
-															onSubmit={(name) =>
-																void rename(
-																	doc.id,
-																	name,
-																	"document",
-																)
-															}
-															onCancel={() =>
-																setRenaming({
-																	kind: "closed",
-																})
-															}
-														/>
-													</div>
-												</li>
-											) : (
-												<li
-													key={doc.id}
-													className="documents__item"
-													style={indent(row.depth)}
-													{...reorder.item(
-														doc.id,
-														row.index,
-														row.group,
-													)}
-												>
-													<button
-														type="button"
-														className="document"
-														aria-current={
-															doc.id ===
-															selectedId
-																? "page"
-																: undefined
-														}
-														onClick={() =>
-															onSelect(doc)
-														}
-													>
-														<span className="document__at">
-															{String(
-																row.index + 1,
-															).padStart(2, "0")}
-														</span>
-														<span className="document__title">
-															{doc.title}
-														</span>
-														{/* Always in the row and
-														    faded when there is
-														    nothing to say, so the
-														    title never shifts as
-														    the writer types. */}
-														<span
-															className="document__dirty"
-															data-dirty={
-																unsaved.includes(
-																	doc.id,
-																)
-																	? ""
-																	: undefined
-															}
-															aria-hidden="true"
-														/>
-													</button>
-													<DocumentMenu
-														label={`Actions for ${doc.title}`}
+										{list.map((row) =>
+											row.kind === "folder" ? (
+												<Fragment key={row.id}>
+													<FolderRow
 														root={root}
-														index={row.index}
-														count={row.siblings}
-														moving={{
-															id: doc.id,
-															kind: null,
-															folder: false,
-															from: row.group,
-														}}
+														row={row}
+														section={section.name}
+														current={
+															row.id ===
+															selectedFolder
+														}
+														renaming={retitling(
+															renaming,
+															row.id,
+														)}
+														onOpen={() =>
+															onOpenFolder({
+																id: row.id,
+																name: row.name,
+																kind: row.folderKind,
+																section:
+																	section.name,
+															})
+														}
+														onNew={(making) =>
+															setNaming({
+																kind: "open",
+																at: row.id,
+																making,
+															})
+														}
 														onMove={(
 															parentId,
-															to,
+															at,
 														) =>
 															void move(
-																doc.id,
+																row.id,
 																parentId,
-																to,
+																at,
 															)
 														}
 														onRename={() =>
 															setRenaming({
 																kind: "open",
-																id: doc.id,
+																id: row.id,
 															})
 														}
 														onDelete={() =>
 															void remove(
-																doc.id,
-																"document",
+																row.id,
+																"folder",
 															)
 														}
+														onRetitle={(name) =>
+															void rename(
+																row.id,
+																name,
+																"folder",
+															)
+														}
+														onCancelRetitle={() =>
+															setRenaming({
+																kind: "closed",
+															})
+														}
 													/>
-												</li>
-											);
-										})}
+													{naming.kind !== "closed" &&
+														naming.at ===
+															row.id && (
+															<li
+																className="documents__item"
+																style={indent(
+																	row.depth +
+																		1,
+																)}
+															>
+																{field(
+																	row.id,
+																	row.name,
+																)}
+															</li>
+														)}
+												</Fragment>
+											) : (
+												<DocumentRow
+													key={row.document.id}
+													root={root}
+													row={row}
+													current={
+														row.document.id ===
+														selectedId
+													}
+													unsaved={unsaved.includes(
+														row.document.id,
+													)}
+													renaming={retitling(
+														renaming,
+														row.document.id,
+													)}
+													drag={reorder.item(
+														row.document.id,
+														row.index,
+														row.group,
+													)}
+													onOpen={() =>
+														onSelect(row.document)
+													}
+													onMove={(parentId, to) =>
+														void move(
+															row.document.id,
+															parentId,
+															to,
+														)
+													}
+													onRename={() =>
+														setRenaming({
+															kind: "open",
+															id: row.document.id,
+														})
+													}
+													onDelete={() =>
+														void remove(
+															row.document.id,
+															"document",
+														)
+													}
+													onRetitle={(name) =>
+														void rename(
+															row.document.id,
+															name,
+															"document",
+														)
+													}
+													onCancelRetitle={() =>
+														setRenaming({
+															kind: "closed",
+														})
+													}
+												/>
+											),
+										)}
 									</ul>
 								) : (
 									<p className="section__empty">

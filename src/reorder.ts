@@ -9,6 +9,18 @@ import type { DragEvent } from "react";
 
 type Dragging = { id: string; from: number; group: string } | null;
 
+/** What goes on the element standing for one row, so a row can ask for it. */
+export type Draggable = {
+	draggable: boolean;
+	"data-dragging": string | undefined;
+	"data-over": string | undefined;
+	onDragStart: (event: DragEvent) => void;
+	onDragOver: (event: DragEvent) => void;
+	onDragLeave: () => void;
+	onDrop: (event: DragEvent) => void;
+	onDragEnd: () => void;
+};
+
 export function useReorder(
 	move: (id: string, parentId: string, index: number) => void,
 ) {
@@ -26,7 +38,7 @@ export function useReorder(
 	 * its own, so anywhere else refuses the drop rather than quietly meaning
 	 * something the writer did not ask for.
 	 */
-	function item(id: string, at: number, group: string) {
+	function item(id: string, at: number, group: string): Draggable {
 		const landing = dragging !== null && dragging.group === group;
 
 		return {
