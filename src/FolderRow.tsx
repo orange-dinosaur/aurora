@@ -43,6 +43,7 @@ type Props = {
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
 	onDelete: () => void;
+	onToggle: () => void;
 	onRetitle: (name: string) => void;
 	onCancelRetitle: () => void;
 };
@@ -58,6 +59,7 @@ export default function FolderRow({
 	onMove,
 	onRename,
 	onDelete,
+	onToggle,
 	onRetitle,
 	onCancelRetitle,
 }: Props) {
@@ -81,6 +83,25 @@ export default function FolderRow({
 
 	return (
 		<li className="documents__item" style={indent(row.depth)}>
+			{/* Over the row rather than inside it, for the reason the menus at
+			    the other end are: the row is itself a button. A folder holding
+			    nothing has nothing to open, so it draws no chevron and leaves
+			    the column to the folders that do. */}
+			{row.holds > 0 && (
+				<button
+					type="button"
+					className="disclosure"
+					aria-expanded={row.expanded}
+					aria-label={`${row.expanded ? "Collapse" : "Expand"} ${row.name}`}
+					onClick={onToggle}
+				>
+					<Icon
+						name={row.expanded ? "chevron-down" : "chevron-right"}
+						className="disclosure__glyph"
+					/>
+				</button>
+			)}
+
 			<button
 				type="button"
 				className="folder"

@@ -36,7 +36,9 @@ pub fn run() {
 			document::purge_trash_entry,
 			document::move_node,
 			store::read_preferences,
-			store::write_preferences
+			store::write_preferences,
+			store::read_expanded,
+			store::write_expanded
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

@@ -1,15 +1,17 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 use tauri::AppHandle;
 
 use crate::project::{Error, Result, store_path, write_json};
 
-pub const STORE_VERSION: u32 = 4;
+pub const STORE_VERSION: u32 = 5;
 
 /// How many projects are worth offering on the welcome screen.
 const MAX_RECENT: usize = 10;
@@ -89,6 +91,13 @@ pub struct Store {
 	/// migrated: there is nothing in an older store to derive them from.
 	#[serde(default)]
 	pub preferences: Preferences,
+	/// The folders the writer has left open in the sidebar, by the root of the
+	/// project they belong to. Kept here rather than in the project's manifest
+	/// because it is how one writer is looking at the project on one machine,
+	/// not part of the story: a copy of the project carries the words, and this
+	/// stays behind. Absent from a store written before version 5.
+	#[serde(default)]
+	pub expanded: BTreeMap<PathBuf, Vec<Uuid>>,
 }
 
 impl Default for Store {
@@ -98,6 +107,7 @@ impl Default for Store {
 			last: None,
 			recent: Vec::new(),
 			preferences: Preferences::default(),
+			expanded: BTreeMap::new(),
 		}
 	}
 }
@@ -138,6 +148,9 @@ impl Store {
 		if self.last.as_deref() == Some(root) {
 			self.last = None;
 		}
+		// A project Aurora has been told to forget leaves nothing behind, and
+		// a folder it no longer knows about could not be opened again anyway.
+		self.expanded.remove(root);
 	}
 }
 
@@ -153,8 +166,8 @@ pub fn load(path: &Path) -> Result<Store> {
 
 /// Version 1 had no `last`: whatever was at the head of the list was what
 /// reopened. Adopting it here means an upgrade does not lose the open project.
-/// Version 2 had no preferences, and version 3 no `sidebar`; serde's defaults
-/// are the whole migration for both.
+/// Version 2 had no preferences, version 3 no `sidebar` and version 4 no
+/// `expanded`; serde's defaults are the whole migration for all three.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
 	if store.version < STORE_VERSION {
@@ -198,6 +211,37 @@ pub fn read_preferences(app: AppHandle) -> Result<Preferences> {
 #[tauri::command]
 pub fn write_preferences(app: AppHandle, preferences: Preferences) -> Result<()> {
 	set_preferences(&store_path(&app)?, preferences)
+}
+
+fn expanded(path: &Path, root: &Path) -> Result<Vec<Uuid>> {
+	Ok(load(path)?.expanded.remove(root).unwrap_or_default())
+}
+
+/// An empty list drops the project's entry rather than writing one: a writer
+/// who folds everything shut is back where they started, and the store should
+/// say so rather than keep a row saying nothing.
+fn set_expanded(path: &Path, root: PathBuf, open: Vec<Uuid>) -> Result<()> {
+	let mut store = load(path)?;
+
+	if open.is_empty() {
+		store.expanded.remove(&root);
+	} else {
+		store.expanded.insert(root, open);
+	}
+
+	save(path, &store)
+}
+
+/// The folders left open in one project, which is none at all for a project the
+/// writer has not expanded anything in yet.
+#[tauri::command]
+pub fn read_expanded(app: AppHandle, root: PathBuf) -> Result<Vec<Uuid>> {
+	expanded(&store_path(&app)?, &root)
+}
+
+#[tauri::command]
+pub fn write_expanded(app: AppHandle, root: PathBuf, open: Vec<Uuid>) -> Result<()> {
+	set_expanded(&store_path(&app)?, root, open)
 }
 
 #[cfg(test)]
@@ -268,7 +312,7 @@ mod tests {
 
 		let json = fs::read_to_string(&path).unwrap();
 		assert!(
-			json.contains("\n\t\"version\": 4"),
+			json.contains("\n\t\"version\": 5"),
 			"expected tab indentation"
 		);
 		assert!(json.contains("\"lastOpened\": \"2023-11-14T22:13:20Z\""));
@@ -531,6 +575,47 @@ mod tests {
 		let read_back = load(&path).unwrap();
 		assert!(read_back.reopen().is_none());
 		assert_eq!(read_back.recent.len(), 1);
+	}
+
+	#[test]
+	fn the_folders_left_open_come_back_project_by_project() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		let ithaca = PathBuf::from("/writing/Ithaca");
+		let rooks = PathBuf::from("/writing/Rooks");
+		let part = Uuid::new_v4();
+
+		set_expanded(&path, ithaca.clone(), vec![part]).unwrap();
+
+		assert_eq!(expanded(&path, &ithaca).unwrap(), vec![part]);
+		assert!(
+			expanded(&path, &rooks).unwrap().is_empty(),
+			"one project's open folders are not another's"
+		);
+	}
+
+	#[test]
+	fn folding_everything_shut_leaves_no_entry_behind() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		let ithaca = PathBuf::from("/writing/Ithaca");
+
+		set_expanded(&path, ithaca.clone(), vec![Uuid::new_v4()]).unwrap();
+		set_expanded(&path, ithaca, Vec::new()).unwrap();
+
+		assert!(load(&path).unwrap().expanded.is_empty());
+	}
+
+	#[test]
+	fn forgetting_a_project_forgets_which_folders_were_open() {
+		let mut store = Store::default();
+		let root = PathBuf::from("/writing/Ithaca");
+		store.remember("Ithaca", root.clone(), at(1));
+		store.expanded.insert(root.clone(), vec![Uuid::new_v4()]);
+
+		store.forget(&root);
+
+		assert!(store.expanded.is_empty());
 	}
 
 	#[test]

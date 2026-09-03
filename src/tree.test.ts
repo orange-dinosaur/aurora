@@ -32,8 +32,8 @@ function document(path: string): TreeNode {
 }
 
 /** A row as `kind name depth`, which is what the sidebar draws. */
-function drawn(nodes: TreeNode[]) {
-	return rows(nodes, "root").map((row) =>
+function drawn(nodes: TreeNode[], open: ReadonlySet<string> | null = null) {
+	return rows(nodes, "root", open).map((row) =>
 		row.kind === "folder"
 			? `folder ${row.name} ${row.depth}`
 			: `document ${row.document.title} ${row.depth}`,
@@ -53,6 +53,30 @@ describe("laying a level out as rows", () => {
 		expect(drawn(section)).toEqual([
 			"document Chapter 1 0",
 			"document Chapter 2 0",
+		]);
+	});
+
+	test("a folder nobody has opened keeps what it holds to itself", () => {
+		const section = [
+			folder("Part One", [
+				document("Manuscript/Part One/Chapter 1.md"),
+				folder("Chapter Two", [
+					document("Manuscript/Part One/Chapter Two/Scene.md"),
+				]),
+			]),
+			document("Manuscript/Epilogue.md"),
+		];
+
+		expect(drawn(section, new Set())).toEqual([
+			"folder Part One 0",
+			"document Epilogue 0",
+		]);
+
+		expect(drawn(section, new Set(["id-Part One"]))).toEqual([
+			"folder Part One 0",
+			"document Chapter 1 1",
+			"folder Chapter Two 1",
+			"document Epilogue 0",
 		]);
 	});
 

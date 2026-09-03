@@ -88,6 +88,10 @@ export default function Sidebar({
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
+	// The folders drawn open. A project the writer has expanded nothing in
+	// starts folded, so a deep manuscript opens as its parts rather than as
+	// every scene in it.
+	const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
 	const reorder = useReorder(
 		(id, parentId, index) => void move(id, parentId, index),
 	);
@@ -107,6 +111,28 @@ export default function Sidebar({
 	useEffect(() => {
 		void load();
 	}, [load, reload]);
+
+	// Which folders were open last time. A store that cannot be read leaves
+	// the sidebar folded rather than stopping the project from opening.
+	useEffect(() => {
+		invoke<string[]>("read_expanded", { root })
+			.then((ids) => setOpen(new Set(ids)))
+			.catch(() => setOpen(new Set()));
+	}, [root]);
+
+	async function toggle(id: string) {
+		const next = new Set(open);
+		if (!next.delete(id)) {
+			next.add(id);
+		}
+		setOpen(next);
+
+		try {
+			await invoke("write_expanded", { root, open: [...next] });
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
+		}
+	}
 
 	async function move(id: string, parentId: string, index: number) {
 		try {
@@ -196,7 +222,7 @@ export default function Sidebar({
 			<div className="sidebar__list">
 				<div className="sidebar__sections">
 					{sections(tree).map((section) => {
-						const list = rows(section.children, section.id);
+						const list = rows(section.children, section.id, open);
 
 						return (
 							<section key={section.id} className="section">
@@ -297,6 +323,9 @@ export default function Sidebar({
 																row.id,
 																"folder",
 															)
+														}
+														onToggle={() =>
+															void toggle(row.id)
 														}
 														onRetitle={(name) =>
 															void rename(

@@ -52,15 +52,27 @@ export type Row =
 			folderKind: FolderKind | null;
 			/** The words in every document below it, however deep. */
 			words: number;
+			/** How many nodes it holds directly, which is whether it opens. */
+			holds: number;
+			/** Whether what it holds is drawn under it. */
+			expanded: boolean;
 	  })
 	| (Place & { kind: "document"; document: ProjectDocument });
 
 /**
- * Everything under one folder, depth first: a folder, then all it holds, then
- * whatever follows it. The section itself is not a row; the sidebar draws its
- * own header.
+ * Everything under one folder, depth first: a folder, then all it holds if it
+ * is open, then whatever follows it. The section itself is not a row; the
+ * sidebar draws its own header.
+ *
+ * `open` holds the ids of the folders the writer has expanded. Null stands for
+ * all of them, which is what counting rows rather than drawing them wants.
  */
-export function rows(nodes: TreeNode[], group: string, depth = 0): Row[] {
+export function rows(
+	nodes: TreeNode[],
+	group: string,
+	open: ReadonlySet<string> | null = null,
+	depth = 0,
+): Row[] {
 	return nodes.flatMap((node, index) => {
 		const place = { depth, index, siblings: nodes.length, group };
 
@@ -76,6 +88,7 @@ export function rows(nodes: TreeNode[], group: string, depth = 0): Row[] {
 			return [row];
 		}
 
+		const expanded = open === null || open.has(node.id);
 		const row: Row = {
 			kind: "folder",
 			...place,
@@ -83,8 +96,12 @@ export function rows(nodes: TreeNode[], group: string, depth = 0): Row[] {
 			name: node.name,
 			folderKind: node.kind,
 			words: node.words,
+			holds: node.children.length,
+			expanded,
 		};
-		return [row, ...rows(node.children, node.id, depth + 1)];
+		return expanded
+			? [row, ...rows(node.children, node.id, open, depth + 1)]
+			: [row];
 	});
 }
 
