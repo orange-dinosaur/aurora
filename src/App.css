@@ -676,6 +676,12 @@ body,
 	padding: 0.1rem 0.25rem;
 	margin-left: -0.25rem;
 	font: inherit;
+	/* Said again here rather than left to the heading above. WebKit's own
+	   stylesheet resets both of these on a control, and `font: inherit` does
+	   not put them back: neither is part of the shorthand. Without this the
+	   eyebrow draws as plain mixed case. */
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
 	text-align: left;
 	color: inherit;
 	background: none;
