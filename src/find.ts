@@ -33,12 +33,33 @@ export type Match = {
 	toOffset: number;
 };
 
+/**
+ * How the query should be read. Both are off by default, which is what Find
+ * and project-wide search want: a writer typing `rose` expects to be shown
+ * `Rosemary` too.
+ */
+export type Reading = {
+	/** Reject a match with a letter or digit against either edge. */
+	wholeWord?: boolean;
+	/** Tell `Rose` from `rose`. */
+	caseSensitive?: boolean;
+};
+
 type Span = {
 	key: string;
 	/** Where this run begins in the joined text. */
 	at: number;
 	length: number;
 };
+
+const WORD = /[\p{L}\p{N}_]/u;
+
+/** Whether nothing word-like sits against either edge of the match. */
+function whole(text: string, at: number, length: number): boolean {
+	return (
+		!WORD.test(text[at - 1] ?? "") && !WORD.test(text[at + length] ?? "")
+	);
+}
 
 /** The run holding `index`, and how far into it that is. */
 function within(spans: Span[], index: number, end: boolean): Span | null {
@@ -55,9 +76,14 @@ function within(spans: Span[], index: number, end: boolean): Span | null {
 
 /**
  * Every place `query` appears, in the order a writer would step through them.
- * Matching ignores case and never crosses from one block into the next.
+ * Matching never crosses from one block into the next; whether it ignores case
+ * and whether it stops at word edges are up to `reading`.
  */
-export function matches(runs: Run[], query: string): Match[] {
+export function matches(
+	runs: Run[],
+	query: string,
+	reading: Reading = {},
+): Match[] {
 	if (query === "") {
 		return [];
 	}
@@ -86,7 +112,8 @@ export function matches(runs: Run[], query: string): Match[] {
 	// Turkish İ becomes two — which would put every offset after it out by
 	// one. When that happens the search is exact instead of being wrong.
 	const folded = text.toLowerCase();
-	const exact = folded.length !== text.length;
+	const exact =
+		reading.caseSensitive === true || folded.length !== text.length;
 	const haystack = exact ? text : folded;
 	const needle = exact ? query : query.toLowerCase();
 
@@ -94,6 +121,13 @@ export function matches(runs: Run[], query: string): Match[] {
 	let at = haystack.indexOf(needle);
 
 	while (at !== -1) {
+		if (reading.wholeWord === true && !whole(haystack, at, needle.length)) {
+			// A rejected place can still hold the start of a real match one
+			// character along, so this steps rather than skipping the width.
+			at = haystack.indexOf(needle, at + 1);
+			continue;
+		}
+
 		const from = within(spans, at, false);
 		const to = within(spans, at + needle.length, true);
 		if (from !== null && to !== null) {
