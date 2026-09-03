@@ -1141,9 +1141,9 @@ mod tests {
 
 	#[test]
 	fn a_document_id_survives_the_round_trip() {
-		let document = Document::new("Manuscript", "Chapter 1.md");
+		let document = Document::new("Manuscript", "Scene 1.md");
 		let json = serde_json::to_value(&document).unwrap();
-		assert_eq!(json["path"], "Manuscript/Chapter 1.md");
+		assert_eq!(json["path"], "Manuscript/Scene 1.md");
 		assert_eq!(json["id"], document.id.to_string());
 		assert_eq!(serde_json::from_value::<Document>(json).unwrap(), document);
 	}
@@ -1172,7 +1172,7 @@ mod tests {
 		assert_eq!(
 			scan_paths(&root),
 			[
-				"Manuscript/Chapter 1.md",
+				"Manuscript/Scene 1.md",
 				"Outline/Outline.md",
 				"Characters/Characters.md",
 				"Locations/Locations.md",
@@ -1193,9 +1193,9 @@ mod tests {
 		assert_eq!(
 			&found[..3],
 			[
-				"Manuscript/Chapter 1.md",
 				"Manuscript/Chapter 2.md",
 				"Manuscript/Chapter 3.md",
+				"Manuscript/Scene 1.md",
 			]
 		);
 	}
@@ -1232,10 +1232,7 @@ mod tests {
 				.iter()
 				.filter(|p| p.starts_with("Manuscript/"))
 				.collect::<Vec<_>>(),
-			[
-				"Manuscript/Chapter 1.md",
-				"Manuscript/Part One/Chapter 2.md"
-			],
+			["Manuscript/Part One/Chapter 2.md", "Manuscript/Scene 1.md"],
 			"a directory sorts among the files beside it"
 		);
 	}
@@ -1263,10 +1260,10 @@ mod tests {
 		let found = scan(&root, &novel_folders()).unwrap();
 
 		let manuscript = &found[0];
-		let Some([_, Node::Folder { name, children, .. }]) =
+		let Some([Node::Folder { name, children, .. }, _]) =
 			tree::children(&found, manuscript.id())
 		else {
-			panic!("the seed chapter and the new directory, in that order")
+			panic!("the new directory and the seed scene, in that order")
 		};
 		assert_eq!(name, "Part Two");
 		assert!(children.is_empty(), "nothing is in it yet");
@@ -1282,7 +1279,7 @@ mod tests {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		let hidden = root.join("Manuscript").join(".drafts");
 		fs::create_dir(&hidden).unwrap();
-		fs::write(hidden.join("Chapter 1.md"), "").unwrap();
+		fs::write(hidden.join("Scene 1.md"), "").unwrap();
 
 		assert!(!scan_paths(&root).iter().any(|p| p.contains(".drafts")));
 	}
@@ -1356,25 +1353,25 @@ mod tests {
 
 	#[test]
 	fn reconcile_leaves_a_manifest_that_already_agrees_alone() {
-		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+		let mut manifest = manifest_with(&["Manuscript/Scene 1.md", "Notes/Notes.md"]);
 		let before = manifest.documents();
 
 		assert!(!reconcile(
 			&mut manifest,
-			&found(&["Manuscript/Chapter 1.md", "Notes/Notes.md"])
+			&found(&["Manuscript/Scene 1.md", "Notes/Notes.md"])
 		));
 		assert_eq!(manifest.documents(), before);
 	}
 
 	#[test]
 	fn a_new_file_is_adopted_at_the_end_of_its_section() {
-		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+		let mut manifest = manifest_with(&["Manuscript/Scene 1.md", "Notes/Notes.md"]);
 		let chapter_one = manifest.documents()[0].id;
 
 		assert!(reconcile(
 			&mut manifest,
 			&found(&[
-				"Manuscript/Chapter 1.md",
+				"Manuscript/Scene 1.md",
 				"Manuscript/Chapter 2.md",
 				"Notes/Notes.md",
 			])
@@ -1382,7 +1379,7 @@ mod tests {
 		assert_eq!(
 			paths_of(&manifest),
 			[
-				"Manuscript/Chapter 1.md",
+				"Manuscript/Scene 1.md",
 				"Manuscript/Chapter 2.md",
 				"Notes/Notes.md",
 			]
@@ -1396,7 +1393,7 @@ mod tests {
 
 	#[test]
 	fn a_vanished_file_is_dropped() {
-		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+		let mut manifest = manifest_with(&["Manuscript/Scene 1.md", "Notes/Notes.md"]);
 
 		assert!(reconcile(&mut manifest, &found(&["Notes/Notes.md"])));
 		assert_eq!(paths_of(&manifest), ["Notes/Notes.md"]);
@@ -1404,15 +1401,15 @@ mod tests {
 
 	#[test]
 	fn the_recorded_order_wins_over_the_order_on_disk() {
-		let mut manifest = manifest_with(&["Manuscript/Chapter 2.md", "Manuscript/Chapter 1.md"]);
+		let mut manifest = manifest_with(&["Manuscript/Chapter 2.md", "Manuscript/Scene 1.md"]);
 
 		assert!(!reconcile(
 			&mut manifest,
-			&found(&["Manuscript/Chapter 1.md", "Manuscript/Chapter 2.md"])
+			&found(&["Manuscript/Scene 1.md", "Manuscript/Chapter 2.md"])
 		));
 		assert_eq!(
 			paths_of(&manifest),
-			["Manuscript/Chapter 2.md", "Manuscript/Chapter 1.md"]
+			["Manuscript/Chapter 2.md", "Manuscript/Scene 1.md"]
 		);
 	}
 
@@ -1422,11 +1419,11 @@ mod tests {
 
 		assert!(reconcile(
 			&mut manifest,
-			&found(&["Manuscript/Chapter 1.md", "Notes/Notes.md"])
+			&found(&["Manuscript/Scene 1.md", "Notes/Notes.md"])
 		));
 		assert_eq!(
 			paths_of(&manifest),
-			["Manuscript/Chapter 1.md", "Notes/Notes.md"]
+			["Manuscript/Scene 1.md", "Notes/Notes.md"]
 		);
 		let ids: HashSet<_> = manifest.documents().iter().map(|d| d.id).collect();
 		assert_eq!(ids.len(), 2, "each adopted file gets its own id");
@@ -1434,14 +1431,11 @@ mod tests {
 
 	#[test]
 	fn a_path_recorded_twice_is_collapsed() {
-		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Manuscript/Chapter 1.md"]);
+		let mut manifest = manifest_with(&["Manuscript/Scene 1.md", "Manuscript/Scene 1.md"]);
 		let first = manifest.documents()[0].id;
 
-		assert!(reconcile(
-			&mut manifest,
-			&found(&["Manuscript/Chapter 1.md"])
-		));
-		assert_eq!(paths_of(&manifest), ["Manuscript/Chapter 1.md"]);
+		assert!(reconcile(&mut manifest, &found(&["Manuscript/Scene 1.md"])));
+		assert_eq!(paths_of(&manifest), ["Manuscript/Scene 1.md"]);
 		assert_eq!(manifest.documents()[0].id, first, "the first id wins");
 	}
 
@@ -1458,7 +1452,7 @@ mod tests {
 
 	#[test]
 	fn a_section_whose_folder_has_gone_keeps_its_place_and_loses_what_was_in_it() {
-		let mut manifest = manifest_with(&["Manuscript/Chapter 1.md", "Notes/Notes.md"]);
+		let mut manifest = manifest_with(&["Manuscript/Scene 1.md", "Notes/Notes.md"]);
 		let mut on_disk = found(&["Notes/Notes.md"]);
 		on_disk.retain(|node| node.name() != "Manuscript");
 
@@ -1484,9 +1478,9 @@ mod tests {
 			["Manuscript", "Outline", "Characters", "Locations", "Notes"]
 		);
 		assert_eq!(listed[0].documents.len(), 1);
-		assert_eq!(listed[0].documents[0].title, "Chapter 1");
+		assert_eq!(listed[0].documents[0].title, "Scene 1");
 		assert_eq!(listed[0].documents[0].folder, "Manuscript");
-		assert_eq!(listed[0].documents[0].path, "Manuscript/Chapter 1.md");
+		assert_eq!(listed[0].documents[0].path, "Manuscript/Scene 1.md");
 	}
 
 	#[test]
@@ -1588,10 +1582,10 @@ mod tests {
 
 	#[test]
 	fn a_title_is_the_file_name_without_its_extension() {
-		let document = Document::new("Manuscript", "Chapter 1.md");
-		assert_eq!(document.title(), "Chapter 1");
+		let document = Document::new("Manuscript", "Scene 1.md");
+		assert_eq!(document.title(), "Scene 1");
 		let view = DocumentView::from(&document);
-		assert_eq!(view.title, "Chapter 1");
+		assert_eq!(view.title, "Scene 1");
 		assert_eq!(view.folder, "Manuscript");
 	}
 
@@ -1625,7 +1619,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::write(
-			root.join("Manuscript").join("Chapter 1.md"),
+			root.join("Manuscript").join("Scene 1.md"),
 			"Sing to me of the man, Muse.",
 		)
 		.unwrap();
@@ -1651,7 +1645,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		let id = first_document(&root).id;
-		fs::remove_file(root.join("Manuscript").join("Chapter 1.md")).unwrap();
+		fs::remove_file(root.join("Manuscript").join("Scene 1.md")).unwrap();
 
 		let err = read_document(root, id).unwrap_err();
 		assert!(matches!(err, Error::DocumentMissing));
@@ -1688,7 +1682,7 @@ mod tests {
 	fn a_document_that_is_not_text_is_reported() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
-		fs::write(root.join("Manuscript").join("Chapter 1.md"), [0xff, 0xfe]).unwrap();
+		fs::write(root.join("Manuscript").join("Scene 1.md"), [0xff, 0xfe]).unwrap();
 
 		let id = first_document(&root).id;
 		let err = read_document(root, id).unwrap_err();
@@ -1737,7 +1731,7 @@ mod tests {
 			.unwrap()
 			.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
 			.collect();
-		assert_eq!(left, ["Chapter 1.md"]);
+		assert_eq!(left, ["Scene 1.md"]);
 		assert_eq!(scan_paths(&root).len(), 5);
 	}
 
@@ -1755,7 +1749,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		let id = first_document(&root).id;
-		fs::remove_file(root.join("Manuscript").join("Chapter 1.md")).unwrap();
+		fs::remove_file(root.join("Manuscript").join("Scene 1.md")).unwrap();
 
 		let err = write_document(root, id, "back again".to_owned()).unwrap_err();
 		assert!(matches!(err, Error::DocumentMissing));
@@ -1779,7 +1773,7 @@ mod tests {
 	fn with_chapter_one_gone(parent: &tempfile::TempDir) -> (PathBuf, Uuid) {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		let id = first_document(&root).id;
-		fs::remove_file(root.join("Manuscript").join("Chapter 1.md")).unwrap();
+		fs::remove_file(root.join("Manuscript").join("Scene 1.md")).unwrap();
 		(root, id)
 	}
 
@@ -1790,13 +1784,13 @@ mod tests {
 
 		let restored = restore_document(
 			root.clone(),
-			"Manuscript/Chapter 1.md".to_owned(),
+			"Manuscript/Scene 1.md".to_owned(),
 			"Sing to me of the man, Muse.".to_owned(),
 		)
 		.unwrap();
 
 		assert_eq!(restored.id, id, "the manifest still knew the path");
-		assert_eq!(restored.title, "Chapter 1");
+		assert_eq!(restored.title, "Scene 1");
 		assert_eq!(
 			read_document(root, restored.id).unwrap(),
 			"Sing to me of the man, Muse."
@@ -1813,7 +1807,7 @@ mod tests {
 
 		let restored = restore_document(
 			root.clone(),
-			"Manuscript/Chapter 1.md".to_owned(),
+			"Manuscript/Scene 1.md".to_owned(),
 			"Back again.".to_owned(),
 		)
 		.unwrap();
@@ -1830,7 +1824,7 @@ mod tests {
 
 		let restored = restore_document(
 			root.clone(),
-			"Manuscript/Chapter 1.md".to_owned(),
+			"Manuscript/Scene 1.md".to_owned(),
 			"Back again.".to_owned(),
 		)
 		.unwrap();
@@ -1844,21 +1838,21 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::write(
-			root.join("Manuscript").join("Chapter 1.md"),
+			root.join("Manuscript").join("Scene 1.md"),
 			"what the sync client brought back",
 		)
 		.unwrap();
 
 		let err = restore_document(
 			root.clone(),
-			"Manuscript/Chapter 1.md".to_owned(),
+			"Manuscript/Scene 1.md".to_owned(),
 			"my copy".to_owned(),
 		)
 		.unwrap_err();
 
 		assert!(matches!(err, Error::DocumentExists));
 		assert_eq!(
-			fs::read_to_string(root.join("Manuscript").join("Chapter 1.md")).unwrap(),
+			fs::read_to_string(root.join("Manuscript").join("Scene 1.md")).unwrap(),
 			"what the sync client brought back"
 		);
 	}
@@ -1954,7 +1948,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::write(
-			root.join("Manuscript").join("Chapter 1.md"),
+			root.join("Manuscript").join("Scene 1.md"),
 			"Sing to me of the man, Muse.",
 		)
 		.unwrap();
@@ -1962,7 +1956,7 @@ mod tests {
 		let overview = cards(root, "Manuscript");
 
 		assert_eq!(overview.len(), 1);
-		assert_eq!(overview[0].document.title, "Chapter 1");
+		assert_eq!(overview[0].document.title, "Scene 1");
 		assert_eq!(overview[0].excerpt, "Sing to me of the man, Muse.");
 		assert_eq!(overview[0].words, 7);
 		assert!(overview[0].modified.is_some());
@@ -1980,7 +1974,7 @@ mod tests {
 		let overview = cards(root, "Manuscript");
 
 		let titles: Vec<_> = overview.iter().map(|d| d.document.title.as_str()).collect();
-		assert_eq!(titles, ["Chapter 1", "Chapter 2", "Chapter 3"]);
+		assert_eq!(titles, ["Scene 1", "Chapter 2", "Chapter 3"]);
 	}
 
 	#[test]
@@ -2060,7 +2054,7 @@ mod tests {
 
 		assert_eq!(overview.len(), 2);
 		assert!(
-			matches!(&overview[0], ChildSummary::Document(card) if card.document.title == "Chapter 1"),
+			matches!(&overview[0], ChildSummary::Document(card) if card.document.title == "Scene 1"),
 			"the seed chapter keeps its place ahead of the new folder"
 		);
 		let ChildSummary::Folder {
@@ -2104,7 +2098,7 @@ mod tests {
 
 	#[test]
 	fn a_summary_serializes_flat_alongside_the_document() {
-		let document = Document::new("Manuscript", "Chapter 1.md");
+		let document = Document::new("Manuscript", "Scene 1.md");
 		let summary = DocumentSummary {
 			document: (&document).into(),
 			words: 3,
@@ -2113,8 +2107,8 @@ mod tests {
 		};
 
 		let json = serde_json::to_value(&summary).unwrap();
-		assert_eq!(json["title"], "Chapter 1");
-		assert_eq!(json["path"], "Manuscript/Chapter 1.md");
+		assert_eq!(json["title"], "Scene 1");
+		assert_eq!(json["path"], "Manuscript/Scene 1.md");
 		assert_eq!(json["words"], 3);
 		assert_eq!(json["modified"], "2023-11-14T22:13:20Z");
 		assert!(json.get("document").is_none());
@@ -2122,11 +2116,11 @@ mod tests {
 
 	#[test]
 	fn a_card_says_which_kind_it_is_on_the_wire() {
-		let document = Document::new("Manuscript", "Chapter 1.md");
+		let document = Document::new("Manuscript", "Scene 1.md");
 		let json = serde_json::to_value(ChildSummary::Document(DocumentSummary::blank(&document)))
 			.unwrap();
 		assert_eq!(json["node"], "document");
-		assert_eq!(json["title"], "Chapter 1", "still flat under the tag");
+		assert_eq!(json["title"], "Scene 1", "still flat under the tag");
 
 		let json = serde_json::to_value(ChildSummary::Folder {
 			id: Uuid::new_v4(),
@@ -2142,7 +2136,7 @@ mod tests {
 
 	#[test]
 	fn an_unreadable_summary_reports_no_time_at_all() {
-		let document = Document::new("Manuscript", "Chapter 1.md");
+		let document = Document::new("Manuscript", "Scene 1.md");
 		let json = serde_json::to_value(DocumentSummary::blank(&document)).unwrap();
 		assert!(json["modified"].is_null());
 	}
@@ -2202,7 +2196,7 @@ mod tests {
 
 		let manuscript = sections(&read_manifest(&root).unwrap()).remove(0);
 		let titles: Vec<_> = manuscript.documents.iter().map(|d| &d.title).collect();
-		assert_eq!(titles, ["Chapter 1", "Chapter 2"]);
+		assert_eq!(titles, ["Scene 1", "Chapter 2"]);
 	}
 
 	#[test]
@@ -2224,16 +2218,16 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::write(
-			root.join("Manuscript").join("Chapter 1.md"),
+			root.join("Manuscript").join("Scene 1.md"),
 			"Sing to me of the man, Muse.",
 		)
 		.unwrap();
 
-		let err = create_in(root.clone(), "Manuscript", "Chapter 1").unwrap_err();
+		let err = create_in(root.clone(), "Manuscript", "Scene 1").unwrap_err();
 
 		assert!(matches!(err, Error::DocumentExists));
 		assert_eq!(
-			fs::read_to_string(root.join("Manuscript").join("Chapter 1.md")).unwrap(),
+			fs::read_to_string(root.join("Manuscript").join("Scene 1.md")).unwrap(),
 			"Sing to me of the man, Muse.",
 			"the document that was already there is untouched"
 		);
@@ -2244,9 +2238,9 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		create_in(root.clone(), "Notes", "Chapter 1").unwrap();
+		create_in(root.clone(), "Notes", "Scene 1").unwrap();
 
-		assert!(root.join("Notes").join("Chapter 1.md").exists());
+		assert!(root.join("Notes").join("Scene 1.md").exists());
 	}
 
 	#[test]
@@ -2680,7 +2674,7 @@ mod tests {
 
 		rename_document(root.clone(), id, "Ithaca Falls".to_owned()).unwrap();
 
-		assert!(!root.join("Manuscript").join("Chapter 1.md").exists());
+		assert!(!root.join("Manuscript").join("Scene 1.md").exists());
 		assert_eq!(scan_paths(&root)[0], "Manuscript/Ithaca Falls.md");
 	}
 
@@ -2690,11 +2684,11 @@ mod tests {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		let id = first_document(&root).id;
 
-		let renamed = rename_document(root.clone(), id, "Chapter 1".to_owned()).unwrap();
+		let renamed = rename_document(root.clone(), id, "Scene 1".to_owned()).unwrap();
 
 		assert_eq!(renamed.id, id);
-		assert_eq!(renamed.path, "Manuscript/Chapter 1.md");
-		assert!(root.join("Manuscript").join("Chapter 1.md").exists());
+		assert_eq!(renamed.path, "Manuscript/Scene 1.md");
+		assert!(root.join("Manuscript").join("Scene 1.md").exists());
 	}
 
 	#[test]
@@ -2713,7 +2707,7 @@ mod tests {
 			"the second chapter",
 			"the document that was already there is untouched"
 		);
-		assert_eq!(first_document(&root).path, "Manuscript/Chapter 1.md");
+		assert_eq!(first_document(&root).path, "Manuscript/Scene 1.md");
 	}
 
 	#[test]
@@ -2754,7 +2748,7 @@ mod tests {
 			);
 		}
 
-		assert_eq!(first_document(&root).path, "Manuscript/Chapter 1.md");
+		assert_eq!(first_document(&root).path, "Manuscript/Scene 1.md");
 	}
 
 	#[test]
@@ -2826,7 +2820,7 @@ mod tests {
 
 	#[test]
 	fn a_document_without_a_target_writes_no_such_field() {
-		let document = Document::new("Manuscript", "Chapter 1.md");
+		let document = Document::new("Manuscript", "Scene 1.md");
 		let json = serde_json::to_value(&document).unwrap();
 		assert!(json.get("target").is_none());
 	}
@@ -2835,7 +2829,7 @@ mod tests {
 	fn a_manifest_written_before_targets_still_loads() {
 		let json = serde_json::json!({
 			"id": Uuid::new_v4().to_string(),
-			"path": "Manuscript/Chapter 1.md",
+			"path": "Manuscript/Scene 1.md",
 		});
 		let document: Document = serde_json::from_value(json).unwrap();
 		assert_eq!(document.target, None);
@@ -2889,15 +2883,12 @@ mod tests {
 
 		trash(&root, id, fixed_time()).unwrap();
 
-		assert_eq!(
-			trashed(&root, "Manuscript"),
-			["20231114-221320 Chapter 1.md"]
-		);
+		assert_eq!(trashed(&root, "Manuscript"), ["20231114-221320 Scene 1.md"]);
 		assert_eq!(
 			fs::read_to_string(
 				root.join(TRASH_DIR)
 					.join("Manuscript")
-					.join("20231114-221320 Chapter 1.md")
+					.join("20231114-221320 Scene 1.md")
 			)
 			.unwrap(),
 			"Sing to me of the man, Muse."
@@ -2912,7 +2903,7 @@ mod tests {
 
 		trash(&root, id, fixed_time()).unwrap();
 
-		assert!(!root.join("Manuscript").join("Chapter 1.md").exists());
+		assert!(!root.join("Manuscript").join("Scene 1.md").exists());
 		assert!(
 			!read_manifest(&root)
 				.unwrap()
@@ -2960,17 +2951,14 @@ mod tests {
 	fn documents_deleted_from_different_sections_do_not_meet() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
-		let notes = create_in(root.clone(), "Notes", "Chapter 1").unwrap();
+		let notes = create_in(root.clone(), "Notes", "Scene 1").unwrap();
 		let manuscript = first_document(&root).id;
 
 		trash(&root, manuscript, fixed_time()).unwrap();
 		trash(&root, notes.id, fixed_time()).unwrap();
 
-		assert_eq!(
-			trashed(&root, "Manuscript"),
-			["20231114-221320 Chapter 1.md"]
-		);
-		assert_eq!(trashed(&root, "Notes"), ["20231114-221320 Chapter 1.md"]);
+		assert_eq!(trashed(&root, "Manuscript"), ["20231114-221320 Scene 1.md"]);
+		assert_eq!(trashed(&root, "Notes"), ["20231114-221320 Scene 1.md"]);
 	}
 
 	#[test]
@@ -3006,7 +2994,7 @@ mod tests {
 		let err = trash(&root, id, fixed_time()).unwrap_err();
 
 		assert!(matches!(err, Error::OutsideProject));
-		assert!(root.join("Manuscript").join("Chapter 1.md").exists());
+		assert!(root.join("Manuscript").join("Scene 1.md").exists());
 	}
 
 	#[test]
@@ -3023,9 +3011,9 @@ mod tests {
 
 	#[test]
 	fn a_stamp_reads_back_as_the_moment_and_the_name() {
-		let (at, was) = unstamp("20231114-221320 Chapter 1.md").unwrap();
+		let (at, was) = unstamp("20231114-221320 Scene 1.md").unwrap();
 		assert_eq!(at, fixed_time());
-		assert_eq!(was, "Chapter 1.md");
+		assert_eq!(was, "Scene 1.md");
 
 		// The suffix a second deletion in the same second carries.
 		let (at, was) = unstamp("20231114-221320-1 Chapter 1.md").unwrap();
@@ -3067,9 +3055,9 @@ mod tests {
 		let listed = list_trash(root).unwrap();
 
 		assert_eq!(listed.len(), 1);
-		assert_eq!(listed[0].title, "Chapter 1");
+		assert_eq!(listed[0].title, "Scene 1");
 		assert_eq!(listed[0].folder, "Manuscript");
-		assert_eq!(listed[0].path, "Manuscript/20231114-221320 Chapter 1.md");
+		assert_eq!(listed[0].path, "Manuscript/20231114-221320 Scene 1.md");
 		assert_eq!(listed[0].deleted, Some(fixed_time()));
 	}
 
@@ -3097,7 +3085,7 @@ mod tests {
 		let listed = list_trash(root).unwrap();
 
 		let titles: Vec<_> = listed.iter().map(|e| e.title.as_str()).collect();
-		assert_eq!(titles, ["Ideas", "Chapter 1", "Stray"]);
+		assert_eq!(titles, ["Ideas", "Scene 1", "Stray"]);
 		assert!(listed[2].deleted.is_none());
 	}
 
@@ -3109,8 +3097,8 @@ mod tests {
 
 		let back = restore_from_trash(root.clone(), entry.path).unwrap();
 
-		assert_eq!(back.path, "Manuscript/Chapter 1.md");
-		assert_eq!(back.title, "Chapter 1");
+		assert_eq!(back.path, "Manuscript/Scene 1.md");
+		assert_eq!(back.title, "Scene 1");
 		assert_eq!(
 			read_document(root.clone(), back.id).unwrap(),
 			"Sing to me of the man, Muse."
@@ -3122,7 +3110,7 @@ mod tests {
 	fn putting_one_back_over_a_document_of_that_name_is_refused() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_chapter_one_deleted(&parent);
-		create_in(root.clone(), "Manuscript", "Chapter 1").unwrap();
+		create_in(root.clone(), "Manuscript", "Scene 1").unwrap();
 		let entry = list_trash(root.clone()).unwrap().remove(0);
 
 		let err = restore_from_trash(root.clone(), entry.path).unwrap_err();
@@ -3163,7 +3151,7 @@ mod tests {
 	fn the_trash_commands_refuse_an_entry_that_is_not_there() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
-		let path = "Manuscript/20231114-221320 Chapter 1.md".to_owned();
+		let path = "Manuscript/20231114-221320 Scene 1.md".to_owned();
 
 		assert!(matches!(
 			restore_from_trash(root.clone(), path.clone()).unwrap_err(),
@@ -3271,7 +3259,7 @@ mod tests {
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
-			["Chapter 3", "Chapter 1", "Chapter 2"]
+			["Chapter 3", "Scene 1", "Chapter 2"]
 		);
 	}
 
@@ -3280,11 +3268,11 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_three_chapters(&parent);
 
-		reorder_document(root.clone(), chapter(&root, "Chapter 1"), 1).unwrap();
+		reorder_document(root.clone(), chapter(&root, "Scene 1"), 1).unwrap();
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
-			["Chapter 2", "Chapter 1", "Chapter 3"]
+			["Chapter 2", "Scene 1", "Chapter 3"]
 		);
 	}
 
@@ -3293,11 +3281,11 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = with_three_chapters(&parent);
 
-		reorder_document(root.clone(), chapter(&root, "Chapter 1"), 99).unwrap();
+		reorder_document(root.clone(), chapter(&root, "Scene 1"), 99).unwrap();
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
-			["Chapter 2", "Chapter 3", "Chapter 1"]
+			["Chapter 2", "Chapter 3", "Scene 1"]
 		);
 	}
 
@@ -3335,7 +3323,7 @@ mod tests {
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
-			["Chapter 3", "Chapter 1", "Chapter 2"]
+			["Chapter 3", "Scene 1", "Chapter 2"]
 		);
 	}
 
@@ -3361,7 +3349,7 @@ mod tests {
 
 		assert_eq!(
 			order_of(&root, "Manuscript"),
-			["Chapter 3", "Chapter 1", "Chapter 2"]
+			["Chapter 3", "Scene 1", "Chapter 2"]
 		);
 	}
 
@@ -3383,7 +3371,7 @@ mod tests {
 	#[test]
 	fn reordering_leaves_the_other_sections_where_they_were() {
 		let mut manifest = manifest_with(&[
-			"Manuscript/Chapter 1.md",
+			"Manuscript/Scene 1.md",
 			"Notes/Notes.md",
 			"Manuscript/Chapter 2.md",
 		]);
@@ -3395,7 +3383,7 @@ mod tests {
 			paths_of(&manifest),
 			[
 				"Manuscript/Chapter 2.md",
-				"Manuscript/Chapter 1.md",
+				"Manuscript/Scene 1.md",
 				"Notes/Notes.md"
 			],
 			"a document moves among the ones it sits beside and nowhere else"
@@ -3413,7 +3401,7 @@ mod tests {
 	fn every_document_comes_back_with_its_text() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
-		fs::write(root.join("Manuscript/Chapter 1.md"), "Wren went down.").unwrap();
+		fs::write(root.join("Manuscript/Scene 1.md"), "Wren went down.").unwrap();
 		fs::write(root.join("Notes/Notes.md"), "Ask about Wren.").unwrap();
 
 		let all = read_all_documents(root.clone()).unwrap();
@@ -3423,7 +3411,7 @@ mod tests {
 				.map(|d| d.document.path.as_str())
 				.collect::<Vec<_>>(),
 			[
-				"Manuscript/Chapter 1.md",
+				"Manuscript/Scene 1.md",
 				"Outline/Outline.md",
 				"Characters/Characters.md",
 				"Locations/Locations.md",
@@ -3433,7 +3421,7 @@ mod tests {
 		);
 		assert_eq!(all[0].text.as_deref(), Some("Wren went down."));
 		assert_eq!(all[4].text.as_deref(), Some("Ask about Wren."));
-		assert_eq!(all[0].document.title, "Chapter 1");
+		assert_eq!(all[0].document.title, "Scene 1");
 		assert_eq!(all[0].document.folder, "Manuscript");
 	}
 
@@ -3442,7 +3430,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::write(root.join("Notes/Notes.md"), "still here").unwrap();
-		fs::remove_file(root.join("Manuscript/Chapter 1.md")).unwrap();
+		fs::remove_file(root.join("Manuscript/Scene 1.md")).unwrap();
 
 		let all = read_all_documents(root).unwrap();
 

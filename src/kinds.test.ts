@@ -7,9 +7,9 @@ function offered(kind: "part" | "chapter" | null, section: string) {
 }
 
 describe("what a + offers in the Manuscript", () => {
-	test("the Manuscript itself takes a part, a chapter or a document", () => {
+	test("the Manuscript itself takes a part, a chapter or a scene", () => {
 		expect(offered(null, "Manuscript")).toEqual([
-			"New document",
+			"New scene",
 			"New part",
 			"New chapter",
 		]);
@@ -17,13 +17,25 @@ describe("what a + offers in the Manuscript", () => {
 
 	test("a part takes chapters, not more parts", () => {
 		expect(offered("part", "Manuscript")).toEqual([
-			"New document",
+			"New scene",
 			"New chapter",
 		]);
 	});
 
-	test("a chapter takes documents and nothing else", () => {
-		expect(offered("chapter", "Manuscript")).toEqual(["New document"]);
+	test("a chapter takes scenes and nothing else", () => {
+		expect(offered("chapter", "Manuscript")).toEqual(["New scene"]);
+	});
+
+	test("a document is named for what it would be where it sits", () => {
+		const [inTheManuscript] = creatable(null, "Manuscript");
+		const [inAChapter] = creatable("chapter", "Manuscript");
+		const [inNotes] = creatable(null, "Notes");
+
+		expect(inTheManuscript.noun).toBe("scene");
+		expect(inAChapter.noun).toBe("scene");
+		expect(inAChapter.placeholder).toBe("Scene 2");
+		expect(inNotes.noun).toBe("document");
+		expect(inNotes.placeholder).toBe("Ideas");
 	});
 });
 

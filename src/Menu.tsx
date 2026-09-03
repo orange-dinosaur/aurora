@@ -12,7 +12,11 @@ type Props = {
 	icon: IconName;
 	/** Written on the trigger beside the icon, where there is room for it. */
 	text?: string;
-	/** On the trigger, beside `menu__trigger`. */
+	/**
+	 * The trigger's class, replacing the plain one rather than joining it. A
+	 * trigger that is really a card or a filled button has a shape of its own,
+	 * and two shapes on one element only fight.
+	 */
 	className?: string;
 	/** The items, given the way to close the menu behind them. */
 	children: (close: () => void) => ReactNode;
@@ -78,11 +82,7 @@ export default function Menu({
 		<div ref={menu} className="menu">
 			<button
 				type="button"
-				className={
-					className === undefined
-						? "menu__trigger"
-						: `menu__trigger ${className}`
-				}
+				className={className ?? "menu__trigger"}
 				aria-label={label}
 				aria-expanded={open}
 				onClick={() => setOpen((was) => !was)}

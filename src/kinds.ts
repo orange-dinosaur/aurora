@@ -24,13 +24,24 @@ export type Making = {
 	placeholder: string;
 };
 
-/** The one every folder offers, wherever it sits. */
-export const NEW_DOCUMENT: Making = {
+/**
+ * Every folder offers a document. What it is called depends on where it sits:
+ * a document anywhere in the Manuscript is a scene, however deep, and a
+ * document in any other section is only a document.
+ */
+const DOCUMENT: Making = {
 	what: "document",
 	kind: null,
 	label: "New document",
 	noun: "document",
-	placeholder: "Chapter 2",
+	placeholder: "Ideas",
+};
+
+const SCENE: Making = {
+	...DOCUMENT,
+	label: "New scene",
+	noun: "scene",
+	placeholder: "Scene 2",
 };
 
 const PART: Making = {
@@ -68,15 +79,15 @@ const FOLDER: Making = {
  */
 export function creatable(kind: FolderKind | null, section: string): Making[] {
 	if (section !== MANUSCRIPT) {
-		return [NEW_DOCUMENT, FOLDER];
+		return [DOCUMENT, FOLDER];
 	}
 
 	switch (kind) {
 		case null:
-			return [NEW_DOCUMENT, PART, CHAPTER];
+			return [SCENE, PART, CHAPTER];
 		case "part":
-			return [NEW_DOCUMENT, CHAPTER];
+			return [SCENE, CHAPTER];
 		case "chapter":
-			return [NEW_DOCUMENT];
+			return [SCENE];
 	}
 }

@@ -34,7 +34,7 @@ pub const MANUSCRIPT: &str = "Manuscript";
 const NOVEL: &[Section] = &[
 	Section {
 		folder: "Manuscript",
-		seed: "Chapter 1.md",
+		seed: "Scene 1.md",
 	},
 	Section {
 		folder: "Outline",
@@ -1029,7 +1029,7 @@ mod tests {
 		assert_eq!(
 			paths,
 			[
-				"Manuscript/Chapter 1.md",
+				"Manuscript/Scene 1.md",
 				"Outline/Outline.md",
 				"Characters/Characters.md",
 				"Locations/Locations.md",
@@ -1080,7 +1080,7 @@ mod tests {
 				   "createdAt":"2023-11-14T22:13:20Z",
 				   "folders":["Manuscript","Notes"],
 				   "documents":[
-				     {{"id":"{id}","path":"Manuscript/Chapter 1.md","target":1200}},
+				     {{"id":"{id}","path":"Manuscript/Scene 1.md","target":1200}},
 				     {{"id":"{}","path":"Notes/Notes.md"}}
 				   ]}}"#,
 				Uuid::new_v4()
@@ -1101,7 +1101,7 @@ mod tests {
 		let documents = manifest.documents();
 		assert_eq!(
 			paths_of(&manifest),
-			["Manuscript/Chapter 1.md", "Notes/Notes.md"]
+			["Manuscript/Scene 1.md", "Notes/Notes.md"]
 		);
 		assert_eq!(
 			documents[0].id, chapter_one,
@@ -1217,7 +1217,7 @@ mod tests {
 				.unwrap();
 
 		assert!(root.join(MANIFEST_FILE).is_file());
-		assert!(root.join("Manuscript").join("Chapter 1.md").is_file());
+		assert!(root.join("Manuscript").join("Scene 1.md").is_file());
 
 		let remembered = store::load(&store).unwrap();
 		assert_eq!(remembered.reopen().unwrap().name, "Ithaca");
@@ -1640,7 +1640,7 @@ mod tests {
 				.unwrap();
 
 		let manuscript = root.join("Manuscript");
-		fs::write(manuscript.join("Chapter 1.md"), "one two three").unwrap();
+		fs::write(manuscript.join("Scene 1.md"), "one two three").unwrap();
 		fs::write(manuscript.join("Chapter 2.md"), "four five").unwrap();
 		refresh(&root).unwrap();
 

@@ -5,7 +5,6 @@ import DocumentMenu from "./DocumentMenu";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
 import type { OverviewCard, ProjectDocument } from "./types";
-import { NEW_DOCUMENT } from "./kinds";
 import type { Making } from "./kinds";
 import type { FolderRef } from "./tree";
 import { counted, described, summarised } from "./cards";
@@ -290,22 +289,18 @@ export default function FolderView({
 					);
 				})}
 
-				<li className="cards__item">
+				<li className="cards__item cards__item--new">
 					{naming.kind === "closed" ? (
-						// The shortcut for the common case. Anything else is
-						// made from the + above, which offers the lot.
-						<button
-							type="button"
+						<NewMenu
+							label={`New in ${folder.name}`}
+							kind={folder.kind}
+							section={folder.section}
+							text="New"
 							className="card card--new"
-							onClick={() =>
-								setNaming({
-									kind: "open",
-									making: NEW_DOCUMENT,
-								})
+							onChoose={(making) =>
+								setNaming({ kind: "open", making })
 							}
-						>
-							+ New document
-						</button>
+						/>
 					) : (
 						<div className="card card--naming">
 							<NameField

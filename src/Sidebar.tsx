@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
 import Icon from "./Icon";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
-import type { ProjectDocument, TreeNode } from "./types";
+import type { FolderKind, ProjectDocument, TreeNode } from "./types";
 import type { Making } from "./kinds";
 import {
 	createDocument,
@@ -21,6 +21,21 @@ import type { FolderRef } from "./tree";
 // How far in a row sits, as the stylesheet reads it.
 function indent(depth: number) {
 	return { "--depth": depth } as CSSProperties;
+}
+
+// What stands in a folder's left-hand slot, where a document carries its
+// number. Without one the name starts at the edge of the column and reads as
+// the smaller thing, which a folder is not. The Manuscript's folders say which
+// they are; a folder anywhere else is only a folder, so it wears the glyph.
+function mark(kind: FolderKind | null) {
+	switch (kind) {
+		case "part":
+			return "PT";
+		case "chapter":
+			return "CH";
+		case null:
+			return <Icon name="folder" className="folder__glyph" />;
+	}
 }
 
 type Status =
@@ -164,6 +179,27 @@ export default function Sidebar({
 		}
 	}
 
+	// The field asking what to call the new thing, under whichever row asked
+	// for it. Both a section header and a folder inside it want the same one.
+	function field(at: string, where: string) {
+		if (naming.kind === "closed") {
+			return null;
+		}
+
+		return (
+			<div className="sidebar__field">
+				<NameField
+					label={`Name of the new ${naming.making.noun} in ${where}`}
+					placeholder={naming.making.placeholder}
+					busy={naming.kind === "creating"}
+					error={naming.kind === "refused" ? naming.message : null}
+					onSubmit={(name) => void create(at, naming.making, name)}
+					onCancel={() => setNaming({ kind: "closed" })}
+				/>
+			</div>
+		);
+	}
+
 	return (
 		<nav
 			className={hidden ? "sidebar sidebar--hidden" : "sidebar"}
@@ -216,70 +252,87 @@ export default function Sidebar({
 								</div>
 
 								{naming.kind !== "closed" &&
-									naming.at === section.id && (
-										<div className="sidebar__field">
-											<NameField
-												label={`Name of the new ${naming.making.noun} in ${section.name}`}
-												placeholder={
-													naming.making.placeholder
-												}
-												busy={
-													naming.kind === "creating"
-												}
-												error={
-													naming.kind === "refused"
-														? naming.message
-														: null
-												}
-												onSubmit={(name) =>
-													void create(
-														section.id,
-														naming.making,
-														name,
-													)
-												}
-												onCancel={() =>
-													setNaming({
-														kind: "closed",
-													})
-												}
-											/>
-										</div>
-									)}
+									naming.at === section.id &&
+									field(section.id, section.name)}
 								{list.length > 0 ? (
 									<ul className="documents">
 										{list.map((row) => {
 											if (row.kind === "folder") {
 												return (
-													<li
-														key={row.id}
-														className="documents__item"
-														style={indent(
-															row.depth,
-														)}
-													>
-														<button
-															type="button"
-															className="folder"
-															aria-current={
-																row.id ===
-																selectedFolder
-																	? "page"
-																	: undefined
-															}
-															onClick={() =>
-																onOpenFolder({
-																	id: row.id,
-																	name: row.name,
-																	kind: row.folderKind,
-																	section:
-																		section.name,
-																})
-															}
+													<Fragment key={row.id}>
+														<li
+															className="documents__item"
+															style={indent(
+																row.depth,
+															)}
 														>
-															{row.name}
-														</button>
-													</li>
+															<button
+																type="button"
+																className="folder"
+																aria-current={
+																	row.id ===
+																	selectedFolder
+																		? "page"
+																		: undefined
+																}
+																onClick={() =>
+																	onOpenFolder(
+																		{
+																			id: row.id,
+																			name: row.name,
+																			kind: row.folderKind,
+																			section:
+																				section.name,
+																		},
+																	)
+																}
+															>
+																<span className="folder__at">
+																	{mark(
+																		row.folderKind,
+																	)}
+																</span>
+																<span className="folder__name">
+																	{row.name}
+																</span>
+															</button>
+															<NewMenu
+																label={`New in ${row.name}`}
+																kind={
+																	row.folderKind
+																}
+																section={
+																	section.name
+																}
+																onChoose={(
+																	making,
+																) =>
+																	setNaming({
+																		kind: "open",
+																		at: row.id,
+																		making,
+																	})
+																}
+															/>
+														</li>
+														{naming.kind !==
+															"closed" &&
+															naming.at ===
+																row.id && (
+																<li
+																	className="documents__item"
+																	style={indent(
+																		row.depth +
+																			1,
+																	)}
+																>
+																	{field(
+																		row.id,
+																		row.name,
+																	)}
+																</li>
+															)}
+													</Fragment>
 												);
 											}
 

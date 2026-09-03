@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -32,6 +33,14 @@ type Props = {
 };
 
 export default function Tabs({ tabs, activeKey, onActivate, onClose }: Props) {
+	const active = useRef<HTMLLIElement>(null);
+
+	// The strip hides its scrollbar, so a tab opened past the edge has to
+	// bring itself in. Asking costs nothing when it is already in view.
+	useEffect(() => {
+		active.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [activeKey]);
+
 	if (tabs.length === 0) {
 		return null;
 	}
@@ -44,6 +53,7 @@ export default function Tabs({ tabs, activeKey, onActivate, onClose }: Props) {
 				return (
 					<li
 						key={tab.key}
+						ref={tab.key === activeKey ? active : null}
 						className="tab"
 						data-active={tab.key === activeKey ? "" : undefined}
 					>
