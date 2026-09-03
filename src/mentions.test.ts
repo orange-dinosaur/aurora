@@ -2,11 +2,13 @@ import { describe, expect, test } from "vitest";
 import { matches } from "./find";
 import {
 	appearancesIn,
+	castOf,
 	type Mentionable,
 	type Subject,
 	mentions,
 	mentionsIn,
 	subjectsIn,
+	under,
 } from "./mentions";
 import { runsOf } from "./runs";
 
@@ -132,11 +134,12 @@ function chapter(
 	title: string,
 	markdown: string,
 	tags: string[] = [],
+	trail: string[] = ["Manuscript"],
 ): Mentionable {
 	return {
-		id: `Manuscript/${title}.md`,
+		id: `${trail.join("/")}/${title}.md`,
 		title,
-		trail: ["Manuscript"],
+		trail,
 		tags,
 		names: [],
 		runs: runsOf(markdown),
@@ -302,5 +305,70 @@ describe("a document collects the subjects it speaks of", () => {
 		const here = { ...chapter("One", ""), runs: null };
 
 		expect(appearancesIn(here, subjectsIn(cast))).toEqual([]);
+	});
+});
+
+describe("a folder collects the cast of everything under it", () => {
+	const cast = [page("Elena", ["the Captain"]), page("Rose"), page("Wren")];
+	const part = ["Manuscript", "Part One"];
+
+	const chapters = [
+		chapter("One", "Elena spoke. Elena left. Rose waited.", [], part),
+		chapter("Two", "She watched the Captain turn.", [], part),
+		chapter("Three", "Wren went home.", ["Rose"], ["Manuscript"]),
+	];
+
+	test("a folder's documents are the ones its trail runs through", () => {
+		expect(
+			under([...cast, ...chapters], part).map(
+				(document) => document.title,
+			),
+		).toEqual(["One", "Two"]);
+	});
+
+	test("a section takes in the folders below it", () => {
+		expect(
+			under(chapters, ["Manuscript"]).map((document) => document.title),
+		).toEqual(["One", "Two", "Three"]);
+	});
+
+	test("a document counts once however often it names a subject", () => {
+		const counts = castOf(under(chapters, part), subjectsIn(cast));
+
+		expect(
+			counts.map(({ subject, count }) => [subject.title, count]),
+		).toEqual([
+			["Elena", 2],
+			["Rose", 1],
+		]);
+	});
+
+	test("the most widely present comes first, and ties go by name", () => {
+		const counts = castOf(chapters, subjectsIn(cast));
+
+		expect(
+			counts.map(({ subject, count }) => [subject.title, count]),
+		).toEqual([
+			["Elena", 2],
+			["Rose", 2],
+			["Wren", 1],
+		]);
+	});
+
+	test("a document that only tags a subject still counts for it", () => {
+		const counts = castOf(
+			[chapter("Three", "Nobody here.", ["Rose"])],
+			subjectsIn(cast),
+		);
+
+		expect(
+			counts.map(({ subject, count }) => [subject.title, count]),
+		).toEqual([["Rose", 1]]);
+	});
+
+	test("a folder nobody is named in has no cast", () => {
+		expect(castOf(under(chapters, ["Notes"]), subjectsIn(cast))).toEqual(
+			[],
+		);
 	});
 });

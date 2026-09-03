@@ -252,3 +252,54 @@ export function appearancesIn(
 
 	return appearances;
 }
+
+/** A subject somewhere under a folder, and how much of the folder it is in. */
+export type CastMember = {
+	subject: Subject;
+	/** How many of the folder's documents name or tag it. */
+	count: number;
+};
+
+/**
+ * Who and what a folder's documents speak of, the most widely present first.
+ *
+ * A document counts once however many times it names the subject: what a
+ * folder answers is where a character turns up, not how much of the prose is
+ * about them. Ties go by name, so the list does not reshuffle itself every
+ * time a chapter grows.
+ */
+export function castOf(
+	documents: Mentionable[],
+	subjects: Subject[],
+): CastMember[] {
+	const counts = new Map<string, number>();
+
+	for (const document of documents) {
+		for (const { subject } of appearancesIn(document, subjects)) {
+			counts.set(subject.id, (counts.get(subject.id) ?? 0) + 1);
+		}
+	}
+
+	return subjects
+		.flatMap((subject) => {
+			const count = counts.get(subject.id);
+			return count === undefined ? [] : [{ subject, count }];
+		})
+		.sort(
+			(one, other) =>
+				other.count - one.count ||
+				one.subject.title.localeCompare(other.subject.title),
+		);
+}
+
+/** The documents under a folder, which are the ones its trail runs through. */
+export function under<T extends { trail: string[] }>(
+	documents: T[],
+	trail: string[],
+): T[] {
+	return documents.filter(
+		(document) =>
+			document.trail.length >= trail.length &&
+			trail.every((folder, at) => document.trail[at] === folder),
+	);
+}

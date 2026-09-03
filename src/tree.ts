@@ -22,6 +22,12 @@ export type FolderRef = {
 	kind: FolderKind | null;
 	/** The top-level folder it lives under, which decides the kind rules. */
 	section: string;
+	/**
+	 * The folders above it from its section down, itself included. A document
+	 * under it carries this as the start of its own trail, which is how
+	 * anything working from the flat list of documents finds what is in here.
+	 */
+	trail: string[];
 };
 
 // Where a row sits, which is everything the sidebar needs that the node itself
@@ -56,6 +62,8 @@ export type Row =
 			holds: number;
 			/** Whether what it holds is drawn under it. */
 			expanded: boolean;
+			/** As `FolderRef.trail`: from the section down, itself included. */
+			trail: string[];
 	  })
 	| (Place & { kind: "document"; document: ProjectDocument });
 
@@ -66,12 +74,17 @@ export type Row =
  *
  * `open` holds the ids of the folders the writer has expanded. Null stands for
  * all of them, which is what counting rows rather than drawing them wants.
+ *
+ * `above` is the folders these nodes already sit in, from the section down. The
+ * sidebar walks a section's children and so passes its name; a caller with the
+ * whole tree in hand starts from nothing.
  */
 export function rows(
 	nodes: TreeNode[],
 	group: string,
 	open: ReadonlySet<string> | null = null,
 	depth = 0,
+	above: string[] = [],
 ): Row[] {
 	return nodes.flatMap((node, index) => {
 		const place = { depth, index, siblings: nodes.length, group };
@@ -89,6 +102,7 @@ export function rows(
 		}
 
 		const expanded = open === null || open.has(node.id);
+		const trail = [...above, node.name];
 		const row: Row = {
 			kind: "folder",
 			...place,
@@ -98,9 +112,10 @@ export function rows(
 			words: node.words,
 			holds: node.children.length,
 			expanded,
+			trail,
 		};
 		return expanded
-			? [row, ...rows(node.children, node.id, open, depth + 1)]
+			? [row, ...rows(node.children, node.id, open, depth + 1, trail)]
 			: [row];
 	});
 }

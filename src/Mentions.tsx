@@ -5,9 +5,11 @@ import type { Seed } from "./find";
 import Icon from "./Icon";
 import {
 	appearancesIn,
+	castOf,
 	mentionsIn,
 	RECOGNITION,
 	subjectsIn,
+	under,
 	type Subject,
 } from "./mentions";
 import { Line, toggled } from "./Search";
@@ -18,7 +20,8 @@ import type { ProjectDocument } from "./types";
 // character's page it is the search results list turned around: rather than
 // starting from a word that was typed, it starts from the names the page
 // answers to and sweeps the project for them. On a chapter it is the cast:
-// which of those pages turn up in what is open, and how much of each.
+// which of those pages turn up in what is open, and how much of each. On a
+// folder it is the cast of everything underneath, counted by document.
 
 /** How many of a document's mentions are drawn before the rest are held back. */
 const CAP = 20;
@@ -26,9 +29,13 @@ const CAP = 20;
 /** The document the panel is about, whether or not it is a subject's page. */
 export type Page = Subject & { trail: string[] };
 
+/** What the panel is about: an open document, or a folder's whole subtree. */
+export type About =
+	{ kind: "document"; page: Page } | { kind: "folder"; trail: string[] };
+
 type Props = {
 	root: string;
-	page: Page;
+	about: About;
 	/** Bumped whenever the project changes on disk. */
 	changed: number;
 	/** The text of every open document as its tab holds it, by id. */
@@ -36,7 +43,53 @@ type Props = {
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 };
 
-export default function Mentions({ root, page, changed, live, onOpen }: Props) {
+/** One list of subjects, whichever end of recognition it came from. */
+type Row = {
+	id: string;
+	title: string;
+	/** Whether the document tags this subject as well as naming it. */
+	tagged: boolean;
+	/** Not drawn when it is nought, which is a subject that is only tagged. */
+	count: number;
+};
+
+function Cast({ rows, onOpen }: { rows: Row[]; onOpen: (id: string) => void }) {
+	return (
+		<div className="search search--panel">
+			<ul className="search__groups">
+				{rows.map((row) => (
+					<li key={row.id}>
+						<button
+							type="button"
+							className="search__document"
+							onClick={() => onOpen(row.id)}
+						>
+							<span className="search__title">{row.title}</span>
+							<span className="search__aside">
+								{row.tagged && (
+									<span className="search__kind">Tagged</span>
+								)}
+								{row.count > 0 && (
+									<span className="search__count">
+										{row.count}
+									</span>
+								)}
+							</span>
+						</button>
+					</li>
+				))}
+			</ul>
+		</div>
+	);
+}
+
+export default function Mentions({
+	root,
+	about,
+	changed,
+	live,
+	onOpen,
+}: Props) {
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 	const [full, setFull] = useState<Set<string>>(new Set());
 
@@ -47,28 +100,37 @@ export default function Mentions({ root, page, changed, live, onOpen }: Props) {
 		wanted: true,
 	});
 
-	// The page arrives freshly built on every render of the project, so what
-	// recognition is run against is its content and not its identity. Sweeping
-	// the whole project again because a keystroke landed somewhere else would
-	// be the most expensive thing this panel does.
-	const { id, title } = page;
-	const names = page.names.join("\n");
-	const own = isSubject(page.trail);
+	// What the panel is about arrives freshly built on every render of the
+	// project, so what recognition is run against is its content and not its
+	// identity. Sweeping the whole project again because a keystroke landed
+	// somewhere else would be the most expensive thing this panel does, so the
+	// lists travel as text and are taken apart again inside the memo.
+	const folder = about.kind === "folder";
+	const id = about.kind === "document" ? about.page.id : "";
+	const title = about.kind === "document" ? about.page.title : "";
+	const own = about.kind === "document" && isSubject(about.page.trail);
+	const held = (
+		about.kind === "folder" ? about.trail : about.page.names
+	).join("\n");
 
 	const results = useMemo(() => {
 		if (corpus.kind !== "ready") {
 			return null;
 		}
 
-		if (own) {
-			const subject = {
-				id,
-				title,
-				names: names === "" ? [] : names.split("\n"),
+		const parts = held === "" ? [] : held.split("\n");
+
+		if (folder) {
+			return {
+				kind: "folder" as const,
+				cast: castOf(under(documents, parts), subjectsIn(documents)),
 			};
+		}
+
+		if (own) {
 			return {
 				kind: "subject" as const,
-				...mentionsIn(subject, documents),
+				...mentionsIn({ id, title, names: parts }, documents),
 			};
 		}
 
@@ -84,7 +146,7 @@ export default function Mentions({ root, page, changed, live, onOpen }: Props) {
 					? []
 					: appearancesIn(here, subjectsIn(documents)),
 		};
-	}, [corpus.kind, documents, id, title, names, own]);
+	}, [corpus.kind, documents, folder, id, title, own, held]);
 
 	// A row that is on screen came out of the corpus, so its document is in
 	// hand; nothing happens if it somehow is not.
@@ -106,6 +168,33 @@ export default function Mentions({ root, page, changed, live, onOpen }: Props) {
 		return <p className="right-sidebar__empty">Reading the project…</p>;
 	}
 
+	if (results.kind === "folder") {
+		if (results.cast.length === 0) {
+			return (
+				<p className="right-sidebar__empty">
+					No character or place is named in here yet.
+				</p>
+			);
+		}
+
+		return (
+			<>
+				{/* The number means something else here than it does on a
+				    document, so the panel says which. */}
+				<p className="search__note">Documents naming each of them.</p>
+				<Cast
+					rows={results.cast.map(({ subject, count }) => ({
+						id: subject.id,
+						title: subject.title,
+						tagged: false,
+						count,
+					}))}
+					onOpen={(id) => openTab(id, null)}
+				/>
+			</>
+		);
+	}
+
 	if (results.kind === "document") {
 		if (results.appearances.length === 0) {
 			return (
@@ -116,35 +205,15 @@ export default function Mentions({ root, page, changed, live, onOpen }: Props) {
 		}
 
 		return (
-			<div className="search search--panel">
-				<ul className="search__groups">
-					{results.appearances.map(({ subject, count, tagged }) => (
-						<li key={subject.id}>
-							<button
-								type="button"
-								className="search__document"
-								onClick={() => openTab(subject.id, null)}
-							>
-								<span className="search__title">
-									{subject.title}
-								</span>
-								<span className="search__aside">
-									{tagged && (
-										<span className="search__kind">
-											Tagged
-										</span>
-									)}
-									{count > 0 && (
-										<span className="search__count">
-											{count}
-										</span>
-									)}
-								</span>
-							</button>
-						</li>
-					))}
-				</ul>
-			</div>
+			<Cast
+				rows={results.appearances.map(({ subject, count, tagged }) => ({
+					id: subject.id,
+					title: subject.title,
+					tagged,
+					count,
+				}))}
+				onOpen={(id) => openTab(id, null)}
+			/>
 		);
 	}
 

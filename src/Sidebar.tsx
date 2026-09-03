@@ -255,6 +255,7 @@ export default function Sidebar({
 													name: section.name,
 													kind: section.kind,
 													section: section.name,
+													trail: [section.name],
 												})
 											}
 										>
@@ -307,6 +308,7 @@ export default function Sidebar({
 																kind: row.folderKind,
 																section:
 																	section.name,
+																trail: row.trail,
 															})
 														}
 														onNew={(making) =>

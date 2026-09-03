@@ -254,6 +254,7 @@ export default function FolderView({
 											name: card.name,
 											kind: card.kind,
 											section: folder.section,
+											trail: [...folder.trail, card.name],
 										})
 									}
 								>
