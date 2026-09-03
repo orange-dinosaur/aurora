@@ -14,13 +14,34 @@ export function counted(words: number, target: number | null) {
 
 /**
  * What a folder card says it is. A folder outside the Manuscript is only ever
- * a folder, so it says so rather than naming a kind it does not have.
+ * a folder, so it says so rather than naming a kind it does not have. The
+ * count beside it is what it holds directly; the words are everything under
+ * it, however deep.
  */
-export function described(kind: FolderKind | null, children: number) {
+export function described(
+	kind: FolderKind | null,
+	children: number,
+	words: number,
+) {
 	const what =
 		kind === null ? "Folder" : kind === "part" ? "Part" : "Chapter";
 	const held = children === 1 ? "1 item" : `${children} items`;
-	return `${what} · ${held}`;
+	return `${what} · ${held} · ${counted(words, null)}`;
+}
+
+/**
+ * A word count for a sidebar row, where there is room for a number and not for
+ * the word after it. Always short of the true figure rather than over it: a
+ * writer reads their own count as a claim, and a rounded-up one is a lie.
+ */
+export function abbreviated(words: number) {
+	if (words < 1000) {
+		return String(words);
+	}
+	const thousands = words / 1000;
+	return thousands < 10
+		? `${(Math.floor(thousands * 10) / 10).toFixed(1)}k`
+		: `${Math.floor(thousands)}k`;
 }
 
 /**
@@ -38,16 +59,16 @@ export function trashed(inside: number) {
 }
 
 /**
- * What the folder amounts to, for the line under its name. Only what it holds
- * directly: reaching through the folders below it would mean reading every
- * file under them.
+ * What the folder amounts to, for the line under its name. The documents are
+ * the ones sitting in it, since a folder below it is not one; the words are
+ * the whole of what is written under it, which every card now carries.
  */
 export function summarised(cards: OverviewCard[]) {
 	let words = 0;
 	let documents = 0;
 	for (const card of cards) {
+		words += card.words;
 		if (card.node === "document") {
-			words += card.words;
 			documents += 1;
 		}
 	}

@@ -15,7 +15,7 @@ function folder(
 	children: TreeNode[] = [],
 	kind: FolderKind | null = null,
 ): TreeNode {
-	return { node: "folder", id: `id-${name}`, name, kind, children };
+	return { node: "folder", id: `id-${name}`, name, kind, children, words: 0 };
 }
 
 /** A document written as the path it sits at, the way Rust sends it. */

@@ -50,6 +50,8 @@ export type Row =
 			id: string;
 			name: string;
 			folderKind: FolderKind | null;
+			/** The words in every document below it, however deep. */
+			words: number;
 	  })
 	| (Place & { kind: "document"; document: ProjectDocument });
 
@@ -80,6 +82,7 @@ export function rows(nodes: TreeNode[], group: string, depth = 0): Row[] {
 			id: node.id,
 			name: node.name,
 			folderKind: node.kind,
+			words: node.words,
 		};
 		return [row, ...rows(node.children, node.id, depth + 1)];
 	});

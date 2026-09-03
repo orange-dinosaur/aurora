@@ -3,6 +3,7 @@
 // retitled, because a rename happens where the name already is.
 
 import FolderMenu from "./FolderMenu";
+import { abbreviated } from "./cards";
 import Icon from "./Icon";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
@@ -88,6 +89,9 @@ export default function FolderRow({
 			>
 				<span className="folder__at">{mark(row.folderKind)}</span>
 				<span className="folder__name">{row.name}</span>
+				{/* Left of the menus' slot rather than in it, so the count is
+				    still there when the row is hovered and they appear. */}
+				<span className="folder__words">{abbreviated(row.words)}</span>
 			</button>
 
 			{/* Two menus share the right-hand end of a folder's row, so they sit

@@ -244,7 +244,11 @@ export default function FolderView({
 										{card.name}
 									</span>
 									<span className="card__meta">
-										{described(card.kind, card.children)}
+										{described(
+											card.kind,
+											card.children,
+											card.words,
+										)}
 									</span>
 								</button>
 								<FolderMenu

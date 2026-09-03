@@ -779,6 +779,16 @@ body,
 	text-overflow: ellipsis;
 }
 
+/* Quiet enough to skim past and steady enough to compare down the column, since
+   the number beside a folder is only ever read against the ones near it. */
+.folder__words {
+	flex: none;
+	font-size: 0.6875rem;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.5;
+}
+
 .folder:hover {
 	color: var(--text);
 	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);

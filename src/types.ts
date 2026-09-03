@@ -84,6 +84,8 @@ export type TreeNode =
 			/** null outside the Manuscript. */
 			kind: FolderKind | null;
 			children: TreeNode[];
+			/** The words in every document below it, however deep. */
+			words: number;
 	  }
 	| ({ node: "document" } & ProjectDocument);
 
@@ -103,6 +105,8 @@ export type OverviewCard =
 			kind: FolderKind | null;
 			/** How many nodes it holds directly. */
 			children: number;
+			/** The words in every document below it, however deep. */
+			words: number;
 	  }
 	| ({ node: "document" } & DocumentSummary);
 

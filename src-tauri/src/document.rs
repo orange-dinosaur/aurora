@@ -107,8 +107,8 @@ impl DocumentSummary {
 }
 
 /// One of a folder's children, as the overview draws it. A document gets the
-/// card it has always had; a folder says what it is and how much it holds,
-/// which is all a card can show without reading everything below it.
+/// card it has always had; a folder says what it is, how much it holds and how
+/// much has been written under it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "node", rename_all = "camelCase")]
 pub enum ChildSummary {
@@ -118,6 +118,8 @@ pub enum ChildSummary {
 		kind: Option<FolderKind>,
 		/// How many nodes it holds directly, folders and documents alike.
 		children: usize,
+		/// The words in every document below it, however deep.
+		words: usize,
 	},
 	Document(DocumentSummary),
 }
@@ -143,6 +145,8 @@ pub enum NodeView {
 		/// a document's target is.
 		kind: Option<FolderKind>,
 		children: Vec<NodeView>,
+		/// The words in every document below it, however deep.
+		words: usize,
 	},
 	Document(DocumentView),
 }
@@ -157,33 +161,89 @@ impl NodeView {
 	}
 }
 
-/// The tree under `prefix`, ready to send. The prefix is how far down the walk
-/// has come, which is what turns a node's name into its path.
-fn views(nodes: &[Node], prefix: &str) -> Vec<NodeView> {
+/// The project root as a real location, which is what the counts below compare
+/// a file against. A root that will not resolve is passed through as it came:
+/// nothing under it then matches, so the counts come back as zero rather than
+/// the call failing.
+fn canonical(root: &Path) -> PathBuf {
+	root.canonicalize().unwrap_or_else(|_| root.to_path_buf())
+}
+
+/// The words in one document, from its path under a canonical root. A file
+/// that cannot be read counts as nothing rather than failing the whole tree,
+/// and so does one the manifest points outside the project: `aurora.json` is a
+/// file a writer can edit, so a name in it is not to be trusted.
+fn words_in(root: &Path, relative: &str) -> usize {
+	let Ok(path) = root.join(relative).canonicalize() else {
+		return 0;
+	};
+	if !path.starts_with(root) {
+		return 0;
+	}
+
+	match fs::read(path) {
+		Ok(bytes) => String::from_utf8(bytes)
+			.unwrap_or_default()
+			.split_whitespace()
+			.count(),
+		Err(_) => 0,
+	}
+}
+
+/// The words under `nodes`, however deep they sit. For a card that has to say
+/// what a folder amounts to without building the views of everything in it.
+fn words_under(root: &Path, nodes: &[Node], prefix: &str) -> usize {
 	nodes
 		.iter()
 		.map(|node| match node {
+			Node::Folder { name, children, .. } => {
+				words_under(root, children, &format!("{prefix}{name}/"))
+			}
+			Node::Document { name, .. } => words_in(root, &format!("{prefix}{name}")),
+		})
+		.sum()
+}
+
+/// The tree under `prefix`, ready to send, and the words in the whole of it.
+/// The prefix is how far down the walk has come, which is what turns a node's
+/// name into its path. The total comes back alongside the views because a
+/// folder's count is its children's added up, and adding them up on the way
+/// out is what keeps each file to a single read.
+fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
+	let mut built = Vec::with_capacity(nodes.len());
+	let mut total = 0;
+
+	for node in nodes {
+		match node {
 			Node::Folder {
 				id,
 				name,
 				kind,
 				children,
-			} => NodeView::Folder {
-				id: *id,
-				name: name.clone(),
-				kind: *kind,
-				children: views(children, &format!("{prefix}{name}/")),
-			},
+			} => {
+				let (children, words) = views(root, children, &format!("{prefix}{name}/"));
+				total += words;
+				built.push(NodeView::Folder {
+					id: *id,
+					name: name.clone(),
+					kind: *kind,
+					children,
+					words,
+				});
+			}
 			Node::Document { id, name, target } => {
 				let document = Document {
 					id: *id,
 					path: format!("{prefix}{name}"),
 					target: *target,
 				};
-				NodeView::Document((&document).into())
+				total += words_in(root, &document.path);
+				built.push(NodeView::Document((&document).into()));
 			}
-		})
-		.collect()
+		}
+	}
+
+	(built, total)
 }
 
 /// A document and the whole of its text, for reading the project in one go.
@@ -684,9 +744,14 @@ pub fn create_folder(
 		kind,
 		children: Vec::new(),
 	};
-	let view = views(std::slice::from_ref(&made), &format!("{inside}/"))
-		.pop()
-		.expect("one node in, one out");
+	let view = views(
+		&canonical(&root),
+		std::slice::from_ref(&made),
+		&format!("{inside}/"),
+	)
+	.0
+	.pop()
+	.expect("one node in, one out");
 
 	let Some(Node::Folder { children, .. }) = tree::find_mut(&mut manifest.nodes, parent_id) else {
 		unreachable!("the parent was a folder a moment ago")
@@ -713,7 +778,7 @@ pub fn document_tree(root: PathBuf) -> Result<Vec<NodeView>> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
-	Ok(views(&read_manifest(&root)?.nodes, ""))
+	Ok(views(&canonical(&root), &read_manifest(&root)?.nodes, "").0)
 }
 
 /// The same, after looking at the folder again for anything added, removed or
@@ -826,9 +891,14 @@ pub fn rename_folder(root: PathBuf, id: Uuid, name: String) -> Result<NodeView> 
 	// rename does not change.
 	let view = |manifest: &Manifest| {
 		let node = tree::find(&manifest.nodes, id).ok_or(Error::UnknownFolder)?;
-		views(std::slice::from_ref(node), &format!("{inside}/"))
-			.pop()
-			.ok_or(Error::UnknownFolder)
+		views(
+			&canonical(&root),
+			std::slice::from_ref(node),
+			&format!("{inside}/"),
+		)
+		.0
+		.pop()
+		.ok_or(Error::UnknownFolder)
 	};
 
 	if path == was {
@@ -1366,6 +1436,8 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 		_ => return Err(Error::UnknownSection),
 	};
 
+	let counting_root = canonical(&root);
+
 	Ok(tree::children(&manifest.nodes, id)
 		.unwrap_or_default()
 		.iter()
@@ -1380,6 +1452,7 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 				name: name.clone(),
 				kind: *kind,
 				children: children.len(),
+				words: words_under(&counting_root, children, &format!("{prefix}/{name}/")),
 			},
 			Node::Document { id, name, target } => {
 				let document = Document {
@@ -1831,7 +1904,7 @@ mod tests {
 	#[test]
 	fn the_tree_keeps_its_shape_and_spells_out_every_path() {
 		let manifest = manifest_with(&["Manuscript/Part One/Chapter 1.md", "Notes/Notes.md"]);
-		let tree = views(&manifest.nodes, "");
+		let tree = views(Path::new("/nowhere"), &manifest.nodes, "").0;
 
 		let NodeView::Folder { name, children, .. } = &tree[0] else {
 			panic!("the top level is the project's sections");
@@ -1867,7 +1940,8 @@ mod tests {
 	#[test]
 	fn a_node_says_which_kind_it_is_on_the_wire() {
 		let manifest = manifest_with(&["Notes/Notes.md"]);
-		let json = serde_json::to_value(views(&manifest.nodes, "")).unwrap();
+		let tree = views(Path::new("/nowhere"), &manifest.nodes, "").0;
+		let json = serde_json::to_value(tree).unwrap();
 
 		let notes = &json.as_array().unwrap()[4];
 		assert_eq!(notes["node"], "folder");
@@ -2393,6 +2467,77 @@ mod tests {
 	}
 
 	#[test]
+	fn a_folder_card_counts_every_word_beneath_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let chapter = root.join("Manuscript").join("Part One").join("Chapter 1");
+		fs::create_dir_all(&chapter).unwrap();
+		fs::write(chapter.join("Scene 2.md"), "Down to the sea again.").unwrap();
+		fs::write(chapter.join("Scene 3.md"), "And the wind.").unwrap();
+		fs::create_dir(root.join("Manuscript").join("Part Two")).unwrap();
+		refresh(&root).unwrap();
+
+		let id = section_id(&root, "Manuscript");
+		let overview = folder_overview(root, id).unwrap();
+		let words = |wanted: &str| {
+			overview
+				.iter()
+				.find_map(|child| match child {
+					ChildSummary::Folder { name, words, .. } if name == wanted => Some(*words),
+					_ => None,
+				})
+				.expect("the overview holds that folder")
+		};
+
+		assert_eq!(
+			words("Part One"),
+			8,
+			"a part's card reaches through the chapter to the scenes"
+		);
+		assert_eq!(
+			words("Part Two"),
+			0,
+			"an empty folder reports nothing written, not nothing at all"
+		);
+	}
+
+	#[test]
+	fn the_tree_counts_words_at_every_level() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = root.join("Manuscript").join("Part One");
+		fs::create_dir(&part).unwrap();
+		fs::write(part.join("Chapter 2.md"), "Down to the sea.").unwrap();
+		fs::write(root.join("Manuscript").join("Scene 1.md"), "Sing to me.").unwrap();
+		refresh(&root).unwrap();
+
+		let tree = document_tree(root).unwrap();
+		let NodeView::Folder {
+			name,
+			children,
+			words,
+			..
+		} = &tree[0]
+		else {
+			panic!("the Manuscript is a folder");
+		};
+		assert_eq!(name, "Manuscript");
+		assert_eq!(
+			*words, 7,
+			"a section counts what its folders hold as well as its own documents"
+		);
+
+		let part = children
+			.iter()
+			.find_map(|node| match node {
+				NodeView::Folder { name, words, .. } if name == "Part One" => Some(*words),
+				_ => None,
+			})
+			.expect("the part is in the tree");
+		assert_eq!(part, 4, "and a folder counts only what is under it");
+	}
+
+	#[test]
 	fn a_summary_serializes_flat_alongside_the_document() {
 		let document = Document::new("Manuscript", "Scene 1.md");
 		let summary = DocumentSummary {
@@ -2423,11 +2568,13 @@ mod tests {
 			name: "Part One".to_owned(),
 			kind: Some(FolderKind::Part),
 			children: 2,
+			words: 1200,
 		})
 		.unwrap();
 		assert_eq!(json["node"], "folder");
 		assert_eq!(json["kind"], "part");
 		assert_eq!(json["children"], 2);
+		assert_eq!(json["words"], 1200);
 	}
 
 	#[test]
