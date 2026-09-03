@@ -9,7 +9,7 @@ import Tabs from "./Tabs";
 import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
-import type { Preferences, ProjectDocument } from "./types";
+import type { FolderNode, Preferences, ProjectDocument } from "./types";
 import type { FolderRef } from "./tree";
 import { deleteDocument } from "./documents";
 import type { Seed } from "./find";
@@ -344,6 +344,20 @@ export default function Project({
 		setListing((version) => version + 1);
 	}
 
+	// A renamed folder keeps its id, so an overview of it is re-pointed where
+	// it stands. Nothing under it moved, so the tabs holding its documents are
+	// left alone: what a document is called is its own name, not its folder's.
+	function renamedFolder(folder: FolderNode) {
+		setTabs((open) =>
+			open.map((tab) =>
+				tab.kind === "folder" && tab.folder.id === folder.id
+					? { ...tab, folder: { ...tab.folder, name: folder.name } }
+					: tab,
+			),
+		);
+		setListing((version) => version + 1);
+	}
+
 	// A target is the writer's intention rather than their text, so nothing is
 	// saved but the manifest — and every listing of the document has to read it
 	// again to show the new one on its card.
@@ -610,6 +624,7 @@ export default function Project({
 					onOpenTrash={openTrash}
 					onCreated={created}
 					onRenamed={renamed}
+					onFolderRenamed={renamedFolder}
 					onChanged={changed}
 					onDelete={remove}
 					onClose={onClose}
@@ -689,6 +704,7 @@ export default function Project({
 									onOpenFolder={openFolder}
 									onCreated={created}
 									onRenamed={renamed}
+									onFolderRenamed={renamedFolder}
 									onChanged={changed}
 									onDelete={remove}
 								/>

@@ -69,6 +69,21 @@ const FOLDER: Making = {
 };
 
 /**
+ * What an empty field suggests for a folder of this kind. The + knows what it
+ * is about to make; a rename has only the folder in front of it to go on.
+ */
+export function folderPlaceholder(kind: FolderKind | null): string {
+	switch (kind) {
+		case "part":
+			return PART.placeholder;
+		case "chapter":
+			return CHAPTER.placeholder;
+		case null:
+			return FOLDER.placeholder;
+	}
+}
+
+/**
  * What may be made inside a folder. `kind` is that folder's own kind and
  * `section` is the top-level folder it lives under.
  *

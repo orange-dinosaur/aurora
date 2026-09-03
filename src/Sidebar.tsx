@@ -2,15 +2,23 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
+import FolderMenu from "./FolderMenu";
 import Icon from "./Icon";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
-import type { FolderKind, ProjectDocument, TreeNode } from "./types";
+import type {
+	FolderKind,
+	FolderNode,
+	ProjectDocument,
+	TreeNode,
+} from "./types";
 import type { Making } from "./kinds";
+import { folderPlaceholder } from "./kinds";
 import {
 	createDocument,
 	createFolder,
 	renameDocument,
+	renameFolder,
 	reorderDocument,
 } from "./documents";
 import { failure } from "./errors";
@@ -49,8 +57,9 @@ type Naming =
 	| { kind: "creating"; at: string; making: Making }
 	| { kind: "refused"; at: string; making: Making; message: string };
 
-// The document the writer is retitling, and what Rust made of the last name
-// they tried.
+// The document or folder the writer is retitling, and what Rust made of the
+// last name they tried. Which of the two it is rides with the row that opened
+// the field rather than with the state, since only that row draws it.
 type Renaming =
 	| { kind: "closed" }
 	| { kind: "open"; id: string }
@@ -77,6 +86,7 @@ type Props = {
 	onOpenTrash: () => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
+	onFolderRenamed: (folder: FolderNode) => void;
 	/** The manifest changed in a way every listing of it has to read again. */
 	onChanged: () => void;
 	// The project view owns this one: it has to write down what the writer
@@ -98,6 +108,7 @@ export default function Sidebar({
 	onOpenTrash,
 	onCreated,
 	onRenamed,
+	onFolderRenamed,
 	onChanged,
 	onDelete,
 	onClose,
@@ -141,10 +152,14 @@ export default function Sidebar({
 		}
 	}
 
-	async function rename(id: string, name: string) {
+	async function rename(id: string, name: string, what: Making["what"]) {
 		setRenaming({ kind: "saving", id });
 		try {
-			onRenamed(await renameDocument(root, id, name));
+			if (what === "folder") {
+				onFolderRenamed(await renameFolder(root, id, name));
+			} else {
+				onRenamed(await renameDocument(root, id, name));
+			}
 			setRenaming({ kind: "closed" });
 		} catch (error) {
 			setRenaming({
@@ -260,61 +275,134 @@ export default function Sidebar({
 											if (row.kind === "folder") {
 												return (
 													<Fragment key={row.id}>
-														<li
-															className="documents__item"
-															style={indent(
-																row.depth,
-															)}
-														>
-															<button
-																type="button"
-																className="folder"
-																aria-current={
-																	row.id ===
-																	selectedFolder
-																		? "page"
-																		: undefined
-																}
-																onClick={() =>
-																	onOpenFolder(
-																		{
-																			id: row.id,
-																			name: row.name,
-																			kind: row.folderKind,
-																			section:
-																				section.name,
-																		},
-																	)
-																}
+														{renaming.kind !==
+															"closed" &&
+														renaming.id ===
+															row.id ? (
+															<li
+																className="documents__item"
+																style={indent(
+																	row.depth,
+																)}
 															>
-																<span className="folder__at">
-																	{mark(
-																		row.folderKind,
-																	)}
-																</span>
-																<span className="folder__name">
-																	{row.name}
-																</span>
-															</button>
-															<NewMenu
-																label={`New in ${row.name}`}
-																kind={
-																	row.folderKind
-																}
-																section={
-																	section.name
-																}
-																onChoose={(
-																	making,
-																) =>
-																	setNaming({
-																		kind: "open",
-																		at: row.id,
-																		making,
-																	})
-																}
-															/>
-														</li>
+																<div className="sidebar__field">
+																	<NameField
+																		label={`New name for ${row.name}`}
+																		placeholder={folderPlaceholder(
+																			row.folderKind,
+																		)}
+																		initial={
+																			row.name
+																		}
+																		busy={
+																			renaming.kind ===
+																			"saving"
+																		}
+																		error={
+																			renaming.kind ===
+																			"refused"
+																				? renaming.message
+																				: null
+																		}
+																		onSubmit={(
+																			name,
+																		) =>
+																			void rename(
+																				row.id,
+																				name,
+																				"folder",
+																			)
+																		}
+																		onCancel={() =>
+																			setRenaming(
+																				{
+																					kind: "closed",
+																				},
+																			)
+																		}
+																	/>
+																</div>
+															</li>
+														) : (
+															<li
+																className="documents__item"
+																style={indent(
+																	row.depth,
+																)}
+															>
+																<button
+																	type="button"
+																	className="folder"
+																	aria-current={
+																		row.id ===
+																		selectedFolder
+																			? "page"
+																			: undefined
+																	}
+																	onClick={() =>
+																		onOpenFolder(
+																			{
+																				id: row.id,
+																				name: row.name,
+																				kind: row.folderKind,
+																				section:
+																					section.name,
+																			},
+																		)
+																	}
+																>
+																	<span className="folder__at">
+																		{mark(
+																			row.folderKind,
+																		)}
+																	</span>
+																	<span className="folder__name">
+																		{
+																			row.name
+																		}
+																	</span>
+																</button>
+																{/* Two menus share the
+																    right-hand end of a
+																    folder's row, so they
+																    sit in a slot rather
+																    than both reaching for
+																    the same edge. */}
+																<div className="documents__actions">
+																	<NewMenu
+																		label={`New in ${row.name}`}
+																		kind={
+																			row.folderKind
+																		}
+																		section={
+																			section.name
+																		}
+																		onChoose={(
+																			making,
+																		) =>
+																			setNaming(
+																				{
+																					kind: "open",
+																					at: row.id,
+																					making,
+																				},
+																			)
+																		}
+																	/>
+																	<FolderMenu
+																		label={`Actions for ${row.name}`}
+																		onRename={() =>
+																			setRenaming(
+																				{
+																					kind: "open",
+																					id: row.id,
+																				},
+																			)
+																		}
+																	/>
+																</div>
+															</li>
+														)}
 														{naming.kind !==
 															"closed" &&
 															naming.at ===
@@ -363,6 +451,7 @@ export default function Sidebar({
 																void rename(
 																	doc.id,
 																	name,
+																	"document",
 																)
 															}
 															onCancel={() =>

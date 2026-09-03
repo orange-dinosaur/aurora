@@ -781,6 +781,89 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 	view(&manifest)
 }
 
+/// Gives a folder a new name, which is to say a new directory name. Everything
+/// under it keeps its id and its place, because nothing anywhere stores a path:
+/// a descendant is found by walking down to it, and the walk is the same walk.
+///
+/// A section is refused. The Manuscript is recognised by its name and the kind
+/// rules stand on that, so the top level of a project holds still.
+#[tauri::command]
+pub fn rename_folder(root: PathBuf, id: Uuid, name: String) -> Result<NodeView> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	validate_name(&name)?;
+
+	let mut manifest = read_manifest(&root)?;
+	if !matches!(tree::find(&manifest.nodes, id), Some(Node::Folder { .. })) {
+		return Err(Error::UnknownFolder);
+	}
+
+	let Some(above) = tree::parent(&manifest.nodes, id) else {
+		return Err(Error::SectionFixed);
+	};
+	let Node::Folder { children, .. } = above else {
+		unreachable!("whatever holds a node is a folder")
+	};
+	// Being called what it is already called is not a collision with itself.
+	if children
+		.iter()
+		.any(|node| node.id() != id && node.name() == name)
+	{
+		return Err(Error::AlreadyExists);
+	}
+
+	let was = tree::path(&manifest.nodes, id).ok_or(Error::UnknownFolder)?;
+	// A folder is renamed where it stands, so its path is the one it has with
+	// the last part swapped.
+	let inside = match was.rfind('/') {
+		Some(slash) => was[..slash].to_owned(),
+		None => return Err(Error::BadDocumentPath),
+	};
+	let path = format!("{inside}/{name}");
+
+	// The prefix a view is built under is where the folder sits, which the
+	// rename does not change.
+	let view = |manifest: &Manifest| {
+		let node = tree::find(&manifest.nodes, id).ok_or(Error::UnknownFolder)?;
+		views(std::slice::from_ref(node), &format!("{inside}/"))
+			.pop()
+			.ok_or(Error::UnknownFolder)
+	};
+
+	if path == was {
+		return view(&manifest);
+	}
+
+	let from = folder_path(&manifest, &root, &was)?;
+	let to = folder_path(&manifest, &root, &path)?;
+
+	// Where the folder above actually leads is what decides whether this stays
+	// inside the project, the same as when the folder was made.
+	let over = to.parent().ok_or(Error::BadDocumentPath)?;
+	if !over.canonicalize()?.starts_with(root.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+	// The manifest has already said no sibling is called this. Anything at the
+	// new name is something Aurora does not know about, and is not to be
+	// written over.
+	if to.exists() {
+		return Err(Error::AlreadyExists);
+	}
+
+	// The directory moves first. If writing the manifest then fails, the next
+	// refresh adopts the renamed folder and what is inside it rather than
+	// losing any of it.
+	fs::rename(&from, &to)?;
+
+	match tree::find_mut(&mut manifest.nodes, id) {
+		Some(Node::Folder { name: called, .. }) => *called = name,
+		_ => return Err(Error::UnknownFolder),
+	}
+	write_manifest(&root, &mut manifest)?;
+	view(&manifest)
+}
+
 /// Sets the word target a document is written towards, or clears it with
 /// `None`. Nothing on disk changes but the manifest: the target is the writer's
 /// intention, not part of the text.
@@ -2775,6 +2858,226 @@ mod tests {
 			PathBuf::from("some/where"),
 			Uuid::new_v4(),
 			"Ithaca Falls".to_owned(),
+		)
+		.unwrap_err();
+		assert!(matches!(err, Error::RelativePath));
+	}
+
+	/// A part holding a chapter, the chapter holding a scene, and a scene loose
+	/// in the part beside it. Renaming the part has to leave all three where
+	/// they were.
+	fn with_a_part(root: &Path) -> Uuid {
+		let part = create_folder(
+			root.to_path_buf(),
+			section_id(root, "Manuscript"),
+			"Part One".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap()
+		.id();
+		let chapter = create_folder(
+			root.to_path_buf(),
+			part,
+			"Chapter 2".to_owned(),
+			Some(FolderKind::Chapter),
+		)
+		.unwrap()
+		.id();
+		create_document(root.to_path_buf(), chapter, "Landfall".to_owned()).unwrap();
+		create_document(root.to_path_buf(), part, "Prologue".to_owned()).unwrap();
+		part
+	}
+
+	/// The id of the document sitting at this path, for the tests whose document
+	/// is not the first one in the project.
+	fn document_id(root: &Path, path: &str) -> Uuid {
+		read_manifest(root)
+			.unwrap()
+			.documents()
+			.iter()
+			.find(|document| document.path == path)
+			.expect("the project has that document")
+			.id
+	}
+
+	#[test]
+	fn a_renamed_folder_keeps_every_descendant_where_it_was() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+		let scene = document_id(&root, "Manuscript/Part One/Chapter 2/Landfall.md");
+		write_document(root.clone(), scene, "The ship came in at dusk.".to_owned()).unwrap();
+
+		let renamed = rename_folder(root.clone(), part, "Part Two".to_owned()).unwrap();
+
+		let NodeView::Folder { id, name, kind, .. } = &renamed else {
+			panic!("a folder was renamed");
+		};
+		assert_eq!(*id, part, "the folder is the same folder");
+		assert_eq!(name, "Part Two");
+		assert_eq!(*kind, Some(FolderKind::Part));
+
+		let manifest = read_manifest(&root).unwrap();
+		assert_eq!(
+			tree::path(&manifest.nodes, chapter).as_deref(),
+			Some("Manuscript/Part Two/Chapter 2"),
+			"the chapter came along and kept its id"
+		);
+		assert_eq!(
+			tree::path(&manifest.nodes, scene).as_deref(),
+			Some("Manuscript/Part Two/Chapter 2/Landfall.md")
+		);
+		assert_eq!(
+			read_document(root.clone(), scene).unwrap(),
+			"The ship came in at dusk.",
+			"the scene is still readable through its id"
+		);
+		assert_eq!(
+			tree::path(&manifest.nodes, part).as_deref(),
+			Some("Manuscript/Part Two")
+		);
+	}
+
+	#[test]
+	fn renaming_takes_the_directory_and_all_of_it_with_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+
+		rename_folder(root.clone(), part, "Part Two".to_owned()).unwrap();
+
+		assert!(!root.join("Manuscript/Part One").exists());
+		assert!(
+			root.join("Manuscript/Part Two/Chapter 2/Landfall.md")
+				.is_file()
+		);
+		assert!(root.join("Manuscript/Part Two/Prologue.md").is_file());
+	}
+
+	#[test]
+	fn a_renamed_folder_still_answers_to_its_id_after_a_refresh() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+
+		rename_folder(root.clone(), part, "Part Two".to_owned()).unwrap();
+		let manifest = refresh(&root).unwrap();
+
+		assert_eq!(
+			tree::path(&manifest.nodes, chapter).as_deref(),
+			Some("Manuscript/Part Two/Chapter 2"),
+			"looking at the folder again found what the manifest already said"
+		);
+	}
+
+	#[test]
+	fn renaming_a_folder_onto_a_sibling_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		create_folder(
+			root.clone(),
+			section_id(&root, "Manuscript"),
+			"Part Two".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap();
+
+		let err = rename_folder(root.clone(), part, "Part Two".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::AlreadyExists));
+		assert!(root.join("Manuscript/Part One/Chapter 2").is_dir());
+		assert_eq!(
+			tree::path(&read_manifest(&root).unwrap().nodes, part).as_deref(),
+			Some("Manuscript/Part One")
+		);
+	}
+
+	#[test]
+	fn a_folder_of_that_name_elsewhere_is_not_a_collision() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		create_folder(
+			root.clone(),
+			section_id(&root, "Notes"),
+			"Part Two".to_owned(),
+			None,
+		)
+		.unwrap();
+
+		rename_folder(root.clone(), part, "Part Two".to_owned()).unwrap();
+
+		assert!(root.join("Manuscript/Part Two").is_dir());
+		assert!(root.join("Notes/Part Two").is_dir());
+	}
+
+	#[test]
+	fn renaming_a_folder_to_the_name_it_already_has_changes_nothing() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+
+		let renamed = rename_folder(root.clone(), part, "Part One".to_owned()).unwrap();
+
+		assert_eq!(renamed.id(), part);
+		assert!(root.join("Manuscript/Part One/Chapter 2").is_dir());
+	}
+
+	#[test]
+	fn a_section_cannot_be_renamed() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = section_id(&root, "Manuscript");
+
+		let err = rename_folder(root.clone(), manuscript, "Novel".to_owned()).unwrap_err();
+
+		assert!(matches!(err, Error::SectionFixed));
+		assert!(root.join("Manuscript").is_dir());
+		assert!(!root.join("Novel").exists());
+	}
+
+	#[test]
+	fn renaming_a_folder_to_a_name_the_filesystem_would_not_take_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+
+		for name in ["", "  ", "Part/Two", "Part?", ".hidden", "NUL"] {
+			let err = rename_folder(root.clone(), part, name.to_owned()).unwrap_err();
+			assert!(
+				matches!(err, Error::InvalidName(_)),
+				"{name:?} should not be a folder name"
+			);
+		}
+
+		assert!(root.join("Manuscript/Part One").is_dir());
+	}
+
+	#[test]
+	fn renaming_a_document_as_a_folder_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let scene = first_document(&root).id;
+
+		assert!(matches!(
+			rename_folder(root.clone(), scene, "Part One".to_owned()).unwrap_err(),
+			Error::UnknownFolder
+		));
+		assert!(matches!(
+			rename_folder(root.clone(), Uuid::new_v4(), "Part One".to_owned()).unwrap_err(),
+			Error::UnknownFolder
+		));
+	}
+
+	#[test]
+	fn renaming_a_folder_refuses_a_relative_path() {
+		let err = rename_folder(
+			PathBuf::from("some/where"),
+			Uuid::new_v4(),
+			"Part Two".to_owned(),
 		)
 		.unwrap_err();
 		assert!(matches!(err, Error::RelativePath));

@@ -2,16 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
+import FolderMenu from "./FolderMenu";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
-import type { OverviewCard, ProjectDocument } from "./types";
+import type { FolderNode, OverviewCard, ProjectDocument } from "./types";
 import type { Making } from "./kinds";
+import { folderPlaceholder } from "./kinds";
 import type { FolderRef } from "./tree";
 import { counted, described, summarised } from "./cards";
 import {
 	createDocument,
 	createFolder,
 	renameDocument,
+	renameFolder,
 	reorderDocument,
 } from "./documents";
 import { when } from "./dates";
@@ -31,7 +34,8 @@ type Naming =
 	| { kind: "refused"; making: Making; message: string };
 
 // The card the writer is retitling, and what Rust made of the last name they
-// tried.
+// tried. Whether it is a document or a folder rides with the card that opened
+// the field rather than with the state, since only that card draws it.
 type Renaming =
 	| { kind: "closed" }
 	| { kind: "open"; id: string }
@@ -49,6 +53,7 @@ type Props = {
 	onOpenFolder: (folder: FolderRef) => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
+	onFolderRenamed: (folder: FolderNode) => void;
 	/** The manifest changed in a way every listing of it has to read again. */
 	onChanged: () => void;
 	// The project view owns this one: it has to write down what the writer
@@ -64,6 +69,7 @@ export default function FolderView({
 	onOpenFolder,
 	onCreated,
 	onRenamed,
+	onFolderRenamed,
 	onChanged,
 	onDelete,
 }: Props) {
@@ -115,10 +121,14 @@ export default function FolderView({
 		}
 	}
 
-	async function rename(id: string, name: string) {
+	async function rename(id: string, name: string, what: Making["what"]) {
 		setRenaming({ kind: "saving", id });
 		try {
-			onRenamed(await renameDocument(root, id, name));
+			if (what === "folder") {
+				onFolderRenamed(await renameFolder(root, id, name));
+			} else {
+				onRenamed(await renameDocument(root, id, name));
+			}
 			setRenaming({ kind: "closed" });
 		} catch (error) {
 			setRenaming({
@@ -177,7 +187,32 @@ export default function FolderView({
 			<ul className="cards">
 				{cards.map((card, at) => {
 					if (card.node === "folder") {
-						return (
+						return renaming.kind !== "closed" &&
+							renaming.id === card.id ? (
+							<li key={card.id} className="cards__item">
+								<div className="card card--naming">
+									<NameField
+										label={`New name for ${card.name}`}
+										placeholder={folderPlaceholder(
+											card.kind,
+										)}
+										initial={card.name}
+										busy={renaming.kind === "saving"}
+										error={
+											renaming.kind === "refused"
+												? renaming.message
+												: null
+										}
+										onSubmit={(name) =>
+											void rename(card.id, name, "folder")
+										}
+										onCancel={() =>
+											setRenaming({ kind: "closed" })
+										}
+									/>
+								</div>
+							</li>
+						) : (
 							<li
 								key={card.id}
 								className="cards__item"
@@ -205,6 +240,15 @@ export default function FolderView({
 										{described(card.kind, card.children)}
 									</span>
 								</button>
+								<FolderMenu
+									label={`Actions for ${card.name}`}
+									onRename={() =>
+										setRenaming({
+											kind: "open",
+											id: card.id,
+										})
+									}
+								/>
 							</li>
 						);
 					}
@@ -225,7 +269,11 @@ export default function FolderView({
 											: null
 									}
 									onSubmit={(name) =>
-										void rename(document.id, name)
+										void rename(
+											document.id,
+											name,
+											"document",
+										)
 									}
 									onCancel={() =>
 										setRenaming({ kind: "closed" })

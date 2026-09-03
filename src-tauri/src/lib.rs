@@ -27,6 +27,7 @@ pub fn run() {
 			document::create_document,
 			document::create_folder,
 			document::rename_document,
+			document::rename_folder,
 			document::set_document_target,
 			document::delete_document,
 			document::list_trash,

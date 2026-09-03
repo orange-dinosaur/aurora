@@ -87,6 +87,9 @@ export type TreeNode =
 	  }
 	| ({ node: "document" } & ProjectDocument);
 
+/** The folder half of a `TreeNode`, for the commands that only return one. */
+export type FolderNode = Extract<TreeNode, { node: "folder" }>;
+
 /**
  * `document::ChildSummary` — one card in a folder's overview, tagged so the
  * caller can switch on `node`. A folder card says what it is and how much it

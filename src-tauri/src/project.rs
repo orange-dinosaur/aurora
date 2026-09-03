@@ -209,6 +209,7 @@ pub enum Error {
 	UnknownSection,
 	UnknownFolder,
 	FolderNotAllowed,
+	SectionFixed,
 	DocumentMissing,
 	DocumentExists,
 	BadDocumentPath,
@@ -242,6 +243,12 @@ impl fmt::Display for Error {
 					f,
 					"a part belongs in the Manuscript and a chapter in the Manuscript or a \
 					 part, and a chapter holds documents rather than folders"
+				)
+			}
+			Error::SectionFixed => {
+				write!(
+					f,
+					"a section is part of the project's shape and cannot be renamed"
 				)
 			}
 			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
@@ -279,6 +286,7 @@ impl Error {
 			Error::UnknownSection => "unknownSection",
 			Error::UnknownFolder => "unknownFolder",
 			Error::FolderNotAllowed => "folderNotAllowed",
+			Error::SectionFixed => "sectionFixed",
 			Error::DocumentMissing => "documentMissing",
 			Error::DocumentExists => "documentExists",
 			Error::BadDocumentPath => "badDocumentPath",
@@ -315,6 +323,7 @@ impl std::error::Error for Error {
 			| Error::UnknownSection
 			| Error::UnknownFolder
 			| Error::FolderNotAllowed
+			| Error::SectionFixed
 			| Error::DocumentMissing
 			| Error::DocumentExists
 			| Error::BadDocumentPath
@@ -1536,6 +1545,9 @@ mod tests {
 			},
 			Error::UnknownDocument,
 			Error::UnknownSection,
+			Error::UnknownFolder,
+			Error::FolderNotAllowed,
+			Error::SectionFixed,
 			Error::DocumentMissing,
 			Error::DocumentExists,
 			Error::BadDocumentPath,
@@ -1566,6 +1578,9 @@ mod tests {
 			Error::NotAProject,
 			Error::UnknownDocument,
 			Error::UnknownSection,
+			Error::UnknownFolder,
+			Error::FolderNotAllowed,
+			Error::SectionFixed,
 			Error::DocumentMissing,
 			Error::DocumentExists,
 			Error::BadDocumentPath,

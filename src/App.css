@@ -731,15 +731,15 @@ body,
 	cursor: pointer;
 }
 
-/* A folder in the list opens its overview and says nothing else so far: its
-   own menu and its chevron are still to come. */
+/* A folder in the list opens its overview. Two buttons are painted over its
+   right-hand end rather than one, so it keeps twice the room clear. */
 .folder {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	width: 100%;
 	height: 28px;
-	padding: 0 1.4rem 0 calc(0.25rem + var(--depth, 0) * 0.75rem);
+	padding: 0 2.8rem 0 calc(0.25rem + var(--depth, 0) * 0.75rem);
 	font: inherit;
 	font-size: 0.8125rem;
 	font-weight: 600;
@@ -1628,6 +1628,32 @@ body,
 
 .documents__item:hover .menu,
 .documents__item:focus-within .menu {
+	opacity: 1;
+}
+
+/* A folder carries two of them. They share one slot at the end of the row, and
+   the ⋮ takes the outer place so it lines up with the ⋮ on every document
+   below it. Inside the slot each menu is only the anchor its dropdown hangs
+   from, so it is placed by the flow rather than by the row. */
+.documents__actions {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	display: flex;
+	align-items: center;
+	opacity: 0;
+}
+
+.documents__item:hover .documents__actions,
+.documents__item:focus-within .documents__actions {
+	opacity: 1;
+}
+
+.documents__actions .menu {
+	position: relative;
+	inset: auto;
+	display: block;
 	opacity: 1;
 }
 

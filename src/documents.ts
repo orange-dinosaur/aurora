@@ -5,6 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
 	FolderKind,
+	FolderNode,
 	ProjectDocument,
 	TrashEntry,
 	TreeNode,
@@ -43,6 +44,19 @@ export function renameDocument(
 	name: string,
 ): Promise<ProjectDocument> {
 	return invoke<ProjectDocument>("rename_document", { root, id, name });
+}
+
+/**
+ * Gives a folder a new name. Everything inside it comes along and keeps its
+ * id, so a tab holding one of its documents needs nothing. A section is
+ * refused: the Manuscript is known by its name.
+ */
+export function renameFolder(
+	root: string,
+	id: string,
+	name: string,
+): Promise<FolderNode> {
+	return invoke<FolderNode>("rename_folder", { root, id, name });
 }
 
 /**
