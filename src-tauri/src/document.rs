@@ -177,13 +177,12 @@ fn words_in(root: &Path, relative: &str) -> usize {
 		return 0;
 	}
 
-	match fs::read(path) {
-		Ok(bytes) => String::from_utf8(bytes)
-			.unwrap_or_default()
-			.split_whitespace()
-			.count(),
-		Err(_) => 0,
-	}
+	let Ok(bytes) = fs::read(path) else {
+		return 0;
+	};
+	let text = String::from_utf8(bytes).unwrap_or_default();
+
+	body(&text).split_whitespace().count()
 }
 
 /// The words under `nodes`, however deep they sit. For a card that has to say
@@ -446,6 +445,22 @@ pub fn refresh(root: &Path) -> Result<Manifest> {
 	Ok(manifest)
 }
 
+/// A document's prose, with any front matter block lifted off the top. The
+/// fence is spelled the same as the one `FRONT_MATTER` matches in
+/// `src/markdown.ts`, which is the end that reads and writes the block; the two
+/// have to agree on where a document starts.
+fn body(text: &str) -> &str {
+	let Some(rest) = text.strip_prefix("---\n") else {
+		return text;
+	};
+	let Some(close) = rest.find("\n---") else {
+		return text;
+	};
+
+	let after = rest[close + 4..].trim_start_matches([' ', '\t']);
+	after.strip_prefix('\n').unwrap_or(after)
+}
+
 /// The opening of a document collapsed onto one line and cut to something a
 /// card can hold.
 fn excerpt(text: &str) -> String {
@@ -496,10 +511,12 @@ fn summarise(document: &Document, path: &Path) -> DocumentSummary {
 		Err(_) => String::new(),
 	};
 
+	let prose = body(&text);
+
 	DocumentSummary {
 		document: document.into(),
-		words: text.split_whitespace().count(),
-		excerpt: excerpt(&text),
+		words: prose.split_whitespace().count(),
+		excerpt: excerpt(prose),
 		modified,
 	}
 }
@@ -2325,6 +2342,22 @@ mod tests {
 	}
 
 	#[test]
+	fn an_overview_counts_the_prose_and_not_the_front_matter() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(
+			root.join("Manuscript").join("Scene 1.md"),
+			"---\ntags:\n  - homecoming\n---\n\nSing to me of the man, Muse.",
+		)
+		.unwrap();
+
+		let overview = cards(root, "Manuscript");
+
+		assert_eq!(overview[0].excerpt, "Sing to me of the man, Muse.");
+		assert_eq!(overview[0].words, 7);
+	}
+
+	#[test]
 	fn an_overview_lists_a_section_in_the_manifests_order() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
@@ -2601,6 +2634,20 @@ mod tests {
 
 		assert_eq!(cut.chars().count(), EXCERPT_CHARS + 1);
 		assert!(cut.ends_with('\u{2026}'));
+	}
+
+	#[test]
+	fn a_front_matter_block_is_not_part_of_the_prose() {
+		assert_eq!(body("---\ntags: []\n---\nSing to me."), "Sing to me.");
+		assert_eq!(body("---\ntags: []\n---  \nSing to me."), "Sing to me.");
+		assert_eq!(body("---\ntags: []\n---"), "");
+	}
+
+	#[test]
+	fn text_without_a_closed_block_is_all_prose() {
+		assert_eq!(body("Sing to me."), "Sing to me.");
+		assert_eq!(body("---\ntags: []\n"), "---\ntags: []\n");
+		assert_eq!(body(""), "");
 	}
 
 	#[test]

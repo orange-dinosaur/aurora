@@ -66,7 +66,9 @@ export const MARKDOWN_TRANSFORMERS = [SCENE_BREAK, ...TRANSFORMERS];
 // A block of settings some note-taking apps fence off at the top of a file.
 // Aurora has no use for it, but it is not Aurora's to throw away, and its
 // fence is spelled the same as a scene break — so it is lifted off the text
-// before anything else looks at it and put back on the way out.
+// before anything else looks at it and put back on the way out. `body` in
+// `src-tauri/src/document.rs` skips the same fence when it counts words and
+// takes an excerpt, so the two have to agree on this shape.
 const FRONT_MATTER = /^---\n[\s\S]*?\n---[ \t]*\n?/;
 
 const frontMatter = createState("frontMatter", {
