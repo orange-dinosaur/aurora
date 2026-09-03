@@ -105,6 +105,30 @@ export function rows(
 	});
 }
 
+/**
+ * The ids of the rows drawn inside the folder with this id: everything after it
+ * until the list comes back up to its level. A drag is aimed at what is on
+ * screen, so a folder drawn shut holds nothing here and keeps nothing back.
+ */
+export function inside(list: Row[], id: string): ReadonlySet<string> {
+	const held = new Set<string>();
+	const from = list.findIndex(
+		(row) => row.kind === "folder" && row.id === id,
+	);
+	if (from === -1) {
+		return held;
+	}
+
+	for (const row of list.slice(from + 1)) {
+		if (row.depth <= list[from].depth) {
+			break;
+		}
+		held.add(row.kind === "folder" ? row.id : row.document.id);
+	}
+
+	return held;
+}
+
 /** How many documents a level holds, however deep they sit. */
 export function documentsIn(nodes: TreeNode[]): number {
 	return rows(nodes, "").filter((row) => row.kind === "document").length;

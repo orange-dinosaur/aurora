@@ -18,6 +18,7 @@ import {
 	renameFolder,
 } from "./documents";
 import { when } from "./dates";
+import type { Spot } from "./reorder";
 import { useReorder } from "./reorder";
 import { failure } from "./errors";
 
@@ -82,9 +83,28 @@ export default function FolderView({
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
+	// The cards flow across the overview rather than down it, so a landing
+	// beside one is to its left or its right.
 	const reorder = useReorder(
 		(id, parentId, index) => void move(id, parentId, index),
+		"x",
 	);
+
+	// What one card offers a drag. Everything on an overview sits in the folder
+	// it is showing, so they all share a group, and nothing a card holds is
+	// drawn here for a drag to get lost inside.
+	function spot(card: OverviewCard, at: number): Spot {
+		return {
+			id: card.id,
+			at,
+			group: folder.id,
+			section: folder.section,
+			kind: card.node === "folder" ? card.kind : null,
+			folder: card.node === "folder",
+			holds: card.node === "folder" ? card.children : 0,
+			within: false,
+		};
+	}
 
 	const load = useCallback(async () => {
 		setStatus({ kind: "busy" });
@@ -223,7 +243,7 @@ export default function FolderView({
 							<li
 								key={card.id}
 								className="cards__item"
-								{...reorder.item(card.id, at, folder.id)}
+								{...reorder.item(spot(card, at))}
 							>
 								<button
 									type="button"
@@ -309,7 +329,7 @@ export default function FolderView({
 						<li
 							key={document.id}
 							className="cards__item"
-							{...reorder.item(document.id, at, folder.id)}
+							{...reorder.item(spot(document, at))}
 						>
 							<button
 								type="button"

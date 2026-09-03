@@ -1,6 +1,7 @@
 // One folder in the sidebar: what it is, what may be made inside it, and what
 // may be done to it. It draws the field instead when it is the row being
-// retitled, because a rename happens where the name already is.
+// retitled, because a rename happens where the name already is, and is not
+// draggable while it does.
 
 import FolderMenu from "./FolderMenu";
 import { abbreviated } from "./cards";
@@ -10,6 +11,7 @@ import NewMenu from "./NewMenu";
 import type { FolderKind } from "./types";
 import type { Making } from "./kinds";
 import { folderPlaceholder } from "./kinds";
+import type { Draggable } from "./reorder";
 import type { Row } from "./tree";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
@@ -38,6 +40,7 @@ type Props = {
 	current: boolean;
 	/** Set only on the row being retitled. */
 	renaming: Retitling | null;
+	drag: Draggable;
 	onOpen: () => void;
 	onNew: (making: Making) => void;
 	onMove: (parentId: string, index: number) => void;
@@ -54,6 +57,7 @@ export default function FolderRow({
 	section,
 	current,
 	renaming,
+	drag,
 	onOpen,
 	onNew,
 	onMove,
@@ -82,7 +86,7 @@ export default function FolderRow({
 	}
 
 	return (
-		<li className="documents__item" style={indent(row.depth)}>
+		<li className="documents__item" style={indent(row.depth)} {...drag}>
 			{/* Over the row rather than inside it, for the reason the menus at
 			    the other end are: the row is itself a button. A folder holding
 			    nothing has nothing to open, so it draws no chevron and leaves

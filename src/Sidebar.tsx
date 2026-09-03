@@ -17,9 +17,12 @@ import {
 import { failure } from "./errors";
 import { useReorder } from "./reorder";
 import type { Renaming } from "./rows";
-import { indent, retitling } from "./rows";
-import { documentsIn, rows, sections } from "./tree";
-import type { FolderRef } from "./tree";
+import { indent, retitling, spot } from "./rows";
+import { documentsIn, inside, rows, sections } from "./tree";
+import type { FolderRef, Row } from "./tree";
+
+/** Nothing is being dragged, so no row is inside anything. */
+const NONE: ReadonlySet<string> = new Set();
 
 type Status =
 	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
@@ -223,6 +226,16 @@ export default function Sidebar({
 				<div className="sidebar__sections">
 					{sections(tree).map((section) => {
 						const list = rows(section.children, section.id, open);
+						// Nowhere inside what is being dragged can be where it
+						// lands. Only the section holding it has any such rows;
+						// for the others this comes back empty.
+						const held =
+							reorder.dragging === null
+								? NONE
+								: inside(list, reorder.dragging);
+						// Every row in the list asks for its drag the same way.
+						const draggable = (row: Row) =>
+							reorder.item(spot(row, section.name, held));
 
 						return (
 							<section key={section.id} className="section">
@@ -278,6 +291,7 @@ export default function Sidebar({
 														root={root}
 														row={row}
 														section={section.name}
+														drag={draggable(row)}
 														current={
 															row.id ===
 															selectedFolder
@@ -373,11 +387,7 @@ export default function Sidebar({
 														renaming,
 														row.document.id,
 													)}
-													drag={reorder.item(
-														row.document.id,
-														row.index,
-														row.group,
-													)}
+													drag={draggable(row)}
 													onOpen={() =>
 														onSelect(row.document)
 													}

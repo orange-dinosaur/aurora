@@ -4,6 +4,7 @@ import {
 	documentsIn,
 	documentsOf,
 	folderOf,
+	inside,
 	rows,
 	sections,
 } from "./tree";
@@ -141,6 +142,33 @@ describe("laying a level out as rows", () => {
 				target: null,
 			},
 		});
+	});
+});
+
+describe("what a folder is drawn holding", () => {
+	const tree = [
+		folder("Research", [
+			document("Notes/Research/Reading.md"),
+			folder("Sources", [document("Notes/Research/Sources/Letters.md")]),
+		]),
+		folder("Ideas", [document("Notes/Ideas/Names.md")]),
+	];
+
+	test("everything under it, however deep, and nothing beside it", () => {
+		expect([...inside(rows(tree, "root"), "id-Research")]).toEqual([
+			"id-Notes/Research/Reading.md",
+			"id-Sources",
+			"id-Notes/Research/Sources/Letters.md",
+		]);
+	});
+
+	test("a folder drawn shut holds nothing", () => {
+		const shut = rows(tree, "root", new Set());
+		expect(inside(shut, "id-Research").size).toBe(0);
+	});
+
+	test("a folder that is not on the list holds nothing", () => {
+		expect(inside(rows(tree, "root"), "id-Sketches").size).toBe(0);
 	});
 });
 
