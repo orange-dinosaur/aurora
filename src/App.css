@@ -545,6 +545,102 @@ body,
 	display: none;
 }
 
+/* The panel about whatever is open, on the far side of the writing. Narrower
+   than the sidebar, which has to hold a whole project's names; this holds one
+   thing's own. It is unmounted when closed rather than hidden, since it keeps
+   nothing a writer would miss. */
+.right-sidebar {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 240px;
+	min-height: 0;
+	background: var(--bg-chrome);
+	border-left: 1px solid var(--border);
+}
+
+.right-sidebar__tabs {
+	display: flex;
+	align-items: center;
+	gap: 0.125rem;
+	flex: none;
+	padding: 0.5rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.right-sidebar__tab {
+	flex: none;
+	padding: 0.1875rem 0.4375rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	/* WebKitGTK resets both on a button and `font: inherit` brings back
+	   neither. */
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+	transition:
+		color 120ms ease-out,
+		background-color 120ms ease-out;
+}
+
+.right-sidebar__tab:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.right-sidebar__tab--on {
+	color: var(--text);
+	background: var(--accent-wash);
+}
+
+/* Pushed to the end of the row, so the three tabs read as one group. */
+.right-sidebar__close {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	margin-left: auto;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 5px;
+	cursor: pointer;
+	transition:
+		color 120ms ease-out,
+		background-color 120ms ease-out;
+}
+
+.right-sidebar__close:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.right-sidebar__tab:focus-visible,
+.right-sidebar__close:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.right-sidebar__body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 0.75rem;
+}
+
+.right-sidebar__empty {
+	margin: 0;
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+}
+
 .sidebar__list {
 	position: relative;
 	display: flex;

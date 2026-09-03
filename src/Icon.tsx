@@ -10,6 +10,7 @@ export type IconName =
 	| "chevron-right"
 	| "arrow-left-right"
 	| "panel-left"
+	| "panel-right"
 	| "folder"
 	| "link"
 	| "plus"
@@ -74,6 +75,12 @@ const SHAPES: Record<IconName, ReactNode> = {
 		<>
 			<rect x="3" y="3" width="18" height="18" rx="2" />
 			<path d="M9 3v18" />
+		</>
+	),
+	"panel-right": (
+		<>
+			<rect x="3" y="3" width="18" height="18" rx="2" />
+			<path d="M15 3v18" />
 		</>
 	),
 	plus: <path d="M5 12h14M12 5v14" />,

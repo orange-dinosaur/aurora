@@ -132,6 +132,9 @@ export type TrashEntry = {
 
 /** `store::Preferences` — how the writer likes to write, kept in `store.json`
  * rather than in a project, so it follows them into all of them. */
+/** The three things the right sidebar can be showing. */
+export type RightSidebarTab = "synopsis" | "info" | "mentions";
+
 export type Preferences = {
 	/** Whether the bar under the document title is showing. */
 	toolbar: boolean;
@@ -142,6 +145,10 @@ export type Preferences = {
 	outline: boolean;
 	/** Whether the list of documents is showing beside the writing. */
 	sidebar: boolean;
+	/** Whether the panel about the open document or folder is showing. */
+	rightSidebar: boolean;
+	/** Which of that panel's tabs is showing. */
+	rightSidebarTab: RightSidebarTab;
 	/** The width of the column of text, in characters. */
 	measure: number;
 	/** In pixels. */

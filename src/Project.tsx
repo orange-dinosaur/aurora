@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
 import Search from "./Search";
 import FolderView from "./FolderView";
+import RightSidebar from "./RightSidebar";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
 import type { TabView } from "./Tabs";
@@ -662,6 +663,13 @@ export default function Project({
 		);
 	}
 
+	// Only a document and a folder overview have anything to say about
+	// themselves. Search and the trash are lists of other things.
+	const about =
+		active?.kind === "document" || active?.kind === "folder"
+			? active.kind
+			: null;
+
 	return (
 		<section className="project">
 			<Titlebar
@@ -670,6 +678,10 @@ export default function Project({
 				sidebar={preferences.sidebar}
 				onSidebar={(open) =>
 					onPreferences({ ...preferences, sidebar: open })
+				}
+				rightSidebar={about === null ? null : preferences.rightSidebar}
+				onRightSidebar={(open) =>
+					onPreferences({ ...preferences, rightSidebar: open })
 				}
 				onSearch={openSearch}
 				onRefreshed={() => setListing((version) => version + 1)}
@@ -800,6 +812,24 @@ export default function Project({
 						) : null}
 					</div>
 				</div>
+
+				{about !== null && preferences.rightSidebar && (
+					<RightSidebar
+						tab={preferences.rightSidebarTab}
+						onTab={(tab) =>
+							onPreferences({
+								...preferences,
+								rightSidebarTab: tab,
+							})
+						}
+						onClose={() =>
+							onPreferences({
+								...preferences,
+								rightSidebar: false,
+							})
+						}
+					/>
+				)}
 			</div>
 		</section>
 	);

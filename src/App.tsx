@@ -14,6 +14,8 @@ const DEFAULTS: Preferences = {
 	typewriter: false,
 	outline: false,
 	sidebar: true,
+	rightSidebar: false,
+	rightSidebarTab: "synopsis",
 	measure: 68,
 	fontSize: 16,
 	lineHeight: 1.7,

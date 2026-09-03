@@ -9,6 +9,12 @@ type Props = {
 	root: string;
 	sidebar: boolean;
 	onSidebar: (open: boolean) => void;
+	/**
+	 * Whether the right sidebar is showing, or null when what is open has
+	 * nothing to say about itself and the panel does not apply.
+	 */
+	rightSidebar: boolean | null;
+	onRightSidebar: (open: boolean) => void;
 	onSearch: () => void;
 	// The manifest has been read again, so whatever is showing it should look
 	// at it afresh.
@@ -20,6 +26,8 @@ export default function Titlebar({
 	root,
 	sidebar,
 	onSidebar,
+	rightSidebar,
+	onRightSidebar,
 	onSearch,
 	onRefreshed,
 }: Props) {
@@ -77,6 +85,21 @@ export default function Titlebar({
 				onClick={() => onSidebar(!sidebar)}
 			>
 				<Icon name="panel-left" />
+			</button>
+			{/* Disabled rather than dropped where it does not apply: a button
+			    that comes and goes would shuffle the row every time the writer
+			    moved between a document and the trash. */}
+			<button
+				type="button"
+				className="titlebar__button"
+				aria-label={
+					rightSidebar ? "Hide right sidebar" : "Show right sidebar"
+				}
+				aria-pressed={rightSidebar === true}
+				disabled={rightSidebar === null}
+				onClick={() => onRightSidebar(rightSidebar !== true)}
+			>
+				<Icon name="panel-right" />
 			</button>
 
 			{/* Out of flow, so a failed refresh cannot push the writing down. */}

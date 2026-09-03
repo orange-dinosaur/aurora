@@ -75,21 +75,27 @@ const frontMatter = createState("frontMatter", {
 	parse: (value: unknown) => (typeof value === "string" ? value : ""),
 });
 
+/** The block the open document carries, fences and all, or "" if it has none. */
+export function $frontMatter(): string {
+	return $getState($getRoot(), frontMatter);
+}
+
+/** Replaces that block. An empty string leaves the document without one. */
+export function $setFrontMatter(block: string): void {
+	$setState($getRoot(), frontMatter, block);
+}
+
 /** Replaces the document with the tree a markdown string describes. */
 export function $fromMarkdown(text: string): void {
 	const found = FRONT_MATTER.exec(text);
 	const body = found === null ? text : text.slice(found[0].length);
 	$convertFromMarkdownString(body.replace(/^\n+/, ""), MARKDOWN_TRANSFORMERS);
-	$setState(
-		$getRoot(),
-		frontMatter,
-		found === null ? "" : found[0].trimEnd(),
-	);
+	$setFrontMatter(found === null ? "" : found[0].trimEnd());
 }
 
 /** The document as markdown, ready to be written to its file. */
 export function $toMarkdown(): string {
-	const head = $getState($getRoot(), frontMatter);
+	const head = $frontMatter();
 	const body = $convertToMarkdownString(MARKDOWN_TRANSFORMERS);
 	if (head === "") {
 		return body;
