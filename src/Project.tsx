@@ -7,6 +7,7 @@ import Search from "./Search";
 import FolderView from "./FolderView";
 import RightSidebar from "./RightSidebar";
 import Sidebar from "./Sidebar";
+import { isSubject } from "./subjects";
 import Tabs from "./Tabs";
 import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
@@ -823,6 +824,10 @@ export default function Project({
 				{about !== null && preferences.rightSidebar && (
 					<RightSidebar
 						fields={about === "document" ? fields : null}
+						subject={
+							active?.kind === "document" &&
+							isSubject(active.document.trail)
+						}
 						tab={preferences.rightSidebarTab}
 						onTab={(tab) =>
 							onPreferences({

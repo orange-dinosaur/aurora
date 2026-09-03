@@ -1,4 +1,4 @@
-import TextBox from "./Field";
+import { TextBox } from "./Field";
 import type { FieldsHandle } from "./fields";
 import { text } from "./frontmatter";
 

@@ -661,6 +661,14 @@ body,
 	color: var(--text-dim);
 }
 
+/* Under the label, for a rule the writer would otherwise have to guess. */
+.field__hint {
+	margin-top: -0.125rem;
+	font-size: 0.6875rem;
+	line-height: 1.4;
+	color: var(--text-dim);
+}
+
 .field__box,
 .field__line {
 	width: 100%;

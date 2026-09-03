@@ -1,11 +1,12 @@
 import { useState } from "react";
+import Icon from "./Icon";
 
 // The controls the panel is built from. A field's text is held here while it is
 // being typed and pushed to the document on every keystroke, rather than being
 // read straight back out of the editor: the round trip through Lexical and the
 // front matter is fast, but not fast enough to be in the way of typing.
 
-type Props = {
+type BoxProps = {
 	label: string;
 	value: string;
 	placeholder: string;
@@ -13,13 +14,13 @@ type Props = {
 	onChange: (value: string) => void;
 };
 
-export default function TextBox({
+export function TextBox({
 	label,
 	value,
 	placeholder,
 	rows,
 	onChange,
-}: Props) {
+}: BoxProps) {
 	const [draft, setDraft] = useState(value);
 	const [shown, setShown] = useState(value);
 
@@ -46,5 +47,89 @@ export default function TextBox({
 				}}
 			/>
 		</label>
+	);
+}
+
+type ChipsProps = {
+	label: string;
+	/** A line under the label, for a rule the writer cannot guess. */
+	hint?: string;
+	placeholder: string;
+	values: string[];
+	onChange: (values: string[]) => void;
+};
+
+/** A list of short values, entered one at a time rather than as a line of
+    commas the writer has to punctuate. */
+export function Chips({
+	label,
+	hint,
+	placeholder,
+	values,
+	onChange,
+}: ChipsProps) {
+	const [draft, setDraft] = useState("");
+
+	function add() {
+		const value = draft.trim();
+
+		// One already there is not added twice, and neither is nothing.
+		if (value !== "" && !values.includes(value)) {
+			onChange([...values, value]);
+		}
+		setDraft("");
+	}
+
+	function remove(value: string) {
+		onChange(values.filter((each) => each !== value));
+	}
+
+	return (
+		<div className="field">
+			<span className="field__label">{label}</span>
+			{hint !== undefined && <span className="field__hint">{hint}</span>}
+			{values.length > 0 && (
+				<ul className="chips">
+					{values.map((value) => (
+						<li key={value} className="chip">
+							{value}
+							<button
+								type="button"
+								className="chip__remove"
+								aria-label={`Remove ${value}`}
+								onClick={() => remove(value)}
+							>
+								<Icon name="x" />
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
+			<input
+				className="field__line"
+				type="text"
+				value={draft}
+				placeholder={placeholder}
+				aria-label={placeholder}
+				onChange={(event) => setDraft(event.target.value)}
+				onKeyDown={(event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						add();
+					} else if (event.key === "Escape") {
+						setDraft("");
+					} else if (
+						event.key === "Backspace" &&
+						draft === "" &&
+						values.length > 0
+					) {
+						remove(values[values.length - 1]);
+					}
+				}}
+				// Clicking away abandons what was half typed, the way every
+				// other field that appears in place behaves.
+				onBlur={() => setDraft("")}
+			/>
+		</div>
 	);
 }

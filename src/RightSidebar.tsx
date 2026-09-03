@@ -18,12 +18,20 @@ const TABS: { name: RightSidebarTab; label: string }[] = [
 type Props = {
 	/** The open document's fields, or null when what is open has none yet. */
 	fields: FieldsHandle | null;
+	/** Whether what is open is a page about a person or a place. */
+	subject: boolean;
 	tab: RightSidebarTab;
 	onTab: (tab: RightSidebarTab) => void;
 	onClose: () => void;
 };
 
-export default function RightSidebar({ fields, tab, onTab, onClose }: Props) {
+export default function RightSidebar({
+	fields,
+	subject,
+	tab,
+	onTab,
+	onClose,
+}: Props) {
 	return (
 		<aside className="right-sidebar" aria-label="About what is open">
 			<div className="right-sidebar__tabs">
@@ -58,7 +66,7 @@ export default function RightSidebar({ fields, tab, onTab, onClose }: Props) {
 				) : tab === "synopsis" ? (
 					<Synopsis {...fields} />
 				) : (
-					<Info {...fields} />
+					<Info {...fields} subject={subject} />
 				)}
 			</div>
 		</aside>
