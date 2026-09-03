@@ -1,5 +1,14 @@
 import { describe, expect, test } from "vitest";
-import { list, parse, serialize, text, type Fields } from "./frontmatter";
+import {
+	custom,
+	fieldNames,
+	list,
+	parse,
+	serialize,
+	split,
+	text,
+	type Fields,
+} from "./frontmatter";
 
 /** A block as it sits at the top of a file, fences and all. */
 function block(...lines: string[]): string {
@@ -76,6 +85,42 @@ describe("reading a field whatever shape it is in", () => {
 		expect(text(fields([["synopsis", ["One.", "Two."]]]), "synopsis")).toBe(
 			"One., Two.",
 		);
+	});
+});
+
+describe("taking a block off a file", () => {
+	test("a file without one is all prose", () => {
+		expect(split("Sing to me.")).toEqual({
+			block: "",
+			body: "Sing to me.",
+		});
+	});
+
+	test("the block keeps its fences and the prose loses them", () => {
+		expect(split("---\ntags: [sea]\n---\n\nSing to me.")).toEqual({
+			block: "---\ntags: [sea]\n---",
+			body: "\nSing to me.",
+		});
+	});
+});
+
+describe("fields the writer added", () => {
+	test("the four Aurora knows are not among them", () => {
+		const found = parse(
+			block("tags: [sea]", "synopsis: She comes home.", "fear: heights"),
+		);
+
+		expect(custom(found)).toEqual(["fear"]);
+	});
+
+	test("names are gathered across the project and sorted", () => {
+		expect(
+			fieldNames([
+				"---\nfear: heights\n---\n\nOne.",
+				"---\nage: 40\nfear: water\ntags: [sea]\n---\n\nTwo.",
+				"No block at all.",
+			]),
+		).toEqual(["age", "fear"]);
 	});
 });
 

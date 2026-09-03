@@ -27,6 +27,7 @@ import {
 	type Klass,
 	type LexicalNode,
 } from "lexical";
+import { split } from "./frontmatter";
 
 // Nodes and transformers go together: a transformer whose node is not
 // registered fails silently, leaving the construct as plain text.
@@ -63,14 +64,9 @@ const SCENE_BREAK: ElementTransformer = {
 
 export const MARKDOWN_TRANSFORMERS = [SCENE_BREAK, ...TRANSFORMERS];
 
-// A block of settings some note-taking apps fence off at the top of a file.
-// Aurora has no use for it, but it is not Aurora's to throw away, and its
-// fence is spelled the same as a scene break — so it is lifted off the text
-// before anything else looks at it and put back on the way out. `body` in
-// `src-tauri/src/document.rs` skips the same fence when it counts words and
-// takes an excerpt, so the two have to agree on this shape.
-const FRONT_MATTER = /^---\n[\s\S]*?\n---[ \t]*\n?/;
-
+// The front matter block a file arrived with, kept as it was written and put
+// back on the way out. `frontmatter.ts` owns what it means; here it is only
+// text to be carried.
 const frontMatter = createState("frontMatter", {
 	parse: (value: unknown) => (typeof value === "string" ? value : ""),
 });
@@ -87,10 +83,9 @@ export function $setFrontMatter(block: string): void {
 
 /** Replaces the document with the tree a markdown string describes. */
 export function $fromMarkdown(text: string): void {
-	const found = FRONT_MATTER.exec(text);
-	const body = found === null ? text : text.slice(found[0].length);
+	const { block, body } = split(text);
 	$convertFromMarkdownString(body.replace(/^\n+/, ""), MARKDOWN_TRANSFORMERS);
-	$setFrontMatter(found === null ? "" : found[0].trimEnd());
+	$setFrontMatter(block);
 }
 
 /** The document as markdown, ready to be written to its file. */

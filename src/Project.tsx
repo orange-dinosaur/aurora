@@ -828,6 +828,8 @@ export default function Project({
 							active?.kind === "document" &&
 							isSubject(active.document.trail)
 						}
+						root={root}
+						changed={listing + written}
 						tab={preferences.rightSidebarTab}
 						onTab={(tab) =>
 							onPreferences({

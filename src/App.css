@@ -661,6 +661,45 @@ body,
 	color: var(--text-dim);
 }
 
+/* The label, and the x on a field the writer added. */
+.field__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	min-height: 18px;
+}
+
+.field__remove {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.field__remove:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.field__remove:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+.field__remove svg {
+	width: 13px;
+	height: 13px;
+}
+
 /* Under the label, for a rule the writer would otherwise have to guess. */
 .field__hint {
 	margin-top: -0.125rem;
@@ -748,6 +787,45 @@ body,
 .chip__remove svg {
 	width: 12px;
 	height: 12px;
+}
+
+/* The names already used elsewhere in the project, under the Add field box. In
+   the layout rather than floating over it: it is the last thing in the panel,
+   so there is nothing below for it to cover. */
+.suggestions {
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0.125rem;
+	list-style: none;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+
+.suggestion {
+	display: block;
+	width: 100%;
+	padding: 0.1875rem 0.375rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	text-transform: none;
+	text-align: left;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.suggestion:hover {
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.suggestion:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
 }
 
 .sidebar__list {

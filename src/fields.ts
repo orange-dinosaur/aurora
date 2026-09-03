@@ -5,9 +5,17 @@
 // disk itself.
 
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { parse, serialize, type Fields, type Value } from "./frontmatter";
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	fieldNames,
+	parse,
+	serialize,
+	type Fields,
+	type Value,
+} from "./frontmatter";
 import { $frontMatter, $setFrontMatter } from "./markdown";
+import type { DocumentText } from "./types";
 
 /** Setting a field, or dropping it when the value is null. */
 export type SetField = (key: string, value: Value | null) => void;
@@ -75,4 +83,42 @@ export function useFields(): FieldsHandle {
 		() => ({ fields: parse(block), setField }),
 		[block, setField],
 	);
+}
+
+/**
+ * The field names already used somewhere in the project, for the Add field box
+ * to suggest.
+ *
+ * Reading them opens every file, so it happens when the box is asked for rather
+ * than when the panel appears, and the answer is kept until something reaches
+ * disk. Failing quietly is deliberate: a suggestion is a convenience, and the
+ * writer can always type the name out.
+ */
+export function useFieldNames(
+	root: string,
+	changed: number,
+): { names: string[]; ask: () => void } {
+	const [names, setNames] = useState<string[]>([]);
+	const read = useRef(-1);
+
+	const ask = useCallback(() => {
+		if (read.current === changed) {
+			return;
+		}
+		read.current = changed;
+
+		void invoke<DocumentText[]>("read_all_documents", { root })
+			.then((documents) =>
+				setNames(
+					fieldNames(
+						documents.flatMap(({ text }) =>
+							text === null ? [] : [text],
+						),
+					),
+				),
+			)
+			.catch(() => {});
+	}, [root, changed]);
+
+	return { names, ask };
 }

@@ -20,6 +20,9 @@ type Props = {
 	fields: FieldsHandle | null;
 	/** Whether what is open is a page about a person or a place. */
 	subject: boolean;
+	root: string;
+	/** Bumped whenever the project changes on disk. */
+	changed: number;
 	tab: RightSidebarTab;
 	onTab: (tab: RightSidebarTab) => void;
 	onClose: () => void;
@@ -28,6 +31,8 @@ type Props = {
 export default function RightSidebar({
 	fields,
 	subject,
+	root,
+	changed,
 	tab,
 	onTab,
 	onClose,
@@ -66,7 +71,12 @@ export default function RightSidebar({
 				) : tab === "synopsis" ? (
 					<Synopsis {...fields} />
 				) : (
-					<Info {...fields} subject={subject} />
+					<Info
+						{...fields}
+						subject={subject}
+						root={root}
+						changed={changed}
+					/>
 				)}
 			</div>
 		</aside>

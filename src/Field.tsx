@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import Icon from "./Icon";
 
 // The controls the panel is built from. A field's text is held here while it is
@@ -10,8 +10,11 @@ type BoxProps = {
 	label: string;
 	value: string;
 	placeholder: string;
+	/** One row makes it a single line rather than a box. */
 	rows: number;
 	onChange: (value: string) => void;
+	/** Given only for a field the writer added, which they can take away. */
+	onRemove?: () => void;
 };
 
 export function TextBox({
@@ -20,7 +23,9 @@ export function TextBox({
 	placeholder,
 	rows,
 	onChange,
+	onRemove,
 }: BoxProps) {
+	const id = useId();
 	const [draft, setDraft] = useState(value);
 	const [shown, setShown] = useState(value);
 
@@ -32,21 +37,49 @@ export function TextBox({
 		setDraft(value);
 	}
 
+	function typed(next: string) {
+		setDraft(next);
+		setShown(next);
+		onChange(next);
+	}
+
 	return (
-		<label className="field">
-			<span className="field__label">{label}</span>
-			<textarea
-				className="field__box"
-				rows={rows}
-				value={draft}
-				placeholder={placeholder}
-				onChange={(event) => {
-					setDraft(event.target.value);
-					setShown(event.target.value);
-					onChange(event.target.value);
-				}}
-			/>
-		</label>
+		<div className="field">
+			<div className="field__head">
+				<label className="field__label" htmlFor={id}>
+					{label}
+				</label>
+				{onRemove !== undefined && (
+					<button
+						type="button"
+						className="field__remove"
+						aria-label={`Remove the field ${label}`}
+						onClick={onRemove}
+					>
+						<Icon name="x" />
+					</button>
+				)}
+			</div>
+			{rows === 1 ? (
+				<input
+					id={id}
+					className="field__line"
+					type="text"
+					value={draft}
+					placeholder={placeholder}
+					onChange={(event) => typed(event.target.value)}
+				/>
+			) : (
+				<textarea
+					id={id}
+					className="field__box"
+					rows={rows}
+					value={draft}
+					placeholder={placeholder}
+					onChange={(event) => typed(event.target.value)}
+				/>
+			)}
+		</div>
 	);
 }
 
@@ -59,8 +92,10 @@ type ChipsProps = {
 	onChange: (values: string[]) => void;
 };
 
-/** A list of short values, entered one at a time rather than as a line of
-    commas the writer has to punctuate. */
+/**
+ * A list of short values, entered one at a time rather than as a line of commas
+ * the writer has to punctuate.
+ */
 export function Chips({
 	label,
 	hint,
@@ -130,6 +165,83 @@ export function Chips({
 				// other field that appears in place behaves.
 				onBlur={() => setDraft("")}
 			/>
+		</div>
+	);
+}
+
+type AddProps = {
+	/** Names used elsewhere in the project, minus the ones already here. */
+	names: string[];
+	/** Read those names, which is put off until the box is used. */
+	onAsk: () => void;
+	onAdd: (name: string) => void;
+};
+
+/** The box that gives a document a field of the writer's own. */
+export function AddField({ names, onAsk, onAdd }: AddProps) {
+	const [draft, setDraft] = useState("");
+	const [open, setOpen] = useState(false);
+
+	const wanted = draft.trim().toLowerCase();
+	const offered = names
+		.filter((name) => name.toLowerCase().includes(wanted))
+		.slice(0, 6);
+
+	function add(name: string) {
+		if (name.trim() !== "") {
+			onAdd(name.trim());
+		}
+		setDraft("");
+	}
+
+	return (
+		<div className="field">
+			<span className="field__label">Add field</span>
+			<input
+				className="field__line"
+				type="text"
+				value={draft}
+				placeholder="Field name"
+				aria-label="Add a field"
+				onFocus={() => {
+					setOpen(true);
+					onAsk();
+				}}
+				onChange={(event) => setDraft(event.target.value)}
+				onKeyDown={(event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						add(draft);
+					} else if (event.key === "Escape") {
+						setDraft("");
+					}
+				}}
+				onBlur={() => {
+					setOpen(false);
+					setDraft("");
+				}}
+			/>
+			{open && offered.length > 0 && (
+				<ul className="suggestions">
+					{offered.map((name) => (
+						<li key={name}>
+							<button
+								type="button"
+								className="suggestion"
+								// Mouse down rather than click: the blur that
+								// closes the list would otherwise happen first
+								// and take the button with it.
+								onMouseDown={(event) => {
+									event.preventDefault();
+									add(name);
+								}}
+							>
+								{name}
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
 		</div>
 	);
 }

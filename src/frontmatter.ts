@@ -11,6 +11,17 @@
 /** What one field holds: a line of text, or a list of them. */
 export type Value = string | string[];
 
+/**
+ * The block some note-taking apps fence off at the top of a file. Its fence is
+ * spelled the same as a scene break, so it is lifted off before anything else
+ * looks at the text. Rust matches the same shape in `document::body`, which is
+ * how the word count and the card excerpt skip it.
+ */
+const FRONT_MATTER = /^---\n[\s\S]*?\n---[ \t]*\n?/;
+
+/** The fields Aurora has controls of its own for. The rest are the writer's. */
+export const BUILT_IN = ["names", "tags", "synopsis", "remarks"];
+
 /** A document's fields, in the order its file lists them. */
 export type Fields = Map<string, Value>;
 
@@ -266,6 +277,38 @@ export function list(fields: Fields, key: string): string[] {
 	}
 
 	return value;
+}
+
+/** A file in two pieces: the block at its top, fences and all, and the prose. */
+export function split(text: string): { block: string; body: string } {
+	const found = FRONT_MATTER.exec(text);
+
+	return found === null
+		? { block: "", body: text }
+		: { block: found[0].trimEnd(), body: text.slice(found[0].length) };
+}
+
+/** The keys of the fields the writer added themselves, in the file's order. */
+export function custom(fields: Fields): string[] {
+	return [...fields.keys()].filter((key) => !BUILT_IN.includes(key));
+}
+
+/**
+ * Every field name used across a project's files, for the Add field box to
+ * suggest, so the same field ends up spelled the same way on every page.
+ */
+export function fieldNames(texts: string[]): string[] {
+	const names: string[] = [];
+
+	for (const file of texts) {
+		for (const key of custom(parse(split(file).block))) {
+			if (!names.includes(key)) {
+				names.push(key);
+			}
+		}
+	}
+
+	return names.sort((one, other) => one.localeCompare(other));
 }
 
 /** The fields a front matter block sets, fences and all. */

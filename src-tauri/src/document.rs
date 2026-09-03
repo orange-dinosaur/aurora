@@ -447,8 +447,8 @@ pub fn refresh(root: &Path) -> Result<Manifest> {
 
 /// A document's prose, with any front matter block lifted off the top. The
 /// fence is spelled the same as the one `FRONT_MATTER` matches in
-/// `src/markdown.ts`, which is the end that reads and writes the block; the two
-/// have to agree on where a document starts.
+/// `src/frontmatter.ts`, which is the end that reads and writes the block; the
+/// two have to agree on where a document starts.
 fn body(text: &str) -> &str {
 	let Some(rest) = text.strip_prefix("---\n") else {
 		return text;
