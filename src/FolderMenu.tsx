@@ -12,6 +12,7 @@ type Props = {
 	moving: Moving;
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
+	onDelete: () => void;
 };
 
 export default function FolderMenu({ label, ...rest }: Props) {
@@ -29,6 +30,7 @@ function Actions({
 	moving,
 	onMove,
 	onRename,
+	onDelete,
 }: Omit<Props, "label"> & { close: () => void }) {
 	const [choosing, setChoosing] = useState(false);
 
@@ -56,6 +58,15 @@ function Actions({
 				}}
 			>
 				Rename
+			</MenuItem>
+			<MenuItem
+				danger
+				onSelect={() => {
+					close();
+					onDelete();
+				}}
+			>
+				Delete
 			</MenuItem>
 		</>
 	);

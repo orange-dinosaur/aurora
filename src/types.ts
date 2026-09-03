@@ -120,6 +120,11 @@ export type TrashEntry = {
 	title: string;
 	/** RFC 3339, or null when the name carries no moment Aurora recognises. */
 	deleted: string | null;
+	/**
+	 * null when the entry is a document on its own. When it is a whole folder,
+	 * how many documents went into the trash inside it.
+	 */
+	inside: number | null;
 };
 
 /** `store::Preferences` — how the writer likes to write, kept in `store.json`

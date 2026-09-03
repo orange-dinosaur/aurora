@@ -905,6 +905,9 @@ pub struct TrashEntry {
 	/// moment Aurora recognises.
 	#[serde(with = "time::serde::rfc3339::option")]
 	pub deleted: Option<OffsetDateTime>,
+	/// Nothing when the entry is a document on its own. When it is a whole
+	/// folder, how many documents went into the trash inside it.
+	pub inside: Option<u32>,
 }
 
 /// The moment of a deletion, as the prefix on its file in the trash: sortable,
@@ -921,41 +924,60 @@ fn stamp(at: OffsetDateTime) -> String {
 	)
 }
 
-/// Moves a document into the project's trash and drops it from the manifest.
-/// The file keeps its name behind the moment it was deleted, so deleting two
-/// documents called the same thing does not lose the first.
+/// Moves a node into the project's trash and drops it from the manifest.
+///
+/// **The trash mirrors the project.** What is deleted lands at the path it sat
+/// at, with the moment of the deletion in front of its own name. That is the
+/// whole record of where it came from: nothing is written down beside it, and a
+/// writer looking in `.trash` sees the shape they deleted from. A folder goes
+/// in as one directory, so what was inside it stays inside it.
+///
+/// The name keeps its stamp so that deleting two things called the same thing
+/// does not lose the first.
 fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
 	let mut manifest = read_manifest(root)?;
-	let from = resolve(&manifest, root, id)?;
 
-	// The trash is laid out in sections, so a document deleted from deeper in
-	// the tree lands in the one it belongs to, under its own file name.
-	let path = tree::path(&manifest.nodes, id).ok_or(Error::UnknownDocument)?;
-	let (section, rest) = path.split_once('/').ok_or(Error::BadDocumentPath)?;
-	let file_name = rest.rsplit('/').next().unwrap_or(rest);
+	let folder = match tree::find(&manifest.nodes, id) {
+		Some(Node::Folder { .. }) => true,
+		Some(Node::Document { .. }) => false,
+		None => return Err(Error::UnknownDocument),
+	};
+	// A section is the project's shape rather than something in it.
+	if tree::parent(&manifest.nodes, id).is_none() {
+		return Err(Error::SectionFixed);
+	}
 
-	let folder = root.join(TRASH_DIR).join(section);
-	fs::create_dir_all(&folder)?;
+	let was = tree::path(&manifest.nodes, id).ok_or(Error::UnknownDocument)?;
+	let (inside, name) = was.rsplit_once('/').ok_or(Error::BadDocumentPath)?;
+	let from = if folder {
+		folder_path(&manifest, root, &was)?
+	} else {
+		resolve(&manifest, root, id)?
+	};
+
+	// The folders above it are made in the trash as they are needed, so the
+	// mirror only ever holds the paths something was actually deleted from.
+	let into = root.join(TRASH_DIR).join(inside);
+	fs::create_dir_all(&into)?;
 	// The trash is an ordinary folder a writer can replace with a symlink, so
 	// where it actually leads is what decides whether this move stays inside
 	// the project.
-	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
+	if !into.canonicalize()?.starts_with(root.canonicalize()?) {
 		return Err(Error::OutsideProject);
 	}
 
 	let at = stamp(at);
-	let mut to = folder.join(format!("{at} {file_name}"));
+	let mut to = into.join(format!("{at} {name}"));
 	// Two deletions within the same second would otherwise write over each
 	// other.
 	let mut again = 1;
 	while to.exists() {
-		to = folder.join(format!("{at}-{again} {file_name}"));
+		to = into.join(format!("{at}-{again} {name}"));
 		again += 1;
 	}
 
 	// The file moves first. If writing the manifest then fails, the next
-	// refresh drops the document anyway, since its file is no longer in the
-	// section.
+	// refresh drops the node anyway, since it is no longer in the section.
 	fs::rename(&from, &to)?;
 
 	tree::remove(&mut manifest.nodes, id);
@@ -967,6 +989,26 @@ fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
 pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	if !matches!(tree::find(&manifest.nodes, id), Some(Node::Document { .. })) {
+		return Err(Error::UnknownDocument);
+	}
+	trash(&root, id, OffsetDateTime::now_utc())
+}
+
+/// Deletes a folder and everything in it. The subtree goes into the trash as
+/// one directory and comes back out of it as one.
+#[tauri::command]
+pub fn delete_folder(root: PathBuf, id: Uuid) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	if !matches!(tree::find(&manifest.nodes, id), Some(Node::Folder { .. })) {
+		return Err(Error::UnknownFolder);
 	}
 	trash(&root, id, OffsetDateTime::now_utc())
 }
@@ -1110,6 +1152,83 @@ fn unstamp(name: &str) -> Option<(OffsetDateTime, &str)> {
 	Some((at, was))
 }
 
+/// How many documents a trashed folder holds, at any depth. What the writer
+/// wants to know before putting it back is how much of their work is in there.
+fn documents_inside(dir: &Path) -> Result<u32> {
+	let mut total = 0;
+	for entry in fs::read_dir(dir)? {
+		let entry = entry?;
+		let name = entry.file_name();
+		let Some(name) = name.to_str() else {
+			continue;
+		};
+		let kind = entry.file_type()?;
+		if kind.is_dir() {
+			total += documents_inside(&entry.path())?;
+		} else if kind.is_file() && is_markdown(name) {
+			total += 1;
+		}
+	}
+	Ok(total)
+}
+
+/// One level of the trash, and every level under it that a deletion made on its
+/// way in. A stamped name is what was actually deleted, so it becomes an entry
+/// and the walk does not go inside it: a chapter of fourteen scenes is one row,
+/// not fifteen.
+fn gather_trash(dir: &Path, at: &str, section: &str, found: &mut Vec<TrashEntry>) -> Result<()> {
+	let entries = match fs::read_dir(dir) {
+		Ok(entries) => entries,
+		Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+		Err(e) => return Err(e.into()),
+	};
+
+	for entry in entries {
+		let entry = entry?;
+		let name = entry.file_name();
+		let Some(name) = name.to_str() else {
+			continue;
+		};
+		if name.starts_with('.') {
+			continue;
+		}
+
+		// A symlink is neither a document nor a folder, here as anywhere else.
+		let kind = entry.file_type()?;
+		let directory = kind.is_dir();
+		if !directory && !(kind.is_file() && is_markdown(name)) {
+			continue;
+		}
+
+		let path = format!("{at}/{name}");
+		match unstamp(name) {
+			Some((deleted, was)) => found.push(TrashEntry {
+				folder: section.to_owned(),
+				title: without_extension(was).to_owned(),
+				deleted: Some(deleted),
+				inside: directory
+					.then(|| documents_inside(&entry.path()))
+					.transpose()?,
+				path,
+			}),
+			// An unstamped directory is one the mirror needed, so what was
+			// deleted is further down.
+			None if directory => gather_trash(&entry.path(), &path, section, found)?,
+			// A file somebody put there by hand is still shown, so it can at
+			// least be got rid of.
+			None => found.push(TrashEntry {
+				folder: section.to_owned(),
+				title: without_extension(name).to_owned(),
+				deleted: None,
+				inside: None,
+				path,
+			}),
+		}
+	}
+
+	Ok(())
+}
+
 /// Everything in the project's trash, most recently deleted first.
 #[tauri::command]
 pub fn list_trash(root: PathBuf) -> Result<Vec<TrashEntry>> {
@@ -1118,41 +1237,22 @@ pub fn list_trash(root: PathBuf) -> Result<Vec<TrashEntry>> {
 	}
 
 	let manifest = read_manifest(&root)?;
-	// The trash is laid out in sections exactly as the project is, so the same
-	// scan reads it.
-	let mut entries: Vec<TrashEntry> =
-		tree::documents(&scan(&root.join(TRASH_DIR), &manifest.folders())?)
-			.iter()
-			.map(|document| {
-				let path = &document.path;
-				let file = path.split_once('/').map_or(path.as_str(), |(_, file)| file);
-				let (deleted, was) = match unstamp(file) {
-					Some((at, was)) => (Some(at), was),
-					// A file somebody put there by hand is still shown, so it can
-					// at least be got rid of.
-					None => (None, file),
-				};
-				TrashEntry {
-					path: path.clone(),
-					folder: section_of(path).unwrap_or_default().to_owned(),
-					title: Path::new(was)
-						.file_stem()
-						.and_then(|stem| stem.to_str())
-						.unwrap_or(was)
-						.to_owned(),
-					deleted,
-				}
-			})
-			.collect();
+	let trash = root.join(TRASH_DIR);
+	let mut entries = Vec::new();
+	for section in manifest.folders() {
+		gather_trash(&trash.join(&section), &section, &section, &mut entries)?;
+	}
 
 	// Newest first, with anything undated behind the rest.
 	entries.sort_by(|a, b| b.deleted.cmp(&a.deleted).then_with(|| a.path.cmp(&b.path)));
 	Ok(entries)
 }
 
-/// A file in the trash, once the project is satisfied it is really in there.
+/// Something in the trash, once the project is satisfied it is really in there.
+/// A trashed folder is a directory and a trashed document is a file, so the
+/// path is walked without holding its last part to the `.md` rule.
 fn trash_entry(manifest: &Manifest, root: &Path, path: &str) -> Result<PathBuf> {
-	let file = document_path(manifest, &root.join(TRASH_DIR), path)?;
+	let file = folder_path(manifest, &root.join(TRASH_DIR), path)?;
 	if !file.exists() {
 		return Err(Error::DocumentMissing);
 	}
@@ -1163,10 +1263,33 @@ fn trash_entry(manifest: &Manifest, root: &Path, path: &str) -> Result<PathBuf> 
 	Ok(file)
 }
 
-/// Puts a deleted document back in the section it came from, under the name it
-/// had. A document already using that name is not written over.
+/// The deepest of the folders on this path that the project still has. The
+/// section at its head is the last resort, and something the writer deleted
+/// three folders down comes back as near to where it was as is left.
+fn nearest_folder(manifest: &Manifest, path: &str) -> String {
+	let parts: Vec<&str> = path.split('/').collect();
+
+	for depth in (1..=parts.len()).rev() {
+		let above = parts[..depth].join("/");
+		let there = tree::walk(&manifest.nodes).any(|node| {
+			matches!(node, Node::Folder { .. })
+				&& tree::path(&manifest.nodes, node.id()).as_deref() == Some(above.as_str())
+		});
+		if there {
+			return above;
+		}
+	}
+
+	parts[0].to_owned()
+}
+
+/// Puts a deleted document or folder back where it came from, under the name it
+/// had. The trash mirrors the project, so where it came from is the path it is
+/// sitting at with the stamp taken off. A folder it was inside may have been
+/// deleted too, and then it goes to the nearest one still standing rather than
+/// failing. Anything already using that name is not written over.
 #[tauri::command]
-pub fn restore_from_trash(root: PathBuf, path: String) -> Result<DocumentView> {
+pub fn restore_from_trash(root: PathBuf, path: String) -> Result<()> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
@@ -1174,13 +1297,22 @@ pub fn restore_from_trash(root: PathBuf, path: String) -> Result<DocumentView> {
 	let manifest = read_manifest(&root)?;
 	let from = trash_entry(&manifest, &root, &path)?;
 
-	let (section, file) = path.split_once('/').ok_or(Error::BadDocumentPath)?;
+	let (inside, file) = path.rsplit_once('/').ok_or(Error::BadDocumentPath)?;
 	let was = unstamp(file).map_or(file, |(_, was)| was);
-	let back = format!("{section}/{was}");
+	let back = format!("{}/{was}", nearest_folder(&manifest, inside));
 
-	let to = document_path(&manifest, &root, &back)?;
+	let directory = from.is_dir();
+	let to = if directory {
+		folder_path(&manifest, &root, &back)?
+	} else {
+		document_path(&manifest, &root, &back)?
+	};
 	if to.exists() {
-		return Err(Error::DocumentExists);
+		return Err(if directory {
+			Error::AlreadyExists
+		} else {
+			Error::DocumentExists
+		});
 	}
 
 	let folder = to.parent().ok_or(Error::BadDocumentPath)?;
@@ -1191,15 +1323,15 @@ pub fn restore_from_trash(root: PathBuf, path: String) -> Result<DocumentView> {
 
 	fs::rename(&from, &to)?;
 
-	refresh(&root)?
-		.documents()
-		.iter()
-		.find(|d| d.path == back)
-		.map(DocumentView::from)
-		.ok_or(Error::UnknownDocument)
+	// What came back has no ids any more, so the manifest adopts it the way it
+	// adopts anything that appears in a section: at the end of the folder it
+	// landed in, and inside a restored folder in the order the disk lists it.
+	refresh(&root)?;
+	Ok(())
 }
 
-/// Throws one document in the trash away for good.
+/// Throws one thing in the trash away for good, a folder with everything that
+/// went into it.
 #[tauri::command]
 pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
 	if !root.is_absolute() {
@@ -1208,7 +1340,12 @@ pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
 
 	let manifest = read_manifest(&root)?;
 	let file = trash_entry(&manifest, &root, &path)?;
-	Ok(fs::remove_file(file)?)
+	if file.is_dir() {
+		fs::remove_dir_all(file)?;
+	} else {
+		fs::remove_file(file)?;
+	}
+	Ok(())
 }
 
 /// What a folder holds, one card at a time, in the order the folder keeps
@@ -3474,10 +3611,10 @@ mod tests {
 		let root = with_chapter_one_deleted(&parent);
 		let entry = list_trash(root.clone()).unwrap().remove(0);
 
-		let back = restore_from_trash(root.clone(), entry.path).unwrap();
+		restore_from_trash(root.clone(), entry.path).unwrap();
 
+		let back = first_document(&root);
 		assert_eq!(back.path, "Manuscript/Scene 1.md");
-		assert_eq!(back.title, "Scene 1");
 		assert_eq!(
 			read_document(root.clone(), back.id).unwrap(),
 			"Sing to me of the man, Muse."
@@ -3505,9 +3642,10 @@ mod tests {
 		fs::remove_dir_all(root.join("Manuscript")).unwrap();
 		let entry = list_trash(root.clone()).unwrap().remove(0);
 
-		let back = restore_from_trash(root.clone(), entry.path).unwrap();
+		restore_from_trash(root.clone(), entry.path).unwrap();
 
-		assert_eq!(back.folder, "Manuscript");
+		let back = first_document(&root);
+		assert_eq!(back.path, "Manuscript/Scene 1.md");
 		assert_eq!(
 			read_document(root, back.id).unwrap(),
 			"Sing to me of the man, Muse."
@@ -3524,6 +3662,183 @@ mod tests {
 
 		assert!(list_trash(root.clone()).unwrap().is_empty());
 		assert_eq!(scan_paths(&root).len(), 4);
+	}
+
+	#[test]
+	fn a_deleted_folder_is_one_entry_saying_what_is_inside_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+		create_document(root.clone(), chapter, "Storm".to_owned()).unwrap();
+
+		trash(&root, chapter, fixed_time()).unwrap();
+
+		let listed = list_trash(root.clone()).unwrap();
+		assert_eq!(listed.len(), 1, "a chapter of scenes is one row");
+		assert_eq!(listed[0].title, "Chapter 2");
+		assert_eq!(listed[0].folder, "Manuscript");
+		assert_eq!(listed[0].inside, Some(2));
+		assert!(listed[0].deleted.is_some());
+		assert!(
+			tree::find(&read_manifest(&root).unwrap().nodes, chapter).is_none(),
+			"and one node left the manifest"
+		);
+	}
+
+	#[test]
+	fn the_trash_mirrors_the_project_it_deleted_from() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		with_a_part(&root);
+		let scene = document_id(&root, "Manuscript/Part One/Chapter 2/Landfall.md");
+
+		trash(&root, scene, fixed_time()).unwrap();
+
+		let listed = list_trash(root.clone()).unwrap();
+		assert_eq!(
+			listed[0].path, "Manuscript/Part One/Chapter 2/20231114-221320 Landfall.md",
+			"it sits at the path it was deleted from"
+		);
+		assert_eq!(listed[0].title, "Landfall");
+		assert_eq!(listed[0].inside, None);
+		assert!(
+			!root
+				.join("Manuscript/Part One/Chapter 2/Landfall.md")
+				.exists()
+		);
+	}
+
+	#[test]
+	fn putting_a_folder_back_returns_the_whole_of_it_where_it_was() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+		create_document(root.clone(), chapter, "Storm".to_owned()).unwrap();
+		let landfall = document_id(&root, "Manuscript/Part One/Chapter 2/Landfall.md");
+		write_document(root.clone(), landfall, "The ship came in.".to_owned()).unwrap();
+		trash(&root, chapter, fixed_time()).unwrap();
+		let entry = list_trash(root.clone()).unwrap().remove(0);
+
+		restore_from_trash(root.clone(), entry.path).unwrap();
+
+		let manifest = read_manifest(&root).unwrap();
+		assert_eq!(
+			paths_of(&manifest)
+				.iter()
+				.filter(|path| path.contains("Chapter 2"))
+				.collect::<Vec<_>>(),
+			[
+				"Manuscript/Part One/Chapter 2/Landfall.md",
+				"Manuscript/Part One/Chapter 2/Storm.md"
+			],
+			"both scenes came back inside the chapter, inside the part"
+		);
+		assert_eq!(
+			read_document(
+				root.clone(),
+				document_id(&root, "Manuscript/Part One/Chapter 2/Landfall.md")
+			)
+			.unwrap(),
+			"The ship came in."
+		);
+		assert!(
+			tree::children(&manifest.nodes, part).unwrap().len() == 2,
+			"the part holds the chapter and its own loose scene"
+		);
+		assert!(list_trash(root).unwrap().is_empty(), "it left the trash");
+	}
+
+	#[test]
+	fn a_folder_whose_parent_has_gone_too_comes_back_to_the_nearest_one_left() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+
+		// The chapter first, then the part it was in.
+		trash(&root, chapter, fixed_time()).unwrap();
+		trash(&root, part, fixed_time()).unwrap();
+		let entry = list_trash(root.clone())
+			.unwrap()
+			.into_iter()
+			.find(|e| e.title == "Chapter 2")
+			.expect("the chapter is in the trash on its own");
+
+		restore_from_trash(root.clone(), entry.path).unwrap();
+
+		let manifest = read_manifest(&root).unwrap();
+		assert_eq!(
+			tree::path(&manifest.nodes, folder_id(&root, "Manuscript/Chapter 2")).as_deref(),
+			Some("Manuscript/Chapter 2"),
+			"the part is gone, so the Manuscript takes it"
+		);
+		assert!(root.join("Manuscript/Chapter 2/Landfall.md").is_file());
+	}
+
+	#[test]
+	fn purging_a_folder_takes_everything_that_went_in_with_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		trash(&root, part, fixed_time()).unwrap();
+		let entry = list_trash(root.clone()).unwrap().remove(0);
+
+		purge_trash_entry(root.clone(), entry.path).unwrap();
+
+		assert!(list_trash(root.clone()).unwrap().is_empty());
+		assert!(!root.join(TRASH_DIR).join("Manuscript/Part One").exists());
+	}
+
+	#[test]
+	fn a_section_cannot_be_deleted() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = delete_folder(root.clone(), section_id(&root, "Notes")).unwrap_err();
+
+		assert!(matches!(err, Error::SectionFixed));
+		assert!(root.join("Notes").is_dir());
+	}
+
+	#[test]
+	fn each_delete_command_refuses_the_other_kind() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = with_a_part(&root);
+		let scene = first_document(&root).id;
+
+		assert!(matches!(
+			delete_document(root.clone(), part).unwrap_err(),
+			Error::UnknownDocument
+		));
+		assert!(matches!(
+			delete_folder(root.clone(), scene).unwrap_err(),
+			Error::UnknownFolder
+		));
+		assert!(root.join("Manuscript/Part One").is_dir());
+		assert!(root.join("Manuscript/Scene 1.md").is_file());
+	}
+
+	#[test]
+	fn two_folders_of_one_name_deleted_together_both_survive() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let notes = section_id(&root, "Notes");
+		let first = create_folder(root.clone(), notes, "Research".to_owned(), None)
+			.unwrap()
+			.id();
+
+		trash(&root, first, fixed_time()).unwrap();
+		let again = create_folder(root.clone(), notes, "Research".to_owned(), None)
+			.unwrap()
+			.id();
+		trash(&root, again, fixed_time()).unwrap();
+
+		let listed = list_trash(root).unwrap();
+		assert_eq!(listed.len(), 2, "the second did not write over the first");
+		assert!(listed.iter().all(|entry| entry.title == "Research"));
 	}
 
 	#[test]

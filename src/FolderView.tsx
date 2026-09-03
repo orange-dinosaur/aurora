@@ -58,9 +58,10 @@ type Props = {
 	onChanged: () => void;
 	/** The same, plus the paths of open documents may have changed under them. */
 	onMoved: () => void;
-	// The project view owns this one: it has to write down what the writer
-	// last typed before the file moves, and close the tab afterwards.
+	// The project view owns these two: it has to write down what the writer
+	// last typed before the files move, and close the tabs afterwards.
 	onDelete: (id: string) => Promise<void>;
+	onDeleteFolder: (id: string) => Promise<void>;
 };
 
 export default function FolderView({
@@ -75,6 +76,7 @@ export default function FolderView({
 	onChanged,
 	onMoved,
 	onDelete,
+	onDeleteFolder,
 }: Props) {
 	const [cards, setCards] = useState<OverviewCard[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
@@ -153,9 +155,9 @@ export default function FolderView({
 		}
 	}
 
-	async function remove(id: string) {
+	async function remove(id: string, what: Making["what"]) {
 		try {
-			await onDelete(id);
+			await (what === "folder" ? onDeleteFolder(id) : onDelete(id));
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
@@ -263,6 +265,9 @@ export default function FolderView({
 											id: card.id,
 										})
 									}
+									onDelete={() =>
+										void remove(card.id, "folder")
+									}
 								/>
 							</li>
 						);
@@ -355,7 +360,9 @@ export default function FolderView({
 										id: document.id,
 									})
 								}
-								onDelete={() => void remove(document.id)}
+								onDelete={() =>
+									void remove(document.id, "document")
+								}
 							/>
 						</li>
 					);

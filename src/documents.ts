@@ -79,20 +79,29 @@ export function deleteDocument(root: string, id: string): Promise<void> {
 	return invoke<void>("delete_document", { root, id });
 }
 
+/**
+ * Moves a folder and everything in it into the trash, as one directory. The
+ * caller writes down whatever is open inside it first: the files move here.
+ */
+export function deleteFolder(root: string, id: string): Promise<void> {
+	return invoke<void>("delete_folder", { root, id });
+}
+
 /** Everything in the project's trash, most recently deleted first. */
 export function listTrash(root: string): Promise<TrashEntry[]> {
 	return invoke<TrashEntry[]>("list_trash", { root });
 }
 
-/** Puts a deleted document back where it came from, under the name it had. */
-export function restoreFromTrash(
-	root: string,
-	path: string,
-): Promise<ProjectDocument> {
-	return invoke<ProjectDocument>("restore_from_trash", { root, path });
+/**
+ * Puts a deleted document or folder back where it came from, under the name it
+ * had. When a folder it was inside has gone too, it lands in the nearest one
+ * still standing.
+ */
+export function restoreFromTrash(root: string, path: string): Promise<void> {
+	return invoke<void>("restore_from_trash", { root, path });
 }
 
-/** Throws one document in the trash away for good. */
+/** Throws one thing in the trash away for good, a folder and all with it. */
 export function purgeTrashEntry(root: string, path: string): Promise<void> {
 	return invoke<void>("purge_trash_entry", { root, path });
 }

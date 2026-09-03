@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TrashEntry } from "./types";
 import { listTrash, purgeTrashEntry, restoreFromTrash } from "./documents";
+import { trashed } from "./cards";
 import { when } from "./dates";
 import { failure } from "./errors";
 
@@ -78,9 +79,17 @@ export default function Trash({ root, reload, onChanged }: Props) {
 									{entry.title}
 								</span>
 								<span className="trashed__meta">
-									{entry.deleted === null
-										? entry.folder
-										: `${entry.folder} · deleted ${when(entry.deleted)}`}
+									{[
+										entry.folder,
+										entry.inside === null
+											? null
+											: trashed(entry.inside),
+										entry.deleted === null
+											? null
+											: `deleted ${when(entry.deleted)}`,
+									]
+										.filter((part) => part !== null)
+										.join(" · ")}
 								</span>
 							</span>
 

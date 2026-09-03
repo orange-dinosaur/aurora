@@ -16,8 +16,8 @@ import type {
 	TreeNode,
 } from "./types";
 import type { FolderRef } from "./tree";
-import { documentsOf } from "./tree";
-import { deleteDocument } from "./documents";
+import { documentsOf, folderOf, rows } from "./tree";
+import { deleteDocument, deleteFolder } from "./documents";
 import type { Seed } from "./find";
 import { failure } from "./errors";
 import { pressed, SEARCH } from "./formatting";
@@ -543,7 +543,9 @@ export default function Project({
 	// first so the copy in the trash is the one they were looking at, then the
 	// file moves, then the tab goes. A failure is thrown back to the surface,
 	// which has somewhere to show it.
-	async function remove(id: string) {
+	// Writes a document's tab down before its file is taken away, and hands
+	// back the tab so the caller can close it once the file has gone.
+	async function settle(id: string) {
 		const tab = documentTab(id);
 		stopTimer(id);
 
@@ -562,10 +564,47 @@ export default function Project({
 			});
 		}
 
+		return tab;
+	}
+
+	async function remove(id: string) {
+		const tab = await settle(id);
 		await deleteDocument(root, id);
 
 		if (tab !== undefined) {
 			dropTab(tab.key);
+		}
+		setListing((version) => version + 1);
+	}
+
+	// A folder goes into the trash whole, so everything open inside it is
+	// written down first and closed afterwards: its own overview, the overviews
+	// of the folders under it, and every scene in any of them.
+	async function removeFolder(id: string) {
+		const tree = await invoke<TreeNode[]>("document_tree", { root });
+		const folder = folderOf(tree, id);
+		const inside = folder === null ? [] : rows(folder.children, id);
+
+		const open = await Promise.all(
+			inside.flatMap((row) =>
+				row.kind === "document" ? [settle(row.document.id)] : [],
+			),
+		);
+		await deleteFolder(root, id);
+
+		const gone = new Set([
+			id,
+			...inside.flatMap((row) => (row.kind === "folder" ? [row.id] : [])),
+		]);
+		setTabs((tabs) =>
+			tabs.filter(
+				(tab) => !(tab.kind === "folder" && gone.has(tab.folder.id)),
+			),
+		);
+		for (const tab of open) {
+			if (tab !== undefined) {
+				dropTab(tab.key);
+			}
 		}
 		setListing((version) => version + 1);
 	}
@@ -660,6 +699,7 @@ export default function Project({
 					onChanged={changed}
 					onMoved={() => void moved()}
 					onDelete={remove}
+					onDeleteFolder={removeFolder}
 					onClose={onClose}
 				/>
 				<div className="project__main">
@@ -741,6 +781,7 @@ export default function Project({
 									onChanged={changed}
 									onMoved={() => void moved()}
 									onDelete={remove}
+									onDeleteFolder={removeFolder}
 								/>
 							</div>
 						) : active.kind === "trash" ? (

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { counted, described, summarised } from "./cards";
+import { counted, described, summarised, trashed } from "./cards";
 import type { OverviewCard } from "./types";
 
 function folder(name: string, kind: "part" | "chapter" | null, held: number) {
@@ -72,5 +72,19 @@ describe("the line under a folder's name", () => {
 				document("Epilogue", 120),
 			]),
 		).toBe("1 document · 120 words");
+	});
+});
+
+describe("what a folder in the trash took with it", () => {
+	test("an empty folder still says it is one", () => {
+		expect(trashed(0)).toBe("an empty folder");
+	});
+
+	test("one document is not one documents", () => {
+		expect(trashed(1)).toBe("a folder of 1 document");
+	});
+
+	test("a chapter of fourteen scenes counts every one of them", () => {
+		expect(trashed(14)).toBe("a folder of 14 documents");
 	});
 });

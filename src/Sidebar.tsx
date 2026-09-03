@@ -91,9 +91,10 @@ type Props = {
 	onChanged: () => void;
 	/** The same, plus the paths of open documents may have changed under them. */
 	onMoved: () => void;
-	// The project view owns this one: it has to write down what the writer
-	// last typed before the file moves, and close the tab afterwards.
+	// The project view owns these two: it has to write down what the writer
+	// last typed before the files move, and close the tabs afterwards.
 	onDelete: (id: string) => Promise<void>;
+	onDeleteFolder: (id: string) => Promise<void>;
 	onClose: () => void;
 };
 
@@ -114,6 +115,7 @@ export default function Sidebar({
 	onChanged,
 	onMoved,
 	onDelete,
+	onDeleteFolder,
 	onClose,
 }: Props) {
 	const [tree, setTree] = useState<TreeNode[]>([]);
@@ -149,9 +151,9 @@ export default function Sidebar({
 		}
 	}
 
-	async function remove(id: string) {
+	async function remove(id: string, what: Making["what"]) {
 		try {
-			await onDelete(id);
+			await (what === "folder" ? onDeleteFolder(id) : onDelete(id));
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
@@ -423,6 +425,12 @@ export default function Sidebar({
 																				},
 																			)
 																		}
+																		onDelete={() =>
+																			void remove(
+																				row.id,
+																				"folder",
+																			)
+																		}
 																	/>
 																</div>
 															</li>
@@ -563,7 +571,10 @@ export default function Sidebar({
 															})
 														}
 														onDelete={() =>
-															void remove(doc.id)
+															void remove(
+																doc.id,
+																"document",
+															)
 														}
 													/>
 												</li>

@@ -3,7 +3,12 @@
 // it sits, keeps the drawing in one place and the walking here, where it can
 // be tested without a screen.
 
-import type { FolderKind, ProjectDocument, TreeNode } from "./types";
+import type {
+	FolderKind,
+	FolderNode,
+	ProjectDocument,
+	TreeNode,
+} from "./types";
 import { MANUSCRIPT, mayHold } from "./kinds";
 
 /**
@@ -88,6 +93,23 @@ export function documentsIn(nodes: TreeNode[]): number {
 /** The project's sections: the folders at the top of the tree. */
 export function sections(nodes: TreeNode[]) {
 	return nodes.filter((node) => node.node === "folder");
+}
+
+/** The folder with this id, and everything under it. */
+export function folderOf(nodes: TreeNode[], id: string): FolderNode | null {
+	for (const node of nodes) {
+		if (node.node !== "folder") {
+			continue;
+		}
+		if (node.id === id) {
+			return node;
+		}
+		const found = folderOf(node.children, id);
+		if (found !== null) {
+			return found;
+		}
+	}
+	return null;
 }
 
 /** Every document in the tree, wherever it sits. */

@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { destinations, documentsIn, documentsOf, rows, sections } from "./tree";
+import {
+	destinations,
+	documentsIn,
+	documentsOf,
+	folderOf,
+	rows,
+	sections,
+} from "./tree";
 import type { Moving } from "./tree";
 import type { FolderKind, TreeNode } from "./types";
 
@@ -288,5 +295,31 @@ describe("every document in the tree", () => {
 			"Manuscript/Part One/Landfall.md",
 			"Notes/Ideas.md",
 		]);
+	});
+});
+
+describe("finding a folder to look inside", () => {
+	test("it comes back with everything under it, at any depth", () => {
+		const tree = [
+			folder("Manuscript", [
+				folder("Part One", [
+					folder("Chapter 2", [
+						document("Manuscript/Part One/Chapter 2/Scene.md"),
+					]),
+				]),
+			]),
+		];
+
+		const found = folderOf(tree, "id-Chapter 2");
+
+		expect(found?.name).toBe("Chapter 2");
+		expect(documentsOf(found?.children ?? [])).toHaveLength(1);
+	});
+
+	test("an id the tree does not have, or a document's, is nothing", () => {
+		const tree = [folder("Notes", [document("Notes/Ideas.md")])];
+
+		expect(folderOf(tree, "id-Notes/Ideas.md")).toBeNull();
+		expect(folderOf(tree, "id-nowhere")).toBeNull();
 	});
 });

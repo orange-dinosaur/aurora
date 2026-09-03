@@ -30,6 +30,7 @@ pub fn run() {
 			document::rename_folder,
 			document::set_document_target,
 			document::delete_document,
+			document::delete_folder,
 			document::list_trash,
 			document::restore_from_trash,
 			document::purge_trash_entry,
