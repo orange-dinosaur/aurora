@@ -46,10 +46,11 @@ type Props = {
 	// answer that could disagree with the tab strip.
 	unsaved: string[];
 	selectedId: string | null;
+	/** The id of the folder whose overview is showing, if one is. */
 	selectedFolder: string | null;
 	selectedTrash: boolean;
 	onSelect: (document: ProjectDocument) => void;
-	onOpenSection: (folder: string) => void;
+	onOpenFolder: (id: string, name: string) => void;
 	onOpenTrash: () => void;
 	onCreated: (document: ProjectDocument) => void;
 	onRenamed: (document: ProjectDocument) => void;
@@ -69,7 +70,7 @@ export default function Sidebar({
 	selectedFolder,
 	selectedTrash,
 	onSelect,
-	onOpenSection,
+	onOpenFolder,
 	onOpenTrash,
 	onCreated,
 	onRenamed,
@@ -164,12 +165,15 @@ export default function Sidebar({
 											type="button"
 											className="section__open"
 											aria-current={
-												section.name === selectedFolder
+												section.id === selectedFolder
 													? "page"
 													: undefined
 											}
 											onClick={() =>
-												onOpenSection(section.name)
+												onOpenFolder(
+													section.id,
+													section.name,
+												)
 											}
 										>
 											{section.name}

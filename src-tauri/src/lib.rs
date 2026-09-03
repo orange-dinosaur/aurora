@@ -23,7 +23,7 @@ pub fn run() {
 			document::read_all_documents,
 			document::write_document,
 			document::restore_document,
-			document::section_overview,
+			document::folder_overview,
 			document::create_document,
 			document::rename_document,
 			document::set_document_target,

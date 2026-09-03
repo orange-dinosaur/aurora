@@ -1083,6 +1083,14 @@ body,
 	margin-top: 0;
 }
 
+/* A folder holds no opening to show, so its card is the shorter one and says
+   what it is instead. */
+.card--folder {
+	gap: 0.5rem;
+	min-height: 6rem;
+	background: color-mix(in srgb, var(--accent-wash) 40%, var(--bg-card));
+}
+
 /* Outlined rather than filled, so the row of real documents reads first. */
 .card--new {
 	align-items: flex-start;

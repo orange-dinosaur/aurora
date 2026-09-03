@@ -106,6 +106,22 @@ impl DocumentSummary {
 	}
 }
 
+/// One of a folder's children, as the overview draws it. A document gets the
+/// card it has always had; a folder says what it is and how much it holds,
+/// which is all a card can show without reading everything below it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "node", rename_all = "camelCase")]
+pub enum ChildSummary {
+	Folder {
+		id: Uuid,
+		name: String,
+		kind: Option<FolderKind>,
+		/// How many nodes it holds directly, folders and documents alike.
+		children: usize,
+	},
+	Document(DocumentSummary),
+}
+
 /// One of the project's sections and the documents in it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SectionDocuments {
@@ -946,27 +962,52 @@ pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
 	Ok(fs::remove_file(file)?)
 }
 
-/// Every document in one section, with enough of each to recognise it. Reads
-/// the manifest rather than the folder, the way `list_documents` does.
+/// What a folder holds, one card at a time, in the order the folder keeps
+/// them. Reads the manifest rather than the folder, the way `list_documents`
+/// does.
 #[tauri::command]
-pub fn section_overview(root: PathBuf, section: String) -> Result<Vec<DocumentSummary>> {
+pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
 
 	let manifest = read_manifest(&root)?;
-	if !manifest.folders().contains(&section) {
-		return Err(Error::UnknownSection);
-	}
+	// The folder's own path, which is the prefix of everything it holds. Ask
+	// for it first: an id that names a document, or nothing at all, is not a
+	// folder to look inside.
+	let prefix = match tree::find(&manifest.nodes, id) {
+		Some(Node::Folder { .. }) => tree::path(&manifest.nodes, id).unwrap_or_default(),
+		_ => return Err(Error::UnknownSection),
+	};
 
-	Ok(manifest
-		.documents()
+	Ok(tree::children(&manifest.nodes, id)
+		.unwrap_or_default()
 		.iter()
-		.filter(|d| section_of(&d.path) == Some(section.as_str()))
-		.map(|document| match resolve(&manifest, &root, document.id) {
-			Ok(path) => summarise(document, &path),
-			// A vanished file, or one the manifest points outside the project.
-			Err(_) => DocumentSummary::blank(document),
+		.map(|node| match node {
+			Node::Folder {
+				id,
+				name,
+				kind,
+				children,
+			} => ChildSummary::Folder {
+				id: *id,
+				name: name.clone(),
+				kind: *kind,
+				children: children.len(),
+			},
+			Node::Document { id, name, target } => {
+				let document = Document {
+					id: *id,
+					path: format!("{prefix}/{name}"),
+					target: *target,
+				};
+				ChildSummary::Document(match resolve(&manifest, &root, document.id) {
+					Ok(path) => summarise(&document, &path),
+					// A vanished file, or one the manifest points outside the
+					// project.
+					Err(_) => DocumentSummary::blank(&document),
+				})
+			}
 		})
 		.collect())
 }
@@ -1785,6 +1826,32 @@ mod tests {
 		assert!(matches!(err, Error::RelativePath));
 	}
 
+	/// The id of one of the project's sections, which is what an overview takes
+	/// now that it is a folder like any other.
+	fn section_id(root: &Path, name: &str) -> Uuid {
+		read_manifest(root)
+			.unwrap()
+			.nodes
+			.iter()
+			.find(|node| node.name() == name)
+			.expect("the project has that section")
+			.id()
+	}
+
+	/// A section's overview as the document cards it used to be, which is all
+	/// a project with no folders in it can hold.
+	fn cards(root: PathBuf, section: &str) -> Vec<DocumentSummary> {
+		let id = section_id(&root, section);
+		folder_overview(root, id)
+			.unwrap()
+			.into_iter()
+			.map(|child| match child {
+				ChildSummary::Document(card) => card,
+				ChildSummary::Folder { name, .. } => panic!("{name} is a folder, not a card"),
+			})
+			.collect()
+	}
+
 	#[test]
 	fn an_overview_carries_the_opening_the_count_and_the_time() {
 		let parent = tempfile::tempdir().unwrap();
@@ -1795,7 +1862,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+		let overview = cards(root, "Manuscript");
 
 		assert_eq!(overview.len(), 1);
 		assert_eq!(overview[0].document.title, "Chapter 1");
@@ -1813,7 +1880,7 @@ mod tests {
 		}
 		refresh(&root).unwrap();
 
-		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+		let overview = cards(root, "Manuscript");
 
 		let titles: Vec<_> = overview.iter().map(|d| d.document.title.as_str()).collect();
 		assert_eq!(titles, ["Chapter 1", "Chapter 2", "Chapter 3"]);
@@ -1824,7 +1891,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		let overview = section_overview(root, "Notes".to_owned()).unwrap();
+		let overview = cards(root, "Notes");
 
 		assert_eq!(overview.len(), 1);
 		assert_eq!(overview[0].document.folder, "Notes");
@@ -1835,7 +1902,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let (root, id) = with_chapter_one_gone(&parent);
 
-		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+		let overview = cards(root, "Manuscript");
 
 		assert_eq!(overview.len(), 1);
 		assert_eq!(overview[0].document.id, id);
@@ -1851,24 +1918,91 @@ mod tests {
 		fs::write(parent.path().join("secrets.md"), "not yours").unwrap();
 		set_document_path(&root, 0, "../secrets.md");
 
-		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+		let overview = cards(root, "Manuscript");
 
 		assert!(overview.is_empty(), "it is no longer in Manuscript");
 	}
 
 	#[test]
-	fn an_overview_of_a_section_the_project_does_not_have_is_refused() {
+	fn an_overview_of_something_the_project_does_not_have_is_refused() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
-		let err = section_overview(root, "Scraps".to_owned()).unwrap_err();
+		let err = folder_overview(root, Uuid::new_v4()).unwrap_err();
+		assert!(matches!(err, Error::UnknownSection));
+	}
+
+	#[test]
+	fn an_overview_of_a_document_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let chapter = first_document(&root).id;
+
+		let err = folder_overview(root, chapter).unwrap_err();
 		assert!(matches!(err, Error::UnknownSection));
 	}
 
 	#[test]
 	fn an_overview_refuses_a_relative_path() {
-		let err = section_overview(PathBuf::from("some/where"), "Notes".to_owned()).unwrap_err();
+		let err = folder_overview(PathBuf::from("some/where"), Uuid::new_v4()).unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn an_overview_interleaves_folders_with_documents_and_says_what_they_hold() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = root.join("Manuscript").join("Part One");
+		fs::create_dir(&part).unwrap();
+		fs::write(part.join("Chapter 2.md"), "").unwrap();
+		fs::write(part.join("Chapter 3.md"), "").unwrap();
+		refresh(&root).unwrap();
+
+		let id = section_id(&root, "Manuscript");
+		let overview = folder_overview(root, id).unwrap();
+
+		assert_eq!(overview.len(), 2);
+		assert!(
+			matches!(&overview[0], ChildSummary::Document(card) if card.document.title == "Chapter 1"),
+			"the seed chapter keeps its place ahead of the new folder"
+		);
+		let ChildSummary::Folder {
+			name,
+			kind,
+			children,
+			..
+		} = &overview[1]
+		else {
+			panic!("Part One is a folder");
+		};
+		assert_eq!(name, "Part One");
+		assert_eq!(*kind, None, "a folder found on disk has no kind yet");
+		assert_eq!(*children, 2);
+	}
+
+	#[test]
+	fn an_overview_looks_only_at_what_a_folder_holds_directly() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let part = root.join("Manuscript").join("Part One");
+		fs::create_dir(&part).unwrap();
+		fs::write(part.join("Chapter 2.md"), "Down to the sea.").unwrap();
+		refresh(&root).unwrap();
+
+		let manifest = read_manifest(&root).unwrap();
+		let id = tree::find(&manifest.nodes, section_id(&root, "Manuscript"))
+			.and_then(|section| match section {
+				Node::Folder { children, .. } => children.last().map(|node| node.id()),
+				Node::Document { .. } => None,
+			})
+			.unwrap();
+		let overview = folder_overview(root, id).unwrap();
+
+		let ChildSummary::Document(card) = &overview[0] else {
+			panic!("the part holds one chapter");
+		};
+		assert_eq!(card.document.path, "Manuscript/Part One/Chapter 2.md");
+		assert_eq!(card.words, 4, "a card is read from the file, however deep");
 	}
 
 	#[test]
@@ -1887,6 +2021,26 @@ mod tests {
 		assert_eq!(json["words"], 3);
 		assert_eq!(json["modified"], "2023-11-14T22:13:20Z");
 		assert!(json.get("document").is_none());
+	}
+
+	#[test]
+	fn a_card_says_which_kind_it_is_on_the_wire() {
+		let document = Document::new("Manuscript", "Chapter 1.md");
+		let json = serde_json::to_value(ChildSummary::Document(DocumentSummary::blank(&document)))
+			.unwrap();
+		assert_eq!(json["node"], "document");
+		assert_eq!(json["title"], "Chapter 1", "still flat under the tag");
+
+		let json = serde_json::to_value(ChildSummary::Folder {
+			id: Uuid::new_v4(),
+			name: "Part One".to_owned(),
+			kind: Some(FolderKind::Part),
+			children: 2,
+		})
+		.unwrap();
+		assert_eq!(json["node"], "folder");
+		assert_eq!(json["kind"], "part");
+		assert_eq!(json["children"], 2);
 	}
 
 	#[test]
@@ -1933,7 +2087,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let overview = section_overview(root, "Notes".to_owned()).unwrap();
+		let overview = cards(root, "Notes");
 		assert_eq!(overview[0].words, 4);
 	}
 
@@ -2279,7 +2433,7 @@ mod tests {
 		assert_eq!(first_document(&root).target, Some(1_500));
 		let listed = list_documents(root.clone()).unwrap();
 		assert_eq!(listed[0].documents[0].target, Some(1_500));
-		let overview = section_overview(root, "Manuscript".to_owned()).unwrap();
+		let overview = cards(root, "Manuscript");
 		assert_eq!(overview[0].document.target, Some(1_500));
 	}
 

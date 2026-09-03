@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
 import Search from "./Search";
-import SectionView from "./SectionView";
+import FolderView from "./FolderView";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
 import Titlebar from "./Titlebar";
@@ -49,6 +49,8 @@ type DocumentTab = {
 type SectionTab = {
 	kind: "section";
 	key: string;
+	/** The folder the overview is of, which is what the command takes. */
+	id: string;
 	folder: string;
 };
 
@@ -246,9 +248,9 @@ export default function Project({
 		patch(document.id, (tab) => ({ ...tab, content }));
 	}
 
-	function openSection(folder: string) {
+	function openFolder(id: string, folder: string) {
 		const already = tabs.find(
-			(tab) => tab.kind === "section" && tab.folder === folder,
+			(tab) => tab.kind === "section" && tab.id === id,
 		);
 		if (already !== undefined) {
 			setActiveKey(already.key);
@@ -258,6 +260,7 @@ export default function Project({
 		const opening: SectionTab = {
 			kind: "section",
 			key: freshKey(),
+			id,
 			folder,
 		};
 		setTabs((open) => [...open, opening]);
@@ -585,11 +588,11 @@ export default function Project({
 						active?.kind === "document" ? active.document.id : null
 					}
 					selectedFolder={
-						active?.kind === "section" ? active.folder : null
+						active?.kind === "section" ? active.id : null
 					}
 					selectedTrash={active?.kind === "trash"}
 					onSelect={(document) => void openDocument(document)}
-					onOpenSection={openSection}
+					onOpenFolder={openFolder}
 					onOpenTrash={openTrash}
 					onCreated={created}
 					onRenamed={renamed}
@@ -661,14 +664,16 @@ export default function Project({
 								    starts the new one empty rather than
 								    showing the previous section's cards
 								    until its read comes back. */}
-								<SectionView
+								<FolderView
 									key={active.key}
 									root={root}
+									id={active.id}
 									folder={active.folder}
 									reload={listing}
 									onSelect={(document) =>
 										void openDocument(document)
 									}
+									onOpenFolder={openFolder}
 									onCreated={created}
 									onRenamed={renamed}
 									onReordered={reordered}

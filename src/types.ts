@@ -87,6 +87,22 @@ export type TreeNode =
 	  }
 	| ({ node: "document" } & ProjectDocument);
 
+/**
+ * `document::ChildSummary` — one card in a folder's overview, tagged so the
+ * caller can switch on `node`. A folder card says what it is and how much it
+ * holds; a document card is the summary it has always been.
+ */
+export type OverviewCard =
+	| {
+			node: "folder";
+			id: string;
+			name: string;
+			kind: FolderKind | null;
+			/** How many nodes it holds directly. */
+			children: number;
+	  }
+	| ({ node: "document" } & DocumentSummary);
+
 /** `document::SectionDocuments` */
 export type SectionDocuments = {
 	folder: string;
