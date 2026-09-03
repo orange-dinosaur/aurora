@@ -625,7 +625,7 @@ body,
 .section__title {
 	min-width: 0;
 	margin: 0;
-	font-size: 0.875rem;
+	font-size: 0.75rem;
 	font-weight: 600;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
@@ -693,11 +693,18 @@ body,
 
 .section__open:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
+/* Colour alone, no wash behind it. The eyebrow is the quietest label in the
+   sidebar, and filling it makes the quietest thing on the screen the loudest.
+   The rows below it keep their wash: they are the writing, not the chrome. */
 .section__open[aria-current="page"] {
-	background: var(--accent-wash);
+	color: var(--accent);
+}
+
+.section__open:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 .section__empty {
