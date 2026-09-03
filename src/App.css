@@ -625,9 +625,9 @@ body,
 .section__title {
 	min-width: 0;
 	margin: 0;
-	font-size: 0.6875rem;
+	font-size: 0.875rem;
 	font-weight: 600;
-	letter-spacing: 0.1em;
+	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	color: var(--text-dim);
 }
@@ -649,6 +649,18 @@ body,
 .section__header .menu {
 	position: relative;
 	flex: none;
+}
+
+/* Smaller than the ⋮ on a row. The header it sits in is an eyebrow, and a + at
+   full size beside it is the loudest thing in the sidebar. */
+.section__header .menu__trigger {
+	width: 18px;
+	height: 18px;
+}
+
+.section__header .menu__trigger .icon {
+	width: 13px;
+	height: 13px;
 }
 
 /* A field opened in the sidebar sits where the button that opened it was, and
@@ -1025,10 +1037,14 @@ body,
 	padding-bottom: 1.5rem;
 }
 
+/* Aligned to the top rather than the middle: the heading is two lines, the name
+   and what the folder amounts to, and a button centred against both of them
+   sits below the name it belongs to. The two are within a pixel of the same
+   height, so lining their tops up lines the button up with the name. */
 .overview__header {
 	flex: none;
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 1rem;
 	margin-bottom: 1rem;
 }
@@ -1080,6 +1096,13 @@ body,
 	border-radius: 8px;
 	cursor: pointer;
 	transition: opacity 120ms ease-out;
+}
+
+/* Centring the two boxes is not the same as aligning what is in them: this
+   font's letters sit high in their line, so a + centred by the box lands three
+   pixels below the word beside it. Measured against "New", not guessed. */
+.overview__new .icon {
+	margin-top: -3px;
 }
 
 .overview__new:hover,
