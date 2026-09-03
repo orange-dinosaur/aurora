@@ -23,6 +23,12 @@ export type Seed = {
 	query: string;
 	/** Counting from zero, in reading order, as `matches` returns them. */
 	ordinal: number;
+	/**
+	 * How whatever counted the hits was reading. A mention was counted
+	 * whole-word and case-sensitively, and Find has to read the same way or it
+	 * would step to a different occurrence than the one that was clicked.
+	 */
+	reading?: Reading;
 };
 
 /** Where one match starts and ends, in the editor's own terms. */

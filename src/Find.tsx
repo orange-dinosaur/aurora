@@ -8,7 +8,7 @@ import {
 	type LexicalEditor,
 } from "lexical";
 import { useEffect, useRef, useState } from "react";
-import { matches, type Match, type Seed } from "./find";
+import { matches, type Match, type Reading, type Seed } from "./find";
 import { REPLACE, shortcutLabel } from "./formatting";
 import Icon from "./Icon";
 import { $runs } from "./runs";
@@ -128,6 +128,9 @@ export default function Find({
 	const [into, setInto] = useState("");
 	const [found, setFound] = useState<Match[]>([]);
 	const [at, setAt] = useState(0);
+	// Ordinary Find matches substrings and ignores case. Only a seed asks for
+	// anything else, and only until the writer types over what it put here.
+	const [reading, setReading] = useState<Reading>({});
 	const input = useRef<HTMLInputElement>(null);
 
 	// Whether the panel is opening or was already open, the field takes the
@@ -146,6 +149,7 @@ export default function Find({
 
 		setQuery(seed.query);
 		setAt(seed.ordinal);
+		setReading(seed.reading ?? {});
 	}, [seed]);
 
 	// Matches are read from the document rather than kept: an edit, an undo or
@@ -153,12 +157,12 @@ export default function Find({
 	useEffect(() => {
 		function look() {
 			const runs = editor.getEditorState().read($runs);
-			setFound(matches(runs, query));
+			setFound(matches(runs, query, reading));
 		}
 
 		look();
 		return editor.registerUpdateListener(look);
-	}, [editor, query]);
+	}, [editor, query, reading]);
 
 	const here = found.length === 0 ? 0 : Math.min(at, found.length - 1);
 	const match = found[here];
@@ -243,6 +247,7 @@ export default function Find({
 					onChange={(event) => {
 						setQuery(event.target.value);
 						setAt(0);
+						setReading({});
 					}}
 					onKeyDown={(event) => {
 						if (event.key === "Escape") {

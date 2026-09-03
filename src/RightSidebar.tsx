@@ -1,8 +1,11 @@
 import Icon from "./Icon";
 import Info from "./Info";
+import Mentions from "./Mentions";
 import Synopsis from "./Synopsis";
 import type { FieldsHandle } from "./fields";
-import type { RightSidebarTab } from "./types";
+import type { Seed } from "./find";
+import type { Subject } from "./mentions";
+import type { ProjectDocument, RightSidebarTab } from "./types";
 
 // The panel on the far side of the writing from the sidebar, about whatever is
 // open. It serves a document and a folder overview alike, which is why it takes
@@ -18,13 +21,16 @@ const TABS: { name: RightSidebarTab; label: string }[] = [
 type Props = {
 	/** The open document's fields, or null when what is open has none yet. */
 	fields: FieldsHandle | null;
-	/** Whether what is open is a page about a person or a place. */
-	subject: boolean;
+	/** What is open when it is a page about a person or a place, else null. */
+	subject: Subject | null;
 	root: string;
 	/** Bumped whenever the project changes on disk. */
 	changed: number;
+	/** The text of every open document as its tab holds it, by id. */
+	live: Map<string, string>;
 	tab: RightSidebarTab;
 	onTab: (tab: RightSidebarTab) => void;
+	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 	onClose: () => void;
 };
 
@@ -33,8 +39,10 @@ export default function RightSidebar({
 	subject,
 	root,
 	changed,
+	live,
 	tab,
 	onTab,
+	onOpen,
 	onClose,
 }: Props) {
 	return (
@@ -66,14 +74,28 @@ export default function RightSidebar({
 			</div>
 
 			<div className="right-sidebar__body">
-				{fields === null || tab === "mentions" ? (
+				{tab === "mentions" ? (
+					subject === null ? (
+						<p className="right-sidebar__empty">
+							Mentions are gathered on a character or a place.
+						</p>
+					) : (
+						<Mentions
+							root={root}
+							subject={subject}
+							changed={changed}
+							live={live}
+							onOpen={onOpen}
+						/>
+					)
+				) : fields === null ? (
 					<p className="right-sidebar__empty">Nothing here yet.</p>
 				) : tab === "synopsis" ? (
 					<Synopsis {...fields} />
 				) : (
 					<Info
 						{...fields}
-						subject={subject}
+						subject={subject !== null}
 						root={root}
 						changed={changed}
 					/>

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
 import type { FieldsHandle } from "./fields";
+import { list } from "./frontmatter";
 import Search from "./Search";
 import FolderView from "./FolderView";
 import RightSidebar from "./RightSidebar";
@@ -678,6 +679,20 @@ export default function Project({
 			? active.kind
 			: null;
 
+	// The page the right sidebar is about, when it is a page about a person or
+	// a place. Its names come from the open editor rather than from the file,
+	// so a name typed into Info is recognised before it reaches disk.
+	const subject =
+		active?.kind === "document" &&
+		isSubject(active.document.trail) &&
+		fields !== null
+			? {
+					id: active.document.id,
+					title: active.document.title,
+					names: list(fields.fields, "names"),
+				}
+			: null;
+
 	return (
 		<section className="project">
 			<Titlebar
@@ -824,18 +839,19 @@ export default function Project({
 				{about !== null && preferences.rightSidebar && (
 					<RightSidebar
 						fields={about === "document" ? fields : null}
-						subject={
-							active?.kind === "document" &&
-							isSubject(active.document.trail)
-						}
+						subject={subject}
 						root={root}
 						changed={listing + written}
+						live={live}
 						tab={preferences.rightSidebarTab}
 						onTab={(tab) =>
 							onPreferences({
 								...preferences,
 								rightSidebarTab: tab,
 							})
+						}
+						onOpen={(document, seed) =>
+							void openDocument(document, seed)
 						}
 						onClose={() =>
 							onPreferences({

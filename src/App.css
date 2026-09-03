@@ -1895,6 +1895,40 @@ body,
 	list-style: none;
 }
 
+/* The same list of hits, read in the right sidebar rather than in a tab of its
+   own. The panel is a fifth of the width, so a line wraps instead of running
+   off the end with an ellipsis, and the sidebar's own body does the scrolling
+   rather than nesting a second scroller inside it. */
+.search--panel {
+	flex: none;
+	gap: 0;
+}
+
+.search--panel .search__results {
+	padding: 0;
+	overflow-y: visible;
+}
+
+.search--panel .search__document,
+.search--panel .search__hits {
+	max-width: none;
+}
+
+.search--panel .search__hits {
+	padding-left: 1rem;
+}
+
+.search--panel .search__title {
+	font-size: 0.9375rem;
+}
+
+.search--panel .search__line {
+	overflow: visible;
+	font-size: 0.875rem;
+	white-space: normal;
+	text-overflow: clip;
+}
+
 /* Out of flow wherever it appears; each surface says where. */
 .trash {
 	display: flex;

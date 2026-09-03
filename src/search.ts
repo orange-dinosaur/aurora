@@ -2,7 +2,7 @@
 // each document. Nothing here knows about Lexical, Rust or React: it takes
 // text and gives back the hits, so it can be tested on its own.
 
-import { matches, type Run } from "./find";
+import { matches, type Match, type Run } from "./find";
 
 /** A document as search reads it, once its runs have been taken. */
 export type Searchable = {
@@ -75,14 +75,14 @@ const NOTHING: Results = { groups: [], unreadable: [] };
 type Block = { text: string };
 
 /** A run's block, and where the run begins within it. */
-type Located = { block: Block; start: number };
+export type Located = { block: Block; start: number };
 
 /**
  * Every run placed in its block, with the block's runs joined the way
  * `matches` joins them. Empty runs are skipped here for the same reason they
  * are skipped there: so the offsets the two work out agree.
  */
-function locate(runs: Run[]): Map<string, Located> {
+export function locate(runs: Run[]): Map<string, Located> {
 	const located = new Map<string, Located>();
 	let block: Block | null = null;
 	let previous: string | null = null;
@@ -103,26 +103,43 @@ function locate(runs: Run[]): Map<string, Located> {
 	return located;
 }
 
+/** A match as a panel draws it: the line it sits in, and where in that line. */
+export type Line = { line: string; from: number; to: number };
+
+/**
+ * The line a match sits in, and where in that line it starts and ends. Null
+ * when the match came from runs other than the ones that were located, which
+ * is the only way its keys can be unknown here.
+ */
+export function lineOf(
+	located: Map<string, Located>,
+	match: Match,
+): Line | null {
+	// A match never crosses a block boundary, so where it starts and where it
+	// ends are in the same block.
+	const from = located.get(match.fromKey);
+	const to = located.get(match.toKey);
+	if (from === undefined || to === undefined) {
+		return null;
+	}
+
+	return {
+		line: from.block.text,
+		from: from.start + match.fromOffset,
+		to: to.start + match.toOffset,
+	};
+}
+
 /** The hits in one document's prose, in reading order. */
 function hitsIn(runs: Run[], query: string): Hit[] {
 	const located = locate(runs);
 	const hits: Hit[] = [];
 
 	for (const match of matches(runs, query)) {
-		// A match never crosses a block boundary, so where it starts and where
-		// it ends are in the same block.
-		const from = located.get(match.fromKey);
-		const to = located.get(match.toKey);
-		if (from === undefined || to === undefined) {
-			continue;
+		const where = lineOf(located, match);
+		if (where !== null) {
+			hits.push({ ordinal: hits.length, ...where });
 		}
-
-		hits.push({
-			ordinal: hits.length,
-			line: from.block.text,
-			from: from.start + match.fromOffset,
-			to: to.start + match.toOffset,
-		});
 	}
 
 	return hits;

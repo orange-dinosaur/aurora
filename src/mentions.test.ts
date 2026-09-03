@@ -1,10 +1,15 @@
 import { describe, expect, test } from "vitest";
 import { matches } from "./find";
-import { type Subject, mentions } from "./mentions";
+import {
+	type Mentionable,
+	type Subject,
+	mentions,
+	mentionsIn,
+} from "./mentions";
 import { runsOf } from "./runs";
 
 function subject(title: string, ...names: string[]): Subject {
-	return { path: `Characters/${title}.md`, title, names };
+	return { id: `Characters/${title}.md`, title, names };
 }
 
 /** The names recognised in `markdown`, in the order they were met. */
@@ -118,5 +123,100 @@ describe("mentions come back in reading order, whoever they belong to", () => {
 			"Rose Quartz",
 			"Rose",
 		]);
+	});
+});
+
+function chapter(
+	title: string,
+	markdown: string,
+	tags: string[] = [],
+): Mentionable {
+	return {
+		id: `Manuscript/${title}.md`,
+		title,
+		trail: ["Manuscript"],
+		tags,
+		runs: runsOf(markdown),
+	};
+}
+
+const elena = subject("Elena", "the Captain");
+
+describe("a subject's page collects where it is spoken of", () => {
+	test("a document that names it and one that tags it both appear", () => {
+		const { groups } = mentionsIn(elena, [
+			chapter("One", "Elena went out."),
+			chapter("Two", "The door stayed shut.", ["Elena"]),
+			chapter("Three", "Nobody was there."),
+		]);
+
+		expect(groups.map((group) => group.title)).toEqual(["One", "Two"]);
+		expect(groups[0].hits.map((hit) => hit.name)).toEqual(["Elena"]);
+		expect(groups[0].tagged).toEqual([]);
+		expect(groups[1].hits).toEqual([]);
+		expect(groups[1].tagged).toEqual(["Elena"]);
+	});
+
+	test("a tag only counts when it is one of the subject's names", () => {
+		const { groups } = mentionsIn(elena, [
+			chapter("One", "Nothing here.", ["elena", "sea"]),
+		]);
+
+		expect(groups).toEqual([]);
+	});
+
+	test("the subject's own page is left out", () => {
+		const own: Mentionable = {
+			id: elena.id,
+			title: elena.title,
+			trail: ["Characters"],
+			tags: [],
+			runs: runsOf("Elena is the Captain."),
+		};
+
+		expect(mentionsIn(elena, [own]).groups).toEqual([]);
+	});
+
+	test("a hit carries the line it sits in and where it is in it", () => {
+		const { groups } = mentionsIn(elena, [
+			chapter("One", "The wind rose. Elena went out."),
+		]);
+		const hit = groups[0].hits[0];
+
+		expect(hit.line).toBe("The wind rose. Elena went out.");
+		expect(hit.line.slice(hit.from, hit.to)).toBe("Elena");
+	});
+
+	test("each name is numbered on its own, for Find to step to", () => {
+		const { groups } = mentionsIn(elena, [
+			chapter(
+				"One",
+				"Elena spoke. the Captain turned. Elena left the Captain.",
+			),
+		]);
+
+		expect(groups[0].hits.map((hit) => [hit.name, hit.ordinal])).toEqual([
+			["Elena", 0],
+			["the Captain", 0],
+			["Elena", 1],
+			["the Captain", 1],
+		]);
+	});
+
+	test("tags and hits are counted together", () => {
+		const { groups } = mentionsIn(elena, [
+			chapter("One", "Elena spoke. Elena left.", ["Elena"]),
+		]);
+
+		expect(groups[0].count).toBe(3);
+	});
+
+	test("a document that could not be read is reported, not skipped", () => {
+		const { groups, unreadable } = mentionsIn(elena, [
+			{ ...chapter("One", ""), runs: null },
+		]);
+
+		expect(groups).toEqual([]);
+		expect(unreadable.map((document) => document.title)).toEqual(["One"]);
 	});
 });
