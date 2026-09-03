@@ -8,7 +8,6 @@ import Search from "./Search";
 import FolderView from "./FolderView";
 import RightSidebar from "./RightSidebar";
 import Sidebar from "./Sidebar";
-import { isSubject } from "./subjects";
 import Tabs from "./Tabs";
 import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
@@ -679,16 +678,15 @@ export default function Project({
 			? active.kind
 			: null;
 
-	// The page the right sidebar is about, when it is a page about a person or
-	// a place. Its names come from the open editor rather than from the file,
-	// so a name typed into Info is recognised before it reaches disk.
-	const subject =
-		active?.kind === "document" &&
-		isSubject(active.document.trail) &&
-		fields !== null
+	// The document the right sidebar is about. Its names come from the open
+	// editor rather than from the file, so a name typed into Info is
+	// recognised before it reaches disk.
+	const page =
+		active?.kind === "document" && fields !== null
 			? {
 					id: active.document.id,
 					title: active.document.title,
+					trail: active.document.trail,
 					names: list(fields.fields, "names"),
 				}
 			: null;
@@ -839,7 +837,7 @@ export default function Project({
 				{about !== null && preferences.rightSidebar && (
 					<RightSidebar
 						fields={about === "document" ? fields : null}
-						subject={subject}
+						page={page}
 						root={root}
 						changed={listing + written}
 						live={live}

@@ -1929,6 +1929,20 @@ body,
 	text-overflow: clip;
 }
 
+/* The right-hand end of a cast row: whether the document tags this subject,
+   and how many times it names it. Either can be missing, so they travel
+   together rather than each finding its own way to the edge. */
+.search__aside {
+	display: flex;
+	align-items: baseline;
+	gap: 0.4rem;
+	margin-left: auto;
+}
+
+.search__aside .search__count {
+	margin-left: 0;
+}
+
 /* Out of flow wherever it appears; each surface says where. */
 .trash {
 	display: flex;

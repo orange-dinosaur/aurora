@@ -39,12 +39,19 @@ const SWEEP_MS = 250;
 function readIn(text: string | null): {
 	runs: Mentionable["runs"];
 	tags: string[];
+	names: string[];
 } {
 	if (text === null) {
-		return { runs: null, tags: [] };
+		return { runs: null, tags: [], names: [] };
 	}
 
-	return { runs: runsOf(text), tags: list(parse(split(text).block), "tags") };
+	const fields = parse(split(text).block);
+
+	return {
+		runs: runsOf(text),
+		tags: list(fields, "tags"),
+		names: list(fields, "names"),
+	};
 }
 
 /** Reads every document in the project and parses it, or says why it could not. */
@@ -153,16 +160,24 @@ export function useCorpus({ root, changed, live, wanted, retry = 0 }: Asked): {
 		});
 	}, [wanted, refreshing, corpus, changed, root]);
 
-	// What the open tabs hold, parsed when the corpus is wanted. Reading them
-	// continuously would parse a chapter on every keystroke the writer makes.
+	// What the open tabs hold, parsed once the writer stops typing. A tab
+	// changes on every keystroke, and parsing all of them on each one — with
+	// whatever reads this then running again over the whole project — is the
+	// one thing here that could be felt in the caret.
 	useEffect(() => {
 		if (!wanted) {
 			return;
 		}
 
-		setOpen(
-			new Map([...live].map(([id, text]) => [id, runsOf(text)] as const)),
-		);
+		const timer = window.setTimeout(() => {
+			setOpen(
+				new Map(
+					[...live].map(([id, text]) => [id, runsOf(text)] as const),
+				),
+			);
+		}, SWEEP_MS);
+
+		return () => window.clearTimeout(timer);
 	}, [wanted, live]);
 
 	// An open tab beats the file it came from: a word typed a moment ago is not

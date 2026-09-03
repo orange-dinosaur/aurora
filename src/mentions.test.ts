@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { matches } from "./find";
 import {
+	appearancesIn,
 	type Mentionable,
 	type Subject,
 	mentions,
 	mentionsIn,
+	subjectsIn,
 } from "./mentions";
 import { runsOf } from "./runs";
 
@@ -136,7 +138,20 @@ function chapter(
 		title,
 		trail: ["Manuscript"],
 		tags,
+		names: [],
 		runs: runsOf(markdown),
+	};
+}
+
+/** A character page as the corpus reads it. */
+function page(title: string, names: string[] = []): Mentionable {
+	return {
+		id: `Characters/${title}.md`,
+		title,
+		trail: ["Characters"],
+		tags: [],
+		names,
+		runs: runsOf(`# ${title}`),
 	};
 }
 
@@ -171,6 +186,7 @@ describe("a subject's page collects where it is spoken of", () => {
 			title: elena.title,
 			trail: ["Characters"],
 			tags: [],
+			names: [],
 			runs: runsOf("Elena is the Captain."),
 		};
 
@@ -218,5 +234,73 @@ describe("a subject's page collects where it is spoken of", () => {
 
 		expect(groups).toEqual([]);
 		expect(unreadable.map((document) => document.title)).toEqual(["One"]);
+	});
+});
+
+describe("a document collects the subjects it speaks of", () => {
+	const cast = [page("Elena", ["the Captain"]), page("Rose"), page("Wren")];
+
+	test("only the pages under a subject section count as subjects", () => {
+		const documents = [...cast, chapter("One", "Elena went out.")];
+
+		expect(subjectsIn(documents).map((subject) => subject.title)).toEqual([
+			"Elena",
+			"Rose",
+			"Wren",
+		]);
+	});
+
+	test("subjects come in the order they are first named, with counts", () => {
+		const here = chapter(
+			"One",
+			"Rose spoke. Elena answered. Rose left, and the Captain with her.",
+		);
+
+		expect(
+			appearancesIn(here, subjectsIn(cast)).map(({ subject, count }) => [
+				subject.title,
+				count,
+			]),
+		).toEqual([
+			["Rose", 2],
+			["Elena", 2],
+		]);
+	});
+
+	test("a subject the document only tags comes last, uncounted", () => {
+		const here = chapter("One", "Rose spoke.", ["Wren"]);
+
+		expect(
+			appearancesIn(here, subjectsIn(cast)).map(
+				({ subject, count, tagged }) => [subject.title, count, tagged],
+			),
+		).toEqual([
+			["Rose", 1, false],
+			["Wren", 0, true],
+		]);
+	});
+
+	test("a document that both names and tags a subject says so once", () => {
+		const here = chapter("One", "Rose spoke.", ["Rose"]);
+
+		expect(appearancesIn(here, subjectsIn(cast))).toEqual([
+			{
+				subject: { id: cast[1].id, title: "Rose", names: [] },
+				count: 1,
+				tagged: true,
+			},
+		]);
+	});
+
+	test("a subject's own page does not appear in its own list", () => {
+		const own = { ...cast[1], runs: runsOf("Rose is a gardener.") };
+
+		expect(appearancesIn(own, subjectsIn(cast))).toEqual([]);
+	});
+
+	test("a document that could not be read names nobody", () => {
+		const here = { ...chapter("One", ""), runs: null };
+
+		expect(appearancesIn(here, subjectsIn(cast))).toEqual([]);
 	});
 });

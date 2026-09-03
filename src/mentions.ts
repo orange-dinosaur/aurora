@@ -9,6 +9,7 @@
 
 import { type Match, type Run, matches } from "./find";
 import { lineOf, locate, type Searchable, type Unreadable } from "./search";
+import { isSubject } from "./subjects";
 
 /** A document the writer keeps a page about, and what it answers to. */
 export type Subject = {
@@ -75,11 +76,24 @@ export function mentions(subjects: Subject[], runs: Run[]): Mention[] {
 	});
 }
 
-/** A document as recognition reads it: search's view of it, plus its tags. */
+/** A document as recognition reads it: search's view of it, plus its fields. */
 export type Mentionable = Searchable & {
 	/** The `tags` field of its front matter, or empty when it has none. */
 	tags: string[];
+	/** Its `names` field, which is what it answers to if it is a subject. */
+	names: string[];
 };
+
+/**
+ * The pages in the project that are about a person or a place. Where a
+ * document sits decides this, so a chapter that happens to carry a `names`
+ * field is not one.
+ */
+export function subjectsIn(documents: Mentionable[]): Subject[] {
+	return documents
+		.filter((document) => isSubject(document.trail))
+		.map(({ id, title, names }) => ({ id, title, names }));
+}
 
 /** One place in a document where the subject was named. */
 export type MentionHit = {
@@ -179,4 +193,62 @@ export function mentionsIn(
 	}
 
 	return { groups, unreadable };
+}
+
+/** A subject a document speaks of, and how much of it there is. */
+export type Appearance = {
+	subject: Subject;
+	/** How many times one of its names is in the prose. Zero if only tagged. */
+	count: number;
+	/** Whether the document carries one of its names as a tag. */
+	tagged: boolean;
+};
+
+/**
+ * Who and what a document speaks of, in the order they are first named, with
+ * the ones it only tags after them.
+ *
+ * This is `mentionsIn` read the other way round: that starts from a page and
+ * sweeps the project, this starts from a chapter and asks which pages are in
+ * it. A subject's own page is left out of its own list for the same reason.
+ */
+export function appearancesIn(
+	document: Mentionable,
+	subjects: Subject[],
+): Appearance[] {
+	const others = subjects.filter((subject) => subject.id !== document.id);
+	const by = new Map(others.map((subject) => [subject.id, subject]));
+
+	// `mentions` hands them back in reading order, so the map is in the order
+	// each subject is first named and stays that way as the counts go up.
+	const counts = new Map<string, number>();
+	for (const { subject } of mentions(others, document.runs ?? [])) {
+		counts.set(subject, (counts.get(subject) ?? 0) + 1);
+	}
+
+	const tagged = new Set(
+		others
+			.filter((subject) =>
+				namesOf(subject).some((name) => document.tags.includes(name)),
+			)
+			.map((subject) => subject.id),
+	);
+
+	const appearances: Appearance[] = [];
+
+	for (const [id, count] of counts) {
+		const subject = by.get(id);
+		if (subject !== undefined) {
+			appearances.push({ subject, count, tagged: tagged.has(id) });
+		}
+	}
+
+	for (const id of tagged) {
+		const subject = by.get(id);
+		if (subject !== undefined && !counts.has(id)) {
+			appearances.push({ subject, count: 0, tagged: true });
+		}
+	}
+
+	return appearances;
 }

@@ -3,22 +3,32 @@ import { contextOf } from "./context";
 import { useCorpus } from "./corpus";
 import type { Seed } from "./find";
 import Icon from "./Icon";
-import { mentionsIn, RECOGNITION, type Subject } from "./mentions";
+import {
+	appearancesIn,
+	mentionsIn,
+	RECOGNITION,
+	subjectsIn,
+	type Subject,
+} from "./mentions";
 import { Line, toggled } from "./Search";
+import { isSubject } from "./subjects";
 import type { ProjectDocument } from "./types";
 
-// Where in the project a character or a place is spoken of. It is the search
-// results list read the other way round: search starts from a word the writer
-// typed, this starts from the page they have open and looks for the names it
-// answers to.
+// Recognition read from whichever end the writer is standing at. On a
+// character's page it is the search results list turned around: rather than
+// starting from a word that was typed, it starts from the names the page
+// answers to and sweeps the project for them. On a chapter it is the cast:
+// which of those pages turn up in what is open, and how much of each.
 
 /** How many of a document's mentions are drawn before the rest are held back. */
 const CAP = 20;
 
+/** The document the panel is about, whether or not it is a subject's page. */
+export type Page = Subject & { trail: string[] };
+
 type Props = {
 	root: string;
-	/** The page this panel is about. */
-	subject: Subject;
+	page: Page;
 	/** Bumped whenever the project changes on disk. */
 	changed: number;
 	/** The text of every open document as its tab holds it, by id. */
@@ -26,13 +36,7 @@ type Props = {
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 };
 
-export default function Mentions({
-	root,
-	subject,
-	changed,
-	live,
-	onOpen,
-}: Props) {
+export default function Mentions({ root, page, changed, live, onOpen }: Props) {
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 	const [full, setFull] = useState<Set<string>>(new Set());
 
@@ -43,23 +47,44 @@ export default function Mentions({
 		wanted: true,
 	});
 
-	// The subject arrives freshly built on every render of the project, so what
+	// The page arrives freshly built on every render of the project, so what
 	// recognition is run against is its content and not its identity. Sweeping
 	// the whole project again because a keystroke landed somewhere else would
 	// be the most expensive thing this panel does.
-	const { id, title } = subject;
-	const names = subject.names.join("\n");
+	const { id, title } = page;
+	const names = page.names.join("\n");
+	const own = isSubject(page.trail);
 
 	const results = useMemo(() => {
 		if (corpus.kind !== "ready") {
 			return null;
 		}
 
-		return mentionsIn(
-			{ id, title, names: names === "" ? [] : names.split("\n") },
-			documents,
-		);
-	}, [corpus.kind, documents, id, title, names]);
+		if (own) {
+			const subject = {
+				id,
+				title,
+				names: names === "" ? [] : names.split("\n"),
+			};
+			return {
+				kind: "subject" as const,
+				...mentionsIn(subject, documents),
+			};
+		}
+
+		// The document has to be found in the corpus rather than parsed again:
+		// what is on screen is the version its tab holds, which the corpus has
+		// already merged in.
+		const here = documents.find((document) => document.id === id);
+
+		return {
+			kind: "document" as const,
+			appearances:
+				here === undefined
+					? []
+					: appearancesIn(here, subjectsIn(documents)),
+		};
+	}, [corpus.kind, documents, id, title, names, own]);
 
 	// A row that is on screen came out of the corpus, so its document is in
 	// hand; nothing happens if it somehow is not.
@@ -79,6 +104,48 @@ export default function Mentions({
 
 	if (results === null) {
 		return <p className="right-sidebar__empty">Reading the project…</p>;
+	}
+
+	if (results.kind === "document") {
+		if (results.appearances.length === 0) {
+			return (
+				<p className="right-sidebar__empty">
+					No character or place is named here yet.
+				</p>
+			);
+		}
+
+		return (
+			<div className="search search--panel">
+				<ul className="search__groups">
+					{results.appearances.map(({ subject, count, tagged }) => (
+						<li key={subject.id}>
+							<button
+								type="button"
+								className="search__document"
+								onClick={() => openTab(subject.id, null)}
+							>
+								<span className="search__title">
+									{subject.title}
+								</span>
+								<span className="search__aside">
+									{tagged && (
+										<span className="search__kind">
+											Tagged
+										</span>
+									)}
+									{count > 0 && (
+										<span className="search__count">
+											{count}
+										</span>
+									)}
+								</span>
+							</button>
+						</li>
+					))}
+				</ul>
+			</div>
+		);
 	}
 
 	if (results.groups.length === 0 && results.unreadable.length === 0) {

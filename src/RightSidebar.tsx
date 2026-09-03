@@ -1,10 +1,10 @@
 import Icon from "./Icon";
 import Info from "./Info";
-import Mentions from "./Mentions";
+import Mentions, { type Page } from "./Mentions";
 import Synopsis from "./Synopsis";
 import type { FieldsHandle } from "./fields";
 import type { Seed } from "./find";
-import type { Subject } from "./mentions";
+import { isSubject } from "./subjects";
 import type { ProjectDocument, RightSidebarTab } from "./types";
 
 // The panel on the far side of the writing from the sidebar, about whatever is
@@ -21,8 +21,8 @@ const TABS: { name: RightSidebarTab; label: string }[] = [
 type Props = {
 	/** The open document's fields, or null when what is open has none yet. */
 	fields: FieldsHandle | null;
-	/** What is open when it is a page about a person or a place, else null. */
-	subject: Subject | null;
+	/** The open document, or null when what is open is a folder overview. */
+	page: Page | null;
 	root: string;
 	/** Bumped whenever the project changes on disk. */
 	changed: number;
@@ -36,7 +36,7 @@ type Props = {
 
 export default function RightSidebar({
 	fields,
-	subject,
+	page,
 	root,
 	changed,
 	live,
@@ -75,14 +75,14 @@ export default function RightSidebar({
 
 			<div className="right-sidebar__body">
 				{tab === "mentions" ? (
-					subject === null ? (
+					page === null ? (
 						<p className="right-sidebar__empty">
-							Mentions are gathered on a character or a place.
+							Mentions are gathered on a document.
 						</p>
 					) : (
 						<Mentions
 							root={root}
-							subject={subject}
+							page={page}
 							changed={changed}
 							live={live}
 							onOpen={onOpen}
@@ -95,7 +95,7 @@ export default function RightSidebar({
 				) : (
 					<Info
 						{...fields}
-						subject={subject !== null}
+						subject={page !== null && isSubject(page.trail)}
 						root={root}
 						changed={changed}
 					/>
