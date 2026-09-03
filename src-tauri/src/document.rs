@@ -54,7 +54,10 @@ impl Document {
 pub struct DocumentView {
 	pub id: Uuid,
 	pub path: String,
-	pub folder: String,
+	/// The folders it sits in, from its section down. A list rather than one
+	/// joined name, because the search panel draws the whole of it and the tab
+	/// strip only the last.
+	pub trail: Vec<String>,
 	pub title: String,
 	/// Always present here, `null` when unset, so the front end has one shape
 	/// to read rather than a field that comes and goes.
@@ -66,7 +69,7 @@ impl From<&Document> for DocumentView {
 		Self {
 			id: document.id,
 			path: document.path.clone(),
-			folder: section_of(&document.path).unwrap_or_default().to_owned(),
+			trail: trail_of(&document.path),
 			title: document.title(),
 			target: document.target,
 		}
@@ -124,17 +127,10 @@ pub enum ChildSummary {
 	Document(DocumentSummary),
 }
 
-/// One of the project's sections and the documents in it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct SectionDocuments {
-	pub folder: String,
-	pub documents: Vec<DocumentView>,
-}
-
 /// One entry in the project's tree as the front end reads it: [`tree::Node`]
 /// with the things a node's place decides already worked out. A document
-/// carries the same view the flat lists send, so nothing outside Rust ever
-/// takes a path apart.
+/// carries the same view every other command sends, so nothing outside Rust
+/// ever takes a path apart.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "node", rename_all = "camelCase")]
 pub enum NodeView {
@@ -334,9 +330,14 @@ fn is_markdown(name: &str) -> bool {
 		.is_some_and(|e| e.eq_ignore_ascii_case("md"))
 }
 
-/// The section a document belongs to, which is the first component of its path.
-fn section_of(path: &str) -> Option<&str> {
-	path.split_once('/').map(|(section, _)| section)
+/// The folders a document sits in, from its section down: `Manuscript`, `Part
+/// One`, `Chapter 3`. This is the one thing a view says about where a document
+/// is rather than what it is, and taking the path apart happens here so that
+/// nothing outside Rust has to.
+fn trail_of(path: &str) -> Vec<String> {
+	let mut names: Vec<String> = path.split('/').map(str::to_owned).collect();
+	names.pop();
+	names
 }
 
 /// Brings the manifest's tree back in step with what `scan` found. The
@@ -443,25 +444,6 @@ pub fn refresh(root: &Path) -> Result<Manifest> {
 		write_manifest(root, &mut manifest)?;
 	}
 	Ok(manifest)
-}
-
-/// The manifest's documents grouped under their section, in the order the
-/// project records both. Sections are fixed by the format, so an empty one is
-/// still listed.
-fn sections(manifest: &Manifest) -> Vec<SectionDocuments> {
-	let documents = manifest.documents();
-	manifest
-		.folders()
-		.into_iter()
-		.map(|folder| SectionDocuments {
-			documents: documents
-				.iter()
-				.filter(|d| section_of(&d.path) == Some(folder.as_str()))
-				.map(DocumentView::from)
-				.collect(),
-			folder,
-		})
-		.collect()
 }
 
 /// The opening of a document collapsed onto one line and cut to something a
@@ -762,17 +744,8 @@ pub fn create_folder(
 	Ok(view)
 }
 
-/// The sidebar's view of the project, straight from the manifest.
-#[tauri::command]
-pub fn list_documents(root: PathBuf) -> Result<Vec<SectionDocuments>> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-	Ok(sections(&read_manifest(&root)?))
-}
-
-/// The project as a tree, straight from the manifest. The sidebar reads this;
-/// the flat lists above it are what everything else still asks for.
+/// The project as a tree, straight from the manifest. Every listing of the
+/// project is this one, however much of it the caller draws.
 #[tauri::command]
 pub fn document_tree(root: PathBuf) -> Result<Vec<NodeView>> {
 	if !root.is_absolute() {
@@ -781,14 +754,16 @@ pub fn document_tree(root: PathBuf) -> Result<Vec<NodeView>> {
 	Ok(views(&canonical(&root), &read_manifest(&root)?.nodes, "").0)
 }
 
-/// The same, after looking at the folder again for anything added, removed or
-/// renamed outside Aurora.
+/// Looks at the project's folders again for anything added, removed or renamed
+/// outside Aurora, and brings the manifest back in step with what it finds.
+/// Nothing comes back: whoever asked reads the tree again afterwards.
 #[tauri::command]
-pub fn refresh_documents(root: PathBuf) -> Result<Vec<SectionDocuments>> {
+pub fn refresh_documents(root: PathBuf) -> Result<()> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
-	Ok(sections(&refresh(&root)?))
+	refresh(&root)?;
+	Ok(())
 }
 
 /// Gives a document a new title, which is to say a new file name. It stays in
@@ -1419,7 +1394,7 @@ pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
 }
 
 /// What a folder holds, one card at a time, in the order the folder keeps
-/// them. Reads the manifest rather than the folder, the way `list_documents`
+/// them. Reads the manifest rather than the folder, the way `document_tree`
 /// does.
 #[tauri::command]
 pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
@@ -1515,6 +1490,29 @@ mod tests {
 		assert_eq!(json["path"], "Manuscript/Scene 1.md");
 		assert_eq!(json["id"], document.id.to_string());
 		assert_eq!(serde_json::from_value::<Document>(json).unwrap(), document);
+	}
+
+	/// The documents one section holds, in the order the manifest records them.
+	/// The commands send the whole tree; the tests that predate it only ever
+	/// look at one flat level of it.
+	fn documents_in(manifest: &Manifest, section: &str) -> Vec<DocumentView> {
+		let Some(Node::Folder { children, .. }) =
+			manifest.nodes.iter().find(|node| node.name() == section)
+		else {
+			panic!("the project has no section called {section}");
+		};
+
+		children
+			.iter()
+			.filter_map(|node| match node {
+				Node::Document { id, name, target } => Some(DocumentView::from(&Document {
+					id: *id,
+					path: format!("{section}/{name}"),
+					target: *target,
+				})),
+				Node::Folder { .. } => None,
+			})
+			.collect()
 	}
 
 	fn novel_folders() -> Vec<String> {
@@ -1836,32 +1834,32 @@ mod tests {
 	}
 
 	#[test]
-	fn listing_groups_documents_under_their_section() {
+	fn the_tree_holds_the_project_under_its_sections() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
-		let listed = sections(&read_manifest(&root).unwrap());
+		let manifest = read_manifest(&root).unwrap();
 
-		let folders: Vec<_> = listed.iter().map(|s| s.folder.as_str()).collect();
+		let folders: Vec<_> = manifest.nodes.iter().map(Node::name).collect();
 		assert_eq!(
 			folders,
 			["Manuscript", "Outline", "Characters", "Locations", "Notes"]
 		);
-		assert_eq!(listed[0].documents.len(), 1);
-		assert_eq!(listed[0].documents[0].title, "Scene 1");
-		assert_eq!(listed[0].documents[0].folder, "Manuscript");
-		assert_eq!(listed[0].documents[0].path, "Manuscript/Scene 1.md");
+
+		let manuscript = documents_in(&manifest, "Manuscript");
+		assert_eq!(manuscript.len(), 1);
+		assert_eq!(manuscript[0].title, "Scene 1");
+		assert_eq!(manuscript[0].trail, ["Manuscript"]);
+		assert_eq!(manuscript[0].path, "Manuscript/Scene 1.md");
 	}
 
 	#[test]
-	fn an_empty_section_is_still_listed() {
+	fn an_empty_section_is_still_there() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::remove_file(root.join("Notes").join("Notes.md")).unwrap();
 		refresh(&root).unwrap();
 
-		let listed = sections(&read_manifest(&root).unwrap());
-		let notes = listed.iter().find(|s| s.folder == "Notes").unwrap();
-		assert!(notes.documents.is_empty());
+		assert!(documents_in(&read_manifest(&root).unwrap(), "Notes").is_empty());
 	}
 
 	#[test]
@@ -1870,27 +1868,20 @@ mod tests {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 		fs::write(root.join("Notes").join("Ideas.md"), "").unwrap();
 
-		let listed = sections(&read_manifest(&root).unwrap());
-		let notes = listed.iter().find(|s| s.folder == "Notes").unwrap();
 		assert_eq!(
-			notes.documents.len(),
+			documents_in(&read_manifest(&root).unwrap(), "Notes").len(),
 			1,
 			"the manifest has not been re-read"
 		);
 
-		let refreshed = sections(&refresh(&root).unwrap());
-		let notes = refreshed.iter().find(|s| s.folder == "Notes").unwrap();
-		assert_eq!(notes.documents.len(), 2);
-		assert_eq!(notes.documents[1].title, "Ideas");
+		let refreshed = documents_in(&refresh(&root).unwrap(), "Notes");
+		assert_eq!(refreshed.len(), 2);
+		assert_eq!(refreshed[1].title, "Ideas");
 	}
 
 	#[test]
 	fn the_listing_commands_refuse_a_relative_path() {
 		let relative = PathBuf::from("some/where");
-		assert!(matches!(
-			list_documents(relative.clone()).unwrap_err(),
-			Error::RelativePath
-		));
 		assert!(matches!(
 			refresh_documents(relative.clone()).unwrap_err(),
 			Error::RelativePath
@@ -1932,8 +1923,9 @@ mod tests {
 		assert_eq!(chapter.path, "Manuscript/Part One/Chapter 1.md");
 		assert_eq!(chapter.title, "Chapter 1");
 		assert_eq!(
-			chapter.folder, "Manuscript",
-			"a document's section is the top of its path, however deep it sits"
+			chapter.trail,
+			["Manuscript", "Part One"],
+			"a document's trail is every folder above it, from its section down"
 		);
 	}
 
@@ -1956,7 +1948,7 @@ mod tests {
 		assert_eq!(document.title(), "Scene 1");
 		let view = DocumentView::from(&document);
 		assert_eq!(view.title, "Scene 1");
-		assert_eq!(view.folder, "Manuscript");
+		assert_eq!(view.trail, ["Manuscript"]);
 	}
 
 	/// Rewrites one document's recorded path, the way a hand-edited manifest
@@ -2199,7 +2191,7 @@ mod tests {
 		)
 		.unwrap();
 
-		assert_eq!(restored.folder, "Manuscript");
+		assert_eq!(restored.trail, ["Manuscript"]);
 		assert_eq!(read_document(root, restored.id).unwrap(), "Back again.");
 	}
 
@@ -2355,7 +2347,7 @@ mod tests {
 		let overview = cards(root, "Notes");
 
 		assert_eq!(overview.len(), 1);
-		assert_eq!(overview[0].document.folder, "Notes");
+		assert_eq!(overview[0].document.trail, ["Notes"]);
 	}
 
 	#[test]
@@ -2633,12 +2625,12 @@ mod tests {
 		let created = create_in(root.clone(), "Manuscript", "Chapter 2").unwrap();
 
 		assert_eq!(created.title, "Chapter 2");
-		assert_eq!(created.folder, "Manuscript");
+		assert_eq!(created.trail, ["Manuscript"]);
 		assert_eq!(created.path, "Manuscript/Chapter 2.md");
 		assert_eq!(read_document(root.clone(), created.id).unwrap(), "");
 
-		let manuscript = sections(&read_manifest(&root).unwrap()).remove(0);
-		let titles: Vec<_> = manuscript.documents.iter().map(|d| &d.title).collect();
+		let manuscript = documents_in(&read_manifest(&root).unwrap(), "Manuscript");
+		let titles: Vec<_> = manuscript.iter().map(|d| &d.title).collect();
 		assert_eq!(titles, ["Scene 1", "Chapter 2"]);
 	}
 
@@ -3097,15 +3089,15 @@ mod tests {
 
 		assert_eq!(renamed.id, id);
 		assert_eq!(renamed.title, "Ithaca Falls");
-		assert_eq!(renamed.folder, "Manuscript");
+		assert_eq!(renamed.trail, ["Manuscript"]);
 		assert_eq!(renamed.path, "Manuscript/Ithaca Falls.md");
 		assert_eq!(
 			read_document(root.clone(), id).unwrap(),
 			"Sing to me of the man, Muse."
 		);
 
-		let manuscript = sections(&read_manifest(&root).unwrap()).remove(0);
-		let titles: Vec<_> = manuscript.documents.iter().map(|d| &d.title).collect();
+		let manuscript = documents_in(&read_manifest(&root).unwrap(), "Manuscript");
+		let titles: Vec<_> = manuscript.iter().map(|d| &d.title).collect();
 		assert_eq!(titles, ["Ithaca Falls", "Chapter 2"], "it did not move");
 	}
 
@@ -3453,8 +3445,8 @@ mod tests {
 
 		assert_eq!(view.target, Some(1_500));
 		assert_eq!(first_document(&root).target, Some(1_500));
-		let listed = list_documents(root.clone()).unwrap();
-		assert_eq!(listed[0].documents[0].target, Some(1_500));
+		let listed = documents_in(&read_manifest(&root).unwrap(), "Manuscript");
+		assert_eq!(listed[0].target, Some(1_500));
 		let overview = cards(root, "Manuscript");
 		assert_eq!(overview[0].document.target, Some(1_500));
 	}
@@ -3574,8 +3566,7 @@ mod tests {
 				.iter()
 				.any(|d| d.id == id)
 		);
-		let manuscript = sections(&read_manifest(&root).unwrap()).remove(0);
-		assert!(manuscript.documents.is_empty());
+		assert!(documents_in(&read_manifest(&root).unwrap(), "Manuscript").is_empty());
 	}
 
 	#[test]
@@ -4071,11 +4062,7 @@ mod tests {
 
 	/// The titles in one section, in the order the manifest records them.
 	fn order_of(root: &Path, folder: &str) -> Vec<String> {
-		sections(&read_manifest(root).unwrap())
-			.into_iter()
-			.find(|s| s.folder == folder)
-			.unwrap()
-			.documents
+		documents_in(&read_manifest(root).unwrap(), folder)
 			.iter()
 			.map(|d| d.title.clone())
 			.collect()
@@ -4482,7 +4469,7 @@ mod tests {
 		assert_eq!(all[0].text.as_deref(), Some("Wren went down."));
 		assert_eq!(all[4].text.as_deref(), Some("Ask about Wren."));
 		assert_eq!(all[0].document.title, "Scene 1");
-		assert_eq!(all[0].document.folder, "Manuscript");
+		assert_eq!(all[0].document.trail, ["Manuscript"]);
 	}
 
 	#[test]

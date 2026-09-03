@@ -80,7 +80,7 @@ export function rows(
 			const document: ProjectDocument = {
 				id: node.id,
 				path: node.path,
-				folder: node.folder,
+				trail: node.trail,
 				title: node.title,
 				target: node.target,
 			};

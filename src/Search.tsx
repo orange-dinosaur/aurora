@@ -67,10 +67,10 @@ async function sweep(root: string, at: number): Promise<Corpus> {
 		return {
 			kind: "ready",
 			at,
-			documents: documents.map(({ id, title, folder, text }) => ({
+			documents: documents.map(({ id, title, trail, text }) => ({
 				id,
 				title,
-				folder,
+				trail,
 				runs: text === null ? null : runsOf(text),
 			})),
 			known: new Map(
@@ -315,7 +315,7 @@ export default function Search({
 											{group.title}
 										</span>
 										<span className="search__folder">
-											{group.folder}
+											{group.trail.join(" / ")}
 										</span>
 										<span className="search__count">
 											{group.count}
@@ -425,7 +425,7 @@ export default function Search({
 												{document.title}
 											</span>
 											<span className="search__folder">
-												{document.folder}
+												{document.trail.join(" / ")}
 											</span>
 										</button>
 									</li>

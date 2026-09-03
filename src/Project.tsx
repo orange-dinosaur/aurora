@@ -88,7 +88,9 @@ function strip(tab: Tab): TabView {
 			return {
 				key: tab.key,
 				kind: "document",
-				folder: tab.document.folder,
+				// A tab has room for the folder holding it, not the whole trail
+				// down to it.
+				folder: tab.document.trail.slice(-1)[0] ?? null,
 				title: tab.document.title,
 				dirty: tab.save.kind !== "clean",
 			};

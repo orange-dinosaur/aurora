@@ -8,7 +8,8 @@ import { matches, type Run } from "./find";
 export type Searchable = {
 	id: string;
 	title: string;
-	folder: string;
+	/** The folders it sits in, as the row labels it. */
+	trail: string[];
 	/** null when the document's file could not be read. */
 	runs: Run[] | null;
 };
@@ -37,7 +38,7 @@ export type Hit = {
 export type Group = {
 	id: string;
 	title: string;
-	folder: string;
+	trail: string[];
 	/** Whether the query is in the document's name. */
 	titleHit: boolean;
 	hits: Hit[];
@@ -53,7 +54,7 @@ export type Group = {
 export type Unreadable = {
 	id: string;
 	title: string;
-	folder: string;
+	trail: string[];
 };
 
 export type Results = {
@@ -137,9 +138,9 @@ export function search(documents: Searchable[], query: string): Results {
 	const groups: Group[] = [];
 	const unreadable: Unreadable[] = [];
 
-	for (const { id, title, folder, runs } of documents) {
+	for (const { id, title, trail, runs } of documents) {
 		if (runs === null) {
-			unreadable.push({ id, title, folder });
+			unreadable.push({ id, title, trail });
 			continue;
 		}
 
@@ -152,7 +153,7 @@ export function search(documents: Searchable[], query: string): Results {
 		groups.push({
 			id,
 			title,
-			folder,
+			trail,
 			titleHit,
 			hits,
 			count: hits.length + (titleHit ? 1 : 0),

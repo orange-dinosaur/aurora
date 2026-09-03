@@ -26,7 +26,7 @@ function document(path: string): TreeNode {
 		node: "document",
 		id: `id-${path}`,
 		path,
-		folder: path.slice(0, path.indexOf("/")),
+		trail: path.split("/").slice(0, -1),
 		title: name.replace(/\.md$/, ""),
 		target: null,
 	};
@@ -137,7 +137,7 @@ describe("laying a level out as rows", () => {
 			document: {
 				id: "id-Notes/Ideas.md",
 				path: "Notes/Ideas.md",
-				folder: "Notes",
+				trail: ["Notes"],
 				title: "Ideas",
 				target: null,
 			},

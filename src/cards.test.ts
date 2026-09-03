@@ -23,7 +23,7 @@ function document(title: string, words: number) {
 		node: "document",
 		id: `id-${title}`,
 		path: `Manuscript/${title}.md`,
-		folder: "Manuscript",
+		trail: ["Manuscript"],
 		title,
 		target: null,
 		words,

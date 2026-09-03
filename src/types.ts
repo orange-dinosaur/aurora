@@ -41,7 +41,12 @@ export type RecentSummary = RecentProject & {
 export type ProjectDocument = {
 	id: string;
 	path: string;
-	folder: string;
+	/**
+	 * The folders it sits in, from its section down. Search draws the whole of
+	 * it and the tab strip only the last, so it arrives as names rather than
+	 * as one line of text.
+	 */
+	trail: string[];
 	title: string;
 	/** How many words the writer is aiming at, or null if they have not said. */
 	target: number | null;
@@ -109,12 +114,6 @@ export type OverviewCard =
 			words: number;
 	  }
 	| ({ node: "document" } & DocumentSummary);
-
-/** `document::SectionDocuments` */
-export type SectionDocuments = {
-	folder: string;
-	documents: ProjectDocument[];
-};
 
 /** `document::TrashEntry` */
 export type TrashEntry = {

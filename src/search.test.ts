@@ -7,14 +7,14 @@ function document(title: string, markdown: string): Searchable {
 	return {
 		id: `id-${title}`,
 		title,
-		folder: "Manuscript",
+		trail: ["Manuscript"],
 		runs: runsOf(markdown),
 	};
 }
 
 /** A document whose file would not open. */
 function unreadable(title: string): Searchable {
-	return { id: `id-${title}`, title, folder: "Manuscript", runs: null };
+	return { id: `id-${title}`, title, trail: ["Manuscript"], runs: null };
 }
 
 describe("what comes back", () => {
