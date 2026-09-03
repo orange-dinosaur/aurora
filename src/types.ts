@@ -67,6 +67,26 @@ export type DocumentText = ProjectDocument & {
 	text: string | null;
 };
 
+/** `tree::FolderKind` — what a folder inside the Manuscript is. */
+export type FolderKind = "part" | "chapter";
+
+/**
+ * `document::NodeView` — one entry in the project's tree, tagged so the caller
+ * can switch on `node`. The top level is the project's sections; every level
+ * below it is one ordered list of folders and documents, which is the order a
+ * reader would meet the text in.
+ */
+export type TreeNode =
+	| {
+			node: "folder";
+			id: string;
+			name: string;
+			/** null outside the Manuscript. */
+			kind: FolderKind | null;
+			children: TreeNode[];
+	  }
+	| ({ node: "document" } & ProjectDocument);
+
 /** `document::SectionDocuments` */
 export type SectionDocuments = {
 	folder: string;

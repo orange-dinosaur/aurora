@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::project::{
 	Error, Manifest, Result, read_manifest, validate_name, write_atomic, write_manifest,
 };
-use crate::tree::{self, Node};
+use crate::tree::{self, FolderKind, Node};
 
 /// A document inside a project. The path is relative to the project root and
 /// always uses forward slashes, so a manifest written on one platform still
@@ -111,6 +111,53 @@ impl DocumentSummary {
 pub struct SectionDocuments {
 	pub folder: String,
 	pub documents: Vec<DocumentView>,
+}
+
+/// One entry in the project's tree as the front end reads it: [`tree::Node`]
+/// with the things a node's place decides already worked out. A document
+/// carries the same view the flat lists send, so nothing outside Rust ever
+/// takes a path apart.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "node", rename_all = "camelCase")]
+pub enum NodeView {
+	Folder {
+		id: Uuid,
+		name: String,
+		/// Always present, `null` outside the Manuscript, for the same reason
+		/// a document's target is.
+		kind: Option<FolderKind>,
+		children: Vec<NodeView>,
+	},
+	Document(DocumentView),
+}
+
+/// The tree under `prefix`, ready to send. The prefix is how far down the walk
+/// has come, which is what turns a node's name into its path.
+fn views(nodes: &[Node], prefix: &str) -> Vec<NodeView> {
+	nodes
+		.iter()
+		.map(|node| match node {
+			Node::Folder {
+				id,
+				name,
+				kind,
+				children,
+			} => NodeView::Folder {
+				id: *id,
+				name: name.clone(),
+				kind: *kind,
+				children: views(children, &format!("{prefix}{name}/")),
+			},
+			Node::Document { id, name, target } => {
+				let document = Document {
+					id: *id,
+					path: format!("{prefix}{name}"),
+					target: *target,
+				};
+				NodeView::Document((&document).into())
+			}
+		})
+		.collect()
 }
 
 /// A document and the whole of its text, for reading the project in one go.
@@ -551,6 +598,16 @@ pub fn list_documents(root: PathBuf) -> Result<Vec<SectionDocuments>> {
 		return Err(Error::RelativePath);
 	}
 	Ok(sections(&read_manifest(&root)?))
+}
+
+/// The project as a tree, straight from the manifest. The sidebar reads this;
+/// the flat lists above it are what everything else still asks for.
+#[tauri::command]
+pub fn document_tree(root: PathBuf) -> Result<Vec<NodeView>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	Ok(views(&read_manifest(&root)?.nodes, ""))
 }
 
 /// The same, after looking at the folder again for anything added, removed or
@@ -1341,9 +1398,61 @@ mod tests {
 			Error::RelativePath
 		));
 		assert!(matches!(
-			refresh_documents(relative).unwrap_err(),
+			refresh_documents(relative.clone()).unwrap_err(),
 			Error::RelativePath
 		));
+		assert!(matches!(
+			document_tree(relative).unwrap_err(),
+			Error::RelativePath
+		));
+	}
+
+	#[test]
+	fn the_tree_keeps_its_shape_and_spells_out_every_path() {
+		let manifest = manifest_with(&["Manuscript/Part One/Chapter 1.md", "Notes/Notes.md"]);
+		let tree = views(&manifest.nodes, "");
+
+		let NodeView::Folder { name, children, .. } = &tree[0] else {
+			panic!("the top level is the project's sections");
+		};
+		assert_eq!(name, "Manuscript");
+
+		let NodeView::Folder {
+			name,
+			kind,
+			children,
+			..
+		} = &children[0]
+		else {
+			panic!("a folder inside a section is still a folder");
+		};
+		assert_eq!(name, "Part One");
+		assert_eq!(
+			*kind, None,
+			"a folder read from a flat manifest has no kind"
+		);
+
+		let NodeView::Document(chapter) = &children[0] else {
+			panic!("the chapter sits inside the part");
+		};
+		assert_eq!(chapter.path, "Manuscript/Part One/Chapter 1.md");
+		assert_eq!(chapter.title, "Chapter 1");
+		assert_eq!(
+			chapter.folder, "Manuscript",
+			"a document's section is the top of its path, however deep it sits"
+		);
+	}
+
+	#[test]
+	fn a_node_says_which_kind_it_is_on_the_wire() {
+		let manifest = manifest_with(&["Notes/Notes.md"]);
+		let json = serde_json::to_value(views(&manifest.nodes, "")).unwrap();
+
+		let notes = &json.as_array().unwrap()[4];
+		assert_eq!(notes["node"], "folder");
+		assert_eq!(notes["kind"], serde_json::Value::Null);
+		assert_eq!(notes["children"][0]["node"], "document");
+		assert_eq!(notes["children"][0]["title"], "Notes");
 	}
 
 	#[test]

@@ -721,8 +721,9 @@ body,
 	gap: 0.5rem;
 	width: 100%;
 	height: 28px;
-	/* The right-hand room is the row menu's, which is painted over the row. */
-	padding: 0 1.4rem 0 0.25rem;
+	/* The right-hand room is the row menu's, which is painted over the row.
+	   The left is how far down the tree the row sits. */
+	padding: 0 1.4rem 0 calc(0.25rem + var(--depth, 0) * 0.75rem);
 	font: inherit;
 	font-size: 0.8125rem;
 	text-align: left;
@@ -731,6 +732,17 @@ body,
 	border: 0;
 	border-radius: 4px;
 	cursor: pointer;
+}
+
+/* A folder in the list is a name and nothing else so far. Nothing can make one
+   until folders can be created, so this only says where it sits. */
+.folder {
+	display: flex;
+	align-items: center;
+	height: 28px;
+	padding: 0 1.4rem 0 calc(0.25rem + var(--depth, 0) * 0.75rem);
+	font-size: 0.8125rem;
+	color: var(--text-dim);
 }
 
 /* Fixed rather than fitted, so the titles line up down the column however far

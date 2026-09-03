@@ -17,6 +17,7 @@ pub fn run() {
 			project::open_project,
 			project::recent_projects,
 			document::list_documents,
+			document::document_tree,
 			document::refresh_documents,
 			document::read_document,
 			document::read_all_documents,
