@@ -10,6 +10,7 @@ export type IconName =
 	| "chevron-right"
 	| "arrow-left-right"
 	| "panel-left"
+	| "folder"
 	| "link"
 	| "plus"
 	| "refresh"
@@ -66,6 +67,9 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
 		</>
 	),
+	folder: (
+		<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+	),
 	"panel-left": (
 		<>
 			<rect x="3" y="3" width="18" height="18" rx="2" />
@@ -107,11 +111,19 @@ const SHAPES: Record<IconName, ReactNode> = {
 };
 
 /** Decorative by definition: every button carrying one keeps the label that
- * names it, so the icon has nothing left to say to a screen reader. */
-export default function Icon({ name }: { name: IconName }) {
+ * names it, so the icon has nothing left to say to a screen reader. The size
+ * here is the one the interface uses; a caller wanting another passes a class
+ * and sets it there. */
+export default function Icon({
+	name,
+	className,
+}: {
+	name: IconName;
+	className?: string;
+}) {
 	return (
 		<svg
-			className="icon"
+			className={className === undefined ? "icon" : `icon ${className}`}
 			viewBox="0 0 24 24"
 			width="16"
 			height="16"

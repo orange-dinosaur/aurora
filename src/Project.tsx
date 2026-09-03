@@ -6,6 +6,7 @@ import Search from "./Search";
 import FolderView from "./FolderView";
 import Sidebar from "./Sidebar";
 import Tabs from "./Tabs";
+import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import type { Preferences, ProjectDocument } from "./types";
@@ -46,12 +47,12 @@ type DocumentTab = {
 	seed: Seed | null;
 };
 
-type SectionTab = {
-	kind: "section";
+type FolderTab = {
+	kind: "folder";
 	key: string;
 	/** The folder the overview is of, which is what the command takes. */
 	id: string;
-	folder: string;
+	name: string;
 };
 
 type TrashTab = {
@@ -64,33 +65,47 @@ type SearchTab = {
 	key: string;
 };
 
-type Tab = DocumentTab | SectionTab | TrashTab | SearchTab;
+type Tab = DocumentTab | FolderTab | TrashTab | SearchTab;
 
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
 
-/** One tab as the strip shows it. Only a document can be unsaved. */
-function strip(tab: Tab) {
+/**
+ * One tab as the strip shows it. The kind travels with it: a folder called
+ * `Notes` and a document called `Notes` are not the same tab, and the strip
+ * used to have only the missing `folder/` prefix to tell them apart. Only a
+ * document can be unsaved.
+ */
+function strip(tab: Tab): TabView {
 	switch (tab.kind) {
 		case "document":
 			return {
 				key: tab.key,
+				kind: "document",
 				folder: tab.document.folder,
 				title: tab.document.title,
 				dirty: tab.save.kind !== "clean",
 			};
-		case "section":
+		case "folder":
 			return {
 				key: tab.key,
+				kind: "folder",
 				folder: null,
-				title: tab.folder,
+				title: tab.name,
 				dirty: false,
 			};
 		case "trash":
-			return { key: tab.key, folder: null, title: "Trash", dirty: false };
+			return {
+				key: tab.key,
+				kind: "trash",
+				folder: null,
+				title: "Trash",
+				dirty: false,
+			};
 		case "search":
 			return {
 				key: tab.key,
+				kind: "search",
 				folder: null,
 				title: "Search",
 				dirty: false,
@@ -248,20 +263,20 @@ export default function Project({
 		patch(document.id, (tab) => ({ ...tab, content }));
 	}
 
-	function openFolder(id: string, folder: string) {
+	function openFolder(id: string, name: string) {
 		const already = tabs.find(
-			(tab) => tab.kind === "section" && tab.id === id,
+			(tab) => tab.kind === "folder" && tab.id === id,
 		);
 		if (already !== undefined) {
 			setActiveKey(already.key);
 			return;
 		}
 
-		const opening: SectionTab = {
-			kind: "section",
+		const opening: FolderTab = {
+			kind: "folder",
 			key: freshKey(),
 			id,
-			folder,
+			name,
 		};
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
@@ -588,7 +603,7 @@ export default function Project({
 						active?.kind === "document" ? active.document.id : null
 					}
 					selectedFolder={
-						active?.kind === "section" ? active.id : null
+						active?.kind === "folder" ? active.id : null
 					}
 					selectedTrash={active?.kind === "trash"}
 					onSelect={(document) => void openDocument(document)}
@@ -658,7 +673,7 @@ export default function Project({
 									Choose a document to open.
 								</p>
 							</div>
-						) : active.kind === "section" ? (
+						) : active.kind === "folder" ? (
 							<div className="project__pane">
 								{/* Keyed, so moving between two overviews
 								    starts the new one empty rather than
@@ -668,7 +683,7 @@ export default function Project({
 									key={active.key}
 									root={root}
 									id={active.id}
-									folder={active.folder}
+									folder={active.name}
 									reload={listing}
 									onSelect={(document) =>
 										void openDocument(document)
