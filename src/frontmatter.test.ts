@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parse, serialize, type Fields } from "./frontmatter";
+import { list, parse, serialize, text, type Fields } from "./frontmatter";
 
 /** A block as it sits at the top of a file, fences and all. */
 function block(...lines: string[]): string {
@@ -58,6 +58,24 @@ describe("reading front matter", () => {
 		);
 
 		expect(found).toEqual(fields([["synopsis", "She comes home."]]));
+	});
+});
+
+describe("reading a field whatever shape it is in", () => {
+	test("a field that is not there reads as empty", () => {
+		expect(text(new Map(), "synopsis")).toBe("");
+		expect(list(new Map(), "tags")).toEqual([]);
+	});
+
+	test("text asked for as a list is the one item", () => {
+		expect(list(fields([["tags", "sea"]]), "tags")).toEqual(["sea"]);
+		expect(list(fields([["tags", ""]]), "tags")).toEqual([]);
+	});
+
+	test("a list asked for as text is joined", () => {
+		expect(text(fields([["synopsis", ["One.", "Two."]]]), "synopsis")).toBe(
+			"One., Two.",
+		);
 	});
 });
 

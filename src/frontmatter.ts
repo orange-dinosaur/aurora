@@ -240,6 +240,34 @@ function segments(block: string): Segment[] {
 	return found;
 }
 
+/**
+ * A field as one line of text, whatever shape the file gave it. A writer who
+ * wrote a list where Aurora expects text sees it joined rather than nothing.
+ */
+export function text(fields: Fields, key: string): string {
+	const value = fields.get(key);
+
+	if (value === undefined) {
+		return "";
+	}
+
+	return typeof value === "string" ? value : value.join(", ");
+}
+
+/** A field as a list, whatever shape the file gave it. */
+export function list(fields: Fields, key: string): string[] {
+	const value = fields.get(key);
+
+	if (value === undefined) {
+		return [];
+	}
+	if (typeof value === "string") {
+		return value === "" ? [] : [value];
+	}
+
+	return value;
+}
+
 /** The fields a front matter block sets, fences and all. */
 export function parse(block: string): Fields {
 	const fields: Fields = new Map();

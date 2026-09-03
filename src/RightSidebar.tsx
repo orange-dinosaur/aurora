@@ -1,4 +1,7 @@
 import Icon from "./Icon";
+import Info from "./Info";
+import Synopsis from "./Synopsis";
+import type { FieldsHandle } from "./fields";
 import type { RightSidebarTab } from "./types";
 
 // The panel on the far side of the writing from the sidebar, about whatever is
@@ -13,12 +16,14 @@ const TABS: { name: RightSidebarTab; label: string }[] = [
 ];
 
 type Props = {
+	/** The open document's fields, or null when what is open has none yet. */
+	fields: FieldsHandle | null;
 	tab: RightSidebarTab;
 	onTab: (tab: RightSidebarTab) => void;
 	onClose: () => void;
 };
 
-export default function RightSidebar({ tab, onTab, onClose }: Props) {
+export default function RightSidebar({ fields, tab, onTab, onClose }: Props) {
 	return (
 		<aside className="right-sidebar" aria-label="About what is open">
 			<div className="right-sidebar__tabs">
@@ -48,7 +53,13 @@ export default function RightSidebar({ tab, onTab, onClose }: Props) {
 			</div>
 
 			<div className="right-sidebar__body">
-				<p className="right-sidebar__empty">Nothing here yet.</p>
+				{fields === null || tab === "mentions" ? (
+					<p className="right-sidebar__empty">Nothing here yet.</p>
+				) : tab === "synopsis" ? (
+					<Synopsis {...fields} />
+				) : (
+					<Info {...fields} />
+				)}
 			</div>
 		</aside>
 	);

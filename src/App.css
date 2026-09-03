@@ -641,6 +641,107 @@ body,
 	color: var(--text-dim);
 }
 
+/* One field of the panel: its name, then whatever holds its value. Stacked
+   rather than set beside a label, since the panel is too narrow for two
+   columns and a synopsis wants the whole width. */
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.field + .field {
+	margin-top: 1rem;
+}
+
+.field__label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--text-dim);
+}
+
+.field__box,
+.field__line {
+	width: 100%;
+	padding: 0.375rem 0.5rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	line-height: 1.5;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+
+.field__box {
+	resize: vertical;
+}
+
+.field__box:focus-visible,
+.field__line:focus-visible {
+	outline: 2px solid var(--accent);
+	/* Inside the box rather than around it: the panel's own padding is only
+	   0.75rem and a ring outside would be clipped by the scroll container. */
+	outline-offset: -1px;
+}
+
+.field__box::placeholder,
+.field__line::placeholder {
+	color: var(--text-dim);
+}
+
+/* The tags on a document. A chip is a value, not a control: the x removes it
+   and the chip itself does nothing until a tag has a view of its own. */
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.125rem;
+	padding: 0.0625rem 0.125rem 0.0625rem 0.4375rem;
+	font-size: 0.75rem;
+	color: var(--text);
+	background: var(--accent-wash);
+	border-radius: 999px;
+}
+
+.chip__remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 999px;
+	cursor: pointer;
+}
+
+.chip__remove:hover {
+	color: var(--text);
+}
+
+.chip__remove:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+/* The icon inside a chip is smaller than the 16px the set is drawn at. */
+.chip__remove svg {
+	width: 12px;
+	height: 12px;
+}
+
 .sidebar__list {
 	position: relative;
 	display: flex;

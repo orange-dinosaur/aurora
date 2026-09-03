@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
+import type { FieldsHandle } from "./fields";
 import Search from "./Search";
 import FolderView from "./FolderView";
 import RightSidebar from "./RightSidebar";
@@ -149,6 +150,10 @@ export default function Project({
 	// Bumped whenever a document reaches disk, which is the other way the
 	// project changes under anything holding a copy of it.
 	const [written, setWritten] = useState(0);
+	// The open document's front matter, handed up by whichever editor is
+	// showing. The panel that displays it is rendered out here, beside the
+	// editor rather than inside it, so it cannot read the editor for itself.
+	const [fields, setFields] = useState<FieldsHandle | null>(null);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
 
 	// A tab's key is its own, handed out when it opens and never derived from
@@ -632,6 +637,7 @@ export default function Project({
 				<Editor
 					title={tab.document.title}
 					text={tab.content.text}
+					active={tab.key === activeKey}
 					dirty={tab.save.kind !== "clean"}
 					saving={tab.save.kind === "saving"}
 					missing={tab.save.kind === "missing"}
@@ -640,6 +646,7 @@ export default function Project({
 					seed={tab.seed}
 					preferences={preferences}
 					onChange={(text) => edit(tab.document.id, text)}
+					onFields={setFields}
 					onRestore={() => void restore(tab.document.id)}
 					onPreferences={onPreferences}
 					onTarget={(target) =>
@@ -815,6 +822,7 @@ export default function Project({
 
 				{about !== null && preferences.rightSidebar && (
 					<RightSidebar
+						fields={about === "document" ? fields : null}
 						tab={preferences.rightSidebarTab}
 						onTab={(tab) =>
 							onPreferences({

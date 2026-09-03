@@ -17,6 +17,7 @@ import {
 	EDITOR_NODES,
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
+import { useFields, type FieldsHandle } from "./fields";
 import type { Seed } from "./find";
 import { FIND, OUTLINE, shortcutLabel, TOOLBAR } from "./formatting";
 import Find from "./Find";
@@ -64,6 +65,25 @@ const THEME: EditorThemeClasses = {
 	},
 };
 
+/**
+ * Hands the open document's fields to whatever is showing them, since the panel
+ * that does sits beside the editor rather than inside it and cannot reach the
+ * composer's context from there. Only the editor whose tab is showing reports:
+ * every open document stays mounted, and they would otherwise all answer.
+ */
+function Fields({
+	onFields,
+}: {
+	onFields: (fields: FieldsHandle | null) => void;
+}) {
+	const fields = useFields();
+
+	useEffect(() => onFields(fields), [fields, onFields]);
+	useEffect(() => () => onFields(null), [onFields]);
+
+	return null;
+}
+
 function counted(text: string) {
 	return {
 		words: words(text),
@@ -84,6 +104,8 @@ function tallied(counts: ReturnType<typeof counted>): string {
 type Props = {
 	title: string;
 	text: string;
+	/** Whether this is the tab being looked at, and so the one that reports. */
+	active: boolean;
 	dirty: boolean;
 	saving: boolean;
 	missing: boolean;
@@ -93,6 +115,7 @@ type Props = {
 	seed: Seed | null;
 	preferences: Preferences;
 	onChange: (text: string) => void;
+	onFields: (fields: FieldsHandle | null) => void;
 	onRestore: () => void;
 	onPreferences: (next: Preferences) => void;
 	onTarget: (target: number | null) => void;
@@ -101,6 +124,7 @@ type Props = {
 export default function Editor({
 	title,
 	text,
+	active,
 	dirty,
 	saving,
 	missing,
@@ -109,6 +133,7 @@ export default function Editor({
 	seed,
 	preferences,
 	onChange,
+	onFields,
 	onRestore,
 	onPreferences,
 	onTarget,
@@ -322,6 +347,7 @@ export default function Editor({
 					{/* Moving the caret is not an edit, or every click would
 					    mark the document unsaved. */}
 					<OnChangePlugin ignoreSelectionChange onChange={edited} />
+					{active && <Fields onFields={onFields} />}
 					<Shortcuts
 						onToolbar={toggle}
 						onOutline={outline}

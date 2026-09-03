@@ -9,6 +9,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { parse, serialize, type Fields, type Value } from "./frontmatter";
 import { $frontMatter, $setFrontMatter } from "./markdown";
 
+/** Setting a field, or dropping it when the value is null. */
+export type SetField = (key: string, value: Value | null) => void;
+
+/**
+ * What the panel beside the writing needs from the editor: the open document's
+ * fields, and a way to change one.
+ */
+export type FieldsHandle = { fields: Fields; setField: SetField };
+
 /** The fields the document carries. Call inside a read of an editor state. */
 export function $fields(): Fields {
 	return parse($frontMatter());
@@ -35,10 +44,7 @@ export function $setField(key: string, value: Value | null): void {
  * The fields of the document being edited, kept in step with it, and a way to
  * change one. Only works inside the editor's composer.
  */
-export function useFields(): {
-	fields: Fields;
-	setField: (key: string, value: Value | null) => void;
-} {
+export function useFields(): FieldsHandle {
 	const [editor] = useLexicalComposerContext();
 
 	// The block is held as a string, so typing anywhere else in the document
@@ -55,12 +61,18 @@ export function useFields(): {
 		[editor],
 	);
 
-	const setField = useCallback(
-		(key: string, value: Value | null) => {
+	const setField = useCallback<SetField>(
+		(key, value) => {
 			editor.update(() => $setField(key, value));
 		},
 		[editor],
 	);
 
-	return { fields: useMemo(() => parse(block), [block]), setField };
+	// Memoised as one object: whatever holds it compares it by identity, and a
+	// fresh one on every render would have the panel rebuilding as fast as the
+	// writer types.
+	return useMemo(
+		() => ({ fields: parse(block), setField }),
+		[block, setField],
+	);
 }
