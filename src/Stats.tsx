@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import History from "./History";
 import Target from "./Target";
 import { Sprint } from "./Session";
 import { failure } from "./errors";
@@ -220,6 +221,11 @@ export default function Stats({
 					<h3 className="stats__heading">The project, today</h3>
 					<Whole name="Automatic" tally={project.automatic} />
 					<Whole name="Session" tally={project.deliberate} />
+
+					{/* Every number above this adds sessions together. This is
+					    where one of them can be looked at on its own. */}
+					<h3 className="stats__heading">Past sessions</h3>
+					<History sessions={history} />
 				</>
 			)}
 		</div>

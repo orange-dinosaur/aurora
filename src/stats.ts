@@ -65,6 +65,44 @@ export function onDay(history: PastSession[], at: number): PastSession[] {
 }
 
 /**
+ * The history file in the order a reader wants it, latest first. The file is
+ * appended to as sessions close, so it arrives the other way round, and it is
+ * sorted rather than reversed in case anything ever writes to it out of order.
+ */
+export function newest(history: PastSession[]): PastSession[] {
+	return [...history].sort(
+		(one, other) =>
+			new Date(other.start).getTime() - new Date(one.start).getTime(),
+	);
+}
+
+/** How long a session ran, from the two moments the file holds. */
+export function lasted(session: PastSession): string {
+	return clock(
+		new Date(session.end).getTime() - new Date(session.start).getTime(),
+	);
+}
+
+/**
+ * What a session was, in the vocabulary the decision uses: which layer it came
+ * from, and what it was aiming at when it had something to aim at. A sprint is
+ * a deliberate session with a limit, not a third kind of thing, so it is
+ * spelled out here rather than stored as one.
+ */
+export function sessionKind(session: PastSession): string {
+	if (session.layer === "automatic") {
+		return "Automatic";
+	}
+
+	if (session.limit === undefined) {
+		return "Session";
+	}
+
+	const aim = `Sprint · ${session.limit.amount.toLocaleString()} ${session.limit.unit}`;
+	return session.limitMet === true ? `${aim} · met` : `${aim} · stopped`;
+}
+
+/**
  * A session's three project-wide numbers. Written and removed are counted where
  * the editor sees them; net is the project's own word count moving. They are
  * kept apart because they can disagree and both are true.

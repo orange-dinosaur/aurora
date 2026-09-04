@@ -895,6 +895,79 @@ body,
 	outline-offset: 1px;
 }
 
+.history {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* A hairline between entries rather than a card each: twenty of these sit in a
+   240px column, and boxing them would leave no room for the numbers. */
+.history__session {
+	padding: 0.4rem 0;
+	border-top: 1px solid var(--border);
+}
+
+.history__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--text);
+}
+
+.history__lasted {
+	flex: none;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.history__kind {
+	margin: 0.1rem 0 0;
+	font-size: 0.75rem;
+	color: var(--text);
+}
+
+.history__numbers {
+	margin: 0.1rem 0 0;
+	font-size: 0.6875rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.history__none {
+	margin: 0;
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+}
+
+.history__more {
+	margin-top: 0.4rem;
+	padding: 0.1rem 0.3rem;
+	font: inherit;
+	font-size: 0.75rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.history__more:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.history__more:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
 .stats__trouble {
 	margin: 0 0 0.75rem;
 	font-size: 0.8125rem;

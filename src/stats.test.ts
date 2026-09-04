@@ -4,8 +4,11 @@ import type { Limit, Running } from "./sessions";
 import {
 	clock,
 	dayTally,
+	lasted,
+	newest,
 	onDay,
 	running,
+	sessionKind,
 	sessionReading,
 	today,
 	unexplained,
@@ -106,6 +109,66 @@ describe("what a document has gained", () => {
 			automatic: 0,
 			deliberate: 0,
 		});
+	});
+});
+
+describe("the history file as a list", () => {
+	test("the latest session comes first", () => {
+		const history = [
+			past("automatic", at(3, 9), {}),
+			past("deliberate", at(4, 14), {}),
+			past("automatic", at(4, 9), {}),
+		];
+
+		expect(newest(history).map((session) => session.start)).toEqual([
+			at(4, 14),
+			at(4, 9),
+			at(3, 9),
+		]);
+	});
+
+	test("the file itself is left alone", () => {
+		const history = [past("automatic", at(3, 9), {})];
+		newest(history);
+
+		expect(history.map((session) => session.start)).toEqual([at(3, 9)]);
+	});
+
+	test("how long one ran comes from its two moments", () => {
+		expect(
+			lasted({
+				...past("deliberate", at(4, 9), {}),
+				end: new Date(2026, 8, 4, 9, 25, 30).toISOString(),
+			}),
+		).toBe("25:30");
+	});
+});
+
+describe("what a session was", () => {
+	const began = at(4, 9);
+
+	test("the layer underneath says only that", () => {
+		expect(sessionKind(past("automatic", began, {}))).toBe("Automatic");
+	});
+
+	test("a deliberate session without a limit is just a session", () => {
+		expect(sessionKind(past("deliberate", began, {}))).toBe("Session");
+	});
+
+	// A sprint is a deliberate session with a limit, not a third kind, so what
+	// it was aiming at is spelled out from the limit itself.
+	test("a sprint says what it was aiming at, and whether it got there", () => {
+		const sprint = {
+			...past("deliberate", began, {}),
+			limit: { unit: "words", amount: 500 } as const,
+		};
+
+		expect(sessionKind({ ...sprint, limitMet: true })).toBe(
+			"Sprint · 500 words · met",
+		);
+		expect(sessionKind({ ...sprint, limitMet: false })).toBe(
+			"Sprint · 500 words · stopped",
+		);
 	});
 });
 
