@@ -53,7 +53,8 @@ type Props = {
 	onSelect: (document: ProjectDocument) => void;
 	onOpenFolder: (folder: FolderRef) => void;
 	onCreated: (document: ProjectDocument) => void;
-	onRenamed: (document: ProjectDocument) => void;
+	/** The renamed document, and the title it answered to before. */
+	onRenamed: (document: ProjectDocument, was: string) => void;
 	onFolderRenamed: (folder: FolderNode) => void;
 	/** The manifest changed in a way every listing of it has to read again. */
 	onChanged: () => void;
@@ -148,13 +149,18 @@ export default function FolderView({
 		}
 	}
 
-	async function rename(id: string, name: string, what: Making["what"]) {
+	async function rename(
+		id: string,
+		name: string,
+		what: Making["what"],
+		was = "",
+	) {
 		setRenaming({ kind: "saving", id });
 		try {
 			if (what === "folder") {
 				onFolderRenamed(await renameFolder(root, id, name));
 			} else {
-				onRenamed(await renameDocument(root, id, name));
+				onRenamed(await renameDocument(root, id, name), was);
 			}
 			setRenaming({ kind: "closed" });
 		} catch (error) {
@@ -318,6 +324,7 @@ export default function FolderView({
 											document.id,
 											name,
 											"document",
+											document.title,
 										)
 									}
 									onCancel={() =>

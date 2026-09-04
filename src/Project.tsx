@@ -15,11 +15,13 @@ import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import type {
+	DocumentText,
 	FolderNode,
 	Preferences,
 	ProjectDocument,
 	TreeNode,
 } from "./types";
+import { retag, tagged } from "./tags";
 import type { FolderRef } from "./tree";
 import { documentsOf, folderOf, rows } from "./tree";
 import { deleteDocument, deleteFolder } from "./documents";
@@ -83,6 +85,17 @@ type TagTab = {
 };
 
 type Tab = DocumentTab | FolderTab | TrashTab | SearchTab | TagTab;
+
+/**
+ * What is being offered after a document was renamed out from under the tags
+ * pointing at it. `from` and `to` are the titles; `ids` are the documents
+ * wearing the old one.
+ */
+type Retagging =
+	| { kind: "no" }
+	| { kind: "asking"; from: string; to: string; ids: string[] }
+	| { kind: "writing"; from: string; to: string; ids: string[] }
+	| { kind: "failed"; message: string };
 
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
@@ -167,6 +180,9 @@ export default function Project({
 	// Bumped whenever a document reaches disk, which is the other way the
 	// project changes under anything holding a copy of it.
 	const [written, setWritten] = useState(0);
+	// The one thing a rename cannot decide on its own: what to do with the tags
+	// that were pointing at the old title.
+	const [retagging, setRetagging] = useState<Retagging>({ kind: "no" });
 	// The open document's front matter, handed up by whichever editor is
 	// showing. The panel that displays it is rendered out here, beside the
 	// editor rather than inside it, so it cannot read the editor for itself.
@@ -408,9 +424,85 @@ export default function Project({
 	// A rename gives a document a new path and title but not a new id, so a
 	// tab holding it is re-pointed where it stands. Its key is its own, so
 	// neither the strip nor the editor is torn down for this.
-	function renamed(document: ProjectDocument) {
+	function renamed(document: ProjectDocument, was: string) {
 		patch(document.id, (tab) => ({ ...tab, document }));
 		setListing((version) => version + 1);
+
+		if (was !== "" && was !== document.title) {
+			void countTags(was, document.title);
+		}
+	}
+
+	/**
+	 * Whether anything was filed under the title this document has just left.
+	 * A tag is the writer's word and not a reference Aurora maintains, so the
+	 * rename lands either way and this only offers to follow it.
+	 */
+	async function countTags(from: string, to: string) {
+		try {
+			const all = await invoke<DocumentText[]>("read_all_documents", {
+				root,
+			});
+			const ids = all.flatMap(({ id, text }) =>
+				text !== null && tagged(text, from) ? [id] : [],
+			);
+
+			if (ids.length > 0) {
+				setRetagging({ kind: "asking", from, to, ids });
+			}
+		} catch {
+			// The rename itself landed. Nothing is offered if the rest of the
+			// project could not be read, and nothing is said about it either:
+			// a warning about a question that was never asked is noise.
+		}
+	}
+
+	/**
+	 * Rewrites one document's tag. A document with a tab open is written from
+	 * what the tab holds rather than from the file, which may be up to 800 ms
+	 * behind it, and then comes back under a fresh key: an editor seeds itself
+	 * from its text once and owns it from there, so the only way to show it the
+	 * new tag is to mount it again. That costs the tab its undo history, which
+	 * is why nothing here touches a document that is merely open.
+	 */
+	async function retagOne(id: string, from: string, to: string) {
+		const tab = documentTab(id);
+
+		if (tab === undefined || tab.content.kind !== "ready") {
+			const text = await invoke<string>("read_document", { root, id });
+			await invoke("write_document", {
+				root,
+				id,
+				text: retag(text, from, to),
+			});
+			return;
+		}
+
+		const text = retag(tab.content.text, from, to);
+		stopTimer(id);
+		await invoke("write_document", { root, id, text });
+
+		const key = freshKey();
+		patch(id, (open) => ({
+			...open,
+			key,
+			content: { kind: "ready", text },
+			save: { kind: "clean" },
+		}));
+		setActiveKey((active) => (active === tab.key ? key : active));
+	}
+
+	async function retagAll(from: string, to: string, ids: string[]) {
+		setRetagging({ kind: "writing", from, to, ids });
+		try {
+			for (const id of ids) {
+				await retagOne(id, from, to);
+			}
+			setRetagging({ kind: "no" });
+			setWritten((times) => times + 1);
+		} catch (error) {
+			setRetagging({ kind: "failed", message: failure(error).message });
+		}
 	}
 
 	// A move changes the path of everything under what moved, which can be a
@@ -904,6 +996,60 @@ export default function Project({
 							</div>
 						) : null}
 					</div>
+
+					{/* Over the panes rather than above them: the writing does
+					    not move down to make room for a question about
+					    something else. */}
+					{retagging.kind !== "no" && (
+						<p className="retag" role="status">
+							{retagging.kind === "failed" ? (
+								<span className="retag__said retag__said--error">
+									{retagging.message}
+								</span>
+							) : (
+								<span className="retag__said">
+									{retagging.ids.length === 1
+										? "One document is tagged"
+										: `${retagging.ids.length} documents are tagged`}{" "}
+									<span className="retag__tag">
+										{retagging.from}
+									</span>
+									. Retag them{" "}
+									<span className="retag__tag">
+										{retagging.to}
+									</span>
+									?
+								</span>
+							)}
+
+							{retagging.kind === "asking" && (
+								<button
+									type="button"
+									className="retag__do"
+									onClick={() =>
+										void retagAll(
+											retagging.from,
+											retagging.to,
+											retagging.ids,
+										)
+									}
+								>
+									Retag
+								</button>
+							)}
+
+							<button
+								type="button"
+								className="retag__do"
+								disabled={retagging.kind === "writing"}
+								onClick={() => setRetagging({ kind: "no" })}
+							>
+								{retagging.kind === "asking"
+									? "Leave"
+									: "Close"}
+							</button>
+						</p>
+					)}
 				</div>
 
 				{about !== null && preferences.rightSidebar && (
