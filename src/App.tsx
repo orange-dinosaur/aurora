@@ -12,7 +12,6 @@ const DEFAULTS: Preferences = {
 	toolbar: true,
 	focus: false,
 	typewriter: false,
-	outline: false,
 	sidebar: true,
 	rightSidebar: false,
 	rightSidebarTab: "synopsis",

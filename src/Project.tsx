@@ -26,6 +26,7 @@ import type { FolderRef } from "./tree";
 import { documentsOf, folderOf, rows } from "./tree";
 import { deleteDocument, deleteFolder } from "./documents";
 import type { Seed } from "./find";
+import type { OutlineHandle } from "./outline";
 import { failure } from "./errors";
 import { pressed, SEARCH } from "./formatting";
 
@@ -187,6 +188,8 @@ export default function Project({
 	// showing. The panel that displays it is rendered out here, beside the
 	// editor rather than inside it, so it cannot read the editor for itself.
 	const [fields, setFields] = useState<FieldsHandle | null>(null);
+	// The headings of the same document, and for the same reason.
+	const [outline, setOutline] = useState<OutlineHandle | null>(null);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
 
 	// A folder's fields are read on their own rather than carried on the tab:
@@ -802,6 +805,7 @@ export default function Project({
 					preferences={preferences}
 					onChange={(text) => edit(tab.document.id, text)}
 					onFields={setFields}
+					onOutline={setOutline}
 					onRestore={() => void restore(tab.document.id)}
 					onPreferences={onPreferences}
 					onTarget={(target) =>
@@ -1063,6 +1067,7 @@ export default function Project({
 				{about !== null && preferences.rightSidebar && (
 					<RightSidebar
 						fields={about === "document" ? fields : folderFields}
+						outline={about === "document" ? outline : null}
 						trouble={trouble}
 						about={panel}
 						root={root}

@@ -147,8 +147,6 @@ export type Preferences = {
 	focus: boolean;
 	/** Whether the caret's line is held in place and the page moves under it. */
 	typewriter: boolean;
-	/** Whether the headings are listed in a column beside the text. */
-	outline: boolean;
 	/** Whether the list of documents is showing beside the writing. */
 	sidebar: boolean;
 	/** Whether the panel about the open document or folder is showing. */

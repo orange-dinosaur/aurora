@@ -23,7 +23,7 @@ import { FIND, OUTLINE, shortcutLabel, TOOLBAR } from "./formatting";
 import Find from "./Find";
 import Focus from "./Focus";
 import Links from "./Links";
-import Outline from "./Outline";
+import { useOutline, type OutlineHandle } from "./outline";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
 import Target from "./Target";
@@ -84,6 +84,20 @@ function Fields({
 	return null;
 }
 
+/** The headings, sent the same way and for the same reason as the fields. */
+function Outline({
+	onOutline,
+}: {
+	onOutline: (outline: OutlineHandle | null) => void;
+}) {
+	const outline = useOutline();
+
+	useEffect(() => onOutline(outline), [outline, onOutline]);
+	useEffect(() => () => onOutline(null), [onOutline]);
+
+	return null;
+}
+
 function counted(text: string) {
 	return {
 		words: words(text),
@@ -116,6 +130,7 @@ type Props = {
 	preferences: Preferences;
 	onChange: (text: string) => void;
 	onFields: (fields: FieldsHandle | null) => void;
+	onOutline: (outline: OutlineHandle | null) => void;
 	onRestore: () => void;
 	onPreferences: (next: Preferences) => void;
 	onTarget: (target: number | null) => void;
@@ -134,6 +149,7 @@ export default function Editor({
 	preferences,
 	onChange,
 	onFields,
+	onOutline,
 	onRestore,
 	onPreferences,
 	onTarget,
@@ -142,9 +158,18 @@ export default function Editor({
 		() => onPreferences({ ...preferences, toolbar: !preferences.toolbar }),
 		[preferences, onPreferences],
 	);
+	// The headings live in the right sidebar now, so the button and its
+	// shortcut bring that panel round to them instead of opening a column.
+	const showing =
+		preferences.rightSidebar && preferences.rightSidebarTab === "synopsis";
 	const outline = useCallback(
-		() => onPreferences({ ...preferences, outline: !preferences.outline }),
-		[preferences, onPreferences],
+		() =>
+			onPreferences({
+				...preferences,
+				rightSidebar: !showing,
+				rightSidebarTab: "synopsis",
+			}),
+		[preferences, showing, onPreferences],
 	);
 	const note = error ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
 	// Counted from the markdown the editor would save, which is the same text
@@ -187,11 +212,6 @@ export default function Editor({
 		[onChange],
 	);
 	const look = ["editor"];
-	if (preferences.outline) {
-		// The column is drawn beside the text rather than out of it, so the
-		// frame grows by its width and the measure is left alone.
-		look.push("editor--outline");
-	}
 	if (preferences.focus) {
 		look.push("editor--focus");
 	}
@@ -250,7 +270,7 @@ export default function Editor({
 					<button
 						type="button"
 						className="editor__toggle"
-						aria-pressed={preferences.outline}
+						aria-pressed={showing}
 						aria-label="Outline"
 						title={`Outline (${shortcutLabel(OUTLINE)})`}
 						aria-keyshortcuts={shortcutLabel(OUTLINE)}
@@ -315,7 +335,6 @@ export default function Editor({
 			<LexicalComposer initialConfig={config}>
 				{preferences.toolbar && <Toolbar />}
 				<div className="editor__surface">
-					{preferences.outline && <Outline />}
 					<RichTextPlugin
 						contentEditable={
 							<ContentEditable
@@ -348,6 +367,7 @@ export default function Editor({
 					    mark the document unsaved. */}
 					<OnChangePlugin ignoreSelectionChange onChange={edited} />
 					{active && <Fields onFields={onFields} />}
+					{active && <Outline onOutline={onOutline} />}
 					<Shortcuts
 						onToolbar={toggle}
 						onOutline={outline}

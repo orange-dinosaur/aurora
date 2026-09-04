@@ -30,10 +30,6 @@ pub struct Preferences {
 	/// existed still reads rather than falling back to an empty one.
 	#[serde(default)]
 	pub typewriter: bool,
-	/// Whether the document's headings are listed in a column beside the text.
-	/// Defaulted for the same reason as the field above it.
-	#[serde(default)]
-	pub outline: bool,
 	/// Whether the list of documents is showing beside the writing. Needs a
 	/// default of its own: an older store has no such field, and falling back
 	/// to `false` would open Aurora with the sidebar gone.
@@ -75,7 +71,6 @@ impl Default for Preferences {
 			toolbar: true,
 			focus: false,
 			typewriter: false,
-			outline: false,
 			sidebar: shown(),
 			right_sidebar: false,
 			right_sidebar_tab: RightSidebarTab::Synopsis,
@@ -527,7 +522,6 @@ mod tests {
 		let store = load(&path).unwrap();
 		assert!(!store.preferences.toolbar);
 		assert!(!store.preferences.typewriter);
-		assert!(!store.preferences.outline);
 		// The one field whose default is not its type's: a store that predates
 		// it has to come back with the sidebar showing, not hidden.
 		assert!(store.preferences.sidebar);
@@ -547,7 +541,6 @@ mod tests {
 			toolbar: false,
 			focus: true,
 			typewriter: true,
-			outline: true,
 			sidebar: false,
 			right_sidebar: true,
 			right_sidebar_tab: RightSidebarTab::Mentions,

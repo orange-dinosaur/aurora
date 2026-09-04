@@ -4,6 +4,7 @@ import Mentions, { type About } from "./Mentions";
 import Synopsis from "./Synopsis";
 import type { FieldsHandle } from "./fields";
 import type { Seed } from "./find";
+import type { OutlineHandle } from "./outline";
 import { isSubject } from "./subjects";
 import type { ProjectDocument, RightSidebarTab } from "./types";
 
@@ -21,6 +22,8 @@ const TABS: { name: RightSidebarTab; label: string }[] = [
 type Props = {
 	/** The open document's fields, or null when what is open has none yet. */
 	fields: FieldsHandle | null;
+	/** The open document's headings, or null for a folder overview. */
+	outline: OutlineHandle | null;
 	/** What is open: a document, or the folder whose overview is showing. */
 	about: About | null;
 	/** Why a folder's last change was refused, when one was. */
@@ -40,6 +43,7 @@ type Props = {
 
 export default function RightSidebar({
 	fields,
+	outline,
 	about,
 	trouble,
 	root,
@@ -103,7 +107,7 @@ export default function RightSidebar({
 				) : fields === null ? (
 					<p className="right-sidebar__empty">Nothing here yet.</p>
 				) : tab === "synopsis" ? (
-					<Synopsis {...fields} />
+					<Synopsis {...fields} outline={outline} />
 				) : (
 					<Info
 						{...fields}

@@ -1,4 +1,5 @@
 pub mod document;
+pub mod history;
 pub mod project;
 pub mod store;
 pub mod tree;
@@ -36,6 +37,8 @@ pub fn run() {
 			document::restore_from_trash,
 			document::purge_trash_entry,
 			document::move_node,
+			history::read_history,
+			history::append_session,
 			store::read_preferences,
 			store::write_preferences,
 			store::read_expanded,
