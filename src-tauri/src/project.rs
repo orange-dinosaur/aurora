@@ -13,9 +13,10 @@ use crate::store;
 use crate::tree::{self, Node, tree_from_flat};
 
 /// A folder inside a project, together with the document it starts life with.
+/// A section with no seed is created empty.
 pub struct Section {
 	pub folder: &'static str,
-	pub seed: &'static str,
+	pub seed: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,23 +35,25 @@ pub const MANUSCRIPT: &str = "Manuscript";
 const NOVEL: &[Section] = &[
 	Section {
 		folder: "Manuscript",
-		seed: "Scene 1.md",
+		seed: Some("Scene 1.md"),
 	},
 	Section {
 		folder: "Outline",
-		seed: "Outline.md",
+		seed: Some("Outline.md"),
 	},
+	// Characters and Locations fill up a subject at a time, so a document
+	// standing in for the whole folder only gets in the way.
 	Section {
 		folder: "Characters",
-		seed: "Characters.md",
+		seed: None,
 	},
 	Section {
 		folder: "Locations",
-		seed: "Locations.md",
+		seed: None,
 	},
 	Section {
 		folder: "Notes",
-		seed: "Notes.md",
+		seed: Some("Notes.md"),
 	},
 ];
 
@@ -436,7 +439,8 @@ pub fn validate_name(name: &str) -> std::result::Result<(), NameError> {
 pub const MANIFEST_FILE: &str = "aurora.json";
 
 /// Creates `parent/<name>/` with the format's section folders, a seed document
-/// in each, and the manifest. Returns the new project's root.
+/// in the ones that ask for it, and the manifest. Returns the new project's
+/// root.
 pub fn create(
 	parent: &Path,
 	name: &str,
@@ -502,11 +506,12 @@ fn fill(
 	for section in sections {
 		let folder = root.join(section.folder);
 		fs::create_dir(&folder)?;
-		fs::write(folder.join(section.seed), "")?;
-		nodes.push(Node::folder(
-			section.folder,
-			vec![Node::document(section.seed)],
-		));
+		let mut children = Vec::new();
+		if let Some(seed) = section.seed {
+			fs::write(folder.join(seed), "")?;
+			children.push(Node::document(seed));
+		}
+		nodes.push(Node::folder(section.folder, children));
 	}
 
 	let mut manifest = Manifest::new(name, format, created_at);
@@ -774,15 +779,23 @@ mod tests {
 	}
 
 	#[test]
-	fn every_section_seeds_a_markdown_file() {
+	fn a_section_that_seeds_seeds_a_markdown_file() {
 		for section in Format::Novel.layout() {
-			assert!(
-				section.seed.ends_with(".md"),
-				"{} seeds {}",
-				section.folder,
-				section.seed
-			);
+			if let Some(seed) = section.seed {
+				assert!(seed.ends_with(".md"), "{} seeds {}", section.folder, seed);
+			}
 		}
+	}
+
+	#[test]
+	fn the_subject_sections_start_empty() {
+		let empty: Vec<_> = Format::Novel
+			.layout()
+			.iter()
+			.filter(|s| s.seed.is_none())
+			.map(|s| s.folder)
+			.collect();
+		assert_eq!(empty, ["Characters", "Locations"]);
 	}
 
 	#[test]
@@ -999,9 +1012,19 @@ mod tests {
 		for section in Format::Novel.layout() {
 			let folder = root.join(section.folder);
 			assert!(folder.is_dir(), "{} is missing", section.folder);
-			let seed = folder.join(section.seed);
-			assert!(seed.is_file(), "{} is missing", section.seed);
-			assert_eq!(fs::read_to_string(&seed).unwrap(), "");
+			match section.seed {
+				Some(name) => {
+					let seed = folder.join(name);
+					assert!(seed.is_file(), "{name} is missing");
+					assert_eq!(fs::read_to_string(&seed).unwrap(), "");
+				}
+				None => assert_eq!(
+					fs::read_dir(&folder).unwrap().count(),
+					0,
+					"{} should start empty",
+					section.folder
+				),
+			}
 		}
 
 		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
@@ -1046,9 +1069,7 @@ mod tests {
 			[
 				"Manuscript/Scene 1.md",
 				"Outline/Outline.md",
-				"Characters/Characters.md",
-				"Locations/Locations.md",
-				"Notes/Notes.md",
+				"Notes/Notes.md"
 			]
 		);
 

@@ -1624,9 +1624,7 @@ mod tests {
 			[
 				"Manuscript/Scene 1.md",
 				"Outline/Outline.md",
-				"Characters/Characters.md",
-				"Locations/Locations.md",
-				"Notes/Notes.md",
+				"Notes/Notes.md"
 			]
 		);
 	}
@@ -1755,7 +1753,7 @@ mod tests {
 			!found.iter().any(|node| node.name() == "Outline"),
 			"a section that is not there is not a folder either"
 		);
-		assert_eq!(scan_paths(&root).len(), 4);
+		assert_eq!(scan_paths(&root).len(), 2);
 	}
 
 	#[test]
@@ -2177,7 +2175,7 @@ mod tests {
 			.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
 			.collect();
 		assert_eq!(left, ["Scene 1.md"]);
-		assert_eq!(scan_paths(&root).len(), 5);
+		assert_eq!(scan_paths(&root).len(), 3);
 	}
 
 	#[test]
@@ -2824,7 +2822,7 @@ mod tests {
 			);
 		}
 
-		assert_eq!(scan_paths(&root).len(), 5);
+		assert_eq!(scan_paths(&root).len(), 3);
 	}
 
 	#[test]
@@ -2835,7 +2833,7 @@ mod tests {
 		let err = create_document(root.clone(), Uuid::new_v4(), "Offcut".to_owned()).unwrap_err();
 
 		assert!(matches!(err, Error::UnknownFolder));
-		assert_eq!(scan_paths(&root).len(), 5, "nothing was written");
+		assert_eq!(scan_paths(&root).len(), 3, "nothing was written");
 	}
 
 	/// The id of a folder at a path, for the tests that build a hierarchy.
@@ -3199,7 +3197,7 @@ mod tests {
 		let err = create_in(root.clone(), "Notes", ".md").unwrap_err();
 
 		assert!(matches!(err, Error::InvalidName(NameError::Empty)));
-		assert_eq!(scan_paths(&root).len(), 5);
+		assert_eq!(scan_paths(&root).len(), 3);
 	}
 
 	#[test]
@@ -3755,8 +3753,8 @@ mod tests {
 		trash(&root, id, fixed_time()).unwrap();
 		refresh(&root).unwrap();
 
-		assert_eq!(scan_paths(&root).len(), 4);
-		assert_eq!(read_manifest(&root).unwrap().documents().len(), 4);
+		assert_eq!(scan_paths(&root).len(), 2);
+		assert_eq!(read_manifest(&root).unwrap().documents().len(), 2);
 		assert!(trashed(&root, "Manuscript").len() == 1, "it is still there");
 	}
 
@@ -3976,7 +3974,7 @@ mod tests {
 		purge_trash_entry(root.clone(), entry.path).unwrap();
 
 		assert!(list_trash(root.clone()).unwrap().is_empty());
-		assert_eq!(scan_paths(&root).len(), 4);
+		assert_eq!(scan_paths(&root).len(), 2);
 	}
 
 	#[test]
@@ -4324,7 +4322,7 @@ mod tests {
 		reorder_in(&root, chapter(&root, "Chapter 3"), 0).unwrap();
 
 		assert_eq!(order_of(&root, "Notes"), notes);
-		assert_eq!(read_manifest(&root).unwrap().documents().len(), 8);
+		assert_eq!(read_manifest(&root).unwrap().documents().len(), 6);
 	}
 
 	#[test]
@@ -4637,14 +4635,12 @@ mod tests {
 			[
 				"Manuscript/Scene 1.md",
 				"Outline/Outline.md",
-				"Characters/Characters.md",
-				"Locations/Locations.md",
-				"Notes/Notes.md",
+				"Notes/Notes.md"
 			],
 			"manifest order, which is the order the sidebar shows"
 		);
 		assert_eq!(all[0].text.as_deref(), Some("Wren went down."));
-		assert_eq!(all[4].text.as_deref(), Some("Ask about Wren."));
+		assert_eq!(all[2].text.as_deref(), Some("Ask about Wren."));
 		assert_eq!(all[0].document.title, "Scene 1");
 		assert_eq!(all[0].document.trail, ["Manuscript"]);
 	}
@@ -4658,10 +4654,10 @@ mod tests {
 
 		let all = read_all_documents(root).unwrap();
 
-		assert_eq!(all.len(), 5, "it is still listed, so search can name it");
+		assert_eq!(all.len(), 3, "it is still listed, so search can name it");
 		assert!(all[0].text.is_none());
 		assert_eq!(
-			all[4].text.as_deref(),
+			all[2].text.as_deref(),
 			Some("still here"),
 			"one unreadable file does not cost the rest"
 		);
