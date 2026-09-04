@@ -778,8 +778,10 @@ body,
 	color: var(--text-dim);
 }
 
-/* A heading that follows a group of numbers opens a new one. */
-.stats__line + .stats__heading {
+/* A heading that follows a group of numbers, or a list, opens a new one. */
+.stats__line + .stats__heading,
+.history + .stats__heading,
+.history__none + .stats__heading {
 	margin-top: 1rem;
 }
 

@@ -12,6 +12,7 @@ import {
 	sessionReading,
 	today,
 	unexplained,
+	visits,
 } from "./stats";
 import type { PastSession } from "./types";
 
@@ -141,6 +142,44 @@ describe("the history file as a list", () => {
 				end: new Date(2026, 8, 4, 9, 25, 30).toISOString(),
 			}),
 		).toBe("25:30");
+	});
+});
+
+describe("the sessions one document was written in", () => {
+	const history = [
+		past("automatic", at(4, 9), {
+			scene: { written: 40, removed: 2 },
+			other: { written: 10, removed: 0 },
+		}),
+		past("deliberate", at(4, 14), { other: { written: 90, removed: 0 } }),
+		past("deliberate", at(3, 9), { scene: { written: 25, removed: 0 } }),
+	];
+
+	test("a session that never reached it is left out", () => {
+		expect(
+			visits(history, "scene").map((visit) => visit.session.start),
+		).toEqual([at(4, 9), at(3, 9)]);
+	});
+
+	test("the numbers are the document's own, not the session's", () => {
+		expect(visits(history, "scene")[0]).toMatchObject({
+			written: 40,
+			removed: 2,
+		});
+	});
+
+	test("a document nothing has touched has no sessions", () => {
+		expect(visits(history, "nowhere")).toEqual([]);
+	});
+
+	// The file has held per-document tallies since it was written, but the
+	// field is optional and an old record may arrive without one.
+	test("a record with no tallies at all is left out", () => {
+		const bare = {
+			...past("automatic", at(4, 9), {}),
+			documents: undefined,
+		};
+		expect(visits([bare], "scene")).toEqual([]);
 	});
 });
 

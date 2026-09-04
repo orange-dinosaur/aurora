@@ -222,9 +222,23 @@ export default function Stats({
 					<Whole name="Automatic" tally={project.automatic} />
 					<Whole name="Session" tally={project.deliberate} />
 
-					{/* Every number above this adds sessions together. This is
-					    where one of them can be looked at on its own. */}
-					<h3 className="stats__heading">Past sessions</h3>
+					{/* Every number above this adds sessions together. These
+					    are where one of them can be looked at on its own, in
+					    the same pairing the numbers use: this document, then
+					    the whole project. The filtered list is keyed so that
+					    moving to another document starts it uncapped again. */}
+					<h3 className="stats__heading">
+						Past sessions · this document
+					</h3>
+					<History
+						key={page.id}
+						sessions={history}
+						document={page.id}
+					/>
+
+					<h3 className="stats__heading">
+						Past sessions · everywhere
+					</h3>
 					<History sessions={history} />
 				</>
 			)}

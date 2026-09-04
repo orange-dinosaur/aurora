@@ -76,6 +76,28 @@ export function newest(history: PastSession[]): PastSession[] {
 	);
 }
 
+/** A session as one document saw it: the record, and what went in here. */
+export interface Visit {
+	session: PastSession;
+	written: number;
+	removed: number;
+}
+
+/**
+ * The sessions that touched one document, latest first. A session that never
+ * reached it is left out rather than listed with noughts, so the list answers
+ * "when was this written" and not "what else was I doing".
+ *
+ * There is no net here, and there cannot be: net is the whole project's count
+ * moving, and no single document owns a share of it.
+ */
+export function visits(history: PastSession[], document: string): Visit[] {
+	return newest(history).flatMap((session) => {
+		const counts = session.documents?.[document];
+		return counts === undefined ? [] : [{ session, ...counts }];
+	});
+}
+
 /** How long a session ran, from the two moments the file holds. */
 export function lasted(session: PastSession): string {
 	return clock(
