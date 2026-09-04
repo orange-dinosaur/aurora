@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { abbreviated, counted, described, summarised, trashed } from "./cards";
+import {
+	abbreviated,
+	counted,
+	described,
+	previewed,
+	summarised,
+	trashed,
+} from "./cards";
 import type { OverviewCard } from "./types";
 
 function folder(
@@ -28,6 +35,7 @@ function document(title: string, words: number) {
 		target: null,
 		words,
 		excerpt: "",
+		front: "",
 		modified: null,
 	} satisfies OverviewCard;
 }
@@ -39,6 +47,32 @@ describe("a document card's count", () => {
 
 	test("a target turns the count into a report against it", () => {
 		expect(counted(1200, 2000)).toBe("1,200 of 2,000 words");
+	});
+});
+
+describe("the line under a document card's title", () => {
+	const OPENING = "Elena went down to the water.";
+
+	test("is the synopsis when the writer has written one", () => {
+		const front = "---\nsynopsis: She learns the boat is gone.\n---";
+
+		expect(previewed(front, OPENING)).toBe("She learns the boat is gone.");
+	});
+
+	test("falls back to the opening when they have not", () => {
+		expect(previewed("---\ntags:\n  - draft\n---", OPENING)).toBe(OPENING);
+		expect(previewed("", OPENING)).toBe(OPENING);
+	});
+
+	test("falls back when the synopsis has been emptied to nothing", () => {
+		expect(previewed('---\nsynopsis: "   "\n---', OPENING)).toBe(OPENING);
+	});
+
+	test("collapses a synopsis written over several lines", () => {
+		const front =
+			'---\nsynopsis: "She waits.\\n\\nThen she does not."\n---';
+
+		expect(previewed(front, OPENING)).toBe("She waits. Then she does not.");
 	});
 });
 

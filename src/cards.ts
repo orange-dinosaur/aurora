@@ -2,6 +2,7 @@
 // live apart from the view because they are the part worth checking: the rest
 // of the overview is a shape, and the writer looks at that themselves.
 
+import { parse, text } from "./frontmatter";
 import type { FolderKind, OverviewCard } from "./types";
 
 /** A document card's count, which says what it is aiming at if it is. */
@@ -27,6 +28,21 @@ export function described(
 		kind === null ? "Folder" : kind === "part" ? "Part" : "Chapter";
 	const held = children === 1 ? "1 item" : `${children} items`;
 	return `${what} · ${held} · ${counted(words, null)}`;
+}
+
+/**
+ * The line under a document card's title: what the writer said the document is
+ * about, and its opening only while they have not said. A synopsis is collapsed
+ * onto one line the way Rust collapses an excerpt, since the card gives it four
+ * lines either way and a paragraph break would spend one of them on nothing.
+ */
+export function previewed(front: string, excerpt: string): string {
+	const synopsis = text(parse(front), "synopsis")
+		.split(/\s+/)
+		.filter((word) => word !== "")
+		.join(" ");
+
+	return synopsis === "" ? excerpt : synopsis;
 }
 
 /**

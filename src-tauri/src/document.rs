@@ -93,6 +93,10 @@ pub struct DocumentSummary {
 	pub document: DocumentView,
 	pub words: usize,
 	pub excerpt: String,
+	/// The document's front matter block, fences and all, for the other end to
+	/// read its fields out of. Empty when the file has none. Rust does not look
+	/// inside it: what a field is, is defined once, in `src/frontmatter.ts`.
+	pub front: String,
 	#[serde(with = "time::serde::rfc3339::option")]
 	pub modified: Option<OffsetDateTime>,
 }
@@ -104,6 +108,7 @@ impl DocumentSummary {
 			document: document.into(),
 			words: 0,
 			excerpt: String::new(),
+			front: String::new(),
 			modified: None,
 		}
 	}
@@ -445,20 +450,30 @@ pub fn refresh(root: &Path) -> Result<Manifest> {
 	Ok(manifest)
 }
 
-/// A document's prose, with any front matter block lifted off the top. The
-/// fence is spelled the same as the one `FRONT_MATTER` matches in
-/// `src/frontmatter.ts`, which is the end that reads and writes the block; the
-/// two have to agree on where a document starts.
-fn body(text: &str) -> &str {
+/// A document cut into its front matter block and the prose under it. The fence
+/// is spelled the same as the one `FRONT_MATTER` matches in
+/// `src/frontmatter.ts`, which is the end that reads and writes what is inside
+/// the block; the two have to agree on where a document starts. The block comes
+/// back with its fences and nothing after them, which is the shape the parser
+/// there is given.
+fn split(text: &str) -> (&str, &str) {
 	let Some(rest) = text.strip_prefix("---\n") else {
-		return text;
+		return ("", text);
 	};
 	let Some(close) = rest.find("\n---") else {
-		return text;
+		return ("", text);
 	};
 
 	let after = rest[close + 4..].trim_start_matches([' ', '\t']);
-	after.strip_prefix('\n').unwrap_or(after)
+	let prose = after.strip_prefix('\n').unwrap_or(after);
+
+	// The opening fence and the closing one are four bytes each.
+	(&text[..close + 8], prose)
+}
+
+/// A document's prose, with any front matter block lifted off the top.
+fn body(text: &str) -> &str {
+	split(text).1
 }
 
 /// The opening of a document collapsed onto one line and cut to something a
@@ -511,12 +526,13 @@ fn summarise(document: &Document, path: &Path) -> DocumentSummary {
 		Err(_) => String::new(),
 	};
 
-	let prose = body(&text);
+	let (front, prose) = split(&text);
 
 	DocumentSummary {
 		document: document.into(),
 		words: prose.split_whitespace().count(),
 		excerpt: excerpt(prose),
+		front: front.to_owned(),
 		modified,
 	}
 }
@@ -2569,6 +2585,7 @@ mod tests {
 			document: (&document).into(),
 			words: 3,
 			excerpt: "Sing to me".to_owned(),
+			front: String::new(),
 			modified: Some(fixed_time()),
 		};
 
@@ -2641,6 +2658,17 @@ mod tests {
 		assert_eq!(body("---\ntags: []\n---\nSing to me."), "Sing to me.");
 		assert_eq!(body("---\ntags: []\n---  \nSing to me."), "Sing to me.");
 		assert_eq!(body("---\ntags: []\n---"), "");
+	}
+
+	#[test]
+	fn a_front_matter_block_comes_back_with_its_fences() {
+		assert_eq!(
+			split("---\ntags: []\n---\nSing to me.").0,
+			"---\ntags: []\n---"
+		);
+		assert_eq!(split("---\ntags: []\n---  \n").0, "---\ntags: []\n---");
+		assert_eq!(split("Sing to me.").0, "");
+		assert_eq!(split("---\ntags: []\n").0, "");
 	}
 
 	#[test]

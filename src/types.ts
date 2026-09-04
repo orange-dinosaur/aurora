@@ -59,6 +59,12 @@ export type ProjectDocument = {
 export type DocumentSummary = ProjectDocument & {
 	words: number;
 	excerpt: string;
+	/**
+	 * The document's front matter block, fences and all, for `frontmatter.ts`
+	 * to read. Empty when the file has none. Rust hands the block over rather
+	 * than looking inside it, so what a field is stays defined in one place.
+	 */
+	front: string;
 	/** RFC 3339, or null when the file could not be read at all. */
 	modified: string | null;
 };

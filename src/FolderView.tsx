@@ -9,7 +9,7 @@ import type { FolderNode, OverviewCard, ProjectDocument } from "./types";
 import type { Making } from "./kinds";
 import { folderPlaceholder } from "./kinds";
 import type { FolderRef } from "./tree";
-import { counted, described, summarised } from "./cards";
+import { counted, described, previewed, summarised } from "./cards";
 import {
 	createDocument,
 	createFolder,
@@ -351,7 +351,10 @@ export default function FolderView({
 									{document.title}
 								</span>
 								<span className="card__excerpt">
-									{document.excerpt}
+									{previewed(
+										document.front,
+										document.excerpt,
+									)}
 								</span>
 								<span className="card__meta">
 									{document.modified === null
