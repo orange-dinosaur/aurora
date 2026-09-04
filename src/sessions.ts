@@ -39,6 +39,22 @@ export interface Change extends Counts {
 	document: string;
 }
 
+/**
+ * One change as the editor reports it, from the difference in the document's
+ * word count. Typing a word and deleting it again is one written and one
+ * removed, rather than two written or nothing at all; a change that both adds
+ * and removes within itself shows only its balance, since a word count is all
+ * the editor has to go on.
+ */
+export function changed(document: string, at: number, delta: number): Change {
+	return {
+		at,
+		document,
+		written: Math.max(delta, 0),
+		removed: Math.max(-delta, 0),
+	};
+}
+
 /** A session that is still running. */
 export interface Running extends Counts {
 	layer: Layer;

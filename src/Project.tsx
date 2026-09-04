@@ -27,6 +27,8 @@ import { documentsOf, folderOf, rows } from "./tree";
 import { deleteDocument, deleteFolder } from "./documents";
 import type { Seed } from "./find";
 import type { OutlineHandle } from "./outline";
+// `changed` under another name: this file already has one of its own.
+import { changed as asChange, wrote, IDLE, type Sessions } from "./sessions";
 import { failure } from "./errors";
 import { pressed, SEARCH } from "./formatting";
 
@@ -212,6 +214,20 @@ export default function Project({
 	// One timer per open document, so a tab keeps its own countdown once the
 	// writer has moved on to another one.
 	const timers = useRef(new Map<string, number>());
+
+	// Both layers of the session. A ref rather than state: a keystroke must not
+	// render the project, and nothing on screen reads these yet.
+	const sessions = useRef<Sessions>(IDLE);
+
+	// What a change added or removed, handed to the model, which decides which
+	// sessions it opens, feeds and closes. Whatever closes is dropped for now;
+	// it has nowhere to go until the history file is being written.
+	function record(id: string, delta: number) {
+		sessions.current = wrote(
+			sessions.current,
+			asChange(id, Date.now(), delta),
+		).sessions;
+	}
 
 	// The tabs as they stand now. The handlers below are registered once and
 	// would otherwise go on seeing the tabs they were born with.
@@ -804,6 +820,7 @@ export default function Project({
 					seed={tab.seed}
 					preferences={preferences}
 					onChange={(text) => edit(tab.document.id, text)}
+					onWrote={(delta) => record(tab.document.id, delta)}
 					onFields={setFields}
 					onOutline={setOutline}
 					onRestore={() => void restore(tab.document.id)}

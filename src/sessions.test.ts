@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	changed,
 	IDLE,
 	IDLE_GAP,
 	start,
@@ -116,6 +117,32 @@ describe("the automatic layer", () => {
 		expect(sessions.automatic?.documents.get("two")).toEqual({
 			written: 20,
 			removed: 45,
+		});
+	});
+});
+
+describe("what a change reports", () => {
+	test("a delta is the words it moved, not the words there are", () => {
+		expect(changed("scene", at(0), 40)).toMatchObject({
+			written: 40,
+			removed: 0,
+		});
+		expect(changed("scene", at(0), -12)).toMatchObject({
+			written: 0,
+			removed: 12,
+		});
+	});
+
+	test("typing a word then deleting it is one written and one removed", () => {
+		const { sessions } = run([
+			changed("scene", at(0), 1),
+			changed("scene", at(1), -1),
+		]);
+
+		expect(sessions.automatic).toMatchObject({ written: 1, removed: 1 });
+		expect(sessions.automatic?.documents.get("scene")).toEqual({
+			written: 1,
+			removed: 1,
 		});
 	});
 });

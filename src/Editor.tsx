@@ -10,7 +10,13 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { EditorState, EditorThemeClasses } from "lexical";
 import Icon from "./Icon";
 import type { Preferences } from "./types";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+	type CSSProperties,
+} from "react";
 import {
 	$fromMarkdown,
 	$toMarkdown,
@@ -129,6 +135,8 @@ type Props = {
 	seed: Seed | null;
 	preferences: Preferences;
 	onChange: (text: string) => void;
+	/** How many words a change added, or took away when it is negative. */
+	onWrote: (delta: number) => void;
 	onFields: (fields: FieldsHandle | null) => void;
 	onOutline: (outline: OutlineHandle | null) => void;
 	onRestore: () => void;
@@ -148,6 +156,7 @@ export default function Editor({
 	seed,
 	preferences,
 	onChange,
+	onWrote,
 	onFields,
 	onOutline,
 	onRestore,
@@ -176,6 +185,10 @@ export default function Editor({
 	// the Rust side counts when it summarises the file. The three numbers are
 	// taken from one draft together, so they cannot describe different text.
 	const [tally, setTally] = useState(() => counted(text));
+	// What the last change left behind, so the next one can report the words it
+	// moved rather than the words the document holds. Seeding it from the
+	// document is what keeps opening a tab from counting as writing.
+	const was = useRef(tally.words);
 	const [finding, setFinding] = useState(false);
 	// Bumped rather than just set, so asking for find while the panel is
 	// already open takes the caret back to the field instead of doing nothing.
@@ -206,10 +219,17 @@ export default function Editor({
 	const edited = useCallback(
 		(state: EditorState) => {
 			const markdown = state.read(() => $toMarkdown());
-			setTally(counted(markdown));
+			const next = counted(markdown);
+			setTally(next);
+			// Moving the caret is a change like any other here, and it has
+			// nothing to report.
+			if (next.words !== was.current) {
+				onWrote(next.words - was.current);
+				was.current = next.words;
+			}
 			onChange(markdown);
 		},
-		[onChange],
+		[onChange, onWrote],
 	);
 	const look = ["editor"];
 	if (preferences.focus) {
