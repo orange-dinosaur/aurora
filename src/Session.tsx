@@ -6,6 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { sessionReading } from "./stats";
 import type { Limit, Running } from "./sessions";
 
+/** What a sprint can be measured in, in the order the writer meets them. */
+const UNITS: Limit["unit"][] = ["words", "minutes"];
+
 type Props = {
 	/** The deliberate session running now, or null when there is none. */
 	session: Running | null;
@@ -133,17 +136,26 @@ export function Sprint({
 					setAmount(event.target.value.replace(/\D/g, ""))
 				}
 			/>
-			<select
-				className="sprint__unit"
-				value={unit}
+			{/* Two buttons rather than a select. WebKitGTK draws a native
+			    dropdown in the desktop theme's colours whatever the page asks
+			    for, and nothing else in Aurora is a native widget either. */}
+			<span
+				className="sprint__units"
+				role="group"
 				aria-label="What the sprint is counting"
-				onChange={(event) =>
-					setUnit(event.target.value as Limit["unit"])
-				}
 			>
-				<option value="words">words</option>
-				<option value="minutes">minutes</option>
-			</select>
+				{UNITS.map((it) => (
+					<button
+						key={it}
+						type="button"
+						className="sprint__unit"
+						aria-pressed={unit === it}
+						onClick={() => setUnit(it)}
+					>
+						{it}
+					</button>
+				))}
+			</span>
 			<button
 				type="submit"
 				className="sprint__go"
