@@ -55,7 +55,7 @@ fn shown() -> bool {
 	true
 }
 
-/// The three things the right sidebar can be showing.
+/// The four things the right sidebar can be showing.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RightSidebarTab {
@@ -63,6 +63,7 @@ pub enum RightSidebarTab {
 	Synopsis,
 	Info,
 	Mentions,
+	Stats,
 }
 
 impl Default for Preferences {

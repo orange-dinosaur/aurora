@@ -7,7 +7,7 @@ type Props = {
 };
 
 /** The words half of the status line: how many there are, and how many are wanted. */
-function reading(words: number, target: number | null): string {
+export function reading(words: number, target: number | null): string {
 	const counted = words.toLocaleString();
 	if (target === null) {
 		return words === 1 ? "1 word" : `${counted} words`;

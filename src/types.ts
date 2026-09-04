@@ -159,7 +159,17 @@ export type SessionRecord = {
 	documents: Record<string, { written: number; removed: number }>;
 };
 
-export type RightSidebarTab = "synopsis" | "info" | "mentions";
+/**
+ * The same record read back out of the file. Rust leaves out what a session
+ * has nothing to say about, and mints an id for every one it writes.
+ */
+export type PastSession = Omit<SessionRecord, "limitMet" | "documents"> & {
+	id: string;
+	limitMet?: boolean;
+	documents?: Record<string, { written: number; removed: number }>;
+};
+
+export type RightSidebarTab = "synopsis" | "info" | "mentions" | "stats";
 
 export type Preferences = {
 	/** Whether the bar under the document title is showing. */

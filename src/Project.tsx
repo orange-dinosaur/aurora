@@ -224,9 +224,14 @@ export default function Project({
 	// writer has moved on to another one.
 	const timers = useRef(new Map<string, number>());
 
-	// Both layers of the session. A ref rather than state: a keystroke must not
-	// render the project, and nothing on screen reads these yet.
+	// Both layers of the session. A ref rather than state: the panel that shows
+	// them is drawn from the same keystroke that moves them, since holding the
+	// text is what renders this view anyway.
 	const sessions = useRef<Sessions>(IDLE);
+
+	// Bumped every time a session reaches the history file, which is the only
+	// thing that changes what the Stats tab reads back.
+	const [logged, setLogged] = useState(0);
 
 	// What the project holds, which is where a session's net comes from. The
 	// sidebar says where it stands every time it reads the manifest, and the
@@ -245,11 +250,17 @@ export default function Project({
 	// written behind the writer's back and there is nowhere to say so.
 	function keep(step: Step) {
 		sessions.current = step.sessions;
-		return Promise.allSettled(
+		const written = Promise.allSettled(
 			step.closed.map((session) =>
 				invoke("append_session", { root, session: recorded(session) }),
 			),
 		);
+		if (step.closed.length > 0) {
+			// The panel that reads the file has to be told it moved.
+			void written.then(() => setLogged((times) => times + 1));
+		}
+
+		return written;
 	}
 
 	// What a change added or removed, handed to the model, which decides which
@@ -1142,6 +1153,17 @@ export default function Project({
 						root={root}
 						changed={listing + written}
 						live={live}
+						page={
+							active?.kind === "document" ? active.document : null
+						}
+						text={
+							active?.kind === "document" &&
+							active.content.kind === "ready"
+								? active.content.text
+								: ""
+						}
+						sessions={sessions.current}
+						logged={logged}
 						tab={preferences.rightSidebarTab}
 						onTab={(tab) =>
 							onPreferences({

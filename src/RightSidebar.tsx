@@ -1,8 +1,10 @@
 import Icon from "./Icon";
 import Info from "./Info";
 import Mentions, { type About } from "./Mentions";
+import Stats from "./Stats";
 import Synopsis from "./Synopsis";
 import type { FieldsHandle } from "./fields";
+import type { Sessions } from "./sessions";
 import type { Seed } from "./find";
 import type { OutlineHandle } from "./outline";
 import { isSubject } from "./subjects";
@@ -17,6 +19,7 @@ const TABS: { name: RightSidebarTab; label: string }[] = [
 	{ name: "synopsis", label: "Synopsis" },
 	{ name: "info", label: "Info" },
 	{ name: "mentions", label: "Mentions" },
+	{ name: "stats", label: "Stats" },
 ];
 
 type Props = {
@@ -33,6 +36,13 @@ type Props = {
 	changed: number;
 	/** The text of every open document as its tab holds it, by id. */
 	live: Map<string, string>;
+	/** The open document, and its text, for the panel that counts words. */
+	page: ProjectDocument | null;
+	text: string;
+	/** The two layers of the session as they stand. */
+	sessions: Sessions;
+	/** Bumped when a session has reached the history file. */
+	logged: number;
 	tab: RightSidebarTab;
 	onTab: (tab: RightSidebarTab) => void;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
@@ -49,6 +59,10 @@ export default function RightSidebar({
 	root,
 	changed,
 	live,
+	page,
+	text,
+	sessions,
+	logged,
 	tab,
 	onTab,
 	onOpen,
@@ -90,7 +104,15 @@ export default function RightSidebar({
 			</p>
 
 			<div className="right-sidebar__body">
-				{tab === "mentions" ? (
+				{tab === "stats" ? (
+					<Stats
+						page={page}
+						text={text}
+						sessions={sessions}
+						root={root}
+						logged={logged}
+					/>
+				) : tab === "mentions" ? (
 					about === null ? (
 						<p className="right-sidebar__empty">
 							Nothing here yet.
