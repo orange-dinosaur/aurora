@@ -9,6 +9,7 @@ import Search from "./Search";
 import FolderView from "./FolderView";
 import RightSidebar from "./RightSidebar";
 import Sidebar from "./Sidebar";
+import TagView from "./TagView";
 import Tabs from "./Tabs";
 import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
@@ -75,7 +76,13 @@ type SearchTab = {
 	key: string;
 };
 
-type Tab = DocumentTab | FolderTab | TrashTab | SearchTab;
+type TagTab = {
+	kind: "tag";
+	key: string;
+	tag: string;
+};
+
+type Tab = DocumentTab | FolderTab | TrashTab | SearchTab | TagTab;
 
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
@@ -120,6 +127,14 @@ function strip(tab: Tab): TabView {
 				kind: "search",
 				folder: null,
 				title: "Search",
+				dirty: false,
+			};
+		case "tag":
+			return {
+				key: tab.key,
+				kind: "tag",
+				folder: null,
+				title: tab.tag,
 				dirty: false,
 			};
 	}
@@ -305,6 +320,44 @@ export default function Project({
 		}
 
 		const opening: TrashTab = { kind: "trash", key: freshKey() };
+		setTabs((open) => [...open, opening]);
+		setActiveKey(opening.key);
+	}
+
+	/**
+	 * Where a tag chip goes. A tag that is also the title of a document is a
+	 * link to it; anything else opens the list of what wears it. The match is
+	 * case-sensitive, like recognition in prose, so `elena` is a keyword even
+	 * while `Elena` is a page — one rule for both rather than two answers to
+	 * the same question.
+	 *
+	 * The title is looked up as the chip is clicked rather than held anywhere,
+	 * so deleting Elena's document turns the link into a list on its own.
+	 */
+	async function openTag(tag: string) {
+		try {
+			const tree = await invoke<TreeNode[]>("document_tree", { root });
+			const named = documentsOf(tree).find(
+				(document) => document.title === tag,
+			);
+			if (named !== undefined) {
+				await openDocument(named);
+				return;
+			}
+		} catch {
+			// The tree could not be read, so nothing can be said to be named
+			// this. The list is the honest answer, and reports its own trouble.
+		}
+
+		const already = tabs.find(
+			(tab) => tab.kind === "tag" && tab.tag === tag,
+		);
+		if (already !== undefined) {
+			setActiveKey(already.key);
+			return;
+		}
+
+		const opening: TagTab = { kind: "tag", key: freshKey(), tag };
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
 	}
@@ -836,6 +889,19 @@ export default function Project({
 									}
 								/>
 							</div>
+						) : active.kind === "tag" ? (
+							<div className="project__pane">
+								<TagView
+									key={active.key}
+									root={root}
+									tag={active.tag}
+									changed={listing + written}
+									live={live}
+									onOpen={(document) =>
+										void openDocument(document)
+									}
+								/>
+							</div>
 						) : null}
 					</div>
 				</div>
@@ -857,6 +923,7 @@ export default function Project({
 						onOpen={(document, seed) =>
 							void openDocument(document, seed)
 						}
+						onOpenTag={(tag) => void openTag(tag)}
 						onClose={() =>
 							onPreferences({
 								...preferences,

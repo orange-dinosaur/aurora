@@ -760,6 +760,32 @@ body,
 	border-radius: 999px;
 }
 
+/* A tag that goes somewhere. It stays a chip and does not underline until it is
+   pointed at: a column of tags each wearing a link reads as a row of controls
+   rather than as what the document is filed under. WebKitGTK resets three
+   properties on a button that `font` does not carry, so they are named. */
+.chip__open {
+	margin: 0;
+	padding: 0;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	line-height: inherit;
+	text-transform: inherit;
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.chip__open:hover {
+	text-decoration: underline;
+}
+
+.chip__open:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
 .chip__remove {
 	display: inline-flex;
 	align-items: center;
@@ -1771,6 +1797,15 @@ body,
 .search__folder {
 	color: var(--text-dim);
 	font-size: 0.85rem;
+}
+
+/* The tag a tag tab is about, named in the line above the list. It wears the
+   chip's own background so it reads as the thing that was clicked. */
+.search__tag {
+	padding: 0.0625rem 0.4375rem;
+	color: var(--text);
+	background: var(--accent-wash);
+	border-radius: 999px;
 }
 
 /* Pushed to the far edge and lined up, so a column of counts can be read down

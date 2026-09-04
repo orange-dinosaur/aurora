@@ -11,6 +11,7 @@ type Props = FieldsHandle & {
 	root: string;
 	/** Bumped whenever the project changes, so the suggestions are read again. */
 	changed: number;
+	onOpenTag: (tag: string) => void;
 };
 
 export default function Info({
@@ -19,6 +20,7 @@ export default function Info({
 	subject,
 	root,
 	changed,
+	onOpenTag,
 }: Props) {
 	const { names, ask } = useFieldNames(root, changed);
 	const own = custom(fields);
@@ -40,11 +42,15 @@ export default function Info({
 				/>
 			)}
 
+			{/* A tag goes somewhere: to the document it names, or to the list
+			    of everything else wearing it. A name does not — it is a word
+			    this page answers to, and the page is already open. */}
 			<Chips
 				label="Tags"
 				placeholder="Add a tag"
 				values={list(fields, "tags")}
 				onChange={(next) => setList("tags", next)}
+				onOpen={onOpenTag}
 			/>
 
 			<TextBox

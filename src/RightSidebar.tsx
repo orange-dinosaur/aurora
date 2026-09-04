@@ -31,6 +31,8 @@ type Props = {
 	tab: RightSidebarTab;
 	onTab: (tab: RightSidebarTab) => void;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
+	/** Where a tag chip goes, which only the project view can work out. */
+	onOpenTag: (tag: string) => void;
 	onClose: () => void;
 };
 
@@ -43,6 +45,7 @@ export default function RightSidebar({
 	tab,
 	onTab,
 	onOpen,
+	onOpenTag,
 	onClose,
 }: Props) {
 	return (
@@ -101,6 +104,7 @@ export default function RightSidebar({
 						}
 						root={root}
 						changed={changed}
+						onOpenTag={onOpenTag}
 					/>
 				)}
 			</div>

@@ -8,7 +8,7 @@ import type { IconName } from "./Icon";
  */
 export type TabView = {
 	key: string;
-	kind: "document" | "folder" | "trash" | "search";
+	kind: "document" | "folder" | "trash" | "search" | "tag";
 	/** The section a document sits in. Nothing else has one. */
 	folder: string | null;
 	title: string;
@@ -23,6 +23,7 @@ const MARKS: Record<TabView["kind"], IconName | null> = {
 	folder: "folder",
 	trash: "trash",
 	search: "search",
+	tag: "tag",
 };
 
 type Props = {

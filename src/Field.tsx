@@ -90,6 +90,8 @@ type ChipsProps = {
 	placeholder: string;
 	values: string[];
 	onChange: (values: string[]) => void;
+	/** Given when a chip goes somewhere, which turns its label into a link. */
+	onOpen?: (value: string) => void;
 };
 
 /**
@@ -102,6 +104,7 @@ export function Chips({
 	placeholder,
 	values,
 	onChange,
+	onOpen,
 }: ChipsProps) {
 	const [draft, setDraft] = useState("");
 
@@ -127,7 +130,17 @@ export function Chips({
 				<ul className="chips">
 					{values.map((value) => (
 						<li key={value} className="chip">
-							{value}
+							{onOpen === undefined ? (
+								value
+							) : (
+								<button
+									type="button"
+									className="chip__open"
+									onClick={() => onOpen(value)}
+								>
+									{value}
+								</button>
+							)}
 							<button
 								type="button"
 								className="chip__remove"
