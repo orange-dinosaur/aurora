@@ -28,6 +28,8 @@ pub fn run() {
 			document::rename_document,
 			document::rename_folder,
 			document::set_document_target,
+			document::folder_fields,
+			document::set_folder_fields,
 			document::delete_document,
 			document::delete_folder,
 			document::list_trash,

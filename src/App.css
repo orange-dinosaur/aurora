@@ -626,6 +626,24 @@ body,
 	min-height: 0;
 	background: var(--bg-chrome);
 	border-left: 1px solid var(--border);
+	/* What the trouble line is placed against. */
+	position: relative;
+}
+
+/* Why a change was refused. Always in the tree and empty until there is
+   something to say, and laid over the foot of the panel rather than in it, so
+   the field the writer is looking at does not move. */
+.right-sidebar__trouble {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	margin: 0;
+	padding: 0 0.75rem;
+	font-size: 0.8rem;
+	color: var(--danger);
+	background: var(--bg-chrome);
+	overflow-wrap: anywhere;
 }
 
 .right-sidebar__tabs {

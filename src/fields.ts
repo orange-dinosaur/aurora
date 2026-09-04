@@ -14,6 +14,7 @@ import {
 	type Fields,
 	type Value,
 } from "./frontmatter";
+import { failure } from "./errors";
 import { $frontMatter, $setFrontMatter } from "./markdown";
 import type { DocumentText } from "./types";
 
@@ -46,6 +47,96 @@ export function $setField(key: string, value: Value | null): void {
 	}
 
 	$setFrontMatter(serialize(fields, $frontMatter()));
+}
+
+/** One map, so a folder with nothing read yet does not render as a new one. */
+const EMPTY: Fields = new Map();
+
+/**
+ * The same panel, about a folder. A folder has no file to keep a front matter
+ * block in, so its fields live on its node in the manifest and a change here
+ * goes straight to disk rather than riding on a document's autosave. A write
+ * that is refused puts the field back to what it was and says why.
+ */
+export function useFolderFields(
+	root: string,
+	id: string | null,
+	/** Bumped whenever the manifest changes, so the fields are read again. */
+	changed: number,
+): { handle: FieldsHandle | null; trouble: string | null } {
+	// The fields travel with the folder they were read for, so moving to
+	// another one shows nothing rather than the last one's synopsis while the
+	// read is in flight.
+	const [read, setRead] = useState<{ id: string; fields: Fields } | null>(
+		null,
+	);
+	const [trouble, setTrouble] = useState<string | null>(null);
+
+	const fields = read !== null && read.id === id ? read.fields : EMPTY;
+
+	// What a write starts from, without making every write a new callback.
+	const held = useRef(fields);
+	held.current = fields;
+
+	useEffect(() => {
+		if (id === null) {
+			return;
+		}
+
+		let wanted = true;
+		void invoke<Record<string, Value>>("folder_fields", { root, id })
+			.then((said) => {
+				if (wanted) {
+					setRead({ id, fields: new Map(Object.entries(said)) });
+					setTrouble(null);
+				}
+			})
+			.catch((error: unknown) => {
+				if (wanted) {
+					setTrouble(failure(error).message);
+				}
+			});
+
+		// A read that comes back after the writer has moved on belongs to a
+		// folder that is no longer the one on screen.
+		return () => {
+			wanted = false;
+		};
+	}, [root, id, changed]);
+
+	const setField = useCallback<SetField>(
+		(key, value) => {
+			if (id === null) {
+				return;
+			}
+
+			const was = held.current;
+			const next = new Map(was);
+			if (value === null) {
+				next.delete(key);
+			} else {
+				next.set(key, value);
+			}
+			setRead({ id, fields: next });
+
+			void invoke("set_folder_fields", {
+				root,
+				id,
+				fields: Object.fromEntries(next),
+			})
+				.then(() => setTrouble(null))
+				.catch((error: unknown) => {
+					setRead({ id, fields: was });
+					setTrouble(failure(error).message);
+				});
+		},
+		[root, id],
+	);
+
+	return {
+		handle: id === null ? null : { fields, setField },
+		trouble,
+	};
 }
 
 /**

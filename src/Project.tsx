@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
-import type { FieldsHandle } from "./fields";
+import { useFolderFields, type FieldsHandle } from "./fields";
 import { list } from "./frontmatter";
 import type { About } from "./Mentions";
 import Search from "./Search";
@@ -188,6 +188,14 @@ export default function Project({
 	// editor rather than inside it, so it cannot read the editor for itself.
 	const [fields, setFields] = useState<FieldsHandle | null>(null);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
+
+	// A folder's fields are read on their own rather than carried on the tab:
+	// the manifest is the only copy, and `listing` says when it has moved.
+	const { handle: folderFields, trouble } = useFolderFields(
+		root,
+		active?.kind === "folder" ? active.folder.id : null,
+		listing,
+	);
 
 	// A tab's key is its own, handed out when it opens and never derived from
 	// what it holds: a rename changes a document's path and a restore can
@@ -1054,7 +1062,8 @@ export default function Project({
 
 				{about !== null && preferences.rightSidebar && (
 					<RightSidebar
-						fields={about === "document" ? fields : null}
+						fields={about === "document" ? fields : folderFields}
+						trouble={trouble}
 						about={panel}
 						root={root}
 						changed={listing + written}

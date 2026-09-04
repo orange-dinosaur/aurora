@@ -23,6 +23,8 @@ type Props = {
 	fields: FieldsHandle | null;
 	/** What is open: a document, or the folder whose overview is showing. */
 	about: About | null;
+	/** Why a folder's last change was refused, when one was. */
+	trouble: string | null;
 	root: string;
 	/** Bumped whenever the project changes on disk. */
 	changed: number;
@@ -39,6 +41,7 @@ type Props = {
 export default function RightSidebar({
 	fields,
 	about,
+	trouble,
 	root,
 	changed,
 	live,
@@ -75,6 +78,12 @@ export default function RightSidebar({
 					<Icon name="x" />
 				</button>
 			</div>
+
+			{/* Over the panel rather than in it, so a refused change does not
+			    push the field the writer is looking at down the page. */}
+			<p className="right-sidebar__trouble" role="alert">
+				{trouble ?? ""}
+			</p>
 
 			<div className="right-sidebar__body">
 				{tab === "mentions" ? (

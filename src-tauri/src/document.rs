@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::project::{
 	Error, MANUSCRIPT, Manifest, Result, read_manifest, validate_name, write_atomic, write_manifest,
 };
-use crate::tree::{self, FolderKind, Node};
+use crate::tree::{self, Fields, FolderKind, Node};
 
 /// A document inside a project. The path is relative to the project root and
 /// always uses forward slashes, so a manifest written on one platform still
@@ -215,11 +215,14 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 
 	for node in nodes {
 		match node {
+			// The tree is about shape and counts. What the writer said about a
+			// folder is asked for on its own, by the one panel that shows it.
 			Node::Folder {
 				id,
 				name,
 				kind,
 				children,
+				..
 			} => {
 				let (children, words) = views(root, children, &format!("{prefix}{name}/"));
 				total += words;
@@ -278,6 +281,7 @@ pub fn scan(root: &Path, folders: &[String]) -> Result<Vec<Node>> {
 			id: Uuid::new_v4(),
 			name: folder.clone(),
 			kind: None,
+			fields: Fields::new(),
 			children,
 		});
 	}
@@ -313,6 +317,7 @@ fn read_level(dir: &Path) -> Result<Option<Vec<Node>>> {
 				id: Uuid::new_v4(),
 				name: name.to_owned(),
 				kind: None,
+				fields: Fields::new(),
 				children: read_level(&entry.path())?.unwrap_or_default(),
 			});
 		} else if entry_type.is_file() && is_markdown(name) {
@@ -361,6 +366,7 @@ pub fn reconcile(manifest: &mut Manifest, found: &[Node]) -> bool {
 			id,
 			name,
 			kind,
+			fields,
 			children,
 		} = section
 		else {
@@ -379,10 +385,13 @@ pub fn reconcile(manifest: &mut Manifest, found: &[Node]) -> bool {
 			_ => &[],
 		};
 
+		// The fields come from the manifest and never from disk: a folder is a
+		// directory out there, and a directory says nothing about itself.
 		sections.push(Node::Folder {
 			id: *id,
 			name: name.clone(),
 			kind: *kind,
+			fields: fields.clone(),
 			children: merge(children, below),
 		});
 	}
@@ -412,6 +421,7 @@ fn merge(known: &[Node], found: &[Node]) -> Vec<Node> {
 					id,
 					name,
 					kind,
+					fields,
 					children,
 				},
 				Node::Folder {
@@ -421,6 +431,7 @@ fn merge(known: &[Node], found: &[Node]) -> Vec<Node> {
 				id: *id,
 				name: name.clone(),
 				kind: *kind,
+				fields: fields.clone(),
 				children: merge(children, below),
 			},
 			(Node::Document { .. }, Node::Document { .. }) => node.clone(),
@@ -757,6 +768,7 @@ pub fn create_folder(
 		id: Uuid::new_v4(),
 		name,
 		kind,
+		fields: Fields::new(),
 		children: Vec::new(),
 	};
 	let view = views(
@@ -968,6 +980,41 @@ pub fn set_document_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Resu
 		.find(|d| d.id == id)
 		.map(DocumentView::from)
 		.ok_or(Error::UnknownDocument)
+}
+
+/// What the writer has said about one folder, empty when they have said
+/// nothing. Asked for on its own rather than carried on every view of a folder:
+/// only the panel wants it, and reading it costs a manifest and no files.
+#[tauri::command]
+pub fn folder_fields(root: PathBuf, id: Uuid) -> Result<Fields> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	match tree::find(&read_manifest(&root)?.nodes, id) {
+		Some(Node::Folder { fields, .. }) => Ok(fields.clone()),
+		_ => Err(Error::UnknownFolder),
+	}
+}
+
+/// Replaces everything the writer has said about a folder. A folder has no file
+/// of its own to keep a front matter block in, so the manifest holds its fields
+/// instead; the whole set arrives at once because the panel that sends them
+/// holds the whole set.
+#[tauri::command]
+pub fn set_folder_fields(root: PathBuf, id: Uuid, fields: Fields) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let mut manifest = read_manifest(&root)?;
+	match tree::find_mut(&mut manifest.nodes, id) {
+		Some(Node::Folder { fields: held, .. }) => *held = fields,
+		_ => return Err(Error::UnknownFolder),
+	}
+
+	write_manifest(&root, &mut manifest)?;
+	Ok(())
 }
 
 /// One document in the project's trash, as the Trash view shows it.
@@ -1450,11 +1497,14 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 		.unwrap_or_default()
 		.iter()
 		.map(|node| match node {
+			// A folder card says what it is and how much it holds. What the
+			// writer said about it is the panel's business, not the card's.
 			Node::Folder {
 				id,
 				name,
 				kind,
 				children,
+				..
 			} => ChildSummary::Folder {
 				id: *id,
 				name: name.clone(),
@@ -1509,7 +1559,7 @@ pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
 mod tests {
 	use super::*;
 	use crate::project::{Format, NameError, create};
-	use crate::tree::{self, tree_from_flat};
+	use crate::tree::{self, Value, tree_from_flat};
 	use time::OffsetDateTime;
 
 	fn fixed_time() -> OffsetDateTime {
@@ -3585,6 +3635,58 @@ mod tests {
 		let err = set_document_target(root, Uuid::new_v4(), Some(1_500)).unwrap_err();
 
 		assert!(matches!(err, Error::UnknownDocument));
+	}
+
+	#[test]
+	fn a_folder_keeps_what_the_writer_said_about_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = folder_id(&root, "Manuscript");
+
+		let said = Fields::from([
+			(
+				"synopsis".to_owned(),
+				Value::Text("The long way home.".to_owned()),
+			),
+			(
+				"tags".to_owned(),
+				Value::List(vec!["draft".to_owned(), "Elena".to_owned()]),
+			),
+		]);
+		set_folder_fields(root.clone(), id, said.clone()).unwrap();
+
+		assert_eq!(folder_fields(root.clone(), id).unwrap(), said);
+		// A refresh reads the directories again, and a directory says nothing
+		// about itself, so this is the pass that would lose them.
+		refresh_documents(root.clone()).unwrap();
+		assert_eq!(folder_fields(root, id).unwrap(), said);
+	}
+
+	#[test]
+	fn one_folder_does_not_answer_for_another() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = folder_id(&root, "Manuscript");
+		let notes = folder_id(&root, "Notes");
+
+		set_folder_fields(
+			root.clone(),
+			manuscript,
+			Fields::from([("synopsis".to_owned(), Value::Text("Hers.".to_owned()))]),
+		)
+		.unwrap();
+
+		assert!(folder_fields(root, notes).unwrap().is_empty());
+	}
+
+	#[test]
+	fn saying_something_about_an_unknown_folder_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let err = set_folder_fields(root, Uuid::new_v4(), Fields::new()).unwrap_err();
+
+		assert!(matches!(err, Error::UnknownFolder));
 	}
 
 	#[test]

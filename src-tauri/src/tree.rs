@@ -5,10 +5,28 @@
 //! order is compile order, so walking the array in order is the order a reader
 //! would meet the text in.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::document::Document;
+
+/// What one of a folder's fields holds: a line of text, or a list of them.
+///
+/// A document keeps its fields in its own front matter, where the shapes are
+/// the ones `src/frontmatter.ts` allows. A folder has no file of its own, so
+/// the manifest holds them instead — as JSON, which says the same two shapes
+/// without anyone here having to know what YAML is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Value {
+	Text(String),
+	List(Vec<String>),
+}
+
+/// A folder's fields, in the order the manifest lists them, which is alphabetical.
+pub type Fields = BTreeMap<String, Value>;
 
 /// What a folder inside the Manuscript is. A folder anywhere else has no kind:
 /// it is a folder with a name and nothing more.
@@ -35,6 +53,11 @@ pub enum Node {
 		/// Absent outside the Manuscript.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		kind: Option<FolderKind>,
+		/// What the writer has said about the folder itself: its synopsis, its
+		/// tags, and any field of their own. A folder with nothing said about
+		/// it writes no key at all.
+		#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+		fields: Fields,
 		#[serde(default)]
 		children: Vec<Node>,
 	},
@@ -73,6 +96,7 @@ impl Node {
 			id: Uuid::new_v4(),
 			name: name.to_owned(),
 			kind: None,
+			fields: Fields::new(),
 			children,
 		}
 	}
@@ -438,10 +462,15 @@ mod tests {
 			id: Uuid::new_v4(),
 			name: "Manuscript".to_owned(),
 			kind: None,
+			fields: Fields::new(),
 			children: vec![Node::Folder {
 				id: Uuid::new_v4(),
 				name: "Part One".to_owned(),
 				kind: Some(FolderKind::Part),
+				fields: Fields::from([(
+					"synopsis".to_owned(),
+					Value::Text("The crossing.".to_owned()),
+				)]),
 				children: vec![Node::Document {
 					id: Uuid::new_v4(),
 					name: "Chapter 1.md".to_owned(),
@@ -459,6 +488,15 @@ mod tests {
 		assert!(
 			!json.contains(r#""kind":null"#) && !json.contains("target"),
 			"a folder with no kind and a document with no target write no key: {json}"
+		);
+		assert!(
+			json.contains(r#""fields":{"synopsis":"The crossing."}"#),
+			"a folder's fields are ordinary JSON: {json}"
+		);
+		assert_eq!(
+			json.matches("fields").count(),
+			1,
+			"and a folder with nothing said about it writes no key: {json}"
 		);
 		assert_eq!(
 			serde_json::from_str::<Vec<Node>>(&json).unwrap(),
@@ -480,6 +518,7 @@ mod tests {
 			id: Uuid::new_v4(),
 			name: name.to_owned(),
 			kind,
+			fields: Fields::new(),
 			children,
 		}
 	}
