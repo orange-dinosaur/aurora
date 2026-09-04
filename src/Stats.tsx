@@ -5,7 +5,7 @@ import { failure } from "./errors";
 import { running, today } from "./stats";
 import type { Sessions } from "./sessions";
 import type { PastSession, ProjectDocument } from "./types";
-import { words } from "./words";
+import { prose, words } from "./words";
 
 type Props = {
 	/** The open document, or null when a folder's overview is showing. */
@@ -38,7 +38,7 @@ function Layer({ name, total }: { name: string; total: number | null }) {
 export default function Stats({ page, text, sessions, root, logged }: Props) {
 	const [history, setHistory] = useState<PastSession[]>([]);
 	const [trouble, setTrouble] = useState<string | null>(null);
-	const counted = useMemo(() => words(text), [text]);
+	const counted = useMemo(() => words(prose(text)), [text]);
 
 	// Read when the tab opens and again whenever a session has been added to
 	// the file. Nothing else changes it.

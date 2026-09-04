@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { characters, charactersWithoutSpaces, words } from "./words";
+import { characters, charactersWithoutSpaces, prose, words } from "./words";
 
 /** A character named by code point, so the test file holds nothing invisible. */
 function ch(code: number): string {
@@ -64,5 +64,26 @@ describe("counting characters without spaces", () => {
 
 	test("a document of nothing but spaces has none", () => {
 		expect(charactersWithoutSpaces("   \n\n  ")).toBe(0);
+	});
+});
+
+describe("what counts as the document", () => {
+	const page = [
+		"---",
+		'remarks: "a note to myself"',
+		"---",
+		"",
+		"# Chapter One",
+		"",
+		"Elena andava a scuola",
+	].join("\n");
+
+	test("naming a field is not writing a word", () => {
+		expect(words(page)).toBe(14);
+		expect(words(prose(page))).toBe(7);
+	});
+
+	test("a document with no front matter is all of it", () => {
+		expect(prose("Elena andava a scuola")).toBe("Elena andava a scuola");
 	});
 });

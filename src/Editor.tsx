@@ -36,7 +36,7 @@ import Target from "./Target";
 import Toolbar from "./Toolbar";
 import Typewriter from "./Typewriter";
 import Typography from "./Typography";
-import { characters, charactersWithoutSpaces, words } from "./words";
+import { characters, charactersWithoutSpaces, prose, words } from "./words";
 
 // Lexical puts these class names on the elements it renders; App.css styles
 // them. Bold and italic are left out because they come out as <strong> and
@@ -105,10 +105,11 @@ function Outline({
 }
 
 function counted(text: string) {
+	const body = prose(text);
 	return {
-		words: words(text),
-		characters: characters(text),
-		tight: charactersWithoutSpaces(text),
+		words: words(body),
+		characters: characters(body),
+		tight: charactersWithoutSpaces(body),
 	};
 }
 
@@ -181,9 +182,10 @@ export default function Editor({
 		[preferences, showing, onPreferences],
 	);
 	const note = error ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
-	// Counted from the markdown the editor would save, which is the same text
-	// the Rust side counts when it summarises the file. The three numbers are
-	// taken from one draft together, so they cannot describe different text.
+	// Counted from the markdown the editor would save, less the front matter,
+	// which is exactly what the Rust side counts when it summarises the file.
+	// The three numbers are taken from one draft together, so they cannot
+	// describe different text.
 	const [tally, setTally] = useState(() => counted(text));
 	// What the last change left behind, so the next one can report the words it
 	// moved rather than the words the document holds. Seeding it from the

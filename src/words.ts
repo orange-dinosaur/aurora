@@ -2,6 +2,18 @@
 // it summarises a file for a section card. These are the same counts for the
 // editor, so the two can never disagree about the document on screen.
 
+import { split } from "./frontmatter";
+
+/**
+ * A document's own writing: everything but the front matter, which is data
+ * about the page rather than words in it. Rust counts a file this way too,
+ * through `body`, so both ends agree about how long a chapter is and naming a
+ * field is not the same as writing a sentence.
+ */
+export function prose(text: string): string {
+	return split(text).body;
+}
+
 // `split_whitespace` breaks on Unicode's White_Space property, which is not
 // quite JavaScript's `\s`: it takes NEL and leaves out the byte-order mark.
 // Spelling the code points out keeps the two counts provably the same.
