@@ -154,6 +154,14 @@ export function sections(nodes: TreeNode[]) {
 	return nodes.filter((node) => node.node === "folder");
 }
 
+/**
+ * Every word in the project. The tree already carries a count on each section,
+ * so this asks no file anything.
+ */
+export function wordsIn(nodes: TreeNode[]): number {
+	return sections(nodes).reduce((all, section) => all + section.words, 0);
+}
+
 /** The folder with this id, and everything under it. */
 export function folderOf(nodes: TreeNode[], id: string): FolderNode | null {
 	for (const node of nodes) {

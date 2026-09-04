@@ -7,6 +7,7 @@ import {
 	inside,
 	rows,
 	sections,
+	wordsIn,
 } from "./tree";
 import type { Moving } from "./tree";
 import type { FolderKind, TreeNode } from "./types";
@@ -373,5 +374,29 @@ describe("finding a folder to look inside", () => {
 
 		expect(folderOf(tree, "id-Notes/Ideas.md")).toBeNull();
 		expect(folderOf(tree, "id-nowhere")).toBeNull();
+	});
+});
+
+describe("counting a whole project", () => {
+	/** A section carrying the count Rust sends with it. */
+	function section(name: string, words: number): TreeNode {
+		return {
+			node: "folder",
+			id: `id-${name}`,
+			name,
+			kind: null,
+			children: [],
+			words,
+		};
+	}
+
+	test("the project's words are its sections' words", () => {
+		const tree = [section("Manuscript", 12000), section("Notes", 340)];
+
+		expect(wordsIn(tree)).toBe(12340);
+	});
+
+	test("a project with nothing in it holds no words", () => {
+		expect(wordsIn([])).toBe(0);
 	});
 });

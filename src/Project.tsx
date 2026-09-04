@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Editor from "./Editor";
@@ -219,6 +219,18 @@ export default function Project({
 	// render the project, and nothing on screen reads these yet.
 	const sessions = useRef<Sessions>(IDLE);
 
+	// What the project holds, which is where a session's net comes from. The
+	// sidebar says where it stands every time it reads the manifest, and the
+	// editor's changes carry it forward in between, so knowing this costs no
+	// reading of its own.
+	const words = useRef(0);
+
+	// Stable on purpose: the sidebar reloads its whole tree whenever the
+	// handlers it was given change.
+	const measured = useCallback((total: number) => {
+		words.current = total;
+	}, []);
+
 	// What a change added or removed, handed to the model, which decides which
 	// sessions it opens, feeds and closes. Whatever closes is dropped for now;
 	// it has nowhere to go until the history file is being written.
@@ -226,7 +238,9 @@ export default function Project({
 		sessions.current = wrote(
 			sessions.current,
 			asChange(id, Date.now(), delta),
+			words.current,
 		).sessions;
+		words.current += delta;
 	}
 
 	// The tabs as they stand now. The handlers below are registered once and
@@ -893,6 +907,7 @@ export default function Project({
 					hidden={!preferences.sidebar}
 					root={root}
 					reload={listing}
+					onWords={measured}
 					unsaved={tabs.flatMap((tab) =>
 						tab.kind === "document" && tab.save.kind !== "clean"
 							? [tab.document.id]

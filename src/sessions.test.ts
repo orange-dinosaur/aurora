@@ -8,6 +8,7 @@ import {
 	tick,
 	wrote,
 	type Change,
+	type Closed,
 	type Sessions,
 } from "./sessions";
 
@@ -27,27 +28,34 @@ function change(
 	return { at: at(minutes), document, written, removed };
 }
 
-/** Feeds a run of changes in order, keeping everything that closed. */
-function run(changes: Change[], from: Sessions = IDLE) {
+/**
+ * Feeds a run of changes in order, keeping everything that closed. `total` is
+ * what the project held before the first of them, and it moves with each
+ * change the way the project view moves it.
+ */
+function run(changes: Change[], from: Sessions = IDLE, total = 0) {
 	let sessions = from;
-	const closed = [];
+	let words = total;
+	const closed: Closed[] = [];
 	for (const one of changes) {
-		const step = wrote(sessions, one);
+		const step = wrote(sessions, one, words);
+		words += one.written - one.removed;
 		sessions = step.sessions;
 		closed.push(...step.closed);
 	}
-	return { sessions, closed };
+	return { sessions, closed, words };
 }
 
 describe("the automatic layer", () => {
 	test("the first change opens a session", () => {
-		const { sessions, closed } = wrote(IDLE, change(0, 12));
+		const { sessions, closed } = wrote(IDLE, change(0, 12), 900);
 
 		expect(closed).toEqual([]);
 		expect(sessions.automatic).toMatchObject({
 			layer: "automatic",
 			start: at(0),
 			last: at(0),
+			words: 900,
 			written: 12,
 			removed: 0,
 		});
@@ -84,6 +92,7 @@ describe("the automatic layer", () => {
 			end: at(10),
 			limitMet: false,
 			written: 140,
+			net: 140,
 		});
 		expect(sessions.automatic).toMatchObject({
 			start: at(41),
@@ -92,12 +101,12 @@ describe("the automatic layer", () => {
 	});
 
 	test("the clock alone closes a session that has gone quiet", () => {
-		const typed = wrote(IDLE, change(0, 100)).sessions;
+		const typed = wrote(IDLE, change(0, 100), 0).sessions;
 
-		expect(tick(typed, at(29)).closed).toEqual([]);
-		expect(tick(typed, at(29)).sessions.automatic).not.toBeNull();
+		expect(tick(typed, at(29), 100).closed).toEqual([]);
+		expect(tick(typed, at(29), 100).sessions.automatic).not.toBeNull();
 
-		const { sessions, closed } = tick(typed, at(0) + IDLE_GAP);
+		const { sessions, closed } = tick(typed, at(0) + IDLE_GAP, 100);
 		expect(closed).toHaveLength(1);
 		expect(closed[0]).toMatchObject({ end: at(0), written: 100 });
 		expect(sessions.automatic).toBeNull();
@@ -147,13 +156,43 @@ describe("what a change reports", () => {
 	});
 });
 
+describe("net", () => {
+	test("is what the project gained, whoever moved it", () => {
+		const typed = wrote(IDLE, change(0, 50), 1000).sessions;
+		// The writer pastes a chapter in from somewhere else, which the
+		// editor never saw a word of.
+		const { closed } = tick(typed, at(0) + IDLE_GAP, 4000);
+
+		expect(closed[0]).toMatchObject({ written: 50, net: 3000 });
+	});
+
+	test("a deleted document shows here and in neither of the others", () => {
+		const typed = wrote(IDLE, change(0, 50), 1000).sessions;
+		// A whole document goes to the trash. The editor sees nothing: it was
+		// never open, and removing it is not typing.
+		const { closed } = tick(typed, at(0) + IDLE_GAP, 200);
+
+		expect(closed[0]).toMatchObject({
+			written: 50,
+			removed: 0,
+			net: -800,
+		});
+	});
+
+	test("the two halves are allowed to disagree", () => {
+		const typed = wrote(IDLE, change(0, 50), 1000).sessions;
+		const session = tick(typed, at(0) + IDLE_GAP, 200).closed[0];
+
+		expect(session.written - session.removed).toBe(50);
+		expect(session.net).toBe(-800);
+	});
+});
+
 describe("the deliberate layer", () => {
 	test("a session spans a gap that closes the automatic one underneath", () => {
-		const opened = start(
-			wrote(IDLE, change(0, 40)).sessions,
-			at(1),
-		).sessions;
-		const { sessions, closed } = run([change(60, 20)], opened);
+		const typed = wrote(IDLE, change(0, 40), 0).sessions;
+		const opened = start(typed, at(1), 40).sessions;
+		const { sessions, closed } = run([change(60, 20)], opened, 40);
 
 		expect(closed).toHaveLength(1);
 		expect(closed[0]?.layer).toBe("automatic");
@@ -165,7 +204,7 @@ describe("the deliberate layer", () => {
 	});
 
 	test("a change is counted on both layers", () => {
-		const opened = start(IDLE, at(0)).sessions;
+		const opened = start(IDLE, at(0), 0).sessions;
 		const { sessions } = run([change(1, 60, 10)], opened);
 
 		expect(sessions.automatic).toMatchObject({ written: 60, removed: 10 });
@@ -173,8 +212,8 @@ describe("the deliberate layer", () => {
 	});
 
 	test("starting a session while one runs closes the first", () => {
-		const opened = start(IDLE, at(0)).sessions;
-		const { sessions, closed } = start(opened, at(30));
+		const opened = start(IDLE, at(0), 500).sessions;
+		const { sessions, closed } = start(opened, at(30), 700);
 
 		expect(closed).toHaveLength(1);
 		expect(closed[0]).toMatchObject({
@@ -182,6 +221,7 @@ describe("the deliberate layer", () => {
 			start: at(0),
 			end: at(30),
 			limitMet: false,
+			net: 200,
 		});
 		expect(sessions.deliberate?.start).toBe(at(30));
 	});
@@ -189,7 +229,7 @@ describe("the deliberate layer", () => {
 
 describe("sprints", () => {
 	test("a word limit closes the sprint on the change that crosses it", () => {
-		const opened = start(IDLE, at(0), {
+		const opened = start(IDLE, at(0), 0, {
 			unit: "words",
 			amount: 500,
 		}).sessions;
@@ -204,6 +244,9 @@ describe("sprints", () => {
 			end: at(9),
 			limitMet: true,
 			written: 540,
+			// The change that crossed the line is inside the sprint, so the
+			// project it is measured against is the one that change left.
+			net: 540,
 		});
 		expect(sessions.deliberate).toBeNull();
 		// The writing itself did not stop, so the layer underneath runs on.
@@ -211,11 +254,11 @@ describe("sprints", () => {
 	});
 
 	test("a time limit closes the sprint at its deadline, not when anyone looks", () => {
-		const opened = start(IDLE, at(0), {
+		const opened = start(IDLE, at(0), 0, {
 			unit: "minutes",
 			amount: 15,
 		}).sessions;
-		const { sessions, closed } = tick(opened, at(20));
+		const { sessions, closed } = tick(opened, at(20), 0);
 
 		expect(closed).toHaveLength(1);
 		expect(closed[0]).toMatchObject({ end: at(15), limitMet: true });
@@ -223,7 +266,7 @@ describe("sprints", () => {
 	});
 
 	test("a change after the deadline goes to the automatic layer alone", () => {
-		const opened = start(IDLE, at(0), {
+		const opened = start(IDLE, at(0), 0, {
 			unit: "minutes",
 			amount: 15,
 		}).sessions;
@@ -238,13 +281,14 @@ describe("sprints", () => {
 	});
 
 	test("stopping a sprint early leaves its limit unmet", () => {
-		const opened = start(IDLE, at(0), {
+		const opened = start(IDLE, at(0), 0, {
 			unit: "words",
 			amount: 500,
 		}).sessions;
 		const { sessions, closed } = stop(
 			run([change(1, 120)], opened).sessions,
 			at(4),
+			120,
 		);
 
 		expect(closed).toHaveLength(1);
@@ -252,6 +296,7 @@ describe("sprints", () => {
 			end: at(4),
 			limitMet: false,
 			written: 120,
+			net: 120,
 			limit: { unit: "words", amount: 500 },
 		});
 		expect(sessions.deliberate).toBeNull();
@@ -259,7 +304,7 @@ describe("sprints", () => {
 	});
 
 	test("aiming at nothing is not a sprint", () => {
-		const opened = start(IDLE, at(0), {
+		const opened = start(IDLE, at(0), 0, {
 			unit: "words",
 			amount: 0,
 		}).sessions;

@@ -18,7 +18,7 @@ import { failure } from "./errors";
 import { useReorder } from "./reorder";
 import type { Renaming } from "./rows";
 import { indent, retitling, spot } from "./rows";
-import { documentsIn, inside, rows, sections } from "./tree";
+import { documentsIn, inside, rows, sections, wordsIn } from "./tree";
 import type { FolderRef, Row } from "./tree";
 
 /** Nothing is being dragged, so no row is inside anything. */
@@ -63,6 +63,13 @@ type Props = {
 	onMoved: () => void;
 	// The project view owns these two: it has to write down what the writer
 	// last typed before the files move, and close the tabs afterwards.
+	/**
+	 * How many words the project holds, said again every time the tree is read.
+	 * This is the only place that count is going anyway, so nothing else has to
+	 * open every file to learn it. Has to be stable, or the tree is read again
+	 * on every render.
+	 */
+	onWords: (words: number) => void;
 	onDelete: (id: string) => Promise<void>;
 	onDeleteFolder: (id: string) => Promise<void>;
 	onClose: () => void;
@@ -84,6 +91,7 @@ export default function Sidebar({
 	onFolderRenamed,
 	onChanged,
 	onMoved,
+	onWords,
 	onDelete,
 	onDeleteFolder,
 	onClose,
@@ -105,12 +113,14 @@ export default function Sidebar({
 	const load = useCallback(async () => {
 		setStatus({ kind: "busy" });
 		try {
-			setTree(await invoke<TreeNode[]>("document_tree", { root }));
+			const read = await invoke<TreeNode[]>("document_tree", { root });
+			setTree(read);
+			onWords(wordsIn(read));
 			setStatus({ kind: "idle" });
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
-	}, [root]);
+	}, [root, onWords]);
 
 	useEffect(() => {
 		void load();

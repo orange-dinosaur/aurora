@@ -62,20 +62,24 @@ export interface Running extends Counts {
 	/** The last change this session saw, which is where it ends if it goes quiet. */
 	last: number;
 	limit?: Limit;
+	/** What the project held when this opened, which is where net starts from. */
+	words: number;
 	documents: Map<string, Counts>;
 }
 
-/**
- * A session that has closed. Its net is missing because net is the project's
- * word count at the end less its count at the start, which is measured where
- * deletions show up rather than here.
- */
+/** A session that has closed, with everything a record of it needs. */
 export interface Closed extends Counts {
 	layer: Layer;
 	start: number;
 	end: number;
 	limit?: Limit;
 	limitMet: boolean;
+	/**
+	 * The project's word count at the end less its count at the start. It can
+	 * disagree with written less removed, and is meant to: a document deleted
+	 * whole shows up here and in neither of the other two.
+	 */
+	net: number;
 	documents: Map<string, Counts>;
 }
 
@@ -95,7 +99,7 @@ export interface Step {
 	closed: Closed[];
 }
 
-function open(layer: Layer, at: number, limit?: Limit): Running {
+function open(layer: Layer, at: number, words: number, limit?: Limit): Running {
 	return {
 		layer,
 		start: at,
@@ -103,19 +107,26 @@ function open(layer: Layer, at: number, limit?: Limit): Running {
 		// Aiming at nothing is the same as not aiming, which keeps a sprint
 		// that could never end out of the model.
 		limit: limit && limit.amount > 0 ? limit : undefined,
+		words,
 		written: 0,
 		removed: 0,
 		documents: new Map(),
 	};
 }
 
-function shut(running: Running, end: number, limitMet: boolean): Closed {
+function shut(
+	running: Running,
+	end: number,
+	limitMet: boolean,
+	words: number,
+): Closed {
 	return {
 		layer: running.layer,
 		start: running.start,
 		end,
 		limit: running.limit,
 		limitMet,
+		net: words - running.words,
 		written: running.written,
 		removed: running.removed,
 		documents: running.documents,
@@ -155,11 +166,17 @@ function wordsReached(running: Running): boolean {
 }
 
 /**
- * Everything that closes by the passing of time alone, at `at`. Both the idle
- * gap and a sprint's deadline are read this way, so the same rules apply
- * whether the moment arrived with a change or with the clock.
+ * Everything that closes by the passing of time alone, at `at`, with `words`
+ * saying what the project holds. Both the idle gap and a sprint's deadline are
+ * read this way, so the same rules apply whether the moment arrived with a
+ * change or with the clock.
+ *
+ * A session closing here ended in the past, and the count it is measured
+ * against is the one there is now. Nothing wrote in between, which is why the
+ * session ended, so the two are the same count in every case but a file changed
+ * outside Aurora.
  */
-export function tick(sessions: Sessions, at: number): Step {
+export function tick(sessions: Sessions, at: number, words: number): Step {
 	let { automatic, deliberate } = sessions;
 	const closed: Closed[] = [];
 
@@ -168,7 +185,7 @@ export function tick(sessions: Sessions, at: number): Step {
 	if (deliberate) {
 		const due = deadline(deliberate);
 		if (due !== null && at >= due) {
-			closed.push(shut(deliberate, due, true));
+			closed.push(shut(deliberate, due, true, words));
 			deliberate = null;
 		}
 	}
@@ -176,18 +193,22 @@ export function tick(sessions: Sessions, at: number): Step {
 	// A silence closes the automatic session where the typing stopped, not
 	// where it started again.
 	if (automatic && at - automatic.last >= IDLE_GAP) {
-		closed.push(shut(automatic, automatic.last, false));
+		closed.push(shut(automatic, automatic.last, false, words));
 		automatic = null;
 	}
 
 	return { sessions: { automatic, deliberate }, closed };
 }
 
-/** A change the editor saw, fed to whichever layers are running. */
-export function wrote(sessions: Sessions, change: Change): Step {
-	const { sessions: now, closed } = tick(sessions, change.at);
+/**
+ * A change the editor saw, fed to whichever layers are running. `words` is what
+ * the project held before it: a session opening on this change counts the
+ * change itself, so its net has to start from the count the change moved.
+ */
+export function wrote(sessions: Sessions, change: Change, words: number): Step {
+	const { sessions: now, closed } = tick(sessions, change.at, words);
 	const automatic = fed(
-		now.automatic ?? open("automatic", change.at),
+		now.automatic ?? open("automatic", change.at, words),
 		change,
 	);
 	let deliberate = now.deliberate;
@@ -197,7 +218,8 @@ export function wrote(sessions: Sessions, change: Change): Step {
 		// A change cannot be split, so the one that crosses the line counts in
 		// full and the sprint closes with it.
 		if (wordsReached(deliberate)) {
-			closed.push(shut(deliberate, change.at, true));
+			const after = words + change.written - change.removed;
+			closed.push(shut(deliberate, change.at, true, after));
 			deliberate = null;
 		}
 	}
@@ -210,16 +232,21 @@ export function wrote(sessions: Sessions, change: Change): Step {
  * session runs at a time, so an earlier one is closed here rather than being
  * left to whatever offered the button.
  */
-export function start(sessions: Sessions, at: number, limit?: Limit): Step {
-	const { sessions: now, closed } = tick(sessions, at);
+export function start(
+	sessions: Sessions,
+	at: number,
+	words: number,
+	limit?: Limit,
+): Step {
+	const { sessions: now, closed } = tick(sessions, at, words);
 	if (now.deliberate) {
-		closed.push(shut(now.deliberate, at, false));
+		closed.push(shut(now.deliberate, at, false, words));
 	}
 
 	return {
 		sessions: {
 			automatic: now.automatic,
-			deliberate: open("deliberate", at, limit),
+			deliberate: open("deliberate", at, words, limit),
 		},
 		closed,
 	};
@@ -229,10 +256,10 @@ export function start(sessions: Sessions, at: number, limit?: Limit): Step {
  * Stop session. A sprint stopped by hand did not meet its limit. The automatic
  * layer underneath runs on: the writer ended a session, not the writing.
  */
-export function stop(sessions: Sessions, at: number): Step {
-	const { sessions: now, closed } = tick(sessions, at);
+export function stop(sessions: Sessions, at: number, words: number): Step {
+	const { sessions: now, closed } = tick(sessions, at, words);
 	if (now.deliberate) {
-		closed.push(shut(now.deliberate, at, false));
+		closed.push(shut(now.deliberate, at, false, words));
 	}
 
 	return { sessions: { automatic: now.automatic, deliberate: null }, closed };
