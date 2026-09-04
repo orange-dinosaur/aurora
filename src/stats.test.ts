@@ -1,7 +1,15 @@
 import { describe, expect, test } from "vitest";
 import { changed, start, wrote, IDLE } from "./sessions";
 import type { Limit, Running } from "./sessions";
-import { clock, onDay, running, sessionReading, today } from "./stats";
+import {
+	clock,
+	dayTally,
+	onDay,
+	running,
+	sessionReading,
+	today,
+	unexplained,
+} from "./stats";
 import type { PastSession } from "./types";
 
 /** Noon on the fourth, where the writer is: a day is a local thing. */
@@ -98,6 +106,85 @@ describe("what a document has gained", () => {
 			automatic: 0,
 			deliberate: 0,
 		});
+	});
+});
+
+describe("the project's day, across the three numbers", () => {
+	/** A closed session with the three numbers the file holds for it. */
+	function whole(
+		layer: "automatic" | "deliberate",
+		began: string,
+		numbers: { written: number; removed: number; net: number },
+	): PastSession {
+		return { ...past(layer, began, {}), ...numbers };
+	}
+
+	test("the file's sessions are summed inside their own layer", () => {
+		const history = [
+			whole("automatic", at(4, 9), {
+				written: 400,
+				removed: 40,
+				net: 360,
+			}),
+			whole("automatic", at(4, 11), {
+				written: 200,
+				removed: 0,
+				net: 200,
+			}),
+			whole("deliberate", at(4, 10), {
+				written: 300,
+				removed: 20,
+				net: 280,
+			}),
+			whole("automatic", at(3, 9), {
+				written: 999,
+				removed: 0,
+				net: 999,
+			}),
+		];
+
+		expect(dayTally(history, IDLE, 0, NOON)).toEqual({
+			automatic: { written: 600, removed: 40, net: 560 },
+			deliberate: { written: 300, removed: 20, net: 280 },
+		});
+	});
+
+	// A running session has no net of its own yet: it is the project's count
+	// now less the count the session opened on.
+	test("a running session's net comes from the count now", () => {
+		const open = start(IDLE, NOON, 1000);
+		const typed = wrote(open.sessions, changed("scene", NOON, 50), 1000);
+
+		expect(dayTally([], typed.sessions, 1050, NOON).deliberate).toEqual({
+			written: 50,
+			removed: 0,
+			net: 50,
+		});
+	});
+
+	test("nothing today is three noughts", () => {
+		expect(dayTally([], IDLE, 4000, NOON)).toEqual({
+			automatic: { written: 0, removed: 0, net: 0 },
+			deliberate: { written: 0, removed: 0, net: 0 },
+		});
+	});
+});
+
+describe("what net does not say", () => {
+	test("nothing, when every word went through the editor", () => {
+		expect(unexplained({ written: 400, removed: 40, net: 360 })).toBe(0);
+	});
+
+	// The case the panel exists for: a document deleted whole moves the
+	// project's count and passes neither of the other two.
+	test("the words a deleted document took with it", () => {
+		expect(unexplained({ written: 400, removed: 40, net: -600 })).toBe(
+			-960,
+		);
+	});
+
+	test("and words that arrived from outside", () => {
+		expect(unexplained({ written: 10, removed: 0, net: 2010 })).toBe(2000);
 	});
 });
 

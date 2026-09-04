@@ -796,6 +796,28 @@ body,
 	color: var(--text-dim);
 }
 
+/* Which layer the three numbers under it came from. Lighter than a heading: it
+   divides a group rather than opening one. */
+.stats__layers {
+	margin: 0.75rem 0 0.25rem;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--text);
+}
+
+.stats__heading + .stats__layers {
+	margin-top: 0;
+}
+
+/* An explanation, not a warning, so it reads in the same grey as the labels
+   rather than in the danger colour. */
+.stats__note {
+	margin: 0.25rem 0 0;
+	font-size: 0.75rem;
+	line-height: 1.4;
+	color: var(--text-dim);
+}
+
 .stats__number {
 	color: var(--text);
 	font-variant-numeric: tabular-nums;

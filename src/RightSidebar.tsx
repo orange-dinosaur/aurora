@@ -46,6 +46,8 @@ type Props = {
 	onTarget: (target: number | null) => void;
 	/** The two layers of the session as they stand. */
 	sessions: Sessions;
+	/** What the whole project holds, for the numbers that are not per document. */
+	words: number;
 	/** Opens a deliberate session with something to reach, and closes one. */
 	onStartSprint: (limit: Limit) => void;
 	onStopSession: () => void;
@@ -72,6 +74,7 @@ export default function RightSidebar({
 	folder,
 	onTarget,
 	sessions,
+	words,
 	onStartSprint,
 	onStopSession,
 	logged,
@@ -122,6 +125,7 @@ export default function RightSidebar({
 						text={text}
 						folder={folder}
 						sessions={sessions}
+						words={words}
 						root={root}
 						logged={logged}
 						changed={changed}

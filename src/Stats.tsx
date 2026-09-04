@@ -3,7 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import Target from "./Target";
 import { Sprint } from "./Session";
 import { failure } from "./errors";
-import { running, today } from "./stats";
+import { dayTally, running, today, unexplained } from "./stats";
+import type { Tally } from "./stats";
 import type { Limit, Sessions } from "./sessions";
 import type { FolderRef } from "./tree";
 import type { FolderProgress, PastSession, ProjectDocument } from "./types";
@@ -18,6 +19,8 @@ type Props = {
 	folder: FolderRef | null;
 	/** The two layers as they stand, for the numbers that are not on disk yet. */
 	sessions: Sessions;
+	/** What the whole project holds, which is where a running session's net ends. */
+	words: number;
 	root: string;
 	/** Bumped when a session has been written to the history file. */
 	logged: number;
@@ -46,11 +49,48 @@ function Layer({ name, total }: { name: string; total: number | null }) {
 	);
 }
 
+/** One of the three, so a row of them lines up whatever is in it. */
+function Count({ name, total }: { name: string; total: number }) {
+	return (
+		<p className="stats__line">
+			<span className="stats__layer">{name}</span>
+			<span className="stats__number">{total.toLocaleString()}</span>
+		</p>
+	);
+}
+
+/**
+ * One layer's three project numbers, and the line that reconciles them when
+ * they do not add up. Nothing here picks one to believe: net sees a document
+ * deleted whole and the other two never can, so both readings are true and the
+ * panel says which is which.
+ */
+function Whole({ name, tally }: { name: string; tally: Tally }) {
+	const gap = unexplained(tally);
+
+	return (
+		<>
+			<h4 className="stats__layers">{name}</h4>
+			<Count name="Written" total={tally.written} />
+			<Count name="Removed" total={tally.removed} />
+			<Count name="Net" total={tally.net} />
+			{gap !== 0 && (
+				<p className="stats__note">
+					{gap < 0
+						? `Net is ${(-gap).toLocaleString()} lower: a document deleted whole shows here and in neither of the others.`
+						: `Net is ${gap.toLocaleString()} higher: words arrived from outside the editor.`}
+				</p>
+			)}
+		</>
+	);
+}
+
 export default function Stats({
 	page,
 	text,
 	folder,
 	sessions,
+	words: held,
 	root,
 	logged,
 	changed,
@@ -133,8 +173,10 @@ export default function Stats({
 		);
 	}
 
+	const at = Date.now();
 	const now = running(sessions, page.id);
-	const day = today(history, sessions, page.id, Date.now());
+	const day = today(history, sessions, page.id, at);
+	const project = dayTally(history, sessions, held, at);
 
 	return (
 		<div className="stats">
@@ -168,6 +210,17 @@ export default function Stats({
 				</>
 			) : (
 				<p className="stats__trouble">{trouble}</p>
+			)}
+
+			{/* The three numbers are project-wide because that is where net is
+			    measured: a document deleted whole never passes the editor, so
+			    there is no document to hang it on. */}
+			{trouble === null && (
+				<>
+					<h3 className="stats__heading">The project, today</h3>
+					<Whole name="Automatic" tally={project.automatic} />
+					<Whole name="Session" tally={project.deliberate} />
+				</>
 			)}
 		</div>
 	);

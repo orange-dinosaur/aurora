@@ -65,6 +65,82 @@ export function onDay(history: PastSession[], at: number): PastSession[] {
 }
 
 /**
+ * A session's three project-wide numbers. Written and removed are counted where
+ * the editor sees them; net is the project's own word count moving. They are
+ * kept apart because they can disagree and both are true.
+ */
+export interface Tally {
+	written: number;
+	removed: number;
+	net: number;
+}
+
+const NOTHING: Tally = { written: 0, removed: 0, net: 0 };
+
+function added(one: Tally, other: Tally): Tally {
+	return {
+		written: one.written + other.written,
+		removed: one.removed + other.removed,
+		net: one.net + other.net,
+	};
+}
+
+/**
+ * What a session still running has done to the project. Its net is worked out
+ * here rather than held: it is the count now less the count the session opened
+ * on, and it only settles when the session closes.
+ */
+function sofar(session: Running | null, words: number): Tally {
+	return session === null
+		? NOTHING
+		: {
+				written: session.written,
+				removed: session.removed,
+				net: words - session.words,
+			};
+}
+
+/**
+ * The whole project's three numbers for the day `at` falls in, per layer: what
+ * the file holds from the sessions that began today, plus whatever is still
+ * running.
+ */
+export function dayTally(
+	history: PastSession[],
+	sessions: Sessions,
+	words: number,
+	at: number,
+): { automatic: Tally; deliberate: Tally } {
+	return onDay(history, at).reduce(
+		(all, session) => {
+			const tally = {
+				written: session.written,
+				removed: session.removed,
+				net: session.net,
+			};
+
+			return session.layer === "automatic"
+				? { ...all, automatic: added(all.automatic, tally) }
+				: { ...all, deliberate: added(all.deliberate, tally) };
+		},
+		{
+			automatic: sofar(sessions.automatic, words),
+			deliberate: sofar(sessions.deliberate, words),
+		},
+	);
+}
+
+/**
+ * How far net is from what written and removed would predict. It is nought
+ * whenever every word that moved went through the editor, and something else
+ * whenever words arrived or left another way: a document deleted whole, a file
+ * changed outside Aurora, a chapter pasted in from elsewhere.
+ */
+export function unexplained(tally: Tally): number {
+	return tally.net - (tally.written - tally.removed);
+}
+
+/**
  * What has gone into one document today: what the file holds from the sessions
  * that began today, plus what the running ones hold, since nothing is written
  * down until a session closes.

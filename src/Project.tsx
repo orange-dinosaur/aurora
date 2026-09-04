@@ -1230,6 +1230,7 @@ export default function Project({
 							}
 						}}
 						sessions={sessions.current}
+						words={words.current}
 						onStartSprint={(limit) => startSession(limit)}
 						onStopSession={stopSession}
 						logged={logged}
