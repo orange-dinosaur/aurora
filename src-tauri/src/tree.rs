@@ -53,6 +53,11 @@ pub enum Node {
 		/// Absent outside the Manuscript.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		kind: Option<FolderKind>,
+		/// How many words the writer is aiming at under it, if they have said.
+		/// The same field a document carries: a target belongs to any node, so
+		/// a chapter, a part and the whole Manuscript are one mechanism.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		target: Option<u32>,
 		/// What the writer has said about the folder itself: its synopsis, its
 		/// tags, and any field of their own. A folder with nothing said about
 		/// it writes no key at all.
@@ -96,6 +101,7 @@ impl Node {
 			id: Uuid::new_v4(),
 			name: name.to_owned(),
 			kind: None,
+			target: None,
 			fields: Fields::new(),
 			children,
 		}
@@ -462,11 +468,13 @@ mod tests {
 			id: Uuid::new_v4(),
 			name: "Manuscript".to_owned(),
 			kind: None,
+			target: None,
 			fields: Fields::new(),
 			children: vec![Node::Folder {
 				id: Uuid::new_v4(),
 				name: "Part One".to_owned(),
 				kind: Some(FolderKind::Part),
+				target: None,
 				fields: Fields::from([(
 					"synopsis".to_owned(),
 					Value::Text("The crossing.".to_owned()),
@@ -487,7 +495,7 @@ mod tests {
 		assert!(json.contains(r#""kind":"part""#), "a part says so: {json}");
 		assert!(
 			!json.contains(r#""kind":null"#) && !json.contains("target"),
-			"a folder with no kind and a document with no target write no key: {json}"
+			"a folder with no kind and a node with no target write no key: {json}"
 		);
 		assert!(
 			json.contains(r#""fields":{"synopsis":"The crossing."}"#),
@@ -518,6 +526,7 @@ mod tests {
 			id: Uuid::new_v4(),
 			name: name.to_owned(),
 			kind,
+			target: None,
 			fields: Fields::new(),
 			children,
 		}

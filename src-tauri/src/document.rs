@@ -281,6 +281,7 @@ pub fn scan(root: &Path, folders: &[String]) -> Result<Vec<Node>> {
 			id: Uuid::new_v4(),
 			name: folder.clone(),
 			kind: None,
+			target: None,
 			fields: Fields::new(),
 			children,
 		});
@@ -317,6 +318,7 @@ fn read_level(dir: &Path) -> Result<Option<Vec<Node>>> {
 				id: Uuid::new_v4(),
 				name: name.to_owned(),
 				kind: None,
+				target: None,
 				fields: Fields::new(),
 				children: read_level(&entry.path())?.unwrap_or_default(),
 			});
@@ -366,6 +368,7 @@ pub fn reconcile(manifest: &mut Manifest, found: &[Node]) -> bool {
 			id,
 			name,
 			kind,
+			target,
 			fields,
 			children,
 		} = section
@@ -391,6 +394,7 @@ pub fn reconcile(manifest: &mut Manifest, found: &[Node]) -> bool {
 			id: *id,
 			name: name.clone(),
 			kind: *kind,
+			target: *target,
 			fields: fields.clone(),
 			children: merge(children, below),
 		});
@@ -421,6 +425,7 @@ fn merge(known: &[Node], found: &[Node]) -> Vec<Node> {
 					id,
 					name,
 					kind,
+					target,
 					fields,
 					children,
 				},
@@ -431,6 +436,7 @@ fn merge(known: &[Node], found: &[Node]) -> Vec<Node> {
 				id: *id,
 				name: name.clone(),
 				kind: *kind,
+				target: *target,
 				fields: fields.clone(),
 				children: merge(children, below),
 			},
@@ -768,6 +774,7 @@ pub fn create_folder(
 		id: Uuid::new_v4(),
 		name,
 		kind,
+		target: None,
 		fields: Fields::new(),
 		children: Vec::new(),
 	};
@@ -980,6 +987,61 @@ pub fn set_document_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Resu
 		.find(|d| d.id == id)
 		.map(DocumentView::from)
 		.ok_or(Error::UnknownDocument)
+}
+
+/// Sets the word target a folder is written towards, or clears it with `None`.
+/// The same field a document has, on the other kind of node, so a chapter and
+/// the whole Manuscript are aimed the same way.
+#[tauri::command]
+pub fn set_folder_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let target = target.filter(|words| *words > 0);
+
+	let mut manifest = read_manifest(&root)?;
+	match tree::find_mut(&mut manifest.nodes, id) {
+		Some(Node::Folder { target: aim, .. }) => *aim = target,
+		_ => return Err(Error::UnknownFolder),
+	}
+
+	write_manifest(&root, &mut manifest)?;
+	Ok(())
+}
+
+/// How a folder stands against what it is aiming at: everything written under
+/// it, and the target on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderProgress {
+	/// The words in every document below it, however deep.
+	pub words: usize,
+	pub target: Option<u32>,
+}
+
+/// A folder's progress, asked for on its own the way its fields are: only the
+/// panel wants it, and the tree that already carries the count is read for the
+/// sidebar rather than for this.
+#[tauri::command]
+pub fn folder_progress(root: PathBuf, id: Uuid) -> Result<FolderProgress> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	let Some(Node::Folder {
+		target, children, ..
+	}) = tree::find(&manifest.nodes, id)
+	else {
+		return Err(Error::UnknownFolder);
+	};
+
+	let prefix = tree::path(&manifest.nodes, id).unwrap_or_default();
+	Ok(FolderProgress {
+		words: words_under(&canonical(&root), children, &format!("{prefix}/")),
+		target: *target,
+	})
 }
 
 /// What the writer has said about one folder, empty when they have said
@@ -3633,6 +3695,80 @@ mod tests {
 		let err = set_document_target(root, Uuid::new_v4(), Some(1_500)).unwrap_err();
 
 		assert!(matches!(err, Error::UnknownDocument));
+	}
+
+	#[test]
+	fn a_folder_is_written_towards_a_target_of_its_own() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = folder_id(&root, "Manuscript");
+		// The section is seeded with an empty document, so everything counted
+		// here is what this writes.
+		fs::write(
+			root.join("Manuscript").join("Chapter 1.md"),
+			"Elena andava a scuola\n",
+		)
+		.unwrap();
+		refresh_documents(root.clone()).unwrap();
+
+		set_folder_target(root.clone(), manuscript, Some(90_000)).unwrap();
+
+		let progress = folder_progress(root.clone(), manuscript).unwrap();
+		assert_eq!(progress.target, Some(90_000));
+		assert_eq!(progress.words, 4);
+		// A refresh reads the directories again, and a directory says nothing
+		// about itself, so this is the pass that would lose it.
+		refresh_documents(root.clone()).unwrap();
+		assert_eq!(
+			folder_progress(root, manuscript).unwrap().target,
+			Some(90_000)
+		);
+	}
+
+	#[test]
+	fn a_folder_counts_the_documents_below_its_own_folders() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let deep = root.join("Manuscript").join("Part 1").join("Chapter 2");
+		fs::create_dir_all(&deep).unwrap();
+		fs::write(deep.join("Scene 2.md"), "one two three").unwrap();
+		fs::write(root.join("Manuscript").join("Chapter 1.md"), "four five").unwrap();
+		refresh_documents(root.clone()).unwrap();
+
+		let manuscript = folder_id(&root, "Manuscript");
+		let part = folder_id(&root, "Manuscript/Part 1");
+
+		assert_eq!(folder_progress(root.clone(), manuscript).unwrap().words, 5);
+		assert_eq!(folder_progress(root, part).unwrap().words, 3);
+	}
+
+	#[test]
+	fn aiming_a_folder_at_no_words_is_not_aiming() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = folder_id(&root, "Notes");
+
+		set_folder_target(root.clone(), id, Some(0)).unwrap();
+
+		assert_eq!(folder_progress(root, id).unwrap().target, None);
+	}
+
+	#[test]
+	fn aiming_an_unknown_folder_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manifest = read_manifest(&root).unwrap();
+		let scene = documents_in(&manifest, "Manuscript")[0].id;
+
+		assert!(matches!(
+			set_folder_target(root.clone(), Uuid::new_v4(), Some(100)).unwrap_err(),
+			Error::UnknownFolder
+		));
+		// A document has a target of its own, set by its own command.
+		assert!(matches!(
+			folder_progress(root, scene).unwrap_err(),
+			Error::UnknownFolder
+		));
 	}
 
 	#[test]

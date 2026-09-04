@@ -5,6 +5,7 @@ import Stats from "./Stats";
 import Synopsis from "./Synopsis";
 import type { FieldsHandle } from "./fields";
 import type { Sessions } from "./sessions";
+import type { FolderRef } from "./tree";
 import type { Seed } from "./find";
 import type { OutlineHandle } from "./outline";
 import { isSubject } from "./subjects";
@@ -39,6 +40,10 @@ type Props = {
 	/** The open document, and its text, for the panel that counts words. */
 	page: ProjectDocument | null;
 	text: string;
+	/** The folder whose overview is showing, when it is one of those. */
+	folder: FolderRef | null;
+	/** A target typed over the number in the Stats tab. */
+	onTarget: (target: number | null) => void;
 	/** The two layers of the session as they stand. */
 	sessions: Sessions;
 	/** Bumped when a session has reached the history file. */
@@ -61,6 +66,8 @@ export default function RightSidebar({
 	live,
 	page,
 	text,
+	folder,
+	onTarget,
 	sessions,
 	logged,
 	tab,
@@ -108,9 +115,12 @@ export default function RightSidebar({
 					<Stats
 						page={page}
 						text={text}
+						folder={folder}
 						sessions={sessions}
 						root={root}
 						logged={logged}
+						changed={changed}
+						onTarget={onTarget}
 					/>
 				) : tab === "mentions" ? (
 					about === null ? (

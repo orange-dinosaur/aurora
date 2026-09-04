@@ -29,6 +29,8 @@ pub fn run() {
 			document::rename_document,
 			document::rename_folder,
 			document::set_document_target,
+			document::set_folder_target,
+			document::folder_progress,
 			document::folder_fields,
 			document::set_folder_fields,
 			document::delete_document,

@@ -121,6 +121,16 @@ export type OverviewCard =
 	  }
 	| ({ node: "document" } & DocumentSummary);
 
+/**
+ * `document::FolderProgress` — how a folder stands against what it is aiming
+ * at. Asked for on its own, the way its fields are.
+ */
+export type FolderProgress = {
+	/** The words in every document below it, however deep. */
+	words: number;
+	target: number | null;
+};
+
 /** `document::TrashEntry` */
 export type TrashEntry = {
 	/** Where it is, relative to the project's trash. */

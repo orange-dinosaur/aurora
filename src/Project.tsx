@@ -233,6 +233,9 @@ export default function Project({
 	// thing that changes what the Stats tab reads back.
 	const [logged, setLogged] = useState(0);
 
+	// Why a folder's target was refused, when one was.
+	const [aiming, setAiming] = useState<string | null>(null);
+
 	// What the project holds, which is where a session's net comes from. The
 	// sidebar says where it stands every time it reads the manifest, and the
 	// editor's changes carry it forward in between, so knowing this costs no
@@ -650,6 +653,18 @@ export default function Project({
 				...tab,
 				save: { kind: "failed", message: failure(error).message },
 			}));
+		}
+	}
+
+	// A folder's target has no tab to report a failure on, so it says so in the
+	// panel's own line, where a refused change to its fields already does.
+	async function retargetFolder(id: string, target: number | null) {
+		try {
+			await invoke("set_folder_target", { root, id, target });
+			setAiming(null);
+			setListing((version) => version + 1);
+		} catch (error) {
+			setAiming(failure(error).message);
 		}
 	}
 
@@ -1148,7 +1163,7 @@ export default function Project({
 					<RightSidebar
 						fields={about === "document" ? fields : folderFields}
 						outline={about === "document" ? outline : null}
-						trouble={trouble}
+						trouble={trouble ?? aiming}
 						about={panel}
 						root={root}
 						changed={listing + written}
@@ -1162,6 +1177,16 @@ export default function Project({
 								? active.content.text
 								: ""
 						}
+						folder={
+							active?.kind === "folder" ? active.folder : null
+						}
+						onTarget={(target) => {
+							if (active?.kind === "folder") {
+								void retargetFolder(active.folder.id, target);
+							} else if (active?.kind === "document") {
+								void retarget(active.document.id, target);
+							}
+						}}
 						sessions={sessions.current}
 						logged={logged}
 						tab={preferences.rightSidebarTab}
