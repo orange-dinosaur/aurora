@@ -959,11 +959,37 @@ body,
 	list-style: none;
 }
 
-/* A hairline between entries rather than a card each: twenty of these sit in a
-   240px column, and boxing them would leave no room for the numbers. */
-.history__session {
-	padding: 0.4rem 0;
+/* The hairline falls between days, not between sessions: the day is the
+   division the writer reads by, and a rule under every entry in a 240px column
+   turns the list into a grid. */
+.history__day + .history__day {
+	margin-top: 0.6rem;
+	padding-top: 0.6rem;
 	border-top: 1px solid var(--border);
+}
+
+.history__date {
+	margin: 0;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--text);
+}
+
+/* What the whole day came to, which is not always what is listed under it: the
+   cap can cut a day short and the total still speaks for all of it. */
+.history__total {
+	margin-top: 0.05rem;
+	color: var(--text);
+}
+
+.history__sessions {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.history__session {
+	padding: 0.35rem 0 0;
 }
 
 .history__head {

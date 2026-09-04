@@ -76,22 +76,34 @@ export function newest(history: PastSession[]): PastSession[] {
 	);
 }
 
-/** A session as one document saw it: the record, and what went in here. */
-export interface Visit {
+/**
+ * One line of the history list: a session, and the numbers to show beside it.
+ * Net is absent when the line is about a single document, since net is the
+ * whole project's count moving and no document owns a share of it.
+ */
+export interface Entry {
 	session: PastSession;
 	written: number;
 	removed: number;
+	net?: number;
+}
+
+/** Every session, latest first, with the project's own three numbers. */
+export function entries(history: PastSession[]): Entry[] {
+	return newest(history).map((session) => ({
+		session,
+		written: session.written,
+		removed: session.removed,
+		net: session.net,
+	}));
 }
 
 /**
  * The sessions that touched one document, latest first. A session that never
  * reached it is left out rather than listed with noughts, so the list answers
  * "when was this written" and not "what else was I doing".
- *
- * There is no net here, and there cannot be: net is the whole project's count
- * moving, and no single document owns a share of it.
  */
-export function visits(history: PastSession[], document: string): Visit[] {
+export function visits(history: PastSession[], document: string): Entry[] {
 	return newest(history).flatMap((session) => {
 		const counts = session.documents?.[document];
 		return counts === undefined ? [] : [{ session, ...counts }];
@@ -198,6 +210,71 @@ export function dayTally(
  */
 export function unexplained(tally: Tally): number {
 	return tally.net - (tally.written - tally.removed);
+}
+
+/** A day of the history list, with what the day came to. */
+export interface Day {
+	/** The day itself, for telling one from the next. */
+	day: string;
+	/** A moment inside it, for writing the date out. */
+	at: string;
+	written: number;
+	removed: number;
+	net?: number;
+	entries: Entry[];
+}
+
+/**
+ * The list broken into days, latest day first. A session belongs whole to the
+ * day it began on: it is the atom of the history, and the file holds nothing
+ * that could divide one at midnight except a guess from elapsed time. The day
+ * is the writer's own, not UTC, which is the rule the day numbers already use.
+ */
+export function byDay(list: Entry[]): Day[] {
+	return list.reduce<Day[]>((days, entry) => {
+		const day = new Date(entry.session.start).toDateString();
+		const open = days[days.length - 1];
+
+		if (open === undefined || open.day !== day) {
+			days.push({
+				day,
+				at: entry.session.start,
+				written: entry.written,
+				removed: entry.removed,
+				net: entry.net,
+				entries: [entry],
+			});
+			return days;
+		}
+
+		open.written += entry.written;
+		open.removed += entry.removed;
+		if (open.net !== undefined && entry.net !== undefined) {
+			open.net += entry.net;
+		}
+		open.entries.push(entry);
+		return days;
+	}, []);
+}
+
+/**
+ * The first `cap` lines of a grouped list. A day that is cut short keeps the
+ * total it had: the heading says what the day came to, not what is on screen.
+ */
+export function firstOf(days: Day[], cap: number): Day[] {
+	const kept: Day[] = [];
+	let room = cap;
+
+	for (const day of days) {
+		if (room <= 0) {
+			break;
+		}
+
+		kept.push({ ...day, entries: day.entries.slice(0, room) });
+		room -= day.entries.length;
+	}
+
+	return kept;
 }
 
 /**

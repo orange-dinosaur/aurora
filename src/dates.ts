@@ -3,17 +3,17 @@
 // disagree about how a date looks.
 
 /**
- * A date with the time of day on it, for a list where several entries fall on
- * the same day and the order only makes sense with the hour showing.
+ * The time of day on its own, for a list that already carries the date on the
+ * heading above it.
  */
-export function moment(iso: string): string {
+export function timeOfDay(iso: string): string {
 	const at = new Date(iso);
 	return Number.isNaN(at.getTime())
 		? iso
-		: `${when(iso)}, ${at.toLocaleTimeString(undefined, {
+		: at.toLocaleTimeString(undefined, {
 				hour: "numeric",
 				minute: "2-digit",
-			})}`;
+			});
 }
 
 /** A date as the writer reads it, or the raw string if it is not one. */

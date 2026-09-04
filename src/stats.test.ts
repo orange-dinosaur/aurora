@@ -2,8 +2,11 @@ import { describe, expect, test } from "vitest";
 import { changed, start, wrote, IDLE } from "./sessions";
 import type { Limit, Running } from "./sessions";
 import {
+	byDay,
 	clock,
 	dayTally,
+	entries,
+	firstOf,
 	lasted,
 	newest,
 	onDay,
@@ -180,6 +183,92 @@ describe("the sessions one document was written in", () => {
 			documents: undefined,
 		};
 		expect(visits([bare], "scene")).toEqual([]);
+	});
+});
+
+describe("the list broken into days", () => {
+	function ran(began: string, written: number): PastSession {
+		return { ...past("deliberate", began, {}), written, net: written };
+	}
+
+	test("two sessions on one day sum into it", () => {
+		const days = byDay(
+			entries([ran(at(4, 9), 40), ran(at(4, 14), 60), ran(at(3, 9), 90)]),
+		);
+
+		expect(days.map((day) => [day.at, day.written, day.net])).toEqual([
+			[at(4, 14), 100, 100],
+			[at(3, 9), 90, 90],
+		]);
+	});
+
+	test("the latest day comes first, and its latest session with it", () => {
+		const days = byDay(entries([ran(at(4, 9), 1), ran(at(4, 14), 1)]));
+
+		expect(days[0].entries.map((entry) => entry.session.start)).toEqual([
+			at(4, 14),
+			at(4, 9),
+		]);
+	});
+
+	// The rule the writer chose: a session belongs whole to the day it began
+	// on. The file holds only a start, an end and totals, so splitting one
+	// could divide its words by elapsed time and nothing better.
+	test("a session running past midnight counts to the day it began", () => {
+		const night = {
+			...ran(new Date(2026, 8, 3, 23, 40).toISOString(), 300),
+			end: new Date(2026, 8, 4, 1, 20).toISOString(),
+		};
+
+		const days = byDay(entries([night, ran(at(4, 9), 50)]));
+		expect(days.map((day) => day.written)).toEqual([50, 300]);
+	});
+
+	test("a document's days have no net, since its sessions have none", () => {
+		const history = [
+			past("deliberate", at(4, 9), { scene: { written: 7, removed: 1 } }),
+			past("deliberate", at(4, 14), {
+				scene: { written: 3, removed: 0 },
+			}),
+		];
+
+		expect(byDay(visits(history, "scene"))).toMatchObject([
+			{ written: 10, removed: 1, net: undefined },
+		]);
+	});
+});
+
+describe("capping a grouped list", () => {
+	function day(started: string, howMany: number) {
+		return byDay(
+			entries(
+				Array.from({ length: howMany }, (_, index) => ({
+					...past("deliberate", started, {}),
+					id: `${started}-${index}`,
+					written: 1,
+					net: 1,
+				})),
+			),
+		)[0];
+	}
+
+	test("a day cut short keeps the total for the whole day", () => {
+		const kept = firstOf([day(at(4, 9), 5)], 2);
+
+		expect(kept[0].entries).toHaveLength(2);
+		expect(kept[0].written).toBe(5);
+	});
+
+	test("days past the cap are dropped whole", () => {
+		const kept = firstOf([day(at(4, 9), 2), day(at(3, 9), 4)], 2);
+
+		expect(kept).toHaveLength(1);
+	});
+
+	test("a list inside the cap is left alone", () => {
+		const days = [day(at(4, 9), 2), day(at(3, 9), 1)];
+
+		expect(firstOf(days, 20)).toEqual(days);
 	});
 });
 
