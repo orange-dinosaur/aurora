@@ -248,6 +248,11 @@ export const SEARCH: Keys = { key: "f", shift: true };
 /** Showing and hiding the column of headings. Like the bar, not an action. */
 export const OUTLINE: Keys = { key: "o", shift: true };
 
+/** Starts a writing session, and stops the one running. Bound on the window
+ * like search, for the same reason: a writer who wants a session may not have
+ * an editor in front of them yet. */
+export const SESSION: Keys = { key: "k", shift: false };
+
 const COMMAND_KEY = IS_APPLE ? "⌘" : "Ctrl+";
 const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift+";
 

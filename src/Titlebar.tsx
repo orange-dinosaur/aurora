@@ -1,12 +1,19 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "./Icon";
+import Session from "./Session";
 import { failure } from "./errors";
-import { SEARCH, shortcutLabel } from "./formatting";
+import { SEARCH, SESSION, shortcutLabel } from "./formatting";
+import type { Running } from "./sessions";
 
 type Props = {
 	name: string;
 	root: string;
+	/** The deliberate session running now, or null when there is none. */
+	session: Running | null;
+	onStartSession: () => void;
+	onStopSession: () => void;
+	onTickSession: () => void;
 	sidebar: boolean;
 	onSidebar: (open: boolean) => void;
 	/**
@@ -24,6 +31,10 @@ type Props = {
 export default function Titlebar({
 	name,
 	root,
+	session,
+	onStartSession,
+	onStopSession,
+	onTickSession,
 	sidebar,
 	onSidebar,
 	rightSidebar,
@@ -55,6 +66,14 @@ export default function Titlebar({
 			<span className="titlebar__path" title={root}>
 				{root}
 			</span>
+
+			<Session
+				session={session}
+				onStart={onStartSession}
+				onStop={onStopSession}
+				onTick={onTickSession}
+				shortcut={shortcutLabel(SESSION)}
+			/>
 
 			{/* The one place search is reachable from in every configuration:
 			    the toolbar and the sidebar can both be hidden, and this

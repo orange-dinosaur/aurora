@@ -32,14 +32,18 @@ import {
 	changed as asChange,
 	ended,
 	recorded,
+	start,
+	stop,
 	tick,
 	wrote,
 	IDLE,
+	type Limit,
+	type Running,
 	type Sessions,
 	type Step,
 } from "./sessions";
 import { failure } from "./errors";
-import { pressed, SEARCH } from "./formatting";
+import { pressed, SEARCH, SESSION } from "./formatting";
 
 type Props = {
 	name: string;
@@ -229,6 +233,11 @@ export default function Project({
 	// text is what renders this view anyway.
 	const sessions = useRef<Sessions>(IDLE);
 
+	// The deliberate layer again, as state this time. The titlebar draws it and
+	// is nowhere near the keystroke that moves it, so it needs telling; the ref
+	// above stays the one the model is handed.
+	const [deliberate, setDeliberate] = useState<Running | null>(null);
+
 	// Bumped every time a session reaches the history file, which is the only
 	// thing that changes what the Stats tab reads back.
 	const [logged, setLogged] = useState(0);
@@ -253,6 +262,7 @@ export default function Project({
 	// written behind the writer's back and there is nowhere to say so.
 	function keep(step: Step) {
 		sessions.current = step.sessions;
+		setDeliberate(step.sessions.deliberate);
 		const written = Promise.allSettled(
 			step.closed.map((session) =>
 				invoke("append_session", { root, session: recorded(session) }),
@@ -277,6 +287,23 @@ export default function Project({
 			),
 		);
 		words.current += delta;
+	}
+
+	// Opening a session by hand. A limit makes it a sprint, which closes itself
+	// once the limit is met; without one it runs until the writer says stop.
+	function startSession(limit?: Limit) {
+		void keep(start(sessions.current, Date.now(), words.current, limit));
+	}
+
+	function stopSession() {
+		void keep(stop(sessions.current, Date.now(), words.current));
+	}
+
+	// What the clock alone has closed. The titlebar asks every second while a
+	// session is running, so a sprint on minutes ends at its deadline rather
+	// than at the next beat of the minute timer above.
+	function tickSession() {
+		void keep(tick(sessions.current, Date.now(), words.current));
 	}
 
 	// Nobody else notices that a session has gone quiet, since going quiet is
@@ -494,11 +521,22 @@ export default function Project({
 				event.preventDefault();
 				openSearch();
 			}
+			// One key both ways round, so a writer who cannot see the titlebar
+			// control can still end what they started. The layer is read from
+			// the ref, which is current wherever this was registered.
+			if (pressed(event, SESSION)) {
+				event.preventDefault();
+				if (sessions.current.deliberate === null) {
+					startSession();
+				} else {
+					stopSession();
+				}
+			}
 		}
 
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, []);
+	}, [root]);
 
 	// A new document is opened for writing in, and every listing of it has to
 	// be read again.
@@ -953,6 +991,10 @@ export default function Project({
 			<Titlebar
 				name={name}
 				root={root}
+				session={deliberate}
+				onStartSession={() => startSession()}
+				onStopSession={stopSession}
+				onTickSession={tickSession}
 				sidebar={preferences.sidebar}
 				onSidebar={(open) =>
 					onPreferences({ ...preferences, sidebar: open })
@@ -1188,6 +1230,8 @@ export default function Project({
 							}
 						}}
 						sessions={sessions.current}
+						onStartSprint={(limit) => startSession(limit)}
+						onStopSession={stopSession}
 						logged={logged}
 						tab={preferences.rightSidebarTab}
 						onTab={(tab) =>

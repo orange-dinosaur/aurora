@@ -4,7 +4,7 @@ import Mentions, { type About } from "./Mentions";
 import Stats from "./Stats";
 import Synopsis from "./Synopsis";
 import type { FieldsHandle } from "./fields";
-import type { Sessions } from "./sessions";
+import type { Limit, Sessions } from "./sessions";
 import type { FolderRef } from "./tree";
 import type { Seed } from "./find";
 import type { OutlineHandle } from "./outline";
@@ -46,6 +46,9 @@ type Props = {
 	onTarget: (target: number | null) => void;
 	/** The two layers of the session as they stand. */
 	sessions: Sessions;
+	/** Opens a deliberate session with something to reach, and closes one. */
+	onStartSprint: (limit: Limit) => void;
+	onStopSession: () => void;
 	/** Bumped when a session has reached the history file. */
 	logged: number;
 	tab: RightSidebarTab;
@@ -69,6 +72,8 @@ export default function RightSidebar({
 	folder,
 	onTarget,
 	sessions,
+	onStartSprint,
+	onStopSession,
 	logged,
 	tab,
 	onTab,
@@ -121,6 +126,8 @@ export default function RightSidebar({
 						logged={logged}
 						changed={changed}
 						onTarget={onTarget}
+						onStartSprint={onStartSprint}
+						onStopSession={onStopSession}
 					/>
 				) : tab === "mentions" ? (
 					about === null ? (

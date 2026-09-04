@@ -435,6 +435,44 @@ body,
 	text-overflow: ellipsis;
 }
 
+/* The readout is the control, the way the word count is: no box of its own,
+   and fixed-width digits so a running clock cannot jog the row. It takes its
+   width out of the path beside it, which gives room back first, so nothing
+   else on the row moves when a session opens. WebKitGTK resets the three
+   properties below on a button and `font: inherit` restores none of them. */
+.titlebar__session {
+	flex: none;
+	font: inherit;
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.titlebar__session:hover {
+	color: var(--text);
+	text-decoration: underline;
+}
+
+.titlebar__session:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: 3px;
+}
+
+/* An open session is worth more than the dim grey around it: seeing that it is
+   running is the whole reason it is drawn up here. */
+.titlebar__session--running {
+	color: var(--accent);
+}
+
 .titlebar__button {
 	flex: none;
 	align-self: center;
@@ -761,6 +799,78 @@ body,
 .stats__number {
 	color: var(--text);
 	font-variant-numeric: tabular-nums;
+}
+
+.sprint {
+	display: flex;
+	align-items: center;
+	gap: 0.375rem;
+	margin: 0;
+}
+
+/* A form stands where a group of numbers would, so the heading after it has to
+   open a new group the same way one of those does. */
+.sprint + .stats__heading {
+	margin-top: 1rem;
+}
+
+.sprint__amount {
+	width: 4.5ch;
+	min-width: 0;
+	padding: 0.15rem 0.25rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	text-align: right;
+}
+
+.sprint__unit {
+	flex: 1;
+	min-width: 0;
+	padding: 0.15rem 0.25rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+}
+
+.sprint__go,
+.sprint__stop {
+	flex: none;
+	padding: 0.15rem 0.5rem;
+	font: inherit;
+	font-size: 0.75rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	cursor: pointer;
+}
+
+.sprint__go:hover:not(:disabled),
+.sprint__stop:hover {
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.sprint__go:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.sprint__amount:focus-visible,
+.sprint__unit:focus-visible,
+.sprint__go:focus-visible,
+.sprint__stop:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 .stats__trouble {

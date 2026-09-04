@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Target from "./Target";
+import { Sprint } from "./Session";
 import { failure } from "./errors";
 import { running, today } from "./stats";
-import type { Sessions } from "./sessions";
+import type { Limit, Sessions } from "./sessions";
 import type { FolderRef } from "./tree";
 import type { FolderProgress, PastSession, ProjectDocument } from "./types";
 import { prose, words } from "./words";
@@ -24,6 +25,9 @@ type Props = {
 	changed: number;
 	/** The target the writer typed over the number, for whichever is open. */
 	onTarget: (target: number | null) => void;
+	/** Opens a deliberate session with something to reach. */
+	onStartSprint: (limit: Limit) => void;
+	onStopSession: () => void;
 };
 
 /**
@@ -51,6 +55,8 @@ export default function Stats({
 	logged,
 	changed,
 	onTarget,
+	onStartSprint,
+	onStopSession,
 }: Props) {
 	const [history, setHistory] = useState<PastSession[]>([]);
 	const [progress, setProgress] = useState<FolderProgress | null>(null);
@@ -145,6 +151,13 @@ export default function Stats({
 			<Layer
 				name="Session"
 				total={sessions.deliberate === null ? null : now.deliberate}
+			/>
+
+			<h3 className="stats__heading">Sprint</h3>
+			<Sprint
+				session={sessions.deliberate}
+				onStart={onStartSprint}
+				onStop={onStopSession}
 			/>
 
 			<h3 className="stats__heading">Today</h3>

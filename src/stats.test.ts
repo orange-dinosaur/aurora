@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { changed, start, wrote, IDLE } from "./sessions";
-import { onDay, running, today } from "./stats";
+import type { Limit, Running } from "./sessions";
+import { clock, onDay, running, sessionReading, today } from "./stats";
 import type { PastSession } from "./types";
 
 /** Noon on the fourth, where the writer is: a day is a local thing. */
@@ -97,5 +98,56 @@ describe("what a document has gained", () => {
 			automatic: 0,
 			deliberate: 0,
 		});
+	});
+});
+
+describe("a span on the clock", () => {
+	test("reads as minutes and seconds", () => {
+		expect(clock(0)).toBe("0:00");
+		expect(clock(9 * 1000)).toBe("0:09");
+		expect(clock(4 * 60 * 1000 + 12 * 1000)).toBe("4:12");
+	});
+
+	test("takes an hour once it has run one", () => {
+		expect(clock(3725 * 1000)).toBe("1:02:05");
+	});
+
+	// A deadline that has passed arrives here as a negative span, from the
+	// second between the limit being met and the session closing.
+	test("never runs backwards", () => {
+		expect(clock(-5000)).toBe("0:00");
+	});
+});
+
+describe("what a running session reads as", () => {
+	/** The deliberate layer of a session just opened. */
+	function opened(limit?: Limit): Running {
+		const session = start(IDLE, NOON, 0, limit).sessions.deliberate;
+		if (session === null) {
+			throw new Error("starting opens a deliberate session");
+		}
+		return session;
+	}
+
+	test("without a limit, the time it has been open", () => {
+		expect(sessionReading(opened(), NOON + 90 * 1000)).toBe("1:30");
+	});
+
+	test("a sprint on the clock, the time it has left", () => {
+		const sprint = opened({ unit: "minutes", amount: 25 });
+		expect(sessionReading(sprint, NOON + 60 * 1000)).toBe("24:00 left");
+	});
+
+	test("a sprint on words, its progress towards them", () => {
+		const sprint = start(IDLE, NOON, 0, { unit: "words", amount: 500 });
+		const session = wrote(
+			sprint.sessions,
+			changed("scene", NOON + 1000, 120),
+			0,
+		).sessions.deliberate;
+
+		expect(session && sessionReading(session, NOON + 1000)).toBe(
+			"120 of 500 words · 24%",
+		);
 	});
 });
