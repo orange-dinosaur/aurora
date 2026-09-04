@@ -75,21 +75,30 @@
 }
 
 :root {
-	--bg: oklch(0.985 0.006 85);
+	--bg: oklch(0.993 0.002 220);
 	/* The tint that separates chrome from paper: the sidebar, the tab strip and
 	   anything else that is not the manuscript. */
-	--bg-chrome: oklch(0.965 0.009 85);
-	--bg-card: oklch(0.997 0.003 85);
-	--border: oklch(0.89 0.012 80);
-	--text: oklch(0.24 0.012 60);
-	--text-dim: oklch(0.53 0.012 65);
-	--accent: oklch(0.58 0.115 70);
+	--bg-chrome: oklch(0.951 0.006 226);
+	--bg-card: oklch(1 0 0);
+	/* Under the pointer. Nothing reads it yet; hovers still take --accent-wash
+	   at half, and the chrome pass is what moves them onto this. */
+	--bg-hover: oklch(0.928 0.005 226);
+	--border: oklch(0.906 0.008 226);
+	/* A rule that has to carry weight, around a control rather than between two
+	   rows of a list. Nothing reads it yet either. */
+	--border-strong: oklch(0.845 0.01 226);
+	--text: oklch(0.255 0.015 250);
+	--text-dim: oklch(0.515 0.012 245);
+	/* A third tone below --text-dim, for a label sitting beside something that
+	   is already dim. Nothing reads it yet. */
+	--text-faint: oklch(0.66 0.01 245);
+	--accent: oklch(0.55 0.095 205);
 	/* Behind whatever is selected, at full strength; hover takes the same wash
 	   at half. A selection is never drawn with a border. */
-	--accent-wash: oklch(0.93 0.05 82);
-	--danger: oklch(0.48 0.14 25);
+	--accent-wash: oklch(0.925 0.038 205);
+	--danger: oklch(0.505 0.15 22);
 	/* The tint on a match that is not the one being read. */
-	--find: oklch(0.92 0.09 95);
+	--find: oklch(0.9 0.09 95);
 	--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 	--serif: Newsreader, Georgia, "Times New Roman", serif;
 	/* The one shadow in the app, and only ever under something that floats.
@@ -110,16 +119,19 @@
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--bg: oklch(0.195 0.008 70);
-		--bg-chrome: oklch(0.165 0.008 70);
-		--bg-card: oklch(0.235 0.009 70);
-		--border: oklch(0.31 0.01 70);
-		--text: oklch(0.93 0.008 80);
-		--text-dim: oklch(0.68 0.01 75);
-		--accent: oklch(0.78 0.1 78);
-		--accent-wash: oklch(0.33 0.05 78);
-		--danger: oklch(0.7 0.13 30);
-		--find: oklch(0.42 0.07 90);
+		--bg: oklch(0.212 0.006 240);
+		--bg-chrome: oklch(0.162 0.006 240);
+		--bg-card: oklch(0.242 0.008 240);
+		--bg-hover: oklch(0.262 0.006 240);
+		--border: oklch(0.305 0.008 240);
+		--border-strong: oklch(0.38 0.01 240);
+		--text: oklch(0.925 0.006 240);
+		--text-dim: oklch(0.665 0.01 240);
+		--text-faint: oklch(0.55 0.01 240);
+		--accent: oklch(0.745 0.09 205);
+		--accent-wash: oklch(0.325 0.048 205);
+		--danger: oklch(0.7 0.13 25);
+		--find: oklch(0.42 0.07 92);
 	}
 }
 
@@ -3241,9 +3253,11 @@ body,
 	background-color: var(--find);
 }
 
+/* The paper is what reads against the accent in both schemes: dark on a light
+   accent, light on a dark one. A fixed white was legible in one of the two. */
 ::highlight(aurora-find-current) {
 	background-color: var(--accent);
-	color: #ffffff;
+	color: var(--bg);
 }
 
 .slash {
