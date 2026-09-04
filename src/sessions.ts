@@ -14,6 +14,8 @@
  * the moment it is acting at, so a test can hand it any clock it likes.
  */
 
+import type { SessionRecord } from "./types";
+
 /** How long a silence has to run before it closes an automatic session. */
 export const IDLE_GAP = 30 * 60 * 1000;
 
@@ -249,6 +251,42 @@ export function start(
 			deliberate: open("deliberate", at, words, limit),
 		},
 		closed,
+	};
+}
+
+/**
+ * Both layers closed where they stand, for a writer who is leaving. The
+ * automatic session ends at its last change rather than now, since nothing was
+ * written between the two; the deliberate one ends here, because the writer
+ * held it open until here.
+ */
+export function ended(sessions: Sessions, at: number, words: number): Step {
+	const { sessions: now, closed } = tick(sessions, at, words);
+	if (now.automatic) {
+		closed.push(shut(now.automatic, now.automatic.last, false, words));
+	}
+	if (now.deliberate) {
+		closed.push(shut(now.deliberate, at, false, words));
+	}
+
+	return { sessions: IDLE, closed };
+}
+
+/**
+ * A closed session as the history file takes it: times as RFC 3339, the tally
+ * as a plain object, and no id, which is Rust's to mint.
+ */
+export function recorded(session: Closed): SessionRecord {
+	return {
+		layer: session.layer,
+		start: new Date(session.start).toISOString(),
+		end: new Date(session.end).toISOString(),
+		...(session.limit === undefined ? {} : { limit: session.limit }),
+		limitMet: session.limitMet,
+		written: session.written,
+		removed: session.removed,
+		net: session.net,
+		documents: Object.fromEntries(session.documents),
 	};
 }
 

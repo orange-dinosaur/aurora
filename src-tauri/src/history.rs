@@ -58,7 +58,9 @@ pub struct Tally {
 pub struct Session {
 	/// The record needs a key of its own: a deliberate session can start on the
 	/// same keystroke as the automatic one beneath it, so the times do not tell
-	/// two records apart.
+	/// two records apart. Minted here when a session arrives without one, since
+	/// inventing a UUID is not the frontend's job.
+	#[serde(default = "Uuid::new_v4")]
 	pub id: Uuid,
 	pub layer: Layer,
 	#[serde(with = "time::serde::rfc3339")]
@@ -278,6 +280,30 @@ mod tests {
 		assert!(json.get("limit").is_none());
 		assert!(json.get("limitMet").is_none());
 		assert!(json.get("documents").is_none());
+	}
+
+	#[test]
+	fn a_session_that_arrives_without_an_id_is_given_one() {
+		let json = r#"{
+			"layer": "deliberate",
+			"start": "2026-09-04T12:00:00Z",
+			"end": "2026-09-04T12:25:00Z",
+			"limitMet": false,
+			"written": 300,
+			"removed": 12,
+			"net": 288,
+			"documents": { "8f4a1c2e-0000-4000-8000-000000000001": {
+				"written": 300, "removed": 12
+			} }
+		}"#;
+
+		let one: Session = serde_json::from_str(json).unwrap();
+		let two: Session = serde_json::from_str(json).unwrap();
+
+		assert_ne!(one.id, two.id);
+		assert_eq!(one.layer, Layer::Deliberate);
+		assert_eq!(one.net, 288);
+		assert_eq!(one.documents.len(), 1);
 	}
 
 	#[test]

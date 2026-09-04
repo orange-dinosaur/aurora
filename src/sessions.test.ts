@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
 	changed,
+	ended,
 	IDLE,
 	IDLE_GAP,
+	recorded,
 	start,
 	stop,
 	tick,
@@ -224,6 +226,54 @@ describe("the deliberate layer", () => {
 			net: 200,
 		});
 		expect(sessions.deliberate?.start).toBe(at(30));
+	});
+});
+
+describe("what reaches the history file", () => {
+	test("a session is spelled the way the file takes it", () => {
+		const opened = start(IDLE, at(0), 1000, {
+			unit: "words",
+			amount: 100,
+		}).sessions;
+		// The change crosses the limit, so the sprint closes on it.
+		const { closed } = run([change(1, 120)], opened, 1000);
+		const written = recorded(closed[0]);
+
+		expect(written).toMatchObject({
+			layer: "deliberate",
+			start: "2026-09-04T12:00:00.000Z",
+			end: "2026-09-04T12:01:00.000Z",
+			limit: { unit: "words", amount: 100 },
+			limitMet: true,
+			written: 120,
+			removed: 0,
+			net: 120,
+		});
+		expect(written.documents).toEqual({
+			scene: { written: 120, removed: 0 },
+		});
+	});
+
+	test("a session with no limit sends no limit", () => {
+		const { closed } = run([change(0, 10), change(40, 5)]);
+
+		expect(recorded(closed[0])).not.toHaveProperty("limit");
+	});
+});
+
+describe("leaving", () => {
+	test("both layers are written down where they stand", () => {
+		const typed = wrote(IDLE, change(0, 40), 900).sessions;
+		const opened = start(typed, at(1), 940).sessions;
+		const running = run([change(5, 60)], opened, 940).sessions;
+		const { sessions, closed } = ended(running, at(9), 1000);
+
+		expect(sessions).toEqual(IDLE);
+		expect(closed).toHaveLength(2);
+		// The automatic one ends at the last change, since nothing happened
+		// after it. The deliberate one was held open until now.
+		expect(closed[0]).toMatchObject({ layer: "automatic", end: at(5) });
+		expect(closed[1]).toMatchObject({ layer: "deliberate", end: at(9) });
 	});
 });
 

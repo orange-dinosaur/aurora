@@ -28,7 +28,16 @@ import { deleteDocument, deleteFolder } from "./documents";
 import type { Seed } from "./find";
 import type { OutlineHandle } from "./outline";
 // `changed` under another name: this file already has one of its own.
-import { changed as asChange, wrote, IDLE, type Sessions } from "./sessions";
+import {
+	changed as asChange,
+	ended,
+	recorded,
+	tick,
+	wrote,
+	IDLE,
+	type Sessions,
+	type Step,
+} from "./sessions";
 import { failure } from "./errors";
 import { pressed, SEARCH } from "./formatting";
 
@@ -231,17 +240,41 @@ export default function Project({
 		words.current = total;
 	}, []);
 
+	// The layers the model left behind are what runs from here, and whatever it
+	// closed goes to the history file. Nothing reports a failure: history is
+	// written behind the writer's back and there is nowhere to say so.
+	function keep(step: Step) {
+		sessions.current = step.sessions;
+		return Promise.allSettled(
+			step.closed.map((session) =>
+				invoke("append_session", { root, session: recorded(session) }),
+			),
+		);
+	}
+
 	// What a change added or removed, handed to the model, which decides which
-	// sessions it opens, feeds and closes. Whatever closes is dropped for now;
-	// it has nowhere to go until the history file is being written.
+	// sessions it opens, feeds and closes.
 	function record(id: string, delta: number) {
-		sessions.current = wrote(
-			sessions.current,
-			asChange(id, Date.now(), delta),
-			words.current,
-		).sessions;
+		void keep(
+			wrote(
+				sessions.current,
+				asChange(id, Date.now(), delta),
+				words.current,
+			),
+		);
 		words.current += delta;
 	}
+
+	// Nobody else notices that a session has gone quiet, since going quiet is
+	// the writer doing nothing. A minute is fine enough for a gap of half an
+	// hour, and it costs nothing when there is no session to close.
+	useEffect(() => {
+		const beat = window.setInterval(
+			() => void keep(tick(sessions.current, Date.now(), words.current)),
+			60 * 1000,
+		);
+		return () => window.clearInterval(beat);
+	}, [root]);
 
 	// The tabs as they stand now. The handlers below are registered once and
 	// would otherwise go on seeing the tabs they were born with.
@@ -284,6 +317,10 @@ export default function Project({
 					: [],
 			),
 		);
+
+		// The session the writer is in the middle of is worth as much as the
+		// text they were typing into it, and closing the window ends it.
+		await keep(ended(sessions.current, Date.now(), words.current));
 	}
 
 	// Quitting must not lose what the debounce has not written yet. Tauri waits

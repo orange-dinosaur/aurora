@@ -139,6 +139,26 @@ export type TrashEntry = {
 /** `store::Preferences` — how the writer likes to write, kept in `store.json`
  * rather than in a project, so it follows them into all of them. */
 /** The three things the right sidebar can be showing. */
+/**
+ * `history::Session` as it is sent to be recorded. The id is missing on
+ * purpose: Rust mints one for every session that arrives without it, so the
+ * only copy of that decision is in one place.
+ */
+export type SessionRecord = {
+	layer: "automatic" | "deliberate";
+	/** RFC 3339, which is how the file spells both of these. */
+	start: string;
+	end: string;
+	/** Absent unless the session was a sprint. */
+	limit?: { unit: "minutes" | "words"; amount: number };
+	limitMet: boolean;
+	written: number;
+	removed: number;
+	net: number;
+	/** What each document gained and lost, by document id. */
+	documents: Record<string, { written: number; removed: number }>;
+};
+
 export type RightSidebarTab = "synopsis" | "info" | "mentions";
 
 export type Preferences = {
