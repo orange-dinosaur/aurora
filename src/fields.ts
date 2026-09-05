@@ -16,7 +16,8 @@ import {
 } from "./frontmatter";
 import { failure } from "./errors";
 import { $frontMatter, $setFrontMatter } from "./markdown";
-import type { DocumentText } from "./types";
+import { subjectNames } from "./subjects";
+import type { DocumentText, TreeNode } from "./types";
 
 /** Setting a field, or dropping it when the value is null. */
 export type SetField = (key: string, value: Value | null) => void;
@@ -208,6 +209,32 @@ export function useFieldNames(
 					),
 				),
 			)
+			.catch(() => {});
+	}, [root, changed]);
+
+	return { names, ask };
+}
+
+/**
+ * The subjects a relationship could point at, read on the same terms as the
+ * field names above: only once the control is used, and again after the
+ * project changes. The tree is enough for this, so no file is opened.
+ */
+export function useSubjectNames(
+	root: string,
+	changed: number,
+): { names: string[]; ask: () => void } {
+	const [names, setNames] = useState<string[]>([]);
+	const read = useRef(-1);
+
+	const ask = useCallback(() => {
+		if (read.current === changed) {
+			return;
+		}
+		read.current = changed;
+
+		void invoke<TreeNode[]>("document_tree", { root })
+			.then((tree) => setNames(subjectNames(tree)))
 			.catch(() => {});
 	}, [root, changed]);
 

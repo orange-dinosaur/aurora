@@ -1,28 +1,56 @@
 import { describe, expect, test } from "vitest";
-import { isSubject } from "./subjects";
+import { subjectNames } from "./subjects";
+import type { TreeNode } from "./types";
 
-describe("what counts as a subject", () => {
-	test("a document in Characters or Locations is one", () => {
-		expect(isSubject(["Characters"])).toBe(true);
-		expect(isSubject(["Locations"])).toBe(true);
+function folder(name: string, children: TreeNode[]): TreeNode {
+	return { node: "folder", id: name, name, kind: null, children, words: 0 };
+}
+
+function document(title: string, trail: string[]): TreeNode {
+	return {
+		node: "document",
+		id: `${trail.join("/")}/${title}.md`,
+		path: `${trail.join("/")}/${title}.md`,
+		trail,
+		title,
+		target: null,
+	};
+}
+
+describe("subjectNames", () => {
+	test("takes the documents under the subject sections and no others", () => {
+		const tree = [
+			folder("Manuscript", [document("Chapter One", ["Manuscript"])]),
+			folder("Characters", [document("Isolde", ["Characters"])]),
+			folder("Locations", [document("Ithaca", ["Locations"])]),
+			folder("Notes", [document("Research", ["Notes"])]),
+		];
+
+		expect(subjectNames(tree)).toEqual(["Isolde", "Ithaca"]);
 	});
 
-	test("filing it deeper does not change that", () => {
-		expect(isSubject(["Characters", "House Marsh"])).toBe(true);
+	test("finds a subject however deep it is filed", () => {
+		const tree = [
+			folder("Characters", [
+				folder("Minor", [document("Bruno", ["Characters", "Minor"])]),
+			]),
+		];
+
+		expect(subjectNames(tree)).toEqual(["Bruno"]);
 	});
 
-	test("the story and the writer's own notes are not", () => {
-		expect(isSubject(["Manuscript"])).toBe(false);
-		expect(isSubject(["Manuscript", "Part One", "Chapter 3"])).toBe(false);
-		expect(isSubject(["Notes"])).toBe(false);
-		expect(isSubject(["Outline"])).toBe(false);
+	test("offers a repeated title once", () => {
+		const tree = [
+			folder("Characters", [
+				document("Ana", ["Characters"]),
+				folder("Minor", [document("Ana", ["Characters", "Minor"])]),
+			]),
+		];
+
+		expect(subjectNames(tree)).toEqual(["Ana"]);
 	});
 
-	test("a folder of the same name deeper in is not the section", () => {
-		expect(isSubject(["Notes", "Characters"])).toBe(false);
-	});
-
-	test("a document that sits nowhere is not one", () => {
-		expect(isSubject([])).toBe(false);
+	test("an empty project offers nothing", () => {
+		expect(subjectNames([])).toEqual([]);
 	});
 });

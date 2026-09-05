@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import Icon from "./Icon";
+import type { Ties } from "./frontmatter";
 
 // The controls the panel is built from. A field's text is held here while it is
 // being typed and pushed to the document on every keystroke, rather than being
@@ -178,6 +179,155 @@ export function Chips({
 				// other field that appears in place behaves.
 				onBlur={() => setDraft("")}
 			/>
+		</div>
+	);
+}
+
+type TieProps = {
+	label: string;
+	hint?: string;
+	placeholder: string;
+	values: Ties;
+	/** The subjects this project has, for the box to suggest. */
+	names: string[];
+	/** Read those subjects, which is put off until the box is used. */
+	onAsk: () => void;
+	onChange: (next: Ties) => void;
+};
+
+/**
+ * Names paired with a line each: who this page is tied to, and what the tie is.
+ * A name is added or dropped whole and is not edited in place, since it is the
+ * key the note hangs off; rewording a tie is the note's job and renaming one is
+ * a remove and an add.
+ */
+export function TieList({
+	label,
+	hint,
+	placeholder,
+	values,
+	names,
+	onAsk,
+	onChange,
+}: TieProps) {
+	const [draft, setDraft] = useState("");
+	const [open, setOpen] = useState(false);
+
+	const wanted = draft.trim().toLowerCase();
+	const offered = names
+		.filter(
+			(name) => !values.has(name) && name.toLowerCase().includes(wanted),
+		)
+		.slice(0, 6);
+
+	function add(name: string) {
+		const subject = name.trim();
+
+		// One already here is not added twice, and neither is nothing.
+		if (subject !== "" && !values.has(subject)) {
+			onChange(new Map([...values, [subject, ""]]));
+		}
+		setDraft("");
+	}
+
+	function word(subject: string, said: string) {
+		onChange(
+			new Map(
+				[...values].map(([name, was]) => [
+					name,
+					name === subject ? said : was,
+				]),
+			),
+		);
+	}
+
+	function remove(subject: string) {
+		onChange(new Map([...values].filter(([name]) => name !== subject)));
+	}
+
+	return (
+		<div className="field">
+			<span className="field__label">{label}</span>
+			{hint !== undefined && <span className="field__hint">{hint}</span>}
+
+			{values.size > 0 && (
+				<ul className="ties">
+					{[...values].map(([name, said]) => (
+						<li key={name} className="tie">
+							<span className="tie__who">
+								<span className="tie__name">{name}</span>
+								<button
+									type="button"
+									className="chip__remove"
+									aria-label={`Remove ${name}`}
+									onClick={() => remove(name)}
+								>
+									<Icon name="x" />
+								</button>
+							</span>
+							<input
+								className="field__line"
+								type="text"
+								value={said}
+								placeholder="How they are tied"
+								aria-label={`How ${name} is tied`}
+								onChange={(event) =>
+									word(name, event.target.value)
+								}
+							/>
+						</li>
+					))}
+				</ul>
+			)}
+
+			<input
+				className="field__line"
+				type="text"
+				value={draft}
+				placeholder={placeholder}
+				aria-label={placeholder}
+				onFocus={() => {
+					setOpen(true);
+					onAsk();
+				}}
+				onChange={(event) => setDraft(event.target.value)}
+				onKeyDown={(event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						add(draft);
+					} else if (event.key === "Escape") {
+						setDraft("");
+					}
+				}}
+				// Clicking away abandons what was half typed, the way every
+				// other field that appears in place behaves.
+				onBlur={() => {
+					setOpen(false);
+					setDraft("");
+				}}
+			/>
+
+			{open && offered.length > 0 && (
+				<ul className="suggestions">
+					{offered.map((name) => (
+						<li key={name}>
+							<button
+								type="button"
+								className="suggestion"
+								// Mouse down rather than click: the blur that
+								// closes the list would otherwise happen first
+								// and take the button with it.
+								onMouseDown={(event) => {
+									event.preventDefault();
+									add(name);
+								}}
+							>
+								{name}
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
 		</div>
 	);
 }

@@ -1,6 +1,6 @@
-import { AddField, Chips, TextBox } from "./Field";
-import { useFieldNames, type FieldsHandle } from "./fields";
-import { BUILT_IN, custom, list, text } from "./frontmatter";
+import { AddField, Chips, TextBox, TieList } from "./Field";
+import { useFieldNames, useSubjectNames, type FieldsHandle } from "./fields";
+import { BUILT_IN, custom, list, text, ties } from "./frontmatter";
 
 // The Info tab: what this document answers to, what it is filed under, what the
 // writer wants to remember about it, and any field they added themselves.
@@ -23,6 +23,10 @@ export default function Info({
 	onOpenTag,
 }: Props) {
 	const { names, ask } = useFieldNames(root, changed);
+	const { names: subjects, ask: askSubjects } = useSubjectNames(
+		root,
+		changed,
+	);
 	const own = custom(fields);
 
 	/** A list field is dropped rather than written empty. */
@@ -39,6 +43,23 @@ export default function Info({
 					placeholder="Add a name"
 					values={list(fields, "names")}
 					onChange={(next) => setList("names", next)}
+				/>
+			)}
+
+			{/* Only on a subject: a relationship is between two pages about
+			    something, and a scene is tied to a character by mentioning
+			    them rather than by saying so in a field. */}
+			{subject && (
+				<TieList
+					label="Relationships"
+					hint="Who else this page is tied to, and how."
+					placeholder="Add a subject"
+					values={ties(fields, "relationships")}
+					names={subjects}
+					onAsk={askSubjects}
+					onChange={(next) =>
+						setField("relationships", next.size === 0 ? null : next)
+					}
 				/>
 			)}
 

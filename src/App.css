@@ -2311,6 +2311,40 @@ body.dragging * {
 	color: var(--text-dim);
 }
 
+/* The subjects this page is tied to. Each one is stacked rather than set in a
+   row of columns: the panel is 300px, and a name and a sentence about it do not
+   both fit across that. */
+.ties {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	margin: 0 0 0.15rem;
+	padding: 0;
+	list-style: none;
+}
+
+.tie {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+}
+
+/* The name and the way to drop it, on one line above the note. */
+.tie__who {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+/* Reads as the note's label, because that is what it is. */
+.tie__name {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
 /* The tags on a document. A chip is a value, not a control: the x removes it
    and the chip itself does nothing until a tag has a view of its own. */
 .chips {

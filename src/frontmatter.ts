@@ -3,13 +3,17 @@
 // inside it; this is the only place that reads it as data.
 //
 // What it understands is a deliberate subset of YAML: a key at the left margin
-// holding one line of text, or a list of them. Everything else, from a nested
-// map to a comment to a blank line, is kept exactly as the writer left it and
-// handed back untouched. A block Aurora did not write therefore comes out of a
-// save reformatted only where a field actually changed.
+// holding one line of text, a list of them, or a block of name-to-line pairs
+// one level in. Everything else, from a comment to a blank line to a map nested
+// two deep, is kept exactly as the writer left it and handed back untouched. A
+// block Aurora did not write therefore comes out of a save reformatted only
+// where a field actually changed.
 
-/** What one field holds: a line of text, or a list of them. */
-export type Value = string | string[];
+/** A field that pairs names with a line each, which is what `relationships` is. */
+export type Ties = Map<string, string>;
+
+/** What one field holds: a line of text, a list of them, or named lines. */
+export type Value = string | string[] | Ties;
 
 /**
  * The block some note-taking apps fence off at the top of a file. Its fence is
@@ -20,7 +24,13 @@ export type Value = string | string[];
 const FRONT_MATTER = /^---\n[\s\S]*?\n---[ \t]*\n?/;
 
 /** The fields Aurora has controls of its own for. The rest are the writer's. */
-export const BUILT_IN = ["names", "tags", "synopsis", "remarks"];
+export const BUILT_IN = [
+	"names",
+	"tags",
+	"synopsis",
+	"remarks",
+	"relationships",
+];
 
 /** A document's fields, in the order its file lists them. */
 export type Fields = Map<string, Value>;
@@ -33,6 +43,13 @@ const ITEM = /^\s*-\s*(.*?)\s*$/;
 
 /** An item that is really a map of its own, which we will not touch. */
 const NESTED = /:(?:\s|$)/;
+
+/**
+ * A `name: line` pair indented under a key, which is how a tie is written. The
+ * indent is captured because every pair in a block has to share it: a line that
+ * steps in again is a map deeper than Aurora reads.
+ */
+const PAIR = /^(\s+)([A-Za-z0-9_"'][^:\n]*):(.*)$/;
 
 /** What a plain scalar may not start with, since YAML gives it a meaning. */
 const OPAQUE = /^[#&*!|>{}%@`]/;
@@ -174,6 +191,18 @@ function emit(key: string, value: Value): string[] {
 	if (typeof value === "string") {
 		return [`${key}: ${quote(value)}`];
 	}
+	if (value instanceof Map) {
+		if (value.size === 0) {
+			return [`${key}: {}`];
+		}
+
+		return [
+			`${key}:`,
+			...[...value].map(
+				([name, note]) => `  ${quote(name)}: ${quote(note)}`,
+			),
+		];
+	}
 	if (value.length === 0) {
 		return [`${key}: []`];
 	}
@@ -182,6 +211,23 @@ function emit(key: string, value: Value): string[] {
 }
 
 function same(one: Value, other: Value): boolean {
+	if (one instanceof Map || other instanceof Map) {
+		if (!(one instanceof Map) || !(other instanceof Map)) {
+			return false;
+		}
+
+		// Order counts: the file's own order is what gets kept when nothing
+		// has changed, so a reordering has to read as a change.
+		const mine = [...one];
+		const theirs = [...other];
+		return (
+			mine.length === theirs.length &&
+			mine.every(
+				([name, note], at) =>
+					theirs[at][0] === name && theirs[at][1] === note,
+			)
+		);
+	}
 	if (typeof one === "string" || typeof other === "string") {
 		return one === other;
 	}
@@ -218,32 +264,64 @@ function segments(block: string): Segment[] {
 			continue;
 		}
 
-		// A key on its own line heads a list, so long as every line under it
-		// is an item of one. Anything else below it is a shape we leave alone.
+		// A key on its own line heads a list or a block of pairs, so long as
+		// every line under it is the same one of those. A block that mixes
+		// them, or holds anything else, is a shape we leave alone.
 		const items: string[] = [];
+		const pairs: Ties = new Map();
+		let shape: "list" | "pairs" | null = null;
+		let indent: string | null = null;
 		let end = at + 1;
 		let usable = true;
 
 		while (end < source.length) {
-			const item = ITEM.exec(source[end]);
-			if (item === null) {
-				break;
-			}
+			const item = shape === "pairs" ? null : ITEM.exec(source[end]);
+			const pair = shape === "list" ? null : PAIR.exec(source[end]);
 
-			const value = NESTED.test(item[1]) ? null : unquote(item[1]);
-			if (value === null) {
-				usable = false;
+			if (item !== null) {
+				shape = "list";
+				const value = NESTED.test(item[1]) ? null : unquote(item[1]);
+				if (value === null) {
+					usable = false;
+				} else {
+					items.push(value);
+				}
+			} else if (pair !== null) {
+				shape = "pairs";
+				indent ??= pair[1];
+				const name = unquote(pair[2].trim());
+				const rest = pair[3].trim();
+				// A name with nothing after it is a tie the writer has not
+				// worded yet, unless a deeper line follows, which makes it the
+				// head of a map this does not read.
+				const value = rest === "" ? "" : read(rest);
+				if (
+					pair[1] !== indent ||
+					name === null ||
+					typeof value !== "string"
+				) {
+					usable = false;
+				} else {
+					pairs.set(name, value);
+				}
 			} else {
-				items.push(value);
+				break;
 			}
 			end += 1;
 		}
 
 		const text = source.slice(at, end);
+		let held: Value | null = null;
+		if (usable && shape === "list" && items.length > 0) {
+			held = items;
+		} else if (usable && shape === "pairs" && pairs.size > 0) {
+			held = pairs;
+		}
+
 		found.push(
-			usable && items.length > 0
-				? { key: key[1], value: items, text }
-				: { key: null, value: null, text },
+			held === null
+				? { key: null, value: null, text }
+				: { key: key[1], value: held, text },
 		);
 		at = end;
 	}
@@ -261,8 +339,11 @@ export function text(fields: Fields, key: string): string {
 	if (value === undefined) {
 		return "";
 	}
+	if (typeof value === "string") {
+		return value;
+	}
 
-	return typeof value === "string" ? value : value.join(", ");
+	return list(fields, key).join(", ");
 }
 
 /** A field as a list, whatever shape the file gave it. */
@@ -275,8 +356,28 @@ export function list(fields: Fields, key: string): string[] {
 	if (typeof value === "string") {
 		return value === "" ? [] : [value];
 	}
+	if (value instanceof Map) {
+		return [...value].map(([name, note]) =>
+			note === "" ? name : `${name}: ${note}`,
+		);
+	}
 
 	return value;
+}
+
+/**
+ * A field as the pairs it names, whatever shape the file gave it. A writer who
+ * wrote a list where Aurora expects pairs sees each entry as a name with
+ * nothing said about it yet, rather than seeing nothing at all.
+ */
+export function ties(fields: Fields, key: string): Ties {
+	const value = fields.get(key);
+
+	if (value instanceof Map) {
+		return value;
+	}
+
+	return new Map(list(fields, key).map((item) => [item, ""]));
 }
 
 /** A file in two pieces: the block at its top, fences and all, and the prose. */

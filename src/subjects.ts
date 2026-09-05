@@ -3,6 +3,8 @@
 // writer who deletes the seeded folder and makes their own `Characters` gets
 // the same behaviour.
 
+import type { TreeNode } from "./types";
+
 /** The sections whose documents are subjects. */
 export const SUBJECT_SECTIONS = ["Characters", "Locations"];
 
@@ -18,4 +20,26 @@ export const SUBJECT_SECTIONS = ["Characters", "Locations"];
  */
 export function isSubject(trail: string[]): boolean {
 	return trail.length > 0 && SUBJECT_SECTIONS.includes(trail[0]);
+}
+
+/**
+ * Every subject in the project by title, in the order the tree lists them, so
+ * a relationship can be offered the pages it could point at. Two subjects of
+ * the same title are one suggestion: the name is all a tie records.
+ */
+export function subjectNames(nodes: TreeNode[]): string[] {
+	const found: string[] = [];
+
+	function walk(node: TreeNode) {
+		if (node.node === "folder") {
+			node.children.forEach(walk);
+			return;
+		}
+		if (isSubject(node.trail) && !found.includes(node.title)) {
+			found.push(node.title);
+		}
+	}
+
+	nodes.forEach(walk);
+	return found;
 }

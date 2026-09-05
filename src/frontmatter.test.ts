@@ -7,6 +7,7 @@ import {
 	serialize,
 	split,
 	text,
+	ties,
 	type Fields,
 } from "./frontmatter";
 
@@ -236,5 +237,172 @@ describe("writing front matter", () => {
 		expect(serialize(now, original)).toBe(
 			block("synopsis: She comes home.", "names:", "  - Ellie"),
 		);
+	});
+});
+
+describe("relationships", () => {
+	test("a block of pairs is read as pairs", () => {
+		expect(
+			parse(
+				block(
+					"relationships:",
+					"  Ana Ferrer: her older sister",
+					"  Bruno: the neighbour who knows",
+				),
+			),
+		).toEqual(
+			new Map([
+				[
+					"relationships",
+					new Map([
+						["Ana Ferrer", "her older sister"],
+						["Bruno", "the neighbour who knows"],
+					]),
+				],
+			]),
+		);
+	});
+
+	test("a name with nothing said about it yet is still a tie", () => {
+		expect(parse(block("relationships:", "  Bruno:"))).toEqual(
+			new Map([["relationships", new Map([["Bruno", ""]])]]),
+		);
+	});
+
+	test("a map deeper than one level is still left alone", () => {
+		const original = block(
+			"relationships:",
+			"  ithaca:",
+			"    weather: rough",
+		);
+
+		expect(parse(original)).toEqual(new Map());
+		expect(serialize(parse(original), original)).toBe(original);
+	});
+
+	// A block only ever holds one shape. The lines that do not fit end it,
+	// which is what any other stray line under a key has always done, and they
+	// are kept verbatim rather than read.
+	test("a block that mixes items and pairs keeps the shape it opened with", () => {
+		const original = block(
+			"relationships:",
+			"  - Ana Ferrer",
+			"  Bruno: the neighbour",
+		);
+
+		expect(parse(original)).toEqual(
+			new Map([["relationships", ["Ana Ferrer"]]]),
+		);
+		expect(serialize(parse(original), original)).toBe(original);
+	});
+
+	test("a pair block that turns into something else is left alone", () => {
+		const original = block(
+			"relationships:",
+			"  Ana Ferrer: her older sister",
+			"  - Bruno",
+		);
+
+		expect(parse(original)).toEqual(
+			new Map([
+				[
+					"relationships",
+					new Map([["Ana Ferrer", "her older sister"]]),
+				],
+			]),
+		);
+		expect(serialize(parse(original), original)).toBe(original);
+	});
+
+	test("pairs the writer wrote come back exactly as written", () => {
+		const original = block(
+			"title: Isolde",
+			"relationships:",
+			"  Ana Ferrer:   her older sister",
+			"  Bruno: the neighbour who knows",
+		);
+
+		expect(serialize(parse(original), original)).toBe(original);
+	});
+
+	test("a tie that changed is rewritten and the rest is not", () => {
+		const original = block(
+			"title: Isolde",
+			"relationships:",
+			"  Ana Ferrer:   her older sister",
+		);
+
+		const now = parse(original);
+		now.set("relationships", new Map([["Ana Ferrer", "her twin"]]));
+
+		expect(serialize(now, original)).toBe(
+			block("title: Isolde", "relationships:", "  Ana Ferrer: her twin"),
+		);
+	});
+
+	test("a name that needs quoting gets it on the way out", () => {
+		const fields: Fields = new Map([
+			["relationships", new Map([["Ana: of the north", "her sister"]])],
+		]);
+
+		expect(serialize(fields)).toBe(
+			block("relationships:", `  "Ana: of the north": her sister`),
+		);
+	});
+
+	test("reordering counts as a change", () => {
+		const original = block(
+			"relationships:",
+			"  Ana: her sister",
+			"  Bruno: the neighbour",
+		);
+
+		const now = parse(original);
+		now.set(
+			"relationships",
+			new Map([
+				["Bruno", "the neighbour"],
+				["Ana", "her sister"],
+			]),
+		);
+
+		expect(serialize(now, original)).toBe(
+			block(
+				"relationships:",
+				"  Bruno: the neighbour",
+				"  Ana: her sister",
+			),
+		);
+	});
+
+	test("ties reads whatever shape the file gave the field", () => {
+		expect(
+			ties(
+				parse(block("relationships:", "  Ana: her sister")),
+				"relationships",
+			),
+		).toEqual(new Map([["Ana", "her sister"]]));
+
+		// A writer who wrote a plain list gets the names with nothing said.
+		expect(
+			ties(
+				parse(block("relationships:", "  - Ana", "  - Bruno")),
+				"relationships",
+			),
+		).toEqual(
+			new Map([
+				["Ana", ""],
+				["Bruno", ""],
+			]),
+		);
+
+		expect(ties(new Map(), "relationships")).toEqual(new Map());
+	});
+
+	test("a field of pairs read as text or a list says both halves", () => {
+		const found = parse(block("relationships:", "  Ana: her sister"));
+
+		expect(list(found, "relationships")).toEqual(["Ana: her sister"]);
+		expect(text(found, "relationships")).toBe("Ana: her sister");
 	});
 });
