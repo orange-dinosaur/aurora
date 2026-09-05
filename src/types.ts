@@ -181,6 +181,20 @@ export type PastSession = Omit<SessionRecord, "limitMet" | "documents"> & {
 
 export type RightSidebarTab = "synopsis" | "info" | "mentions" | "stats";
 
+/** `store::Theme` — whether the desktop decides how Aurora is lit, or the
+ * writer does. */
+export type Theme = "system" | "light" | "dark";
+
+/** `store::ManuscriptFont` — the six faces the manuscript can be set in. Five
+ * are vendored; `system` is whatever the desktop calls its interface font. */
+export type ManuscriptFont =
+	| "newsreader"
+	| "spectral"
+	| "sourceSerif"
+	| "plexSans"
+	| "plexMono"
+	| "system";
+
 export type Preferences = {
 	/** Whether the bar under the document title is showing. */
 	toolbar: boolean;
@@ -193,6 +207,14 @@ export type Preferences = {
 	rightSidebar: boolean;
 	/** Which of that panel's tabs is showing. */
 	rightSidebarTab: RightSidebarTab;
+	/** How wide the list of documents is, in pixels. */
+	sidebarWidth: number;
+	/** How wide the panel about the open document is, in pixels. */
+	rightSidebarWidth: number;
+	/** Whether Aurora follows the desktop's light or dark setting. */
+	theme: Theme;
+	/** The face the manuscript is set in. The chrome is not affected. */
+	manuscriptFont: ManuscriptFont;
 	/** The width of the column of text, in characters. */
 	measure: number;
 	/** In pixels. */

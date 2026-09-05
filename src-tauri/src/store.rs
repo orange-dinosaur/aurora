@@ -11,7 +11,7 @@ use tauri::AppHandle;
 
 use crate::project::{Error, Result, store_path, write_json};
 
-pub const STORE_VERSION: u32 = 6;
+pub const STORE_VERSION: u32 = 7;
 
 /// How many projects are worth offering on the welcome screen.
 const MAX_RECENT: usize = 10;
@@ -42,6 +42,22 @@ pub struct Preferences {
 	/// Which of that panel's tabs is showing.
 	#[serde(default)]
 	pub right_sidebar_tab: RightSidebarTab,
+	/// How wide the list of documents is, in pixels. Needs a default of its
+	/// own: a store written before this field existed would otherwise come
+	/// back with a sidebar no pixels wide.
+	#[serde(default = "sidebar_width")]
+	pub sidebar_width: u32,
+	/// How wide the panel about the open document is, in pixels. Wider than
+	/// the left one because its tabs have to sit side by side.
+	#[serde(default = "right_sidebar_width")]
+	pub right_sidebar_width: u32,
+	/// Whether Aurora follows the desktop's light or dark setting, or is told
+	/// which to use.
+	#[serde(default)]
+	pub theme: Theme,
+	/// The face the manuscript is set in. The chrome is not affected.
+	#[serde(default)]
+	pub manuscript_font: ManuscriptFont,
 	/// The width of the column of text, in characters.
 	pub measure: u32,
 	/// In pixels.
@@ -53,6 +69,38 @@ pub struct Preferences {
 /// serde takes a field's default from a function, not from the type's `Default`.
 fn shown() -> bool {
 	true
+}
+
+fn sidebar_width() -> u32 {
+	248
+}
+
+fn right_sidebar_width() -> u32 {
+	300
+}
+
+/// Whether the desktop decides how Aurora is lit, or the writer does.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Theme {
+	#[default]
+	System,
+	Light,
+	Dark,
+}
+
+/// The six faces the manuscript can be set in. Five are vendored; the sixth is
+/// whatever the desktop calls its interface font.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ManuscriptFont {
+	#[default]
+	Newsreader,
+	Spectral,
+	SourceSerif,
+	PlexSans,
+	PlexMono,
+	System,
 }
 
 /// The four things the right sidebar can be showing.
@@ -75,6 +123,10 @@ impl Default for Preferences {
 			sidebar: shown(),
 			right_sidebar: false,
 			right_sidebar_tab: RightSidebarTab::Synopsis,
+			sidebar_width: sidebar_width(),
+			right_sidebar_width: right_sidebar_width(),
+			theme: Theme::System,
+			manuscript_font: ManuscriptFont::Newsreader,
 			measure: 68,
 			font_size: 16,
 			line_height: 1.7,
@@ -182,8 +234,9 @@ pub fn load(path: &Path) -> Result<Store> {
 /// Version 1 had no `last`: whatever was at the head of the list was what
 /// reopened. Adopting it here means an upgrade does not lose the open project.
 /// Version 2 had no preferences, version 3 no `sidebar`, version 4 no
-/// `expanded` and version 5 no right sidebar; serde's defaults are the whole
-/// migration for all four.
+/// `expanded`, version 5 no right sidebar and version 6 neither the sidebar
+/// widths nor the theme and manuscript font; serde's defaults are the whole
+/// migration for all five.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
 	if store.version < STORE_VERSION {
@@ -532,6 +585,15 @@ mod tests {
 			store.preferences.right_sidebar_tab,
 			RightSidebarTab::Synopsis
 		);
+		// The other two whose defaults are not their type's: zero-width
+		// sidebars would come back invisible.
+		assert_eq!(store.preferences.sidebar_width, 248);
+		assert_eq!(store.preferences.right_sidebar_width, 300);
+		assert_eq!(store.preferences.theme, Theme::System);
+		assert_eq!(
+			store.preferences.manuscript_font,
+			ManuscriptFont::Newsreader
+		);
 	}
 
 	#[test]
@@ -545,6 +607,10 @@ mod tests {
 			sidebar: false,
 			right_sidebar: true,
 			right_sidebar_tab: RightSidebarTab::Mentions,
+			sidebar_width: 300,
+			right_sidebar_width: 360,
+			theme: Theme::Dark,
+			manuscript_font: ManuscriptFont::PlexMono,
 			measure: 80,
 			font_size: 19,
 			line_height: 2.0,

@@ -15,6 +15,10 @@ const DEFAULTS: Preferences = {
 	sidebar: true,
 	rightSidebar: false,
 	rightSidebarTab: "synopsis",
+	sidebarWidth: 248,
+	rightSidebarWidth: 300,
+	theme: "system",
+	manuscriptFont: "newsreader",
 	measure: 68,
 	fontSize: 16,
 	lineHeight: 1.7,
@@ -58,6 +62,17 @@ function App() {
 				setBoot({ kind: "welcome", notice: failure(error).message });
 			});
 	}, []);
+
+	// The stylesheet reads the desktop's setting on its own, so following it
+	// means saying nothing rather than saying which.
+	useEffect(() => {
+		const root = document.documentElement;
+		if (preferences.theme === "system") {
+			root.removeAttribute("data-theme");
+		} else {
+			root.setAttribute("data-theme", preferences.theme);
+		}
+	}, [preferences.theme]);
 
 	return (
 		<main className="app">
