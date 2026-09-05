@@ -67,6 +67,8 @@ type Props = {
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 	/** Where a tag chip goes, which only the project view can work out. */
 	onOpenTag: (tag: string) => void;
+	/** Opens the page about the open document, when it is a subject. */
+	onSubject: () => void;
 	onClose: () => void;
 };
 
@@ -95,6 +97,7 @@ export default function RightSidebar({
 	onTab,
 	onOpen,
 	onOpenTag,
+	onSubject,
 	onClose,
 }: Props) {
 	// Held here rather than passed in, so the element the grip moves is the
@@ -185,6 +188,7 @@ export default function RightSidebar({
 						root={root}
 						changed={changed}
 						onOpenTag={onOpenTag}
+						onSubject={onSubject}
 					/>
 				)}
 			</div>

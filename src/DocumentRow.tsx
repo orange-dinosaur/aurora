@@ -4,6 +4,7 @@
 
 import DocumentMenu from "./DocumentMenu";
 import NameField from "./NameField";
+import { isSubject } from "./subjects";
 import type { Row } from "./tree";
 import type { Draggable } from "./reorder";
 import type { Retitling } from "./rows";
@@ -20,6 +21,8 @@ type Props = {
 	renaming: Retitling | null;
 	drag: Draggable;
 	onOpen: () => void;
+	/** Opens the page about it, which only a subject has. */
+	onSubject: () => void;
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
 	onDelete: () => void;
@@ -35,6 +38,7 @@ export default function DocumentRow({
 	renaming,
 	drag,
 	onOpen,
+	onSubject,
 	onMove,
 	onRename,
 	onDelete,
@@ -92,6 +96,7 @@ export default function DocumentRow({
 					folder: false,
 					from: row.group,
 				}}
+				onSubject={isSubject(document.trail) ? onSubject : undefined}
 				onMove={onMove}
 				onRename={onRename}
 				onDelete={onDelete}

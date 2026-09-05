@@ -14,6 +14,8 @@ type Props = {
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
 	onDelete: () => void;
+	/** Given only for a subject, which is the only kind with a page. */
+	onSubject?: () => void;
 };
 
 export default function DocumentMenu({ label, ...rest }: Props) {
@@ -36,6 +38,7 @@ function Actions({
 	onMove,
 	onRename,
 	onDelete,
+	onSubject,
 }: Omit<Props, "label"> & { close: () => void }) {
 	const [choosing, setChoosing] = useState(false);
 
@@ -82,6 +85,16 @@ function Actions({
 			>
 				Rename
 			</MenuItem>
+			{onSubject !== undefined && (
+				<MenuItem
+					onSelect={() => {
+						close();
+						onSubject();
+					}}
+				>
+					Open subject page
+				</MenuItem>
+			)}
 			<MenuItem
 				danger
 				onSelect={() => {

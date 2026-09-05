@@ -3,6 +3,7 @@
 // writer who deletes the seeded folder and makes their own `Characters` gets
 // the same behaviour.
 
+import { custom, text, type Fields } from "./frontmatter";
 import type { TreeNode } from "./types";
 
 /** The sections whose documents are subjects. */
@@ -42,4 +43,63 @@ export function subjectNames(nodes: TreeNode[]): string[] {
 
 	nodes.forEach(walk);
 	return found;
+}
+
+/**
+ * The field a subject's page reads as its subtitle, by section. A character is
+ * introduced by what they are to the story and a place by where it is, and both
+ * are ordinary fields the writer typed rather than anything Aurora keeps.
+ */
+const LEAD: Record<string, string | undefined> = {
+	Characters: "role",
+	Locations: "region",
+};
+
+/** One of the small boxes across the top of a subject's page. */
+export type Box = { label: string; value: string };
+
+/** What a subject's page says about it, above the notes and the appearances. */
+export type Facts = { subtitle: string; boxes: Box[] };
+
+/** Shown in a box the writer has left empty, so the box keeps its height. */
+const NOTHING = "—";
+
+/**
+ * A subject's page as facts rather than as markup, so the arrangement can be
+ * tested without rendering anything.
+ *
+ * The boxes are the fields the writer gave the page, in the order the file
+ * lists them, with the subtitle's own field taken out of the row and the
+ * counted ones added after. A location is the only one that says where it is
+ * first met: a character is met wherever they are named, and the appearances
+ * below already say where that is.
+ */
+export function factsOf(
+	trail: string[],
+	fields: Fields,
+	counted: { mentions: number; first: string | null },
+): Facts {
+	const section = trail[0] ?? "";
+	const lead = LEAD[section];
+
+	const boxes: Box[] = custom(fields)
+		.filter((key) => key !== lead)
+		.map((key) => ({
+			label: key,
+			value: text(fields, key) === "" ? NOTHING : text(fields, key),
+		}));
+
+	if (section === "Locations") {
+		boxes.push({
+			label: "First appears",
+			value: counted.first ?? NOTHING,
+		});
+	}
+
+	boxes.push({ label: "Mentions", value: String(counted.mentions) });
+
+	return {
+		subtitle: lead === undefined ? "" : text(fields, lead),
+		boxes,
+	};
 }

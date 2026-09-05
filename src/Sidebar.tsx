@@ -56,6 +56,8 @@ type Props = {
 	selectedFolder: string | null;
 	selectedTrash: boolean;
 	onSelect: (document: ProjectDocument) => void;
+	/** Opens the page about a character or a place, for the rows that are one. */
+	onSubject: (document: ProjectDocument) => void;
 	onOpenFolder: (folder: FolderRef) => void;
 	onOpenTrash: () => void;
 	onCreated: (document: ProjectDocument) => void;
@@ -91,6 +93,7 @@ export default function Sidebar({
 	selectedFolder,
 	selectedTrash,
 	onSelect,
+	onSubject,
 	onOpenFolder,
 	onOpenTrash,
 	onCreated,
@@ -420,6 +423,9 @@ export default function Sidebar({
 													drag={draggable(row)}
 													onOpen={() =>
 														onSelect(row.document)
+													}
+													onSubject={() =>
+														onSubject(row.document)
 													}
 													onMove={(parentId, to) =>
 														void move(

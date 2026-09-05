@@ -2311,6 +2311,33 @@ body.dragging * {
 	color: var(--text-dim);
 }
 
+/* The way out of the panel and into the page about this document. Outlined and
+   full width, so it reads as a door rather than as one more field. */
+.info__page {
+	width: 100%;
+	height: 30px;
+	margin-bottom: 0.35rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border-strong);
+	border-radius: 7px;
+	cursor: pointer;
+}
+
+.info__page:hover {
+	background: var(--bg-hover);
+}
+
+.info__page:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
 /* The subjects this page is tied to. Each one is stacked rather than set in a
    row of columns: the panel is 300px, and a name and a sentence about it do not
    both fit across that. */
@@ -3586,6 +3613,196 @@ body.dragging * {
 }
 
 /* Out of flow wherever it appears; each surface says where. */
+/* The page about a character or a place. It fills the pane the editor would
+   have, and scrolls itself, with its own measure so a long note is read at the
+   same width as the writing is. */
+.subject {
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+	max-width: 46rem;
+	padding: 2rem 1.5rem 4rem;
+	margin: 0 auto;
+	overflow-y: auto;
+}
+
+.subject__head {
+	display: flex;
+	align-items: flex-start;
+	gap: 1.5rem;
+}
+
+.subject__who {
+	min-width: 0;
+}
+
+/* Where the page sits, said before its name: the section is what makes a
+   document a subject in the first place. */
+.subject__where {
+	margin: 0;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.subject__name {
+	margin: 0.3rem 0 0;
+	font-family: var(--serif);
+	font-size: 1.75rem;
+	font-weight: 500;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+	overflow-wrap: anywhere;
+}
+
+.subject__lead {
+	margin: 0.3rem 0 0;
+	font-size: 0.875rem;
+	color: var(--text-dim);
+}
+
+.subject__draft {
+	flex: none;
+	margin-left: auto;
+	height: 30px;
+	padding: 0 0.75rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border-strong);
+	border-radius: 7px;
+	cursor: pointer;
+}
+
+.subject__draft:hover {
+	background: var(--bg-hover);
+}
+
+.subject__draft:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* However many fields the writer gave the page, wrapping rather than
+   squeezing: the mock draws three and a document may carry one or six. */
+.subject__boxes {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+	gap: 0.75rem;
+	margin: 2rem 0 0;
+}
+
+.subject__box {
+	padding: 0.9rem 1rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+}
+
+/* The writer's own spelling of the field name, the way Info shows it. */
+.subject__label {
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--text-faint);
+}
+
+.subject__value {
+	margin: 0.15rem 0 0;
+	font-size: 1rem;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.subject__heading {
+	margin: 2.25rem 0 0.75rem;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+/* Read rather than written: the draft is one button away and that is where the
+   writing happens. The blank lines the writer left are kept. */
+.subject__notes {
+	margin: 0;
+	font-size: 0.9375rem;
+	line-height: 1.6;
+	color: var(--text);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.subject__note {
+	margin: 0;
+	font-size: 0.875rem;
+	color: var(--text-dim);
+}
+
+.subject__note--error {
+	color: var(--danger);
+}
+
+.subject__appearances {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* The count sits at the far end so a column of them can be read down. */
+.subject__appearance {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75rem;
+	width: 100%;
+	padding: 0.55rem 0.75rem;
+	font: inherit;
+	text-align: left;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.subject__appearance:hover {
+	border-color: var(--border-strong);
+	background: var(--bg-hover);
+}
+
+.subject__appearance:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.subject__title {
+	font-size: 0.9375rem;
+	overflow-wrap: anywhere;
+}
+
+.subject__folder {
+	min-width: 0;
+	font-size: 0.75rem;
+	color: var(--text-faint);
+	overflow-wrap: anywhere;
+}
+
+.subject__count {
+	margin-left: auto;
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+}
+
 .trash {
 	display: flex;
 	flex-direction: column;

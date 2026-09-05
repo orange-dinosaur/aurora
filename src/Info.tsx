@@ -12,6 +12,8 @@ type Props = FieldsHandle & {
 	/** Bumped whenever the project changes, so the suggestions are read again. */
 	changed: number;
 	onOpenTag: (tag: string) => void;
+	/** Opens the page about this document, when it is a subject. */
+	onSubject: () => void;
 };
 
 export default function Info({
@@ -21,6 +23,7 @@ export default function Info({
 	root,
 	changed,
 	onOpenTag,
+	onSubject,
 }: Props) {
 	const { names, ask } = useFieldNames(root, changed);
 	const { names: subjects, ask: askSubjects } = useSubjectNames(
@@ -36,6 +39,18 @@ export default function Info({
 
 	return (
 		<>
+			{/* Above the fields rather than below them: it is the way out of
+			    this panel, not one more thing in it. */}
+			{subject && (
+				<button
+					type="button"
+					className="info__page"
+					onClick={onSubject}
+				>
+					Open subject page
+				</button>
+			)}
+
 			{subject && (
 				<Chips
 					label="Names"

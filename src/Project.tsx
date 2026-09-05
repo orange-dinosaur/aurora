@@ -9,6 +9,7 @@ import Search from "./Search";
 import FolderView from "./FolderView";
 import RightSidebar from "./RightSidebar";
 import Sidebar from "./Sidebar";
+import SubjectView from "./SubjectView";
 import TagView from "./TagView";
 import Tabs from "./Tabs";
 import type { TabView } from "./Tabs";
@@ -104,7 +105,14 @@ type TagTab = {
 	tag: string;
 };
 
-type Tab = DocumentTab | FolderTab | TrashTab | SearchTab | TagTab;
+type SubjectTab = {
+	kind: "subject";
+	key: string;
+	/** The subject's own document, which the page is a reading of. */
+	subject: ProjectDocument;
+};
+
+type Tab = DocumentTab | FolderTab | TrashTab | SearchTab | TagTab | SubjectTab;
 
 /**
  * What is being offered after a document was renamed out from under the tags
@@ -168,6 +176,14 @@ function strip(tab: Tab): TabView {
 				kind: "tag",
 				folder: null,
 				title: tab.tag,
+				dirty: false,
+			};
+		case "subject":
+			return {
+				key: tab.key,
+				kind: "subject",
+				folder: null,
+				title: tab.subject.title,
 				dirty: false,
 			};
 	}
@@ -511,6 +527,29 @@ export default function Project({
 		}
 
 		const opening: TagTab = { kind: "tag", key: freshKey(), tag };
+		setTabs((open) => [...open, opening]);
+		setActiveKey(opening.key);
+	}
+
+	/**
+	 * The page about a character or a place. It opens as a tab of its own
+	 * rather than in place of the document: the page is a reading of the same
+	 * file, and the writer should be able to keep both.
+	 */
+	function openSubject(subject: ProjectDocument) {
+		const already = tabs.find(
+			(tab) => tab.kind === "subject" && tab.subject.id === subject.id,
+		);
+		if (already !== undefined) {
+			setActiveKey(already.key);
+			return;
+		}
+
+		const opening: SubjectTab = {
+			kind: "subject",
+			key: freshKey(),
+			subject,
+		};
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
 	}
@@ -1060,6 +1099,7 @@ export default function Project({
 					}
 					selectedTrash={active?.kind === "trash"}
 					onSelect={(document) => void openDocument(document)}
+					onSubject={openSubject}
 					onOpenFolder={openFolder}
 					onOpenTrash={openTrash}
 					onCreated={(document) => void created(document)}
@@ -1179,6 +1219,22 @@ export default function Project({
 									}
 								/>
 							</div>
+						) : active.kind === "subject" ? (
+							<div className="project__pane">
+								<SubjectView
+									key={active.key}
+									root={root}
+									subject={active.subject}
+									changed={listing + written}
+									live={live}
+									onOpen={(document, seed) =>
+										void openDocument(document, seed)
+									}
+									onDraft={() =>
+										void openDocument(active.subject)
+									}
+								/>
+							</div>
 						) : null}
 					</div>
 
@@ -1290,6 +1346,11 @@ export default function Project({
 							void openDocument(document, seed)
 						}
 						onOpenTag={(tag) => void openTag(tag)}
+						onSubject={() => {
+							if (active?.kind === "document") {
+								openSubject(active.document);
+							}
+						}}
 						onClose={() =>
 							onPreferences({
 								...preferences,
