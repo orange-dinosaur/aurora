@@ -23,6 +23,7 @@ import type {
 	TreeNode,
 } from "./types";
 import { retag, tagged } from "./tags";
+import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import { documentsOf, folderOf, rows } from "./tree";
 import { deleteDocument, deleteFolder } from "./documents";
@@ -658,9 +659,10 @@ export default function Project({
 	 */
 	async function countTags(from: string, to: string) {
 		try {
-			const all = await invoke<DocumentText[]>("read_all_documents", {
-				root,
-			});
+			const all = await timed(
+				"retag scan",
+				invoke<DocumentText[]>("read_all_documents", { root }),
+			);
 			const ids = all.flatMap(({ id, text }) =>
 				text !== null && tagged(text, from) ? [id] : [],
 			);

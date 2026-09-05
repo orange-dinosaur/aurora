@@ -7,6 +7,7 @@ import { failure } from "./errors";
 import { dayTally, running, today, unexplained } from "./stats";
 import type { Tally } from "./stats";
 import type { Limit, Sessions } from "./sessions";
+import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import type {
 	FolderProgress,
@@ -147,7 +148,10 @@ export default function Stats({
 		}
 
 		let listening = true;
-		invoke<FolderProgress>("folder_progress", { root, id })
+		timed(
+			"folder progress",
+			invoke<FolderProgress>("folder_progress", { root, id }),
+		)
 			.then((read) => {
 				if (listening) {
 					setProgress(read);

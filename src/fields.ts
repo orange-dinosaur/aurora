@@ -17,6 +17,7 @@ import {
 import { failure } from "./errors";
 import { $frontMatter, $setFrontMatter } from "./markdown";
 import { subjectNames } from "./subjects";
+import { timed } from "./timing";
 import type { DocumentText, TreeNode } from "./types";
 
 /** Setting a field, or dropping it when the value is null. */
@@ -199,7 +200,10 @@ export function useFieldNames(
 		}
 		read.current = changed;
 
-		void invoke<DocumentText[]>("read_all_documents", { root })
+		void timed(
+			"field names",
+			invoke<DocumentText[]>("read_all_documents", { root }),
+		)
 			.then((documents) =>
 				setNames(
 					fieldNames(
@@ -233,7 +237,10 @@ export function useSubjectNames(
 		}
 		read.current = changed;
 
-		void invoke<TreeNode[]>("document_tree", { root })
+		void timed(
+			"subject names",
+			invoke<TreeNode[]>("document_tree", { root }),
+		)
 			.then((tree) => setNames(subjectNames(tree)))
 			.catch(() => {});
 	}, [root, changed]);

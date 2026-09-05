@@ -20,6 +20,7 @@ import { failure } from "./errors";
 import { useReorder } from "./reorder";
 import type { Renaming } from "./rows";
 import { indent, retitling, spot } from "./rows";
+import { timed } from "./timing";
 import { documentsIn, inside, rows, sections, wordsIn } from "./tree";
 import type { FolderRef, Row } from "./tree";
 
@@ -126,7 +127,10 @@ export default function Sidebar({
 	const load = useCallback(async () => {
 		setStatus({ kind: "busy" });
 		try {
-			const read = await invoke<TreeNode[]>("document_tree", { root });
+			const read = await timed(
+				"document tree",
+				invoke<TreeNode[]>("document_tree", { root }),
+			);
 			setTree(read);
 			onWords(wordsIn(read));
 			setStatus({ kind: "idle" });

@@ -10,6 +10,7 @@ import { failure } from "./errors";
 import { list, parse, split } from "./frontmatter";
 import type { Mentionable } from "./mentions";
 import { runsOf } from "./runs";
+import { timed } from "./timing";
 import type { DocumentText, ProjectDocument } from "./types";
 
 export type Corpus =
@@ -57,9 +58,10 @@ function readIn(text: string | null): {
 /** Reads every document in the project and parses it, or says why it could not. */
 async function sweep(root: string, at: number): Promise<Corpus> {
 	try {
-		const documents = await invoke<DocumentText[]>("read_all_documents", {
-			root,
-		});
+		const documents = await timed(
+			"corpus sweep",
+			invoke<DocumentText[]>("read_all_documents", { root }),
+		);
 
 		return {
 			kind: "ready",
