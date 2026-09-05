@@ -221,6 +221,7 @@ pub enum Error {
 	NotText,
 	AlreadyExists,
 	UnsupportedFormat(Format),
+	Trash(trash::Error),
 	Io(io::Error),
 	Json(serde_json::Error),
 }
@@ -273,6 +274,7 @@ impl fmt::Display for Error {
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
+			Error::Trash(e) => write!(f, "the desktop's trash would not take the folder: {e}"),
 			Error::Io(e) => write!(f, "{e}"),
 			Error::Json(e) => write!(f, "{e}"),
 		}
@@ -302,6 +304,7 @@ impl Error {
 			Error::NotText => "notText",
 			Error::AlreadyExists => "alreadyExists",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
+			Error::Trash(_) => "trash",
 			Error::Io(_) => "io",
 			Error::Json(_) => "json",
 		}
@@ -340,6 +343,7 @@ impl std::error::Error for Error {
 			| Error::NotText
 			| Error::AlreadyExists
 			| Error::UnsupportedFormat(_) => None,
+			Error::Trash(e) => Some(e),
 			Error::Io(e) => Some(e),
 			Error::Json(e) => Some(e),
 		}
@@ -671,15 +675,25 @@ pub struct RecentSummary {
 	/// None when the manifest could not be read, so the screen can leave the
 	/// count off rather than report a project as empty.
 	pub words: Option<usize>,
+	/// None for the same reason. The question asked before a project is
+	/// trashed counts what is about to go, so it needs this to be honest.
+	pub documents: Option<usize>,
 }
 
 /// Every word in a project. Nothing caches this, so it opens each document
 /// once and keeps only the count.
-fn count_words(root: &Path) -> Option<usize> {
+/// What the welcome screen says about a project. Both numbers come out of one
+/// read of the manifest, since nothing ever wants only one of them.
+struct Measure {
+	words: usize,
+	documents: usize,
+}
+
+fn measure(root: &Path) -> Option<Measure> {
 	let manifest = read_manifest(root).ok()?;
-	Some(
-		manifest
-			.documents()
+	let documents = manifest.documents();
+	Some(Measure {
+		words: documents
 			.iter()
 			.map(|document| {
 				// The manifest is a file in the writer's project and could
@@ -698,15 +712,20 @@ fn count_words(root: &Path) -> Option<usize> {
 					.unwrap_or(0)
 			})
 			.sum(),
-	)
+		documents: documents.len(),
+	})
 }
 
 fn summarise_recents(store_path: &Path) -> Result<Vec<RecentSummary>> {
 	Ok(available_recents(store_path)?
 		.into_iter()
-		.map(|project| RecentSummary {
-			words: count_words(&project.root),
-			project,
+		.map(|project| {
+			let measured = measure(&project.root);
+			RecentSummary {
+				words: measured.as_ref().map(|m| m.words),
+				documents: measured.as_ref().map(|m| m.documents),
+				project,
+			}
 		})
 		.collect())
 }
@@ -729,6 +748,20 @@ pub fn last_project(app: AppHandle) -> Result<LastProject> {
 #[tauri::command]
 pub fn forget_project(app: AppHandle, root: PathBuf) -> Result<()> {
 	forget(&store_path(&app)?, &root)
+}
+
+/// Moves the whole project folder to the desktop's trash and takes it off the
+/// recent list. Nothing here unlinks anything: the folder is recoverable from
+/// the trash until the writer empties it.
+#[tauri::command]
+pub fn trash_project(app: AppHandle, root: PathBuf) -> Result<()> {
+	let store = store_path(&app)?;
+	// Only a folder Aurora can read as a project. A path that arrives from
+	// anywhere else must not be able to bin a folder on the strength of being
+	// asked to.
+	read_manifest(&root)?;
+	trash::delete(&root).map_err(Error::Trash)?;
+	forget(&store, &root)
 }
 
 /// The writer is done with the open project for now. It stays in the recent

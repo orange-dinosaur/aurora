@@ -14,6 +14,7 @@ pub fn run() {
 			project::create_project,
 			project::last_project,
 			project::forget_project,
+			project::trash_project,
 			project::close_project,
 			project::open_project,
 			project::recent_projects,

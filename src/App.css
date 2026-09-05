@@ -561,29 +561,51 @@ body,
 	overflow-y: auto;
 }
 
-/* The shell runs edge to edge, so the welcome carries its own inset and its own
-   centring. Auto margins rather than align-items: overflow past the top of a
-   centred flex item cannot be scrolled to. */
+/* The shell runs edge to edge, so the welcome fills it and does its own
+   centring inside. The bar has to sit at the top of the window rather than at
+   the top of the centred box, which is why the two are separate. */
 .welcome {
 	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-self: stretch;
+	width: 100%;
+	min-height: 100%;
+	text-align: left;
+}
+
+/* The same 44px row the project wears, holding the one control that means
+   anything with no project open. */
+.welcome__bar {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	height: 44px;
+	padding: 0 1rem;
+}
+
+/* Auto margins rather than align-items: overflow past the top of a centred
+   flex item cannot be scrolled to. */
+.welcome__columns {
 	display: grid;
-	grid-template-columns: 1.35fr 1fr;
+	grid-template-columns: 1.3fr 1fr;
 	align-items: start;
-	gap: 2rem;
+	gap: 4rem;
 	width: 100%;
 	/* The padding is inside the box, so the two columns still have 1000px. */
 	max-width: calc(1000px + 4rem);
-	padding: 2rem;
+	padding: 1rem 2rem 3rem;
 	margin: auto;
-	text-align: left;
 }
 
 /* One column under a window too narrow to hold both. The panel goes below the
    create flow rather than above it: what is on screen first should be the
    thing this screen exists to do. */
 @media (max-width: 60rem) {
-	.welcome {
+	.welcome__columns {
 		grid-template-columns: 1fr;
+		gap: 2rem;
 	}
 }
 
@@ -686,10 +708,13 @@ body,
 	color: var(--text-dim);
 }
 
+/* The folders a format makes, named in mono: this is a list of names on disk,
+   not a sentence about the format. */
 .format__files {
 	margin-top: 0.35rem;
-	font-size: 0.8rem;
-	color: var(--text-dim);
+	font-family: var(--mono);
+	font-size: 0.6875rem;
+	color: var(--text-faint);
 }
 
 .welcome__create {
@@ -3805,6 +3830,20 @@ body.dragging * {
 	background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
+/* A second line under an item, for an action whose name does not say what it
+   leaves behind. It inherits the danger colour where it sits in one, so the
+   pair reads as one item rather than two. */
+.menu__hint {
+	display: block;
+	font-size: 0.6875rem;
+	color: var(--text-faint);
+}
+
+.menu__item--danger .menu__hint {
+	color: inherit;
+	opacity: 0.75;
+}
+
 /* The measure column centres itself in the pane now that the project fills the
    window. An auto cross-axis margin, not align-items on the pane, which would
    pull the overview and the trash in with it. */
@@ -4598,16 +4637,17 @@ body.dragging * {
 	padding: 1.25rem;
 	background: var(--bg-chrome);
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: 14px;
 }
 
 .opening__title {
 	margin: 0 0 1rem;
+	padding: 0 0.25rem;
 	font-size: 0.6875rem;
 	font-weight: 600;
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
-	color: var(--text-dim);
+	color: var(--text-faint);
 }
 
 .opening__none {
@@ -4626,17 +4666,30 @@ body.dragging * {
 	text-align: left;
 }
 
+/* The menu sits over the row rather than inside it: the row is a button, and a
+   button cannot hold another one. */
+.recents__item {
+	position: relative;
+}
+
+.recents__item .menu {
+	top: 0.4rem;
+	right: 0.4rem;
+}
+
 .recent {
 	display: flex;
 	flex-direction: column;
-	gap: 0.15rem;
+	gap: 0.2rem;
 	width: 100%;
-	padding: 0.6rem 0.85rem;
+	/* Room at the right end for the ⋮, so a long project name cannot run
+	   under it. */
+	padding: 0.7rem 2.4rem 0.7rem 0.85rem;
 	font: inherit;
 	color: var(--text);
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: 10px;
 	cursor: pointer;
 }
 
@@ -4666,12 +4719,86 @@ body.dragging * {
 }
 
 /* The quietest line of the three: it is there to tell two projects of the same
-   name apart, not to be read every time. */
+   name apart, not to be read every time. Mono, because it is a path and reads
+   as one. */
 .recent__path {
+	font-family: var(--mono);
 	font-size: 0.6875rem;
-	color: var(--text-dim);
-	opacity: 0.7;
+	color: var(--text-faint);
 	overflow-wrap: anywhere;
+}
+
+/* The question a delete asks, standing where the row it is about was. Nothing
+   above or below it moves while it is on screen. */
+.recents__ask {
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+	padding: 0.9rem;
+	background: color-mix(in srgb, var(--danger) 8%, var(--bg-card));
+	border: 1px solid var(--danger);
+	border-radius: 10px;
+}
+
+.recents__question {
+	margin: 0;
+	font-size: 0.8125rem;
+	line-height: 1.5;
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+.recents__question strong {
+	font-weight: 600;
+}
+
+.recents__answers {
+	display: flex;
+	gap: 0.5rem;
+}
+
+/* The two answers share a width, so neither is the one the eye lands on. The
+   colour is what separates them. */
+.recents__keep,
+.recents__bin {
+	flex: 1;
+	height: 30px;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	border-radius: 7px;
+	cursor: pointer;
+}
+
+.recents__keep {
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border-strong);
+}
+
+.recents__keep:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.recents__bin {
+	font-weight: 500;
+	color: var(--bg);
+	background: var(--danger);
+	border: 0;
+}
+
+.recents__keep:disabled,
+.recents__bin:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.recents__keep:focus-visible,
+.recents__bin:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
 }
 
 /* The dim over the app while a dialog is open, and the thing that catches a

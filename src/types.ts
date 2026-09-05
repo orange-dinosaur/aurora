@@ -35,6 +35,8 @@ export type RecentProject = {
 export type RecentSummary = RecentProject & {
 	/** null when the project's manifest could not be read. */
 	words: number | null;
+	/** null for the same reason. */
+	documents: number | null;
 };
 
 /** `document::DocumentView` */

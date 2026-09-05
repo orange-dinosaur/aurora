@@ -157,6 +157,8 @@ function App() {
 						onOpened={(project) =>
 							setBoot({ kind: "project", project })
 						}
+						onLogin={() => setLogin(true)}
+						onProfile={() => setProfile(true)}
 					/>
 				)
 			)}
