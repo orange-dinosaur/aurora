@@ -103,6 +103,13 @@ function App() {
 		}
 	}, [preferences.theme]);
 
+	// A write that fails costs the setting sticking, and neither a writing
+	// screen nor the dialog over it has anywhere to say so.
+	function save(next: Preferences) {
+		setPreferences(next);
+		void invoke("write_preferences", { preferences: next });
+	}
+
 	return (
 		<main className="app">
 			{boot.kind === "project" ? (
@@ -110,14 +117,7 @@ function App() {
 					name={boot.project.name}
 					root={boot.project.root}
 					preferences={preferences}
-					onPreferences={(next) => {
-						setPreferences(next);
-						// A write that fails costs the setting sticking, and
-						// there is nowhere in a writing screen to say so.
-						void invoke("write_preferences", {
-							preferences: next,
-						});
-					}}
+					onPreferences={save}
 					onClose={() => {
 						// Stops the project reopening on launch; it stays in
 						// the recent list.
@@ -136,7 +136,13 @@ function App() {
 				)
 			)}
 
-			{settings && <Settings onClose={() => setSettings(false)} />}
+			{settings && (
+				<Settings
+					preferences={preferences}
+					onPreferences={save}
+					onClose={() => setSettings(false)}
+				/>
+			)}
 		</main>
 	);
 }

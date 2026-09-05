@@ -4111,3 +4111,75 @@ body,
 	overflow-y: auto;
 	padding: 1.5rem;
 }
+
+/* What one preference looks like: what it is on the left, what it is set to on
+   the right. Every section is built out of these. */
+.settings__row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 2rem;
+}
+
+.settings__about {
+	min-width: 0;
+}
+
+.settings__label {
+	margin: 0;
+	font-size: 0.875rem;
+	font-weight: 500;
+}
+
+.settings__hint {
+	margin: 0.2rem 0 0;
+	font-size: 0.8125rem;
+	line-height: 1.5;
+	color: var(--text-dim);
+}
+
+/* One shape made of buttons, like the sprint's units and for the same reason:
+   WebKitGTK draws a native select in the desktop theme's colours whatever the
+   page asks for. */
+.settings__choices {
+	flex: none;
+	display: flex;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.settings__choice {
+	height: 30px;
+	padding: 0 0.75rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.settings__choice + .settings__choice {
+	border-left: 1px solid var(--border);
+}
+
+.settings__choice:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.settings__choice[aria-pressed="true"] {
+	color: var(--text);
+	background: var(--accent-wash);
+}
+
+/* Inside its own edge, since the group clips what overflows it. */
+.settings__choice:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}

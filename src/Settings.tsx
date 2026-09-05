@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
+import type { Preferences, Theme } from "./types";
 
 type Section =
 	"account" | "appearance" | "typography" | "sessions" | "shortcuts";
@@ -14,14 +15,29 @@ const SECTIONS: { id: Section; label: string }[] = [
 	{ id: "shortcuts", label: "Shortcuts" },
 ];
 
+/** Light before dark before system, which is the order they are offered in
+ * rather than the order the store declares them: the two that decide come
+ * before the one that defers. */
+const THEMES: { id: Theme; label: string }[] = [
+	{ id: "light", label: "Light" },
+	{ id: "dark", label: "Dark" },
+	{ id: "system", label: "System" },
+];
+
 type Props = {
+	preferences: Preferences;
+	onPreferences: (next: Preferences) => void;
 	onClose: () => void;
 };
 
 /** Everything that follows the writer between projects, in one place over the
  * app. The sections are empty for now; each one arrives with the step that
  * fills it. */
-export default function Settings({ onClose }: Props) {
+export default function Settings({
+	preferences,
+	onPreferences,
+	onClose,
+}: Props) {
 	const [section, setSection] = useState<Section>("appearance");
 	const dialog = useRef<HTMLDivElement>(null);
 
@@ -99,9 +115,51 @@ export default function Settings({ onClose }: Props) {
 						</button>
 					</div>
 
-					<div className="settings__body"></div>
+					<div className="settings__body">
+						{section === "appearance" && (
+							<Appearance
+								preferences={preferences}
+								onPreferences={onPreferences}
+							/>
+						)}
+					</div>
 				</div>
 			</div>
+		</div>
+	);
+}
+
+function Appearance({
+	preferences,
+	onPreferences,
+}: {
+	preferences: Preferences;
+	onPreferences: (next: Preferences) => void;
+}) {
+	return (
+		<div className="settings__row">
+			<div className="settings__about">
+				<p className="settings__label">Theme</p>
+				<p className="settings__hint">
+					System follows your desktop setting and changes at dusk with
+					it.
+				</p>
+			</div>
+			<span className="settings__choices" role="group" aria-label="Theme">
+				{THEMES.map((each) => (
+					<button
+						key={each.id}
+						type="button"
+						className="settings__choice"
+						aria-pressed={preferences.theme === each.id}
+						onClick={() =>
+							onPreferences({ ...preferences, theme: each.id })
+						}
+					>
+						{each.label}
+					</button>
+				))}
+			</span>
 		</div>
 	);
 }
