@@ -5,6 +5,9 @@ description = "Aurora is an application for writers to help them organize their 
 license = "MIT"
 authors = ["orange-dinosaur"]
 edition = "2024"
+# Two binaries means `cargo run` has to be told which one, and `tauri dev`
+# calls it without a `--bin`. The fixture is never the one it wants.
+default-run = "aurora"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
