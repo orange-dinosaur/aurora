@@ -14,12 +14,18 @@ import {
 	$linkAt,
 	ACTIONS,
 	BLOCKS,
+	FIND,
 	INSERTS,
+	KEYBOARD,
 	MARKS,
 	linkTarget,
 	openable,
 	OUTLINE,
 	pressed,
+	REPLACE,
+	SEARCH,
+	SESSION,
+	SETTINGS,
 	sameFormatting,
 	setLink,
 	shortcutLabel,
@@ -452,5 +458,48 @@ describe("what may be handed to the desktop", () => {
 		["javascript:alert(1)", false],
 	])("%s", (url, allowed) => {
 		expect(openable(url)).toBe(allowed);
+	});
+});
+
+describe("the keyboard the settings dialog lists", () => {
+	const rows = KEYBOARD.flatMap((group) => group.rows);
+
+	test("every action the editor answers to is in it", () => {
+		const listed = rows.map((row) => row.label);
+		for (const action of ACTIONS) {
+			expect(listed).toContain(action.label);
+		}
+		// The actions, and the seven bindings that do something to the app
+		// rather than to the text. Nothing else is bound.
+		expect(rows).toHaveLength(ACTIONS.length + 7);
+	});
+
+	test("an action is listed under the keys it is bound to", () => {
+		for (const action of ACTIONS) {
+			const row = rows.find((each) => each.label === action.label);
+			expect(row?.keys).toEqual(action.keys);
+		}
+	});
+
+	test("the bindings that are not actions are all there", () => {
+		const chords = rows.map((row) => shortcutLabel(row.keys));
+		for (const keys of [
+			SETTINGS,
+			SEARCH,
+			FIND,
+			REPLACE,
+			OUTLINE,
+			TOOLBAR,
+			SESSION,
+		]) {
+			expect(chords).toContain(shortcutLabel(keys));
+		}
+	});
+
+	// The list is also the only place every binding is side by side, which
+	// makes it the only place a clash between two of them would show.
+	test("no two bindings claim the same keys", () => {
+		const chords = rows.map((row) => shortcutLabel(row.keys));
+		expect(new Set(chords).size).toBe(chords.length);
 	});
 });

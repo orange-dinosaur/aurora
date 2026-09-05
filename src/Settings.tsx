@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
 import { UNITS } from "./Session";
 import { bounded } from "./settings";
+import { KEYBOARD, shortcutLabel } from "./formatting";
 import { face, FACES, nudged, SETTINGS, type Setting } from "./typography";
 import type { Preferences, Theme } from "./types";
 
@@ -149,6 +150,7 @@ export default function Settings({
 								onPreferences={onPreferences}
 							/>
 						)}
+						{section === "shortcuts" && <Shortcuts />}
 					</div>
 				</div>
 			</div>
@@ -429,5 +431,30 @@ function Amount({
 				onValue(bounded(event.target.value, bounds.min, bounds.max))
 			}
 		/>
+	);
+}
+
+/**
+ * The keyboard, read from what is bound rather than written out a second time.
+ * Nothing here is a control: this is where a shortcut is confirmed, not where
+ * it is changed.
+ */
+function Shortcuts() {
+	return (
+		<div className="settings__keys">
+			{KEYBOARD.map((group) => (
+				<Fragment key={group.heading}>
+					<h3 className="settings__group">{group.heading}</h3>
+					{group.rows.map((row) => (
+						<Fragment key={row.label}>
+							<span>{row.label}</span>
+							<span className="settings__chord">
+								{shortcutLabel(row.keys)}
+							</span>
+						</Fragment>
+					))}
+				</Fragment>
+			))}
+		</div>
 	);
 }

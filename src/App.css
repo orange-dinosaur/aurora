@@ -4263,6 +4263,36 @@ body,
 	gap: 1rem 1.5rem;
 }
 
+/* The keyboard: what a key does down the left, the key itself down the right,
+   in one grid so every chord in the section lines up however long the names
+   run and whichever group they are under. */
+.settings__keys {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 0.55rem 1.5rem;
+	font-size: 0.8125rem;
+}
+
+.settings__group {
+	grid-column: 1 / -1;
+	margin: 0;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+/* Not the first, which has the section's own space above it already. */
+.settings__group:not(:first-child) {
+	margin-top: 0.75rem;
+}
+
+.settings__chord {
+	font-family: var(--mono);
+	color: var(--text-dim);
+}
+
 /* A control that is two things, a number and what the number counts. */
 .settings__pair {
 	display: flex;

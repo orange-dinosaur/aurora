@@ -265,6 +265,40 @@ export function shortcutLabel(keys: Keys): string {
 	return `${COMMAND_KEY}${keys.shift ? SHIFT_KEY : ""}${keys.key.toUpperCase()}`;
 }
 
+/** One binding as something to read rather than something to dispatch on. */
+export type Shortcut = { label: string; keys: Keys };
+
+/** A run of them under the heading a writer would look for them beneath. */
+export type ShortcutGroup = { heading: string; rows: Shortcut[] };
+
+function named({ label, keys }: Action): Shortcut {
+	return { label, keys };
+}
+
+/**
+ * Every binding Aurora makes, grouped for reading. The last two groups are
+ * built from the lists the editor answers key presses from, so a key that
+ * moves there moves here with it; the first names the seven constants above,
+ * which have no labels of their own. A new binding has to be added here by
+ * hand, and `formatting.test.ts` is what notices when one is not.
+ */
+export const KEYBOARD: ShortcutGroup[] = [
+	{
+		heading: "Getting around",
+		rows: [
+			{ label: "Settings", keys: SETTINGS },
+			{ label: "Search the project", keys: SEARCH },
+			{ label: "Find in this document", keys: FIND },
+			{ label: "Replace", keys: REPLACE },
+			{ label: "Outline", keys: OUTLINE },
+			{ label: "Formatting bar", keys: TOOLBAR },
+			{ label: "Start or stop a session", keys: SESSION },
+		],
+	},
+	{ heading: "Marks", rows: MARKS.map(named) },
+	{ heading: "Blocks", rows: [...BLOCKS, ...INSERTS].map(named) },
+];
+
 /** The block the selection sits in, or null when it spans more than one kind. */
 export function $blockOf(selection: RangeSelection): Action | null {
 	return BLOCKS.find((action) => action.isActive(selection)) ?? null;
