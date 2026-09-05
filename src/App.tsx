@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Welcome from "./Welcome";
 import Project from "./Project";
+import Settings from "./Settings";
 import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
+import { pressed, SETTINGS } from "./formatting";
 
 // What Aurora looks like before the store has answered, and what it falls back
 // to if the store cannot be read at all.
@@ -24,6 +26,18 @@ const DEFAULTS: Preferences = {
 	lineHeight: 1.7,
 };
 
+/** Whether the key that was pressed was pressed into a field. The manuscript
+ * is left out on purpose: it is editable too, but it is what the writer is
+ * looking at, and settings should open from it like anywhere else. A name
+ * being typed is the case that matters, since opening the dialog takes the
+ * focus and a half-typed name is abandoned when it goes. */
+function inAField(target: EventTarget | null): boolean {
+	return (
+		target instanceof HTMLElement &&
+		(target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+	);
+}
+
 type Boot =
 	| { kind: "loading" }
 	| { kind: "welcome"; notice: string | null }
@@ -32,6 +46,7 @@ type Boot =
 function App() {
 	const [boot, setBoot] = useState<Boot>({ kind: "loading" });
 	const [preferences, setPreferences] = useState<Preferences>(DEFAULTS);
+	const [settings, setSettings] = useState(false);
 
 	// Both are read before anything is drawn, so the bar cannot appear and then
 	// vanish on a writer who had hidden it. A store that will not answer costs
@@ -61,6 +76,20 @@ function App() {
 			.catch((error: unknown) => {
 				setBoot({ kind: "welcome", notice: failure(error).message });
 			});
+	}, []);
+
+	// Bound here rather than in the project, since the welcome screen has the
+	// same preferences behind it and nothing else that answers for a key.
+	useEffect(() => {
+		function onKeyDown(event: KeyboardEvent) {
+			if (pressed(event, SETTINGS) && !inAField(event.target)) {
+				event.preventDefault();
+				setSettings(true);
+			}
+		}
+
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
 	// The stylesheet reads the desktop's setting on its own, so following it
@@ -106,6 +135,8 @@ function App() {
 					/>
 				)
 			)}
+
+			{settings && <Settings onClose={() => setSettings(false)} />}
 		</main>
 	);
 }

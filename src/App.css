@@ -473,6 +473,9 @@
 	--danger: oklch(0.505 0.15 22);
 	/* The tint on a match that is not the one being read. */
 	--find: oklch(0.9 0.09 95);
+	/* Over the app while a dialog is open. Dark in both palettes: it is the
+	   room's lights going down, not a tint. */
+	--scrim: oklch(0.2 0.02 250 / 0.34);
 	--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 	--serif: Newsreader, Georgia, "Times New Roman", serif;
 	/* The one shadow in the app, and only ever under something that floats.
@@ -511,6 +514,7 @@
 		--accent-wash: oklch(0.325 0.048 205);
 		--danger: oklch(0.7 0.13 25);
 		--find: oklch(0.42 0.07 92);
+		--scrim: oklch(0.12 0.01 250 / 0.55);
 	}
 }
 
@@ -528,6 +532,7 @@
 	--accent-wash: oklch(0.325 0.048 205);
 	--danger: oklch(0.7 0.13 25);
 	--find: oklch(0.42 0.07 92);
+	--scrim: oklch(0.12 0.01 250 / 0.55);
 }
 
 * {
@@ -3947,4 +3952,162 @@ body,
 	color: var(--text-dim);
 	opacity: 0.7;
 	overflow-wrap: anywhere;
+}
+
+/* The dim over the app while a dialog is open, and the thing that catches a
+   click aimed at nothing in particular. */
+.scrim {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3rem;
+	background: var(--scrim);
+	backdrop-filter: blur(2px);
+}
+
+/* Sized to the window until it reaches its own bounds, so a short window
+   shrinks it rather than pushing the pane off the bottom. */
+.settings {
+	display: flex;
+	width: 100%;
+	max-width: 780px;
+	height: 100%;
+	max-height: 540px;
+	overflow: hidden;
+	background: var(--bg);
+	border: 1px solid var(--border-strong);
+	border-radius: 14px;
+	box-shadow: var(--shadow-pop);
+}
+
+/* It is focused when it opens so a key has somewhere to land. Nothing is drawn
+   for that: the dialog arriving is what says where the writer is. */
+.settings:focus {
+	outline: none;
+}
+
+.settings__rail {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	width: 186px;
+	padding: 1.25rem 0.75rem;
+	background: var(--bg-chrome);
+	border-right: 1px solid var(--border);
+}
+
+.settings__eyebrow {
+	margin: 0 0 1.25rem;
+	padding: 0 0.5rem;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.settings__list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.settings__section {
+	display: block;
+	width: 100%;
+	height: 32px;
+	padding: 0 0.6rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	text-align: left;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 7px;
+	cursor: pointer;
+}
+
+.settings__section:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.settings__section[aria-current="page"] {
+	color: var(--text);
+	background: var(--accent-wash);
+}
+
+.settings__section:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+/* Held at the foot of the rail, which is the one place in the dialog where a
+   line about all of the sections belongs to none of them. */
+.settings__note {
+	margin: auto 0 0;
+	padding: 0 0.6rem;
+	font-size: 0.6875rem;
+	line-height: 1.5;
+	color: var(--text-faint);
+}
+
+.settings__pane {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.settings__head {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 1rem 1.5rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.settings__heading {
+	margin: 0;
+	font-size: 0.9375rem;
+	font-weight: 600;
+}
+
+.settings__close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.settings__close:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.settings__close:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.settings__body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 1.5rem;
 }

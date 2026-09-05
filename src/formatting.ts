@@ -253,6 +253,10 @@ export const OUTLINE: Keys = { key: "o", shift: true };
  * an editor in front of them yet. */
 export const SESSION: Keys = { key: "k", shift: false };
 
+/** Opens the settings dialog. Bound on the window above everything else, since
+ * preferences are not a project's and the welcome screen wants them too. */
+export const SETTINGS: Keys = { key: ",", shift: false };
+
 const COMMAND_KEY = IS_APPLE ? "⌘" : "Ctrl+";
 const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift+";
 
