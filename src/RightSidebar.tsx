@@ -1,5 +1,8 @@
+import { useRef } from "react";
+import Grip from "./Grip";
 import Icon from "./Icon";
 import Info from "./Info";
+import { RIGHT_SIDEBAR } from "./panels";
 import Mentions, { type About } from "./Mentions";
 import Stats from "./Stats";
 import Synopsis from "./Synopsis";
@@ -48,6 +51,9 @@ type Props = {
 	sessions: Sessions;
 	/** What the whole project holds, for the numbers that are not per document. */
 	words: number;
+	/** How wide the writer has dragged it, in pixels. */
+	width: number;
+	onWidth: (width: number) => void;
 	/** What the sprint field starts on, from the writer's preferences. */
 	defaultSprint: number | null;
 	defaultSprintUnit: SprintUnit;
@@ -78,6 +84,8 @@ export default function RightSidebar({
 	onTarget,
 	sessions,
 	words,
+	width,
+	onWidth,
 	defaultSprint,
 	defaultSprintUnit,
 	onStartSprint,
@@ -89,8 +97,17 @@ export default function RightSidebar({
 	onOpenTag,
 	onClose,
 }: Props) {
+	// Held here rather than passed in, so the element the grip moves is the
+	// one this component drew.
+	const panel = useRef<HTMLElement>(null);
+
 	return (
-		<aside className="right-sidebar" aria-label="About what is open">
+		<aside
+			ref={panel}
+			className="right-sidebar"
+			aria-label="About what is open"
+			style={{ width }}
+		>
 			<div className="right-sidebar__tabs">
 				{TABS.map(({ name, label }) => (
 					<button
@@ -171,6 +188,15 @@ export default function RightSidebar({
 					/>
 				)}
 			</div>
+
+			<Grip
+				side="right"
+				panel={panel}
+				width={width}
+				bounds={RIGHT_SIDEBAR}
+				label="Right sidebar width"
+				onWidth={onWidth}
+			/>
 		</aside>
 	);
 }

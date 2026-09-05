@@ -1046,12 +1046,14 @@ body,
 	text-align: center;
 }
 
+/* The width is set on the element from the writer's preference, so what is
+   here is only what the first paint uses before the store has answered. */
 .sidebar {
 	position: relative;
 	display: flex;
 	flex-direction: column;
 	flex-shrink: 0;
-	width: 252px;
+	width: 248px;
 	min-height: 0;
 	padding: 1rem 0.75rem;
 	background: var(--bg-chrome);
@@ -1059,9 +1061,54 @@ body,
 }
 
 /* Out of the layout altogether rather than hidden in place: the point of the
-   toggle is to give the writing those 252px. */
+   toggle is to give the writing that width back. */
 .sidebar--hidden {
 	display: none;
+}
+
+/* The edge between a panel and the writing, widened into something a pointer
+   can find. It lies over the border rather than beside it, so nothing moves
+   when nothing is being dragged, and neither panel clips it. */
+.grip {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 9px;
+	cursor: col-resize;
+}
+
+.grip--left {
+	right: -4px;
+}
+
+.grip--right {
+	left: -4px;
+}
+
+/* The border under it, in the accent colour, so the edge answers the pointer
+   before it is pressed. */
+.grip:hover::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 4px;
+	width: 1px;
+	background: var(--accent);
+}
+
+.grip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+/* While an edge is being dragged. Over everything, since the pointer spends
+   the drag outside the handle it grabbed: without this it would flicker back
+   to a caret over the writing and select the text it crossed. */
+body.dragging,
+body.dragging * {
+	cursor: col-resize;
+	user-select: none;
 }
 
 /* The panel about whatever is open, on the far side of the writing. Narrower
@@ -1072,7 +1119,7 @@ body,
 	display: flex;
 	flex-direction: column;
 	flex-shrink: 0;
-	width: 240px;
+	width: 300px;
 	min-height: 0;
 	background: var(--bg-chrome);
 	border-left: 1px solid var(--border);

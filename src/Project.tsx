@@ -1030,6 +1030,10 @@ export default function Project({
 			<div className="project__body">
 				<Sidebar
 					hidden={!preferences.sidebar}
+					width={preferences.sidebarWidth}
+					onWidth={(sidebarWidth) =>
+						onPreferences({ ...preferences, sidebarWidth })
+					}
 					root={root}
 					reload={listing}
 					onWords={measured}
@@ -1253,6 +1257,13 @@ export default function Project({
 						}}
 						sessions={sessions.current}
 						words={words.current}
+						width={preferences.rightSidebarWidth}
+						onWidth={(rightSidebarWidth) =>
+							onPreferences({
+								...preferences,
+								rightSidebarWidth,
+							})
+						}
 						defaultSprint={preferences.defaultSprint}
 						defaultSprintUnit={preferences.defaultSprintUnit}
 						onStartSprint={(limit) => startSession(limit)}

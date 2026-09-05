@@ -1,8 +1,10 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentRow from "./DocumentRow";
 import FolderRow from "./FolderRow";
+import Grip from "./Grip";
 import Icon from "./Icon";
+import { SIDEBAR } from "./panels";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
 import type { FolderNode, ProjectDocument, TreeNode } from "./types";
@@ -39,6 +41,9 @@ type Props = {
 	// Styled out rather than unmounted, so a half-typed section name and the
 	// sections already read are still there when it comes back.
 	hidden: boolean;
+	/** How wide the writer has dragged it, in pixels. */
+	width: number;
+	onWidth: (width: number) => void;
 	root: string;
 	// Changes when the project view has altered the manifest.
 	reload: number;
@@ -77,6 +82,8 @@ type Props = {
 
 export default function Sidebar({
 	hidden,
+	width,
+	onWidth,
 	root,
 	reload,
 	unsaved,
@@ -96,6 +103,9 @@ export default function Sidebar({
 	onDeleteFolder,
 	onClose,
 }: Props) {
+	// Held here rather than passed in, so the element the grip moves is the
+	// one this component drew.
+	const panel = useRef<HTMLElement>(null);
 	const [tree, setTree] = useState<TreeNode[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
@@ -235,8 +245,10 @@ export default function Sidebar({
 
 	return (
 		<nav
+			ref={panel}
 			className={hidden ? "sidebar sidebar--hidden" : "sidebar"}
 			aria-label="Documents"
+			style={{ width }}
 		>
 			<div className="sidebar__list">
 				<div className="sidebar__sections">
@@ -479,6 +491,15 @@ export default function Sidebar({
 					Close project
 				</button>
 			</div>
+
+			<Grip
+				side="left"
+				panel={panel}
+				width={width}
+				bounds={SIDEBAR}
+				label="Sidebar width"
+				onWidth={onWidth}
+			/>
 		</nav>
 	);
 }
