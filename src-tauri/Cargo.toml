@@ -15,6 +15,21 @@ edition = "2024"
 name = "aurora_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# Declared so the fixture generator can sit beside it without cargo guessing.
+[[bin]]
+name = "aurora"
+path = "src/main.rs"
+
+# Builds a throwaway project to measure against. Behind a feature so an
+# ordinary build, and the bundle, never compile it.
+[[bin]]
+name = "fixture"
+path = "src/fixture.rs"
+required-features = ["fixture"]
+
+[features]
+fixture = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
