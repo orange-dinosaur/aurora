@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import Account from "./Account";
 import Icon from "./Icon";
 import { UNITS } from "./Session";
 import { bounded } from "./settings";
@@ -132,6 +133,7 @@ export default function Settings({
 					</div>
 
 					<div className="settings__body">
+						{section === "account" && <Account />}
 						{section === "appearance" && (
 							<Appearance
 								preferences={preferences}

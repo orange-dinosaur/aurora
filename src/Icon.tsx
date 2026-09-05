@@ -18,6 +18,7 @@ export type IconName =
 	| "tag"
 	| "trash"
 	| "log-out"
+	| "user"
 	| "x"
 	| "more-vertical";
 
@@ -114,6 +115,12 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
 			<path d="m16 17 5-5-5-5" />
 			<path d="M21 12H9" />
+		</>
+	),
+	user: (
+		<>
+			<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+			<circle cx="12" cy="7" r="4" />
 		</>
 	),
 	x: <path d="M18 6 6 18M6 6l12 12" />,

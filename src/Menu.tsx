@@ -9,7 +9,8 @@ import type { IconName } from "./Icon";
 
 type Props = {
 	label: string;
-	icon: IconName;
+	/** Left out only by a trigger that draws its own contents. */
+	icon?: IconName;
 	/** Written on the trigger beside the icon, where there is room for it. */
 	text?: string;
 	/**
@@ -18,6 +19,16 @@ type Props = {
 	 * beside it.
 	 */
 	trailing?: boolean;
+	/**
+	 * Everything inside the trigger, for one that is more than a glyph and a
+	 * word. It replaces `icon` and `text` rather than joining them.
+	 */
+	trigger?: ReactNode;
+	/**
+	 * Joined to the wrapper's class, for a menu that has to sit in a row
+	 * rather than hang off the end of one, or open to a different side.
+	 */
+	wrapper?: string;
 	/**
 	 * The trigger's class, replacing the plain one rather than joining it. A
 	 * trigger that is really a card or a filled button has a shape of its own,
@@ -33,6 +44,8 @@ export default function Menu({
 	icon,
 	text,
 	trailing,
+	trigger,
+	wrapper,
 	className,
 	children,
 }: Props) {
@@ -85,8 +98,13 @@ export default function Menu({
 			?.focus();
 	}, [open]);
 
+	const glyph = icon === undefined ? null : <Icon name={icon} />;
+
 	return (
-		<div ref={menu} className="menu">
+		<div
+			ref={menu}
+			className={wrapper === undefined ? "menu" : `menu ${wrapper}`}
+		>
 			<button
 				type="button"
 				className={className ?? "menu__trigger"}
@@ -94,17 +112,18 @@ export default function Menu({
 				aria-expanded={open}
 				onClick={() => setOpen((was) => !was)}
 			>
-				{trailing === true ? (
-					<>
-						{text}
-						<Icon name={icon} />
-					</>
-				) : (
-					<>
-						<Icon name={icon} />
-						{text}
-					</>
-				)}
+				{trigger ??
+					(trailing === true ? (
+						<>
+							{text}
+							{glyph}
+						</>
+					) : (
+						<>
+							{glyph}
+							{text}
+						</>
+					))}
 			</button>
 
 			{open && (

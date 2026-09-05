@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { AccountChip } from "./Account";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import Session from "./Session";
@@ -79,6 +80,7 @@ export default function Titlebar({
 				icon="chevron-down"
 				text={name}
 				trailing
+				wrapper="titlebar__menu titlebar__menu--project"
 				className="titlebar__name"
 			>
 				{(close) => (
@@ -173,6 +175,8 @@ export default function Titlebar({
 					<Icon name="panel-right" />
 				</button>
 			</div>
+
+			<AccountChip />
 
 			{/* Out of flow, so a failed refresh cannot push the writing down. */}
 			<p className="titlebar__message" role="status">
