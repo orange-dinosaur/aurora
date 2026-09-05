@@ -4,7 +4,14 @@
 // on, and the open tabs beating the files they came from all live here rather
 // than in either panel.
 
-import { useEffect, useMemo, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { failure } from "./errors";
 import { list, parse, split } from "./frontmatter";
@@ -84,6 +91,77 @@ async function sweep(root: string, at: number): Promise<Corpus> {
 	}
 }
 
+/**
+ * One reading of the project, shared by everything that wants it. Panels come
+ * and go; the corpus outlives them, so opening Search, then Mentions, then a
+ * subject page reads the project once instead of three times, and closing a
+ * panel and opening it again reads nothing at all.
+ *
+ * Keyed by the project root and thrown away when that changes, which is the
+ * one time a held corpus is worthless rather than merely old.
+ */
+type Store = {
+	root: string;
+	corpus: Corpus;
+	/** The sweep in flight, so several panels asking at once still read once. */
+	sweeping: Promise<void> | null;
+	/** Told whenever `corpus` is replaced. */
+	listeners: Set<() => void>;
+};
+
+let store: Store | null = null;
+
+function storeFor(root: string): Store {
+	if (store === null || store.root !== root) {
+		store = {
+			root,
+			corpus: { kind: "unread" },
+			sweeping: null,
+			listeners: new Set(),
+		};
+	}
+
+	return store;
+}
+
+function put(held: Store, corpus: Corpus): void {
+	held.corpus = corpus;
+
+	for (const listener of held.listeners) {
+		listener();
+	}
+}
+
+/**
+ * Reads the project, unless it is already read at this `changed`, is already
+ * being read, or failed and has not been asked again.
+ */
+function ask(held: Store, changed: number): void {
+	if (
+		held.sweeping !== null ||
+		held.corpus.kind === "failed" ||
+		(held.corpus.kind === "ready" && held.corpus.at === changed)
+	) {
+		return;
+	}
+
+	// A first read says so, so a panel can show it is working. A re-read
+	// leaves what is drawn alone: they came to read it, not to watch it go.
+	if (held.corpus.kind === "unread") {
+		put(held, { kind: "reading" });
+	}
+
+	held.sweeping = sweep(held.root, changed).then((next) => {
+		held.sweeping = null;
+
+		// The project moved on under this read. Whatever it found describes a
+		// project nobody is looking at any more.
+		if (store === held) {
+			put(held, next);
+		}
+	});
+}
+
 type Asked = {
 	root: string;
 	/**
@@ -111,56 +189,56 @@ export function useCorpus({ root, changed, live, wanted, retry = 0 }: Asked): {
 	corpus: Corpus;
 	documents: Mentionable[];
 } {
-	const [corpus, setCorpus] = useState<Corpus>({ kind: "unread" });
-	// A re-read of a corpus that is already on screen, kept apart from the
-	// corpus itself so what is drawn can stay up while it is in flight.
-	const [refreshing, setRefreshing] = useState(false);
+	const held = storeFor(root);
+	const subscribe = useCallback(
+		(listener: () => void) => {
+			held.listeners.add(listener);
+
+			return () => {
+				held.listeners.delete(listener);
+			};
+		},
+		[held],
+	);
+	const corpus = useSyncExternalStore(subscribe, () => held.corpus);
 	/** What the open tabs hold, which beats what was read from disk. */
 	const [open, setOpen] = useState<Map<string, Mentionable["runs"]>>(
 		new Map(),
 	);
 
 	// A sweep that failed is not retried on its own. Asking again is asking for
-	// another go at it.
+	// another go at it, and it is asked of the store, so every panel sitting on
+	// the same failure recovers together.
+	const asked = useRef(retry);
 	useEffect(() => {
-		setCorpus((held) =>
-			held.kind === "failed" ? { kind: "unread" } : held,
-		);
-	}, [retry]);
-
-	useEffect(() => {
-		if (!wanted || corpus.kind !== "unread") {
+		if (asked.current === retry) {
 			return;
 		}
 
-		const timer = window.setTimeout(() => {
-			setCorpus({ kind: "reading" });
-			void sweep(root, changed).then(setCorpus);
-		}, SWEEP_MS);
+		asked.current = retry;
+
+		if (held.corpus.kind === "failed") {
+			put(held, { kind: "unread" });
+		}
+	}, [held, retry]);
+
+	// Nothing is read until something wants it. Only the first read waits for
+	// the writer to settle; a re-read, of a corpus the project has moved on
+	// from, is already late and goes at once.
+	useEffect(() => {
+		if (!wanted) {
+			return;
+		}
+
+		if (corpus.kind !== "unread") {
+			ask(held, changed);
+			return;
+		}
+
+		const timer = window.setTimeout(() => ask(held, changed), SWEEP_MS);
 
 		return () => window.clearTimeout(timer);
-	}, [wanted, corpus.kind, changed, root]);
-
-	// The project has moved on since this was read: a document was written and
-	// its tab closed, or the manifest changed. Read it again as the writer
-	// comes back to look, and leave what is drawn up while that happens — they
-	// came to read it, not to watch it go away.
-	useEffect(() => {
-		if (
-			!wanted ||
-			refreshing ||
-			corpus.kind !== "ready" ||
-			corpus.at === changed
-		) {
-			return;
-		}
-
-		setRefreshing(true);
-		void sweep(root, changed).then((next) => {
-			setCorpus(next);
-			setRefreshing(false);
-		});
-	}, [wanted, refreshing, corpus, changed, root]);
+	}, [held, wanted, corpus, changed]);
 
 	// What the open tabs hold, parsed once the writer stops typing. A tab
 	// changes on every keystroke, and parsing all of them on each one — with
