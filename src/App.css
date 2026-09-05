@@ -4183,3 +4183,129 @@ body,
 	outline: 2px solid var(--accent);
 	outline-offset: -2px;
 }
+
+/* Between two things a section has to say. The only rule in Aurora drawn as an
+   element rather than as a border, because it separates groups rather than
+   bounding either of them. */
+.settings__rule {
+	height: 1px;
+	margin: 1.5rem 0;
+	background: var(--border);
+}
+
+.settings__faces {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	margin-top: 0.75rem;
+}
+
+/* The specimen and the name sit on one baseline, so the six names line up down
+   the right however tall the faces are. */
+.settings__face {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.6rem 0.75rem;
+	font: inherit;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	text-align: left;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 7px;
+	cursor: pointer;
+}
+
+.settings__face:hover {
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+.settings__face[aria-pressed="true"] {
+	background: var(--accent-wash);
+}
+
+.settings__face:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+.settings__sample {
+	font-size: 1.0625rem;
+}
+
+/* The sans and the typewriter run larger than a serif at the same size, so
+   they are set down to sit level with the three above them. */
+.settings__face[data-face="plexMono"] .settings__sample {
+	font-size: 0.9375rem;
+}
+
+.settings__face[data-face="plexSans"] .settings__sample,
+.settings__face[data-face="system"] .settings__sample {
+	font-size: 1rem;
+}
+
+.settings__family {
+	flex: none;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
+.settings__steppers {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 1rem 1.5rem;
+}
+
+.settings__stepper {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 2px;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+.settings__step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 26px;
+	padding: 0;
+	font: inherit;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.settings__step:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.settings__step:disabled {
+	color: var(--text-faint);
+	cursor: not-allowed;
+}
+
+.settings__step:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+.settings__number {
+	min-width: 3.25rem;
+	font-size: 0.8125rem;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}

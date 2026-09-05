@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { moved, nudged, SETTINGS, type Setting } from "./typography";
+import {
+	face,
+	FACES,
+	moved,
+	nudged,
+	SETTINGS,
+	type Setting,
+} from "./typography";
 import type { Preferences } from "./types";
 
 function find(id: Setting["id"]): Setting {
@@ -73,5 +80,23 @@ describe("what the popover shows", () => {
 		["lineHeight", 2, "2.0"],
 	])("%s at %s reads as %s", (id, value, expected) => {
 		expect(find(id as Setting["id"]).show(value)).toBe(expected);
+	});
+});
+
+describe("the manuscript faces", () => {
+	test("every face the picker offers names a family first", () => {
+		for (const each of FACES) {
+			expect(face(each.id).length).toBeGreaterThan(0);
+		}
+	});
+
+	test("each stack ends in a generic family, so something is always drawn", () => {
+		for (const each of FACES) {
+			expect(face(each.id)).toMatch(/(serif|sans-serif|monospace)$/);
+		}
+	});
+
+	test("no face is offered twice", () => {
+		expect(new Set(FACES.map((each) => each.id)).size).toBe(FACES.length);
 	});
 });

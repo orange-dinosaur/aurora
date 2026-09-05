@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
+import { face, FACES, nudged, SETTINGS, type Setting } from "./typography";
 import type { Preferences, Theme } from "./types";
 
 type Section =
@@ -122,6 +123,12 @@ export default function Settings({
 								onPreferences={onPreferences}
 							/>
 						)}
+						{section === "typography" && (
+							<Typography
+								preferences={preferences}
+								onPreferences={onPreferences}
+							/>
+						)}
 					</div>
 				</div>
 			</div>
@@ -161,5 +168,95 @@ function Appearance({
 				))}
 			</span>
 		</div>
+	);
+}
+
+function Typography({
+	preferences,
+	onPreferences,
+}: {
+	preferences: Preferences;
+	onPreferences: (next: Preferences) => void;
+}) {
+	function press(setting: Setting, presses: number) {
+		onPreferences(nudged(preferences, setting, presses));
+	}
+
+	return (
+		<>
+			<p className="settings__label">Manuscript face</p>
+			<div className="settings__faces">
+				{FACES.map((each) => (
+					<button
+						key={each.id}
+						type="button"
+						className="settings__face"
+						data-face={each.id}
+						aria-pressed={preferences.manuscriptFont === each.id}
+						onClick={() =>
+							onPreferences({
+								...preferences,
+								manuscriptFont: each.id,
+							})
+						}
+					>
+						{/* Set in the face it names, so the writer is choosing
+						    by how it reads rather than by what it is called. */}
+						<span
+							className="settings__sample"
+							style={{ fontFamily: face(each.id) }}
+						>
+							Rope and salt
+						</span>
+						<span className="settings__family">{each.family}</span>
+					</button>
+				))}
+			</div>
+
+			<div className="settings__rule" />
+
+			<div className="settings__steppers">
+				{SETTINGS.map((setting) => (
+					<Fragment key={setting.id}>
+						<div className="settings__about">
+							<p className="settings__label">{setting.full}</p>
+							{setting.hint !== undefined && (
+								<p className="settings__hint">{setting.hint}</p>
+							)}
+						</div>
+						<span className="settings__stepper">
+							<button
+								type="button"
+								className="settings__step"
+								aria-label={`${setting.full} down`}
+								disabled={
+									preferences[setting.id] <= setting.min
+								}
+								onClick={() => press(setting, -1)}
+							>
+								&minus;
+							</button>
+							<span
+								className="settings__number"
+								aria-live="polite"
+							>
+								{setting.show(preferences[setting.id])}
+							</span>
+							<button
+								type="button"
+								className="settings__step"
+								aria-label={`${setting.full} up`}
+								disabled={
+									preferences[setting.id] >= setting.max
+								}
+								onClick={() => press(setting, 1)}
+							>
+								+
+							</button>
+						</span>
+					</Fragment>
+				))}
+			</div>
+		</>
 	);
 }

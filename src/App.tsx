@@ -7,6 +7,7 @@ import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
 import { pressed, SETTINGS } from "./formatting";
+import { face } from "./typography";
 
 // What Aurora looks like before the store has answered, and what it falls back
 // to if the store cannot be read at all.
@@ -102,6 +103,16 @@ function App() {
 			root.setAttribute("data-theme", preferences.theme);
 		}
 	}, [preferences.theme]);
+
+	// The manuscript is not the only thing set in --serif: a card title and a
+	// trashed document's name are too, and they follow it on purpose. It is
+	// the one voice the writing has, wherever the writing is named.
+	useEffect(() => {
+		document.documentElement.style.setProperty(
+			"--serif",
+			face(preferences.manuscriptFont),
+		);
+	}, [preferences.manuscriptFont]);
 
 	// A write that fails costs the setting sticking, and neither a writing
 	// screen nor the dialog over it has anywhere to say so.
