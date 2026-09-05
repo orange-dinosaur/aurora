@@ -1,8 +1,11 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
+use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 use time::{Date, Month, OffsetDateTime};
@@ -170,6 +173,41 @@ fn canonical(root: &Path) -> PathBuf {
 	root.canonicalize().unwrap_or_else(|_| root.to_path_buf())
 }
 
+/// What one file looked like when its words were last counted.
+#[derive(Clone, Copy)]
+struct Counted {
+	modified: SystemTime,
+	len: u64,
+	words: usize,
+}
+
+/// Every file this process has counted, by canonical path, held until it
+/// quits. A tree read stats every document and opens only the ones that moved.
+///
+/// The commands run on Tauri's thread pool, so the map needs a lock. A `Mutex`
+/// rather than an `RwLock`: a hit reads and a miss writes, each holds the map
+/// for about as long as a hash lookup, and readers do not queue long enough
+/// for the second lock to earn its keep. A panic while counting must not take
+/// word counts away for the rest of the session, so a poisoned lock is taken
+/// as it stands.
+static COUNTS: LazyLock<Mutex<HashMap<PathBuf, Counted>>> =
+	LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn counted(path: &Path) -> Option<Counted> {
+	COUNTS
+		.lock()
+		.unwrap_or_else(|poisoned| poisoned.into_inner())
+		.get(path)
+		.copied()
+}
+
+fn remember(path: &Path, counted: Counted) {
+	COUNTS
+		.lock()
+		.unwrap_or_else(|poisoned| poisoned.into_inner())
+		.insert(path.to_path_buf(), counted);
+}
+
 /// The words in one document, from its path under a canonical root. A file
 /// that cannot be read counts as nothing rather than failing the whole tree,
 /// and so does one the manifest points outside the project: `aurora.json` is a
@@ -182,12 +220,39 @@ fn words_in(root: &Path, relative: &str) -> usize {
 		return 0;
 	}
 
-	let Ok(bytes) = fs::read(path) else {
+	// A stat costs a fraction of opening a file and splitting it, and a file
+	// whose time and size have both stayed put has not been written since it
+	// was counted. No timestamp at all means no caching: counting again is
+	// only slow, while trusting a stamp that cannot go stale would be wrong.
+	let stamp = fs::metadata(&path)
+		.ok()
+		.and_then(|data| data.modified().ok().map(|when| (when, data.len())));
+	let held = stamp.and_then(|(modified, len)| {
+		counted(&path).filter(|held| held.modified == modified && held.len == len)
+	});
+
+	if let Some(held) = held {
+		return held.words;
+	}
+
+	let Ok(bytes) = fs::read(&path) else {
 		return 0;
 	};
 	let text = String::from_utf8(bytes).unwrap_or_default();
+	let words = body(&text).split_whitespace().count();
 
-	body(&text).split_whitespace().count()
+	if let Some((modified, len)) = stamp {
+		remember(
+			&path,
+			Counted {
+				modified,
+				len,
+				words,
+			},
+		);
+	}
+
+	words
 }
 
 /// The words under `nodes`, however deep they sit. For a card that has to say
@@ -2686,6 +2751,31 @@ mod tests {
 			})
 			.expect("the part is in the tree");
 		assert_eq!(part, 4, "and a folder counts only what is under it");
+	}
+
+	#[test]
+	fn a_count_follows_the_file_it_came_from() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let scene = root.join("Manuscript").join("Scene 1.md");
+		fs::write(&scene, "Sing to me.").unwrap();
+		refresh(&root).unwrap();
+
+		let counted = |tree: &[NodeView]| match &tree[0] {
+			NodeView::Folder { words, .. } => *words,
+			_ => panic!("the Manuscript is a folder"),
+		};
+
+		assert_eq!(counted(&document_tree(root.clone()).unwrap()), 3);
+
+		// Written behind the count, which is the whole point of the stat.
+		fs::write(&scene, "Sing to me of the man of many turns.").unwrap();
+
+		assert_eq!(
+			counted(&document_tree(root).unwrap()),
+			9,
+			"a file written since it was counted is opened and counted again"
+		);
 	}
 
 	#[test]
