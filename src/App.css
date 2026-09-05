@@ -816,23 +816,69 @@ body,
 /* Aurora's own row, directly beneath the window frame the desktop draws. */
 .titlebar {
 	position: relative;
+	/* Raised over the body so the project menu is not painted on by the
+	   sidebar and the writing below it. */
+	z-index: 2;
 	flex: none;
 	display: flex;
-	align-items: baseline;
-	gap: 0.5rem;
-	height: 40px;
-	padding: 0 0.75rem;
+	align-items: center;
+	gap: 0.75rem;
+	height: 44px;
+	padding: 0 1rem;
 	background: var(--bg-chrome);
 	border-bottom: 1px solid var(--border);
 }
 
-.titlebar__name {
+/* Every other menu in the app hangs off the right of a row it was raised
+   from. This one hangs off the name at the left, and sits in the flow of the
+   header rather than over it. */
+.titlebar .menu {
+	position: relative;
 	flex: none;
-	margin: 0;
+}
+
+.titlebar .menu__items {
+	top: calc(100% + 4px);
+	left: -0.4rem;
+	right: auto;
+	min-width: 14rem;
+}
+
+.titlebar__name {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	height: 26px;
+	padding: 0 0.4rem;
+	/* Pulled back by its own padding, so the name still starts on the
+	   header's left edge and only its hover has room. */
+	margin-left: -0.4rem;
+	font: inherit;
 	font-size: 0.8125rem;
 	font-weight: 600;
-	line-height: 40px;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
 	white-space: nowrap;
+}
+
+.titlebar__name:hover,
+.titlebar__name[aria-expanded="true"] {
+	background: var(--bg-hover);
+}
+
+.titlebar__name:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+.titlebar__name svg {
+	color: var(--text-dim);
 }
 
 /* Takes what is left and gives it back first, so a deep folder never pushes
@@ -841,7 +887,7 @@ body,
 	flex: 1;
 	min-width: 0;
 	font-size: 0.75rem;
-	color: var(--text-dim);
+	color: var(--text-faint);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -885,19 +931,39 @@ body,
 	color: var(--accent);
 }
 
+/* The buttons sit closer to each other than to the readouts they follow, so
+   the row reads as one group of controls rather than four loose glyphs. */
+.titlebar__tools {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.titlebar__rule {
+	flex: none;
+	width: 1px;
+	height: 18px;
+	background: var(--border);
+}
+
+.titlebar__tools .titlebar__rule {
+	margin: 0 0.35rem;
+}
+
 .titlebar__button {
 	flex: none;
 	align-self: center;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 24px;
-	height: 24px;
+	width: 28px;
+	height: 28px;
 	padding: 0;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: 6px;
 	cursor: pointer;
 	transition:
 		color 120ms ease-out,
@@ -919,8 +985,8 @@ body,
 .titlebar__message {
 	position: absolute;
 	top: 100%;
-	left: 0.75rem;
-	right: 0.75rem;
+	left: 1rem;
+	right: 1rem;
 	z-index: 1;
 	margin: 0;
 	font-size: 0.75rem;
@@ -3084,6 +3150,13 @@ body.dragging * {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* Between what a menu does inside the project and what leaves it. */
+.menu__rule {
+	height: 1px;
+	margin: 0.3rem 0.35rem;
+	background: var(--border);
 }
 
 /* The way back to the actions, above the folders it opened over. */

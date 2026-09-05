@@ -51,6 +51,7 @@ type Props = {
 	root: string;
 	preferences: Preferences;
 	onClose: () => void;
+	onSettings: () => void;
 	onPreferences: (next: Preferences) => void;
 };
 
@@ -184,6 +185,7 @@ export default function Project({
 	root,
 	preferences,
 	onClose,
+	onSettings,
 	onPreferences,
 }: Props) {
 	const [tabs, setTabs] = useState<Tab[]>([]);
@@ -1024,6 +1026,8 @@ export default function Project({
 					onPreferences({ ...preferences, rightSidebar: open })
 				}
 				onSearch={openSearch}
+				onSettings={onSettings}
+				onCloseProject={onClose}
 				onRefreshed={() => setListing((version) => version + 1)}
 			/>
 

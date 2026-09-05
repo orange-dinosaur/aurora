@@ -134,6 +134,7 @@ function App() {
 					root={boot.project.root}
 					preferences={preferences}
 					onPreferences={save}
+					onSettings={() => setSettings(true)}
 					onClose={() => {
 						// Stops the project reopening on launch; it stays in
 						// the recent list.

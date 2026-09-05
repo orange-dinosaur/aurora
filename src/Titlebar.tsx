@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "./Icon";
+import Menu, { MenuItem } from "./Menu";
 import Session from "./Session";
 import { failure } from "./errors";
 import { SEARCH, SESSION, shortcutLabel } from "./formatting";
@@ -25,6 +26,9 @@ type Props = {
 	rightSidebar: boolean | null;
 	onRightSidebar: (open: boolean) => void;
 	onSearch: () => void;
+	onSettings: () => void;
+	/** Leaves the project for the welcome screen. */
+	onCloseProject: () => void;
 	// The manifest has been read again, so whatever is showing it should look
 	// at it afresh.
 	onRefreshed: () => void;
@@ -43,6 +47,8 @@ export default function Titlebar({
 	rightSidebar,
 	onRightSidebar,
 	onSearch,
+	onSettings,
+	onCloseProject,
 	onRefreshed,
 }: Props) {
 	const [busy, setBusy] = useState(false);
@@ -65,7 +71,39 @@ export default function Titlebar({
 
 	return (
 		<header className="titlebar">
-			<h1 className="titlebar__name">{name}</h1>
+			{/* The project's name is the way into what can be done to the
+			    project as a whole, so it is the trigger rather than a
+			    heading. */}
+			<Menu
+				label={`${name}: project menu`}
+				icon="chevron-down"
+				text={name}
+				trailing
+				className="titlebar__name"
+			>
+				{(close) => (
+					<>
+						<MenuItem
+							onSelect={() => {
+								close();
+								onSettings();
+							}}
+						>
+							Settings
+						</MenuItem>
+						<span className="menu__rule" />
+						<MenuItem
+							onSelect={() => {
+								close();
+								onCloseProject();
+							}}
+						>
+							Close project
+						</MenuItem>
+					</>
+				)}
+			</Menu>
+
 			<span className="titlebar__path" title={root}>
 				{root}
 			</span>
@@ -79,51 +117,62 @@ export default function Titlebar({
 				shortcut={shortcutLabel(SESSION)}
 			/>
 
-			{/* The one place search is reachable from in every configuration:
-			    the toolbar and the sidebar can both be hidden, and this
-			    cannot. */}
-			<button
-				type="button"
-				className="titlebar__button"
-				aria-label="Search this project"
-				title={`Search (${shortcutLabel(SEARCH)})`}
-				onClick={onSearch}
-			>
-				<Icon name="search" />
-			</button>
-			<button
-				type="button"
-				className="titlebar__button"
-				aria-label={busy ? "Refreshing…" : "Refresh documents"}
-				disabled={busy}
-				onClick={() => void refresh()}
-			>
-				<Icon name="refresh" />
-			</button>
-			<button
-				type="button"
-				className="titlebar__button"
-				aria-label={sidebar ? "Hide sidebar" : "Show sidebar"}
-				aria-pressed={sidebar}
-				onClick={() => onSidebar(!sidebar)}
-			>
-				<Icon name="panel-left" />
-			</button>
-			{/* Disabled rather than dropped where it does not apply: a button
-			    that comes and goes would shuffle the row every time the writer
-			    moved between a document and the trash. */}
-			<button
-				type="button"
-				className="titlebar__button"
-				aria-label={
-					rightSidebar ? "Hide right sidebar" : "Show right sidebar"
-				}
-				aria-pressed={rightSidebar === true}
-				disabled={rightSidebar === null}
-				onClick={() => onRightSidebar(rightSidebar !== true)}
-			>
-				<Icon name="panel-right" />
-			</button>
+			<span className="titlebar__rule" />
+
+			<div className="titlebar__tools">
+				{/* The one place search is reachable from in every
+				    configuration: the toolbar and the sidebar can both be
+				    hidden, and this cannot. */}
+				<button
+					type="button"
+					className="titlebar__button"
+					aria-label="Search this project"
+					title={`Search (${shortcutLabel(SEARCH)})`}
+					onClick={onSearch}
+				>
+					<Icon name="search" />
+				</button>
+				<button
+					type="button"
+					className="titlebar__button"
+					aria-label={busy ? "Refreshing…" : "Refresh documents"}
+					disabled={busy}
+					onClick={() => void refresh()}
+				>
+					<Icon name="refresh" />
+				</button>
+
+				{/* What looks at the project, then what arranges the window
+				    around it. */}
+				<span className="titlebar__rule" />
+
+				<button
+					type="button"
+					className="titlebar__button"
+					aria-label={sidebar ? "Hide sidebar" : "Show sidebar"}
+					aria-pressed={sidebar}
+					onClick={() => onSidebar(!sidebar)}
+				>
+					<Icon name="panel-left" />
+				</button>
+				{/* Disabled rather than dropped where it does not apply: a
+				    button that comes and goes would shuffle the row every time
+				    the writer moved between a document and the trash. */}
+				<button
+					type="button"
+					className="titlebar__button"
+					aria-label={
+						rightSidebar
+							? "Hide right sidebar"
+							: "Show right sidebar"
+					}
+					aria-pressed={rightSidebar === true}
+					disabled={rightSidebar === null}
+					onClick={() => onRightSidebar(rightSidebar !== true)}
+				>
+					<Icon name="panel-right" />
+				</button>
+			</div>
 
 			{/* Out of flow, so a failed refresh cannot push the writing down. */}
 			<p className="titlebar__message" role="status">

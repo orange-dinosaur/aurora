@@ -13,6 +13,12 @@ type Props = {
 	/** Written on the trigger beside the icon, where there is room for it. */
 	text?: string;
 	/**
+	 * Puts the icon after the text rather than before it, for a trigger that
+	 * reads as a name with a chevron after it rather than a glyph with a word
+	 * beside it.
+	 */
+	trailing?: boolean;
+	/**
 	 * The trigger's class, replacing the plain one rather than joining it. A
 	 * trigger that is really a card or a filled button has a shape of its own,
 	 * and two shapes on one element only fight.
@@ -26,6 +32,7 @@ export default function Menu({
 	label,
 	icon,
 	text,
+	trailing,
 	className,
 	children,
 }: Props) {
@@ -87,8 +94,17 @@ export default function Menu({
 				aria-expanded={open}
 				onClick={() => setOpen((was) => !was)}
 			>
-				<Icon name={icon} />
-				{text}
+				{trailing === true ? (
+					<>
+						{text}
+						<Icon name={icon} />
+					</>
+				) : (
+					<>
+						<Icon name={icon} />
+						{text}
+					</>
+				)}
 			</button>
 
 			{open && (
