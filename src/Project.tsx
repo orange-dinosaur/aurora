@@ -31,6 +31,7 @@ import type { OutlineHandle } from "./outline";
 import {
 	changed as asChange,
 	ended,
+	gapOf,
 	recorded,
 	start,
 	stop,
@@ -276,6 +277,11 @@ export default function Project({
 		return written;
 	}
 
+	// The silence that ends an automatic session, as the writer set it. Every
+	// call into the model below is handed this rather than letting it fall
+	// back to its own constant.
+	const gap = gapOf(preferences.idleMinutes);
+
 	// What a change added or removed, handed to the model, which decides which
 	// sessions it opens, feeds and closes.
 	function record(id: string, delta: number) {
@@ -284,6 +290,7 @@ export default function Project({
 				sessions.current,
 				asChange(id, Date.now(), delta),
 				words.current,
+				gap,
 			),
 		);
 		words.current += delta;
@@ -303,19 +310,24 @@ export default function Project({
 	// session is running, so a sprint on minutes ends at its deadline rather
 	// than at the next beat of the minute timer above.
 	function tickSession() {
-		void keep(tick(sessions.current, Date.now(), words.current));
+		void keep(tick(sessions.current, Date.now(), words.current, gap));
 	}
 
 	// Nobody else notices that a session has gone quiet, since going quiet is
-	// the writer doing nothing. A minute is fine enough for a gap of half an
-	// hour, and it costs nothing when there is no session to close.
+	// the writer doing nothing. A minute is fine enough for a gap measured in
+	// them, and it costs nothing when there is no session to close. Remade
+	// when the gap changes, so the beat is never closing sessions by a length
+	// the writer has moved on from.
 	useEffect(() => {
 		const beat = window.setInterval(
-			() => void keep(tick(sessions.current, Date.now(), words.current)),
+			() =>
+				void keep(
+					tick(sessions.current, Date.now(), words.current, gap),
+				),
 			60 * 1000,
 		);
 		return () => window.clearInterval(beat);
-	}, [root]);
+	}, [root, gap]);
 
 	// The tabs as they stand now. The handlers below are registered once and
 	// would otherwise go on seeing the tabs they were born with.
@@ -540,8 +552,15 @@ export default function Project({
 
 	// A new document is opened for writing in, and every listing of it has to
 	// be read again.
-	function created(document: ProjectDocument) {
-		void openDocument(document);
+	// A new document is given the writer's default target, if they set one. It
+	// is applied here rather than by whichever surface made the document, so
+	// the sidebar and a section's overview cannot disagree about it, and after
+	// the document is open, because `retarget` reports a refusal on the tab.
+	async function created(document: ProjectDocument) {
+		await openDocument(document);
+		if (preferences.defaultTarget !== null) {
+			await retarget(document.id, preferences.defaultTarget);
+		}
 		setListing((version) => version + 1);
 	}
 
@@ -992,6 +1011,7 @@ export default function Project({
 				name={name}
 				root={root}
 				session={deliberate}
+				sessionClock={preferences.sessionClock}
 				onStartSession={() => startSession()}
 				onStopSession={stopSession}
 				onTickSession={tickSession}
@@ -1028,7 +1048,7 @@ export default function Project({
 					onSelect={(document) => void openDocument(document)}
 					onOpenFolder={openFolder}
 					onOpenTrash={openTrash}
-					onCreated={created}
+					onCreated={(document) => void created(document)}
 					onRenamed={renamed}
 					onFolderRenamed={renamedFolder}
 					onChanged={changed}
@@ -1110,7 +1130,9 @@ export default function Project({
 										void openDocument(document)
 									}
 									onOpenFolder={openFolder}
-									onCreated={created}
+									onCreated={(document) =>
+										void created(document)
+									}
 									onRenamed={renamed}
 									onFolderRenamed={renamedFolder}
 									onChanged={changed}
@@ -1231,6 +1253,8 @@ export default function Project({
 						}}
 						sessions={sessions.current}
 						words={words.current}
+						defaultSprint={preferences.defaultSprint}
+						defaultSprintUnit={preferences.defaultSprintUnit}
 						onStartSprint={(limit) => startSession(limit)}
 						onStopSession={stopSession}
 						logged={logged}

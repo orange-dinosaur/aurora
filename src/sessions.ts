@@ -14,10 +14,16 @@
  * the moment it is acting at, so a test can hand it any clock it likes.
  */
 
-import type { SessionRecord } from "./types";
+import type { SessionRecord, SprintUnit } from "./types";
 
-/** How long a silence has to run before it closes an automatic session. */
+/** How long a silence has to run before it closes an automatic session, unless
+ * the writer has said otherwise. */
 export const IDLE_GAP = 30 * 60 * 1000;
+
+/** A gap in minutes as the functions below want it. */
+export function gapOf(minutes: number): number {
+	return minutes * 60 * 1000;
+}
 
 export type Layer = "automatic" | "deliberate";
 
@@ -25,8 +31,7 @@ export type Layer = "automatic" | "deliberate";
  * What a sprint is aiming at. The shape matches the record Rust writes, so a
  * closed sprint can go to disk as it stands.
  */
-export type Limit =
-	{ unit: "minutes"; amount: number } | { unit: "words"; amount: number };
+export type Limit = { unit: SprintUnit; amount: number };
 
 /** What a session has added and removed. */
 export interface Counts {
@@ -177,8 +182,17 @@ function wordsReached(running: Running): boolean {
  * against is the one there is now. Nothing wrote in between, which is why the
  * session ended, so the two are the same count in every case but a file changed
  * outside Aurora.
+ *
+ * `gap` is the silence that closes an automatic session. It is an argument
+ * rather than the constant it defaults to because the writer can set it, and
+ * every caller in the app hands it what they chose.
  */
-export function tick(sessions: Sessions, at: number, words: number): Step {
+export function tick(
+	sessions: Sessions,
+	at: number,
+	words: number,
+	gap: number = IDLE_GAP,
+): Step {
 	let { automatic, deliberate } = sessions;
 	const closed: Closed[] = [];
 
@@ -194,7 +208,7 @@ export function tick(sessions: Sessions, at: number, words: number): Step {
 
 	// A silence closes the automatic session where the typing stopped, not
 	// where it started again.
-	if (automatic && at - automatic.last >= IDLE_GAP) {
+	if (automatic && at - automatic.last >= gap) {
 		closed.push(shut(automatic, automatic.last, false, words));
 		automatic = null;
 	}
@@ -207,8 +221,13 @@ export function tick(sessions: Sessions, at: number, words: number): Step {
  * the project held before it: a session opening on this change counts the
  * change itself, so its net has to start from the count the change moved.
  */
-export function wrote(sessions: Sessions, change: Change, words: number): Step {
-	const { sessions: now, closed } = tick(sessions, change.at, words);
+export function wrote(
+	sessions: Sessions,
+	change: Change,
+	words: number,
+	gap: number = IDLE_GAP,
+): Step {
+	const { sessions: now, closed } = tick(sessions, change.at, words, gap);
 	const automatic = fed(
 		now.automatic ?? open("automatic", change.at, words),
 		change,

@@ -11,7 +11,7 @@ use tauri::AppHandle;
 
 use crate::project::{Error, Result, store_path, write_json};
 
-pub const STORE_VERSION: u32 = 7;
+pub const STORE_VERSION: u32 = 8;
 
 /// How many projects are worth offering on the welcome screen.
 const MAX_RECENT: usize = 10;
@@ -58,6 +58,25 @@ pub struct Preferences {
 	/// The face the manuscript is set in. The chrome is not affected.
 	#[serde(default)]
 	pub manuscript_font: ManuscriptFont,
+	/// What the Sprint field starts on, or none for an empty field. A writer
+	/// who sprints the same way every day then types nothing.
+	#[serde(default)]
+	pub default_sprint: Option<u32>,
+	/// What that sprint counts.
+	#[serde(default)]
+	pub default_sprint_unit: SprintUnit,
+	/// The target a new document is given, or none for a document that is not
+	/// aiming at anything.
+	#[serde(default)]
+	pub default_target: Option<u32>,
+	/// How long a silence has to run before it closes an automatic session,
+	/// in minutes.
+	#[serde(default = "idle_minutes")]
+	pub idle_minutes: u32,
+	/// Whether the titlebar shows the running session. Defaulted on: it is the
+	/// only place a session is visible with both sidebars hidden.
+	#[serde(default = "shown")]
+	pub session_clock: bool,
 	/// The width of the column of text, in characters.
 	pub measure: u32,
 	/// In pixels.
@@ -77,6 +96,20 @@ fn sidebar_width() -> u32 {
 
 fn right_sidebar_width() -> u32 {
 	300
+}
+
+fn idle_minutes() -> u32 {
+	30
+}
+
+/// What a sprint counts. The pair the Stats tab already offers, named here so
+/// the preference and the control cannot drift apart.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SprintUnit {
+	#[default]
+	Words,
+	Minutes,
 }
 
 /// Whether the desktop decides how Aurora is lit, or the writer does.
@@ -127,6 +160,11 @@ impl Default for Preferences {
 			right_sidebar_width: right_sidebar_width(),
 			theme: Theme::System,
 			manuscript_font: ManuscriptFont::Newsreader,
+			default_sprint: None,
+			default_sprint_unit: SprintUnit::Words,
+			default_target: None,
+			idle_minutes: idle_minutes(),
+			session_clock: true,
 			measure: 68,
 			font_size: 16,
 			line_height: 1.7,
@@ -234,9 +272,10 @@ pub fn load(path: &Path) -> Result<Store> {
 /// Version 1 had no `last`: whatever was at the head of the list was what
 /// reopened. Adopting it here means an upgrade does not lose the open project.
 /// Version 2 had no preferences, version 3 no `sidebar`, version 4 no
-/// `expanded`, version 5 no right sidebar and version 6 neither the sidebar
-/// widths nor the theme and manuscript font; serde's defaults are the whole
-/// migration for all five.
+/// `expanded`, version 5 no right sidebar, version 6 neither the sidebar
+/// widths nor the theme and manuscript font, and version 7 none of the session
+/// preferences; serde's defaults are the whole migration for all six, and each
+/// of them is the behaviour that version already had.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
 	if store.version < STORE_VERSION {
@@ -594,6 +633,14 @@ mod tests {
 			store.preferences.manuscript_font,
 			ManuscriptFont::Newsreader
 		);
+		// The session preferences all come back as the behaviour a store this
+		// old already had: no default sprint, no target on a new document, a
+		// gap of half an hour and a clock in the titlebar.
+		assert_eq!(store.preferences.default_sprint, None);
+		assert_eq!(store.preferences.default_sprint_unit, SprintUnit::Words);
+		assert_eq!(store.preferences.default_target, None);
+		assert_eq!(store.preferences.idle_minutes, 30);
+		assert!(store.preferences.session_clock);
 	}
 
 	#[test]
@@ -611,6 +658,11 @@ mod tests {
 			right_sidebar_width: 360,
 			theme: Theme::Dark,
 			manuscript_font: ManuscriptFont::PlexMono,
+			default_sprint: Some(750),
+			default_sprint_unit: SprintUnit::Minutes,
+			default_target: Some(1500),
+			idle_minutes: 45,
+			session_clock: false,
 			measure: 80,
 			font_size: 19,
 			line_height: 2.0,

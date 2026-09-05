@@ -195,6 +195,9 @@ export type ManuscriptFont =
 	| "plexMono"
 	| "system";
 
+/** What a sprint counts. */
+export type SprintUnit = "words" | "minutes";
+
 export type Preferences = {
 	/** Whether the bar under the document title is showing. */
 	toolbar: boolean;
@@ -215,6 +218,17 @@ export type Preferences = {
 	theme: Theme;
 	/** The face the manuscript is set in. The chrome is not affected. */
 	manuscriptFont: ManuscriptFont;
+	/** What the Sprint field starts on, or null for an empty field. */
+	defaultSprint: number | null;
+	/** What that sprint counts. */
+	defaultSprintUnit: SprintUnit;
+	/** The target a new document is given, or null for none. */
+	defaultTarget: number | null;
+	/** How long a silence runs before it closes an automatic session, in
+	 * minutes. */
+	idleMinutes: number;
+	/** Whether the titlebar shows the running session. */
+	sessionClock: boolean;
 	/** The width of the column of text, in characters. */
 	measure: number;
 	/** In pixels. */

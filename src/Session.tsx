@@ -5,13 +5,18 @@
 import { useEffect, useRef, useState } from "react";
 import { sessionReading } from "./stats";
 import type { Limit, Running } from "./sessions";
+import type { SprintUnit } from "./types";
 
-/** What a sprint can be measured in, in the order the writer meets them. */
-const UNITS: Limit["unit"][] = ["words", "minutes"];
+/** What a sprint can be measured in, in the order the writer meets them. The
+ * settings dialog offers the same pair from here, so the two cannot fall into
+ * different orders. */
+export const UNITS: SprintUnit[] = ["words", "minutes"];
 
 type Props = {
 	/** The deliberate session running now, or null when there is none. */
 	session: Running | null;
+	/** Whether the readout is drawn. The beat below runs either way. */
+	shown: boolean;
 	onStart: () => void;
 	onStop: () => void;
 	/** Asks the model what the clock alone has closed, once a second. */
@@ -27,6 +32,7 @@ type Props = {
  */
 export default function Session({
 	session,
+	shown,
 	onStart,
 	onStop,
 	onTick,
@@ -60,6 +66,13 @@ export default function Session({
 		return () => window.clearInterval(timer);
 	}, [running]);
 
+	// The writer can turn the readout off, but not the beat above it: a sprint
+	// counted in minutes has to close at its deadline whether or not anyone is
+	// watching the clock.
+	if (!shown) {
+		return null;
+	}
+
 	// The readout is the control, the way the word count is: no box of its own,
 	// and pressing it ends what it is describing.
 	return session === null ? (
@@ -90,15 +103,21 @@ export default function Session({
  */
 export function Sprint({
 	session,
+	defaultAmount,
+	defaultUnit,
 	onStart,
 	onStop,
 }: {
 	session: Running | null;
+	/** What the field starts on, and returns to after a sprint is started. */
+	defaultAmount: number | null;
+	defaultUnit: SprintUnit;
 	onStart: (limit: Limit) => void;
 	onStop: () => void;
 }) {
-	const [amount, setAmount] = useState("");
-	const [unit, setUnit] = useState<Limit["unit"]>("words");
+	const start = defaultAmount === null ? "" : String(defaultAmount);
+	const [amount, setAmount] = useState(start);
+	const [unit, setUnit] = useState<SprintUnit>(defaultUnit);
 
 	if (session !== null) {
 		return (
@@ -121,7 +140,7 @@ export function Sprint({
 			onSubmit={(event) => {
 				event.preventDefault();
 				onStart({ unit, amount: Number(amount) });
-				setAmount("");
+				setAmount(start);
 			}}
 		>
 			<input

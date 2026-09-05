@@ -11,6 +11,8 @@ type Props = {
 	root: string;
 	/** The deliberate session running now, or null when there is none. */
 	session: Running | null;
+	/** Whether the writer wants the session readout drawn here. */
+	sessionClock: boolean;
 	onStartSession: () => void;
 	onStopSession: () => void;
 	onTickSession: () => void;
@@ -32,6 +34,7 @@ export default function Titlebar({
 	name,
 	root,
 	session,
+	sessionClock,
 	onStartSession,
 	onStopSession,
 	onTickSession,
@@ -69,6 +72,7 @@ export default function Titlebar({
 
 			<Session
 				session={session}
+				shown={sessionClock}
 				onStart={onStartSession}
 				onStop={onStopSession}
 				onTick={onTickSession}

@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
+import { UNITS } from "./Session";
+import { bounded } from "./settings";
 import { face, FACES, nudged, SETTINGS, type Setting } from "./typography";
 import type { Preferences, Theme } from "./types";
 
@@ -24,6 +26,18 @@ const THEMES: { id: Theme; label: string }[] = [
 	{ id: "dark", label: "Dark" },
 	{ id: "system", label: "System" },
 ];
+
+/** What each typed setting is allowed to be. These are ceilings against a slip
+ * on the keyboard rather than advice: a sprint of a hundred thousand words is
+ * already more than anyone means, and a gap of a day is the longest silence
+ * that can still be called one session. */
+const SPRINT = { min: 1, max: 100000 };
+const TARGET = { min: 1, max: 1000000 };
+const IDLE = { min: 1, max: 1440 };
+
+/** What the gap falls back to when the field is emptied, since a silence has
+ * to be some length. The same number the store defaults to. */
+const IDLE_DEFAULT = 30;
 
 type Props = {
 	preferences: Preferences;
@@ -129,6 +143,12 @@ export default function Settings({
 								onPreferences={onPreferences}
 							/>
 						)}
+						{section === "sessions" && (
+							<Sessions
+								preferences={preferences}
+								onPreferences={onPreferences}
+							/>
+						)}
 					</div>
 				</div>
 			</div>
@@ -215,7 +235,7 @@ function Typography({
 
 			<div className="settings__rule" />
 
-			<div className="settings__steppers">
+			<div className="settings__grid">
 				{SETTINGS.map((setting) => (
 					<Fragment key={setting.id}>
 						<div className="settings__about">
@@ -258,5 +278,156 @@ function Typography({
 				))}
 			</div>
 		</>
+	);
+}
+
+function Sessions({
+	preferences,
+	onPreferences,
+}: {
+	preferences: Preferences;
+	onPreferences: (next: Preferences) => void;
+}) {
+	return (
+		<>
+			<div className="settings__grid">
+				<div className="settings__about">
+					<p className="settings__label">Default sprint</p>
+					<p className="settings__hint">
+						What the Sprint field starts on.
+					</p>
+				</div>
+				<span className="settings__pair">
+					<Amount
+						value={preferences.defaultSprint}
+						label="Default sprint"
+						bounds={SPRINT}
+						onValue={(defaultSprint) =>
+							onPreferences({ ...preferences, defaultSprint })
+						}
+					/>
+					<span
+						className="settings__choices"
+						role="group"
+						aria-label="What the sprint counts"
+					>
+						{UNITS.map((unit) => (
+							<button
+								key={unit}
+								type="button"
+								className="settings__choice"
+								aria-pressed={
+									preferences.defaultSprintUnit === unit
+								}
+								onClick={() =>
+									onPreferences({
+										...preferences,
+										defaultSprintUnit: unit,
+									})
+								}
+							>
+								{unit}
+							</button>
+						))}
+					</span>
+				</span>
+
+				<div className="settings__about">
+					<p className="settings__label">Target for new documents</p>
+					<p className="settings__hint">Leave empty for none.</p>
+				</div>
+				<Amount
+					value={preferences.defaultTarget}
+					label="Target for new documents"
+					bounds={TARGET}
+					onValue={(defaultTarget) =>
+						onPreferences({ ...preferences, defaultTarget })
+					}
+				/>
+
+				<div className="settings__about">
+					<p className="settings__label">
+						Count a session closed after
+					</p>
+					<p className="settings__hint">
+						Silence long enough to have stopped writing.
+					</p>
+				</div>
+				<span className="settings__pair">
+					<Amount
+						value={preferences.idleMinutes}
+						label="Count a session closed after, in minutes"
+						bounds={IDLE}
+						onValue={(minutes) =>
+							onPreferences({
+								...preferences,
+								idleMinutes: minutes ?? IDLE_DEFAULT,
+							})
+						}
+					/>
+					<span className="settings__suffix">minutes</span>
+				</span>
+			</div>
+
+			<div className="settings__rule" />
+
+			<div className="settings__row">
+				<div className="settings__about">
+					<p className="settings__label">
+						Show the session clock in the title bar
+					</p>
+					<p className="settings__hint">
+						The only place a running session is visible with both
+						sidebars hidden.
+					</p>
+				</div>
+				<button
+					type="button"
+					className="settings__switch"
+					role="switch"
+					aria-checked={preferences.sessionClock}
+					aria-label="Show the session clock in the title bar"
+					onClick={() =>
+						onPreferences({
+							...preferences,
+							sessionClock: !preferences.sessionClock,
+						})
+					}
+				>
+					<span className="settings__knob" />
+				</button>
+			</div>
+		</>
+	);
+}
+
+/**
+ * A number a setting is typed into. It holds no draft of its own: every
+ * keystroke is the setting, and what the field shows is what was stored, so a
+ * number pulled into range shows that it was the moment it happens rather than
+ * when the field is left. An empty field is a real value, not a half-typed
+ * one, which is what lets a setting mean "none".
+ */
+function Amount({
+	value,
+	label,
+	bounds,
+	onValue,
+}: {
+	value: number | null;
+	label: string;
+	bounds: { min: number; max: number };
+	onValue: (value: number | null) => void;
+}) {
+	return (
+		<input
+			className="settings__field"
+			value={value === null ? "" : String(value)}
+			inputMode="numeric"
+			aria-label={label}
+			onChange={(event) =>
+				onValue(bounded(event.target.value, bounds.min, bounds.max))
+			}
+		/>
 	);
 }

@@ -9,7 +9,7 @@ import type { FolderRef } from "./tree";
 import type { Seed } from "./find";
 import type { OutlineHandle } from "./outline";
 import { isSubject } from "./subjects";
-import type { ProjectDocument, RightSidebarTab } from "./types";
+import type { ProjectDocument, RightSidebarTab, SprintUnit } from "./types";
 
 // The panel on the far side of the writing from the sidebar, about whatever is
 // open. It serves a document and a folder overview alike, which is why it takes
@@ -48,6 +48,9 @@ type Props = {
 	sessions: Sessions;
 	/** What the whole project holds, for the numbers that are not per document. */
 	words: number;
+	/** What the sprint field starts on, from the writer's preferences. */
+	defaultSprint: number | null;
+	defaultSprintUnit: SprintUnit;
 	/** Opens a deliberate session with something to reach, and closes one. */
 	onStartSprint: (limit: Limit) => void;
 	onStopSession: () => void;
@@ -75,6 +78,8 @@ export default function RightSidebar({
 	onTarget,
 	sessions,
 	words,
+	defaultSprint,
+	defaultSprintUnit,
 	onStartSprint,
 	onStopSession,
 	logged,
@@ -126,6 +131,8 @@ export default function RightSidebar({
 						folder={folder}
 						sessions={sessions}
 						words={words}
+						defaultSprint={defaultSprint}
+						defaultSprintUnit={defaultSprintUnit}
 						root={root}
 						logged={logged}
 						changed={changed}

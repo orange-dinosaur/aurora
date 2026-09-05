@@ -4254,11 +4254,80 @@ body,
 	color: var(--text-dim);
 }
 
-.settings__steppers {
+/* Several preferences at once: what each one is down the left, what it is set
+   to down the right, so the controls line up however wide their labels run. */
+.settings__grid {
 	display: grid;
 	grid-template-columns: 1fr auto;
 	align-items: center;
 	gap: 1rem 1.5rem;
+}
+
+/* A control that is two things, a number and what the number counts. */
+.settings__pair {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.settings__field {
+	width: 5rem;
+	height: 30px;
+	padding: 0 0.6rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+.settings__field:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+.settings__suffix {
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+}
+
+/* The one switch in Aurora. A preference that is on or off and has no third
+   state reads faster as one thing that moves than as two buttons. */
+.settings__switch {
+	flex: none;
+	width: 40px;
+	height: 24px;
+	padding: 2px;
+	background: var(--border);
+	border: 0;
+	border-radius: 999px;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.settings__switch[aria-checked="true"] {
+	background: var(--accent);
+}
+
+.settings__switch:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.settings__knob {
+	display: block;
+	width: 20px;
+	height: 20px;
+	background: var(--bg-card);
+	border-radius: 999px;
+	transition: transform 0.15s ease;
+}
+
+.settings__switch[aria-checked="true"] .settings__knob {
+	transform: translateX(16px);
 }
 
 .settings__stepper {
