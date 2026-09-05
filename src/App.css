@@ -1313,6 +1313,273 @@ body,
 	font-size: 0.8125rem;
 }
 
+/* The profile screen, on the same terms as the login screen: over the window at
+   the same layer, under the settings dialog, and reachable only with SIGNED_IN
+   flipped by hand. Nobody is on it, so every figure is a dash and every control
+   is dead. */
+.profile {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	overflow-y: auto;
+	background: var(--bg);
+}
+
+/* Sticky rather than fixed: the way out has to stay in reach however far down
+   the screen is scrolled, and the panel under it is taller than the window. */
+.profile__bar {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	height: 44px;
+	padding: 0 1rem;
+	background: var(--bg-chrome);
+	border-bottom: 1px solid var(--border);
+}
+
+.profile__out {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	height: 26px;
+	padding: 0 0.5rem 0 0.35rem;
+	margin-left: -0.35rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.profile__out:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.profile__out:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.profile__panel {
+	width: 100%;
+	max-width: 720px;
+	margin: 0 auto;
+	padding: 2.5rem 1.5rem 4rem;
+}
+
+.profile__who {
+	display: flex;
+	align-items: center;
+	gap: 1.5rem;
+}
+
+/* The same dashed ring the chip wears, at the size the page gives it. */
+.profile__avatar {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 72px;
+	height: 72px;
+	color: var(--text-faint);
+	background: var(--bg-card);
+	border: 1px dashed var(--border-strong);
+	border-radius: 50%;
+}
+
+.profile__avatar svg {
+	width: 28px;
+	height: 28px;
+}
+
+.profile__names {
+	min-width: 0;
+}
+
+.profile__name {
+	margin: 0;
+	font-family: var(--serif);
+	font-size: 2rem;
+	font-weight: 500;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+}
+
+.profile__where {
+	margin: 0.4rem 0 0;
+	font-size: 0.875rem;
+	color: var(--text-dim);
+}
+
+/* Wraps rather than squeezing: four figures do not fit across a narrow
+   window, and a column of them reads better than four slivers. */
+.profile__figures {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+	gap: 0.75rem;
+	margin: 2.5rem 0 0;
+}
+
+.profile__figure {
+	padding: 0.9rem 1rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+}
+
+/* Faint, because it is a dash. A figure this size in the reading colour would
+   claim to be a number. */
+.profile__number {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-faint);
+}
+
+.profile__legend {
+	margin: 0.15rem 0 0;
+	font-size: 0.75rem;
+	color: var(--text-faint);
+}
+
+.profile__heading {
+	margin: 2.75rem 0 0.875rem;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.profile__card {
+	display: grid;
+	gap: 1rem;
+	padding: 1.25rem 1.25rem 1.4rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+}
+
+.profile__field {
+	display: grid;
+	gap: 0.35rem;
+}
+
+.profile__label {
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+}
+
+.profile__input {
+	width: 100%;
+	height: 34px;
+	padding: 0 0.6rem;
+	font: inherit;
+	font-size: 0.875rem;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border-strong);
+	border-radius: 7px;
+}
+
+.profile__input:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.profile__input:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.profile__row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.5rem;
+	padding-top: 0.35rem;
+}
+
+/* The outlined button the card and the header both carry. */
+.profile__quiet {
+	flex: none;
+	height: 30px;
+	padding: 0 0.75rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border-strong);
+	border-radius: 7px;
+	cursor: pointer;
+}
+
+.profile__quiet:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.profile__who .profile__quiet {
+	align-self: flex-start;
+	margin-left: auto;
+	background: var(--bg-card);
+}
+
+.profile__note {
+	margin: 1.25rem 0 0;
+	font-size: 0.8125rem;
+	line-height: 1.6;
+	color: var(--text-faint);
+}
+
+.profile__foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.5rem;
+	margin-top: 1.75rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--border);
+}
+
+.profile__foot .profile__note {
+	margin: 0;
+}
+
+.profile__out-of {
+	flex: none;
+	height: 32px;
+	padding: 0 0.85rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--danger);
+	background: none;
+	border: 1px solid var(--border-strong);
+	border-radius: 7px;
+	cursor: pointer;
+}
+
+.profile__out-of:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
 /* Always in the DOM and out of flow, so a failed refresh appears without
    moving the row or the writing below it. */
 .titlebar__message {

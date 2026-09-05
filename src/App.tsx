@@ -4,6 +4,7 @@ import Welcome from "./Welcome";
 import Project from "./Project";
 import Settings from "./Settings";
 import Login from "./Login";
+import Profile from "./Profile";
 import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
@@ -57,6 +58,7 @@ function App() {
 	// Over the app rather than instead of it: leaving the project to sign in
 	// would close the documents the writer had open.
 	const [login, setLogin] = useState(false);
+	const [profile, setProfile] = useState(false);
 
 	// Both are read before anything is drawn, so the bar cannot appear and then
 	// vanish on a writer who had hidden it. A store that will not answer costs
@@ -140,6 +142,7 @@ function App() {
 					onPreferences={save}
 					onSettings={() => setSettings(true)}
 					onLogin={() => setLogin(true)}
+					onProfile={() => setProfile(true)}
 					onClose={() => {
 						// Stops the project reopening on launch; it stays in
 						// the recent list.
@@ -171,6 +174,7 @@ function App() {
 			)}
 
 			{login && <Login onBack={() => setLogin(false)} />}
+			{profile && <Profile onBack={() => setProfile(false)} />}
 		</main>
 	);
 }

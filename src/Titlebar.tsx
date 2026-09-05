@@ -29,6 +29,7 @@ type Props = {
 	onSearch: () => void;
 	onSettings: () => void;
 	onLogin: () => void;
+	onProfile: () => void;
 	/** Leaves the project for the welcome screen. */
 	onCloseProject: () => void;
 	// The manifest has been read again, so whatever is showing it should look
@@ -51,6 +52,7 @@ export default function Titlebar({
 	onSearch,
 	onSettings,
 	onLogin,
+	onProfile,
 	onCloseProject,
 	onRefreshed,
 }: Props) {
@@ -178,7 +180,7 @@ export default function Titlebar({
 				</button>
 			</div>
 
-			<AccountChip onLogin={onLogin} />
+			<AccountChip onLogin={onLogin} onProfile={onProfile} />
 
 			{/* Out of flow, so a failed refresh cannot push the writing down. */}
 			<p className="titlebar__message" role="status">

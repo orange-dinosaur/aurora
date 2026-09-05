@@ -13,7 +13,13 @@ import Menu, { MenuItem } from "./Menu";
 export const SIGNED_IN: boolean = false;
 
 /** The chip at the right of the header, and the menu it opens. */
-export function AccountChip({ onLogin }: { onLogin: () => void }) {
+export function AccountChip({
+	onLogin,
+	onProfile,
+}: {
+	onLogin: () => void;
+	onProfile: () => void;
+}) {
 	return (
 		<Menu
 			label={SIGNED_IN ? "Account" : "Not signed in"}
@@ -47,10 +53,16 @@ export function AccountChip({ onLogin }: { onLogin: () => void }) {
 
 					<span className="menu__rule" />
 
-					{/* The profile is built in the step after this one. Drawn
-					    and disabled rather than left out, so the menu is
-					    already the shape it will keep. */}
-					<MenuItem disabled onSelect={() => {}}>
+					{/* The one way to the profile screen, which is why it is
+					    dead until SIGNED_IN is flipped: there is no profile to
+					    show a writer who has no account. */}
+					<MenuItem
+						disabled={!SIGNED_IN}
+						onSelect={() => {
+							close();
+							onProfile();
+						}}
+					>
 						Your profile
 					</MenuItem>
 					<MenuItem
