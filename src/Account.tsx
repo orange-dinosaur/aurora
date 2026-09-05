@@ -13,7 +13,7 @@ import Menu, { MenuItem } from "./Menu";
 export const SIGNED_IN: boolean = false;
 
 /** The chip at the right of the header, and the menu it opens. */
-export function AccountChip() {
+export function AccountChip({ onLogin }: { onLogin: () => void }) {
 	return (
 		<Menu
 			label={SIGNED_IN ? "Account" : "Not signed in"}
@@ -29,7 +29,7 @@ export function AccountChip() {
 				</>
 			}
 		>
-			{() => (
+			{(close) => (
 				<>
 					<div className="account__who">
 						<span className="account__avatar account__avatar--big">
@@ -47,13 +47,19 @@ export function AccountChip() {
 
 					<span className="menu__rule" />
 
-					{/* Both screens are built in the steps after this one.
-					    Drawn and disabled rather than left out, so the menu is
+					{/* The profile is built in the step after this one. Drawn
+					    and disabled rather than left out, so the menu is
 					    already the shape it will keep. */}
 					<MenuItem disabled onSelect={() => {}}>
 						Your profile
 					</MenuItem>
-					<MenuItem disabled onSelect={() => {}}>
+					<MenuItem
+						disabled={SIGNED_IN}
+						onSelect={() => {
+							close();
+							onLogin();
+						}}
+					>
 						{SIGNED_IN ? "Sign out" : "Sign in to Aurora"}
 					</MenuItem>
 				</>
@@ -63,7 +69,7 @@ export function AccountChip() {
 }
 
 /** The Account section of the settings dialog. */
-export default function Account() {
+export default function Account({ onLogin }: { onLogin: () => void }) {
 	return (
 		<>
 			<div className="account__card">
@@ -78,7 +84,12 @@ export default function Account() {
 						Preferences are saved on this machine only.
 					</span>
 				</span>
-				<button type="button" className="account__in" disabled>
+				<button
+					type="button"
+					className="account__in"
+					disabled={SIGNED_IN}
+					onClick={onLogin}
+				>
 					Sign in
 				</button>
 			</div>

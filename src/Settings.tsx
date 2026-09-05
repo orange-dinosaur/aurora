@@ -45,6 +45,8 @@ type Props = {
 	preferences: Preferences;
 	onPreferences: (next: Preferences) => void;
 	onClose: () => void;
+	/** Leaves the dialog for the login screen. */
+	onLogin: () => void;
 };
 
 /** Everything that follows the writer between projects, in one place over the
@@ -54,6 +56,7 @@ export default function Settings({
 	preferences,
 	onPreferences,
 	onClose,
+	onLogin,
 }: Props) {
 	const [section, setSection] = useState<Section>("appearance");
 	const dialog = useRef<HTMLDivElement>(null);
@@ -133,7 +136,7 @@ export default function Settings({
 					</div>
 
 					<div className="settings__body">
-						{section === "account" && <Account />}
+						{section === "account" && <Account onLogin={onLogin} />}
 						{section === "appearance" && (
 							<Appearance
 								preferences={preferences}

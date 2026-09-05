@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import Welcome from "./Welcome";
 import Project from "./Project";
 import Settings from "./Settings";
+import Login from "./Login";
 import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
@@ -53,6 +54,9 @@ function App() {
 	const [boot, setBoot] = useState<Boot>({ kind: "loading" });
 	const [preferences, setPreferences] = useState<Preferences>(DEFAULTS);
 	const [settings, setSettings] = useState(false);
+	// Over the app rather than instead of it: leaving the project to sign in
+	// would close the documents the writer had open.
+	const [login, setLogin] = useState(false);
 
 	// Both are read before anything is drawn, so the bar cannot appear and then
 	// vanish on a writer who had hidden it. A store that will not answer costs
@@ -135,6 +139,7 @@ function App() {
 					preferences={preferences}
 					onPreferences={save}
 					onSettings={() => setSettings(true)}
+					onLogin={() => setLogin(true)}
 					onClose={() => {
 						// Stops the project reopening on launch; it stays in
 						// the recent list.
@@ -158,8 +163,14 @@ function App() {
 					preferences={preferences}
 					onPreferences={save}
 					onClose={() => setSettings(false)}
+					onLogin={() => {
+						setSettings(false);
+						setLogin(true);
+					}}
 				/>
 			)}
+
+			{login && <Login onBack={() => setLogin(false)} />}
 		</main>
 	);
 }

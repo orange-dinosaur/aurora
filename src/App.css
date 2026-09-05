@@ -1149,6 +1149,170 @@ body,
 	color: var(--text-dim);
 }
 
+/* The login screen covers the window rather than replacing what is under it:
+   signing in from inside a project must not close the documents that are open.
+   Under the settings dialog, so the shortcut still opens that over this. The
+   mock centres the panel in the window; it sits at the top here, because a
+   panel centred in a scrolling box is unreachable at the top once it is taller
+   than the window. */
+.login {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	overflow-y: auto;
+	background: var(--bg-chrome);
+}
+
+.login__panel {
+	width: 100%;
+	max-width: 392px;
+	margin: 0 auto;
+	padding: 4rem 1.5rem;
+}
+
+.login__title {
+	margin: 0;
+	font-family: var(--serif);
+	font-size: 2.25rem;
+	font-weight: 500;
+	letter-spacing: -0.025em;
+	line-height: 1.1;
+}
+
+.login__blurb {
+	margin: 0.5rem 0 2rem;
+	font-size: 0.9375rem;
+	line-height: 1.5;
+	color: var(--text-dim);
+}
+
+.login__form {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.login__field {
+	display: grid;
+	gap: 0.35rem;
+}
+
+.login__legend {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+}
+
+.login__input {
+	width: 100%;
+	height: 38px;
+	padding: 0 0.7rem;
+	font: inherit;
+	font-size: 0.9375rem;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border-strong);
+	border-radius: 8px;
+}
+
+.login__input:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.login__go {
+	width: 100%;
+	height: 40px;
+	margin-top: 0.5rem;
+	font: inherit;
+	font-size: 0.9375rem;
+	font-weight: 600;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--bg);
+	background: var(--accent);
+	border: 0;
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.login__go:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.login__note {
+	margin: 0;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	color: var(--text-faint);
+}
+
+.login__foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-top: 2rem;
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--border);
+}
+
+.login__back {
+	padding: 0;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	cursor: pointer;
+}
+
+.login__back:hover {
+	color: var(--text);
+}
+
+.login__back:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: 3px;
+}
+
+/* The two ways on that have nowhere to go yet. Drawn as the links they will be
+   and dimmed, rather than left out of a form the writer would then have to
+   relearn. */
+.login__link {
+	padding: 0;
+	font: inherit;
+	font-size: 0.75rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--accent);
+	background: none;
+	border: 0;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	cursor: pointer;
+}
+
+.login__link:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.login__foot .login__link {
+	font-size: 0.8125rem;
+}
+
 /* Always in the DOM and out of flow, so a failed refresh appears without
    moving the row or the writing below it. */
 .titlebar__message {
