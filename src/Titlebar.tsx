@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { AccountChip } from "./Account";
@@ -8,7 +8,7 @@ import Session from "./Session";
 import { failure } from "./errors";
 import { SEARCH, SESSION, shortcutLabel } from "./formatting";
 import type { Running } from "./sessions";
-import { flipped } from "./theme";
+import ThemeToggle from "./ThemeToggle";
 import type { Theme } from "./types";
 
 type Props = {
@@ -66,26 +66,6 @@ export default function Titlebar({
 }: Props) {
 	const [busy, setBusy] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
-
-	// The preference has three states and this button has two, so it has to
-	// know what the desktop is set to as well as what the writer asked for.
-	// Watched rather than read once: a desktop that changes at sunset would
-	// otherwise leave the button offering the theme already on screen.
-	const [systemIsDark, setSystemIsDark] = useState(
-		() => window.matchMedia("(prefers-color-scheme: dark)").matches,
-	);
-
-	useEffect(() => {
-		const query = window.matchMedia("(prefers-color-scheme: dark)");
-		function changed(event: MediaQueryListEvent) {
-			setSystemIsDark(event.matches);
-		}
-
-		query.addEventListener("change", changed);
-		return () => query.removeEventListener("change", changed);
-	}, []);
-
-	const next = flipped(theme, systemIsDark);
 
 	// Hands the project folder to the desktop's file manager. Nothing about
 	// the project changes, so a refusal is worth saying once and no more.
@@ -187,17 +167,11 @@ export default function Titlebar({
 					<Icon name="refresh" />
 				</button>
 
-				{/* Wearing the theme it brings on rather than the one showing:
-				    a button says what pressing it does. */}
-				<button
-					type="button"
+				<ThemeToggle
+					theme={theme}
+					onTheme={onTheme}
 					className="titlebar__button"
-					aria-label={`Switch to the ${next} theme`}
-					title={`Switch to the ${next} theme`}
-					onClick={() => onTheme(next)}
-				>
-					<Icon name={next === "dark" ? "moon" : "sun"} />
-				</button>
+				/>
 
 				{/* What looks at the project, then what arranges the window
 				    around it. */}

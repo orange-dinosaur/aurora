@@ -1013,6 +1013,7 @@ export default function Project({
 			return (
 				<Editor
 					title={tab.document.title}
+					trail={tab.document.trail}
 					text={tab.content.text}
 					active={tab.key === activeKey}
 					dirty={tab.save.kind !== "clean"}

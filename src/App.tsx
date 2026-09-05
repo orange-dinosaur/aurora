@@ -160,6 +160,8 @@ function App() {
 						onLogin={() => setLogin(true)}
 						onProfile={() => setProfile(true)}
 						onSettings={() => setSettings(true)}
+						theme={preferences.theme}
+						onTheme={(theme) => save({ ...preferences, theme })}
 					/>
 				)
 			)}
@@ -176,8 +178,20 @@ function App() {
 				/>
 			)}
 
-			{login && <Login onBack={() => setLogin(false)} />}
-			{profile && <Profile onBack={() => setProfile(false)} />}
+			{login && (
+				<Login
+					onBack={() => setLogin(false)}
+					theme={preferences.theme}
+					onTheme={(theme) => save({ ...preferences, theme })}
+				/>
+			)}
+			{profile && (
+				<Profile
+					onBack={() => setProfile(false)}
+					theme={preferences.theme}
+					onTheme={(theme) => save({ ...preferences, theme })}
+				/>
+			)}
 		</main>
 	);
 }

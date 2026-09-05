@@ -124,6 +124,8 @@ function tallied(counts: ReturnType<typeof counted>): string {
 
 type Props = {
 	title: string;
+	/** The folders it sits in, from its section down, drawn above the title. */
+	trail: string[];
 	text: string;
 	/** Whether this is the tab being looked at, and so the one that reports. */
 	active: boolean;
@@ -147,6 +149,7 @@ type Props = {
 
 export default function Editor({
 	title,
+	trail,
 	text,
 	active,
 	dirty,
@@ -269,7 +272,13 @@ export default function Editor({
 			}
 		>
 			<div className="editor__head">
-				<h2 className="editor__title">{title}</h2>
+				<div className="editor__heading">
+					{/* Where the document sits, above its name. Always in the
+					    tree, so the title never moves as the writer opens
+					    something filed one level deeper. */}
+					<p className="editor__where">{trail.join(" · ")}</p>
+					<h2 className="editor__title">{title}</h2>
+				</div>
 				<div className="editor__tools">
 					<Typography
 						preferences={preferences}

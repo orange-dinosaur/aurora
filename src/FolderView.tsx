@@ -204,6 +204,13 @@ export default function FolderView({
 		<div className="overview">
 			<header className="overview__header">
 				<div className="overview__heading">
+					{/* The folders above this one, which is what tells two
+					    chapters of the same name apart. */}
+					{folder.trail.length > 1 && (
+						<p className="overview__where">
+							{folder.trail.slice(0, -1).join(" · ")}
+						</p>
+					)}
 					<h2 className="overview__title">{folder.name}</h2>
 					<p className="overview__count">{summarised(cards)}</p>
 				</div>

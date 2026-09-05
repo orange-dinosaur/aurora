@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import type { FormatLayout, OpenProject, RecentSummary } from "./types";
+import ThemeToggle from "./ThemeToggle";
+import type { FormatLayout, OpenProject, RecentSummary, Theme } from "./types";
 import { AccountChip } from "./Account";
 import Menu, { MenuItem } from "./Menu";
 import { contents } from "./recents";
@@ -67,6 +68,8 @@ type Props = {
 	onLogin: () => void;
 	onProfile: () => void;
 	onSettings: () => void;
+	theme: Theme;
+	onTheme: (theme: Theme) => void;
 };
 
 export default function Welcome({
@@ -75,6 +78,8 @@ export default function Welcome({
 	onLogin,
 	onProfile,
 	onSettings,
+	theme,
+	onTheme,
 }: Props) {
 	// Seeded once; the notice describes how this screen was reached.
 	const [reason, setReason] = useState(notice);
@@ -184,6 +189,11 @@ export default function Welcome({
 	return (
 		<div className="welcome">
 			<div className="welcome__bar">
+				<ThemeToggle
+					theme={theme}
+					onTheme={onTheme}
+					className="welcome__button"
+				/>
 				<AccountChip
 					onLogin={onLogin}
 					onProfile={onProfile}

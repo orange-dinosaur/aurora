@@ -65,7 +65,13 @@ export default function Trash({ root, reload, onChanged }: Props) {
 	return (
 		<div className="overview">
 			<header className="overview__header">
-				<h2 className="overview__title">Trash</h2>
+				<div className="overview__heading">
+					<h2 className="overview__title">Trash</h2>
+					<p className="overview__count">
+						Deleted documents stay here until you empty them.
+						Nothing is removed from disk on its own.
+					</p>
+				</div>
 			</header>
 
 			{entries.length === 0 ? (

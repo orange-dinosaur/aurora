@@ -6,7 +6,18 @@
 
 import { useEffect, useRef } from "react";
 
-export default function Login({ onBack }: { onBack: () => void }) {
+import ThemeToggle from "./ThemeToggle";
+import type { Theme } from "./types";
+
+export default function Login({
+	onBack,
+	theme,
+	onTheme,
+}: {
+	onBack: () => void;
+	theme: Theme;
+	onTheme: (theme: Theme) => void;
+}) {
 	const email = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
@@ -28,6 +39,14 @@ export default function Login({ onBack }: { onBack: () => void }) {
 
 	return (
 		<div className="login">
+			<div className="login__bar">
+				<ThemeToggle
+					theme={theme}
+					onTheme={onTheme}
+					className="login__button"
+				/>
+			</div>
+
 			<div className="login__panel">
 				<h1 className="login__title">Aurora</h1>
 				<p className="login__blurb">

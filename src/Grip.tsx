@@ -87,6 +87,7 @@ export default function Grip({
 			role="separator"
 			aria-orientation="vertical"
 			aria-label={label}
+			title={`Drag to resize · minimum ${bounds.min}px`}
 			aria-valuenow={width}
 			aria-valuemin={bounds.min}
 			aria-valuemax={bounds.max}

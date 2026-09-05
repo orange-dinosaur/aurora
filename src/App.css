@@ -574,15 +574,49 @@ body,
 	text-align: left;
 }
 
-/* The same 44px row the project wears, holding the one control that means
+/* The same 44px row the project wears, holding the two controls that mean
    anything with no project open. */
 .welcome__bar {
 	flex: none;
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
+	gap: 0.35rem;
 	height: 44px;
 	padding: 0 1rem;
+}
+
+/* The square button the three headerless screens use. The project header has
+   its own, which is the same shape under a name that belongs to that row. */
+.welcome__button,
+.login__button,
+.profile__button {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.welcome__button:hover,
+.login__button:hover,
+.profile__button:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.welcome__button:focus-visible,
+.login__button:focus-visible,
+.profile__button:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 /* Auto margins rather than align-items: overflow past the top of a centred
@@ -1188,11 +1222,21 @@ body,
 	background: var(--bg-chrome);
 }
 
+/* The login screen has no header of its own, so its own row carries the one
+   control it needs. */
+.login__bar {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	height: 44px;
+	padding: 0 1rem;
+}
+
 .login__panel {
 	width: 100%;
 	max-width: 392px;
 	margin: 0 auto;
-	padding: 4rem 1.5rem;
+	padding: 1rem 1.5rem 4rem;
 }
 
 .login__title {
@@ -1358,6 +1402,7 @@ body,
 	z-index: 1;
 	display: flex;
 	align-items: center;
+	gap: 0.35rem;
 	height: 44px;
 	padding: 0 1rem;
 	background: var(--bg-chrome);
@@ -1391,6 +1436,11 @@ body,
 .profile__out:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 1px;
+}
+
+/* Pushed to the far end, away from the way back. */
+.profile__button {
+	margin-left: auto;
 }
 
 .profile__panel {
@@ -3051,6 +3101,17 @@ body.dragging * {
 	color: var(--text-dim);
 }
 
+/* The folders above this one, said before its name. The same eyebrow the
+   subject page and the editor wear, so the three screens open alike. */
+.overview__where {
+	margin: 0 0 0.2rem;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
 /* The only filled button in the application: making a document is the one
    thing this screen is for, and the dashed card in the grid is the same act
    said quietly. */
@@ -4187,6 +4248,24 @@ body.dragging * {
 	justify-content: space-between;
 	gap: 1rem;
 	margin: 0 0 0.5rem;
+}
+
+.editor__heading {
+	min-width: 0;
+}
+
+/* Where the document sits, above its name. Empty for a document straight
+   under a section, and it keeps its line either way so the title does not
+   move between one document and the next. */
+.editor__where {
+	min-height: 1em;
+	margin: 0 0 0.15rem;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	overflow-wrap: anywhere;
 }
 
 .editor__title {

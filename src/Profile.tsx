@@ -7,6 +7,8 @@
 import { useEffect } from "react";
 
 import Icon from "./Icon";
+import ThemeToggle from "./ThemeToggle";
+import type { Theme } from "./types";
 
 /** What a figure will be once there is an account to count it from. */
 const FIGURES = [
@@ -16,7 +18,15 @@ const FIGURES = [
 	{ label: "Member since" },
 ];
 
-export default function Profile({ onBack }: { onBack: () => void }) {
+export default function Profile({
+	onBack,
+	theme,
+	onTheme,
+}: {
+	onBack: () => void;
+	theme: Theme;
+	onTheme: (theme: Theme) => void;
+}) {
 	// The screen covers the window, so the way out has to be the key as well as
 	// the button: the writing behind it cannot be clicked back to.
 	useEffect(() => {
@@ -37,6 +47,11 @@ export default function Profile({ onBack }: { onBack: () => void }) {
 					<Icon name="chevron-left" />
 					Back to writing
 				</button>
+				<ThemeToggle
+					theme={theme}
+					onTheme={onTheme}
+					className="profile__button"
+				/>
 			</div>
 
 			<div className="profile__panel">
