@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { filed, refile } from "./corpus";
 import Editor from "./Editor";
 import { useFolderFields, type FieldsHandle } from "./fields";
 import { list } from "./frontmatter";
@@ -220,6 +221,13 @@ export default function Project({
 	// Bumped whenever a document reaches disk, which is the other way the
 	// project changes under anything holding a copy of it.
 	const [written, setWritten] = useState(0);
+
+	// A document created, renamed, moved or deleted. Every other change is a
+	// text the corpus has already been handed, but this one it cannot work out
+	// for itself.
+	useEffect(() => {
+		refile(root);
+	}, [root, listing]);
 	// The one thing a rename cannot decide on its own: what to do with the tags
 	// that were pointing at the old title.
 	const [retagging, setRetagging] = useState<Retagging>({ kind: "no" });
@@ -368,13 +376,16 @@ export default function Project({
 
 	// Puts a tab's text on disk, putting the file itself back if it has gone.
 	function put(tab: DocumentTab, text: string) {
-		return tab.save.kind === "missing"
-			? invoke("restore_document", {
-					root,
-					path: tab.document.path,
-					text,
-				})
-			: invoke("write_document", { root, id: tab.document.id, text });
+		const done =
+			tab.save.kind === "missing"
+				? invoke("restore_document", {
+						root,
+						path: tab.document.path,
+						text,
+					})
+				: invoke("write_document", { root, id: tab.document.id, text });
+
+		return done.then(() => filed(root, tab.document.id, text));
 	}
 
 	// Writes every tab that is not on disk yet, cancelling the timers that were
@@ -689,12 +700,12 @@ export default function Project({
 		const tab = documentTab(id);
 
 		if (tab === undefined || tab.content.kind !== "ready") {
-			const text = await invoke<string>("read_document", { root, id });
-			await invoke("write_document", {
-				root,
-				id,
-				text: retag(text, from, to),
-			});
+			const text = retag(
+				await invoke<string>("read_document", { root, id }),
+				from,
+				to,
+			);
+			await invoke("write_document", { root, id, text });
 			return;
 		}
 
@@ -712,6 +723,11 @@ export default function Project({
 		setActiveKey((active) => (active === tab.key ? key : active));
 	}
 
+	// This is the one write that is not told to the corpus a document at a
+	// time. Handing over hundreds of texts in a loop would redraw everything
+	// looking at the corpus once per document, and recognition reads the whole
+	// project each time it is redrawn. One read at the end is cheaper than the
+	// patches, and retagging is rare enough to pay for it.
 	async function retagAll(from: string, to: string, ids: string[]) {
 		setRetagging({ kind: "writing", from, to, ids });
 		try {
@@ -722,6 +738,9 @@ export default function Project({
 			setWritten((times) => times + 1);
 		} catch (error) {
 			setRetagging({ kind: "failed", message: failure(error).message });
+		} finally {
+			// A run that failed part way still rewrote what it got to.
+			refile(root);
 		}
 	}
 
@@ -823,6 +842,7 @@ export default function Project({
 		let result: Save;
 		try {
 			await invoke("write_document", { root, id, text });
+			filed(root, id, text);
 			result = { kind: "clean" };
 			setWritten((times) => times + 1);
 		} catch (error) {
@@ -914,11 +934,7 @@ export default function Project({
 				closing.save.kind === "pending" &&
 				closing.content.kind === "ready"
 			) {
-				void invoke("write_document", {
-					root,
-					id: closing.document.id,
-					text: closing.content.text,
-				});
+				void put(closing, closing.content.text);
 			}
 		}
 
@@ -949,6 +965,7 @@ export default function Project({
 				id,
 				text: tab.content.text,
 			});
+			filed(root, id, tab.content.text);
 		}
 
 		return tab;

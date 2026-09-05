@@ -25,8 +25,6 @@ export type Corpus =
 	| { kind: "reading" }
 	| {
 			kind: "ready";
-			/** The value of `changed` this was read at, which is how it knows it is old. */
-			at: number;
 			documents: Mentionable[];
 			/**
 			 * The documents themselves, by id. A result row knows an id; what
@@ -63,7 +61,7 @@ function readIn(text: string | null): {
 }
 
 /** Reads every document in the project and parses it, or says why it could not. */
-async function sweep(root: string, at: number): Promise<Corpus> {
+async function sweep(root: string): Promise<Corpus> {
 	try {
 		const documents = await timed(
 			"corpus sweep",
@@ -72,7 +70,6 @@ async function sweep(root: string, at: number): Promise<Corpus> {
 
 		return {
 			kind: "ready",
-			at,
 			documents: documents.map(({ id, title, trail, text }) => ({
 				id,
 				title,
@@ -105,6 +102,11 @@ type Store = {
 	corpus: Corpus;
 	/** The sweep in flight, so several panels asking at once still read once. */
 	sweeping: Promise<void> | null;
+	/**
+	 * Whether the project has moved in a way no patch could describe, which is
+	 * the only reason left to read all of it again.
+	 */
+	stale: boolean;
 	/** Told whenever `corpus` is replaced. */
 	listeners: Set<() => void>;
 };
@@ -117,6 +119,7 @@ function storeFor(root: string): Store {
 			root,
 			corpus: { kind: "unread" },
 			sweeping: null,
+			stale: false,
 			listeners: new Set(),
 		};
 	}
@@ -133,17 +136,21 @@ function put(held: Store, corpus: Corpus): void {
 }
 
 /**
- * Reads the project, unless it is already read at this `changed`, is already
+ * Reads the project, unless it is already read and still good, is already
  * being read, or failed and has not been asked again.
  */
-function ask(held: Store, changed: number): void {
+function ask(held: Store): void {
 	if (
 		held.sweeping !== null ||
 		held.corpus.kind === "failed" ||
-		(held.corpus.kind === "ready" && held.corpus.at === changed)
+		(held.corpus.kind === "ready" && !held.stale)
 	) {
 		return;
 	}
+
+	// Anything that lands while this read is in flight sets it again, and the
+	// read after that picks it up.
+	held.stale = false;
 
 	// A first read says so, so a panel can show it is working. A re-read
 	// leaves what is drawn alone: they came to read it, not to watch it go.
@@ -151,7 +158,7 @@ function ask(held: Store, changed: number): void {
 		put(held, { kind: "reading" });
 	}
 
-	held.sweeping = sweep(held.root, changed).then((next) => {
+	held.sweeping = sweep(held.root).then((next) => {
 		held.sweeping = null;
 
 		// The project moved on under this read. Whatever it found describes a
@@ -162,11 +169,60 @@ function ask(held: Store, changed: number): void {
 	});
 }
 
+/**
+ * Tells the store what one document now says. Whoever wrote it is holding the
+ * text, so this costs nothing: no file is opened and no sweep is started, and
+ * everything looking at the corpus sees the new words at once.
+ */
+export function filed(root: string, id: string, text: string): void {
+	const held = store;
+
+	if (held === null || held.root !== root || held.corpus.kind !== "ready") {
+		return;
+	}
+
+	// A document the last sweep never saw. Nothing held here describes it, so
+	// the whole project has to be read again after all.
+	if (!held.corpus.documents.some((document) => document.id === id)) {
+		held.stale = true;
+		return;
+	}
+
+	put(held, {
+		...held.corpus,
+		documents: held.corpus.documents.map((document) =>
+			document.id === id ? { ...document, ...readIn(text) } : document,
+		),
+	});
+}
+
+/**
+ * Says the manifest has moved: a document created, renamed, moved or deleted.
+ * No patch describes that, so the corpus is no longer trusted. What is drawn
+ * stays drawn, and the next panel to want it reads the project again.
+ */
+export function refile(root: string): void {
+	const held = store;
+
+	if (held === null || held.root !== root) {
+		return;
+	}
+
+	held.stale = true;
+
+	// The corpus itself has not changed, so nothing would re-render and
+	// nothing would ask. Replacing it is what wakes them.
+	if (held.corpus.kind === "ready") {
+		put(held, { ...held.corpus });
+	}
+}
+
 type Asked = {
 	root: string;
 	/**
-	 * Counts the times the project has changed under what was read: a document
-	 * written to disk, or the manifest itself changing.
+	 * Counts the times the project has changed under what was read. It no
+	 * longer decides anything here — `filed` and `refile` do that — but it
+	 * still makes a mounted panel look again when the project moves.
 	 */
 	changed: number;
 	/**
@@ -231,11 +287,11 @@ export function useCorpus({ root, changed, live, wanted, retry = 0 }: Asked): {
 		}
 
 		if (corpus.kind !== "unread") {
-			ask(held, changed);
+			ask(held);
 			return;
 		}
 
-		const timer = window.setTimeout(() => ask(held, changed), SWEEP_MS);
+		const timer = window.setTimeout(() => ask(held), SWEEP_MS);
 
 		return () => window.clearTimeout(timer);
 	}, [held, wanted, corpus, changed]);
