@@ -66,6 +66,7 @@ type Props = {
 	onOpened: (project: OpenProject) => void;
 	onLogin: () => void;
 	onProfile: () => void;
+	onSettings: () => void;
 };
 
 export default function Welcome({
@@ -73,6 +74,7 @@ export default function Welcome({
 	onOpened,
 	onLogin,
 	onProfile,
+	onSettings,
 }: Props) {
 	// Seeded once; the notice describes how this screen was reached.
 	const [reason, setReason] = useState(notice);
@@ -182,7 +184,11 @@ export default function Welcome({
 	return (
 		<div className="welcome">
 			<div className="welcome__bar">
-				<AccountChip onLogin={onLogin} onProfile={onProfile} />
+				<AccountChip
+					onLogin={onLogin}
+					onProfile={onProfile}
+					onSettings={onSettings}
+				/>
 			</div>
 
 			<section className="welcome__columns">

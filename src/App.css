@@ -3830,6 +3830,22 @@ body.dragging * {
 	background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
+/* The shortcut for an item that has one, at the far end of the row. The menu is
+   where a shortcut is learned, so it is written out rather than left to a
+   tooltip nobody hovers for. */
+.menu__item:has(.menu__chord) {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.5rem;
+}
+
+.menu__chord {
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	color: var(--text-faint);
+}
+
 /* A second line under an item, for an action whose name does not say what it
    leaves behind. It inherits the danger colour where it sits in one, so the
    pair reads as one item rather than two. */

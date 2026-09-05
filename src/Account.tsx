@@ -4,6 +4,7 @@
 
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
+import { SETTINGS as SETTINGS_KEYS, shortcutLabel } from "./formatting";
 
 /**
  * Whether the writer is signed in. Nothing writes it. Sign-in is deferred, so
@@ -16,9 +17,11 @@ export const SIGNED_IN: boolean = false;
 export function AccountChip({
 	onLogin,
 	onProfile,
+	onSettings,
 }: {
 	onLogin: () => void;
 	onProfile: () => void;
+	onSettings: () => void;
 }) {
 	return (
 		<Menu
@@ -65,6 +68,23 @@ export function AccountChip({
 					>
 						Your profile
 					</MenuItem>
+
+					{/* Settings belongs to the writer rather than to the
+					    project: the preferences follow them into every one. */}
+					<MenuItem
+						onSelect={() => {
+							close();
+							onSettings();
+						}}
+					>
+						Settings
+						<span className="menu__chord">
+							{shortcutLabel(SETTINGS_KEYS)}
+						</span>
+					</MenuItem>
+
+					<span className="menu__rule" />
+
 					<MenuItem
 						disabled={SIGNED_IN}
 						onSelect={() => {

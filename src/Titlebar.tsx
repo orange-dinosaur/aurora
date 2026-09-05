@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { AccountChip } from "./Account";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
@@ -59,6 +60,17 @@ export default function Titlebar({
 	const [busy, setBusy] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
 
+	// Hands the project folder to the desktop's file manager. Nothing about
+	// the project changes, so a refusal is worth saying once and no more.
+	async function reveal() {
+		try {
+			await revealItemInDir(root);
+			setMessage(null);
+		} catch (error) {
+			setMessage(failure(error).message);
+		}
+	}
+
 	// `refresh_documents` looks at the folder again before rewriting the
 	// manifest, for anything that changed outside Aurora.
 	async function refresh() {
@@ -92,10 +104,10 @@ export default function Titlebar({
 						<MenuItem
 							onSelect={() => {
 								close();
-								onSettings();
+								void reveal();
 							}}
 						>
-							Settings
+							Show in Files
 						</MenuItem>
 						<span className="menu__rule" />
 						<MenuItem
@@ -180,7 +192,11 @@ export default function Titlebar({
 				</button>
 			</div>
 
-			<AccountChip onLogin={onLogin} onProfile={onProfile} />
+			<AccountChip
+				onLogin={onLogin}
+				onProfile={onProfile}
+				onSettings={onSettings}
+			/>
 
 			{/* Out of flow, so a failed refresh cannot push the writing down. */}
 			<p className="titlebar__message" role="status">

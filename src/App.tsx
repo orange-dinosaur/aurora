@@ -159,6 +159,7 @@ function App() {
 						}
 						onLogin={() => setLogin(true)}
 						onProfile={() => setProfile(true)}
+						onSettings={() => setSettings(true)}
 					/>
 				)
 			)}
