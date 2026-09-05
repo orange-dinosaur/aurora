@@ -3789,15 +3789,34 @@ body.dragging * {
 	color: var(--text-faint);
 }
 
-/* Read rather than written: the draft is one button away and that is where the
-   writing happens. The blank lines the writer left are kept. */
-.subject__notes {
-	margin: 0;
+/* The one thing on this page that writes. Set in the manuscript face, because
+   what goes in it is the writer's words rather than Aurora's. */
+.subject__remarks {
+	display: block;
+	width: 100%;
+	padding: 0.8rem 0.9rem;
+	font-family: var(--serif);
 	font-size: 0.9375rem;
-	line-height: 1.6;
+	line-height: 1.7;
 	color: var(--text);
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	resize: vertical;
+}
+
+.subject__remarks:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+/* Kept even while it says nothing, so a failed write cannot shove the list of
+   appearances down the page. */
+.subject__trouble {
+	min-height: 1.25rem;
+	margin: 0.35rem 0 0;
+	font-size: 0.8125rem;
+	color: var(--danger);
 }
 
 .subject__note {

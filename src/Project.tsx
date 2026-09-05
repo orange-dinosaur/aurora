@@ -836,6 +836,35 @@ export default function Project({
 		);
 	}
 
+	// The subject page setting its own document's remarks. A tab is the holder
+	// of a file whenever there is one, so this goes through the tab and the
+	// countdown the editor already uses, and rebuilds that tab's editor from
+	// the new text the way retagging does: an editor still holding front matter
+	// that has moved on would put it back the next time it saved. With no tab,
+	// the page writes the file itself, on the same countdown.
+	function remark(
+		id: string,
+		text: string,
+		failed: (message: string) => void,
+	) {
+		if (documentTab(id) !== undefined) {
+			edit(id, text);
+			patch(id, (tab) => ({ ...tab, key: freshKey() }));
+			return;
+		}
+
+		stopTimer(id);
+		timers.current.set(
+			id,
+			window.setTimeout(() => {
+				timers.current.delete(id);
+				void invoke("write_document", { root, id, text })
+					.then(() => filed(root, id, text))
+					.catch((error: unknown) => failed(failure(error).message));
+			}, AUTOSAVE_MS),
+		);
+	}
+
 	async function write(id: string, text: string) {
 		patch(id, (tab) => ({ ...tab, save: { kind: "saving" } }));
 
@@ -1281,6 +1310,9 @@ export default function Project({
 									}
 									onSubject={(document) =>
 										turnSubject(active.key, document)
+									}
+									onRemarks={(text, failed) =>
+										remark(active.subject.id, text, failed)
 									}
 								/>
 							</div>

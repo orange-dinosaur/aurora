@@ -3,19 +3,29 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCorpus } from "./corpus";
 import { failure } from "./errors";
 import type { Seed } from "./find";
-import { list, parse, split, text, ties, type Fields } from "./frontmatter";
+import {
+	list,
+	parse,
+	serialize,
+	split,
+	text,
+	ties,
+	type Fields,
+} from "./frontmatter";
 import { mentionsIn, subjectsIn } from "./mentions";
 import { factsOf, linksOf } from "./subjects";
 import type { ProjectDocument } from "./types";
 
-// A page about a person or a place, read rather than written. The same document
-// the editor opens, laid out as what the writer knows about it: the fields they
-// gave it, the notes, and every scene it turns up in. Recognition is the same
-// sweep the Mentions panel runs, so the two never disagree.
+// A page about a person or a place. The same document the editor opens, laid
+// out as what the writer knows about it: the fields they gave it, the remarks,
+// and every scene it turns up in. Recognition is the same sweep the Mentions
+// panel runs, so the two never disagree.
 //
-// Nothing here writes. The draft is one button away and that is where the
-// writing happens; this page would otherwise be a second editor for the same
-// file, with two ways for one document to be dirty.
+// One thing here writes, and that is the remarks box. The prose stays the
+// editor's, and the file still has a single holder: when a tab has this
+// document open the box goes through that tab and the tab's own autosave
+// rather than writing behind it, and the tab is rebuilt from the new text so
+// it cannot put stale front matter back later.
 
 type Props = {
 	root: string;
@@ -30,6 +40,12 @@ type Props = {
 	onDraft: () => void;
 	/** Turns this page to another subject's, rather than opening a second one. */
 	onSubject: (document: ProjectDocument) => void;
+	/**
+	 * Sets the remarks, by handing over the document's whole text with them
+	 * already in it. Writing is on the same countdown the editor uses, so this
+	 * is told separately how to say that the write failed.
+	 */
+	onRemarks: (text: string, failed: (message: string) => void) => void;
 };
 
 const EMPTY: Fields = new Map();
@@ -47,6 +63,7 @@ export default function SubjectView({
 	onOpen,
 	onDraft,
 	onSubject,
+	onRemarks,
 }: Props) {
 	const [held, setHeld] = useState<Held>({ kind: "reading" });
 
@@ -162,7 +179,32 @@ export default function SubjectView({
 		);
 	}
 
-	const notes = text(fields, "remarks");
+	const remarks = text(fields, "remarks");
+	// What the box holds while the writer is in it. For the 800 ms before the
+	// file catches up, this is newer than anything read back from it.
+	const [draft, setDraft] = useState<string | null>(null);
+	const [trouble, setTrouble] = useState("");
+
+	// Turning the page to another subject without remounting it.
+	useEffect(() => {
+		setDraft(null);
+		setTrouble("");
+	}, [subject.id]);
+
+	// This page's copy of the file with the remarks replaced. `serialize` keeps
+	// every other field spelled the way the file spells it.
+	function rewritten(value: string): string {
+		const { block, body } = split(held.kind === "ready" ? held.text : "");
+		const next = new Map(fields);
+
+		if (value === "") {
+			next.delete("remarks");
+		} else {
+			next.set("remarks", value);
+		}
+
+		return `${serialize(next, block)}\n${body}`;
+	}
 	const place = subject.trail[0] === "Locations";
 	const scenes = place ? "Scenes set here" : "Appears in";
 	const connected = place ? "Who is here" : "Connected to";
@@ -197,10 +239,21 @@ export default function SubjectView({
 				))}
 			</div>
 
-			<h3 className="subject__heading">Notes</h3>
-			<p className="subject__notes">
-				{notes === "" ? "Nothing written here yet." : notes}
-			</p>
+			<h3 className="subject__heading">Remarks</h3>
+			<textarea
+				className="subject__remarks"
+				rows={7}
+				value={draft ?? remarks}
+				placeholder="Notes to yourself."
+				disabled={held.kind !== "ready"}
+				onChange={(event) => {
+					const { value } = event.target;
+					setDraft(value);
+					setTrouble("");
+					onRemarks(rewritten(value), setTrouble);
+				}}
+			/>
+			<p className="subject__trouble">{trouble}</p>
 
 			<h3 className="subject__heading">{scenes}</h3>
 			{corpus.kind === "failed" ? (
