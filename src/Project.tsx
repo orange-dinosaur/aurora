@@ -1093,6 +1093,8 @@ export default function Project({
 					onPreferences({ ...preferences, rightSidebar: open })
 				}
 				onSearch={openSearch}
+				theme={preferences.theme}
+				onTheme={(theme) => onPreferences({ ...preferences, theme })}
 				onSettings={onSettings}
 				onLogin={onLogin}
 				onProfile={onProfile}

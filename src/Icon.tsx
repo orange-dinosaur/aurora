@@ -20,6 +20,8 @@ export type IconName =
 	| "log-out"
 	| "user"
 	| "x"
+	| "sun"
+	| "moon"
 	| "more-vertical";
 
 // Lucide's geometry, on its 24-unit grid. Anything added here should be traced
@@ -124,6 +126,17 @@ const SHAPES: Record<IconName, ReactNode> = {
 		</>
 	),
 	x: <path d="M18 6 6 18M6 6l12 12" />,
+	// The theme button wears whichever of these it is about to bring on. The
+	// mock draws the half-filled circle for it, but that shape is already the
+	// editor's focus mode here, and one glyph cannot mean two things in one
+	// window.
+	sun: (
+		<>
+			<circle cx="12" cy="12" r="4" />
+			<path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+		</>
+	),
+	moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
 	"more-vertical": (
 		<>
 			<circle cx="12" cy="5" r="1" />
