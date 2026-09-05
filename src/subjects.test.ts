@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Fields } from "./frontmatter";
-import { factsOf, subjectNames } from "./subjects";
+import { factsOf, linksOf, subjectNames } from "./subjects";
 import type { TreeNode } from "./types";
 
 function folder(name: string, children: TreeNode[]): TreeNode {
@@ -150,5 +150,68 @@ describe("factsOf", () => {
 			{ label: "First appears", value: "—" },
 			{ label: "Mentions", value: "0" },
 		]);
+	});
+});
+
+describe("linksOf", () => {
+	const cast = [
+		{ id: "Characters/Ana.md", title: "Ana Ferrer", names: ["Ana"] },
+		{ id: "Characters/Bruno.md", title: "Bruno", names: [] },
+		{ id: "Locations/Ithaca.md", title: "Ithaca", names: ["the island"] },
+	];
+
+	test("a tie written against a title finds its page", () => {
+		expect(linksOf(new Map([["Bruno", "the neighbour"]]), cast)).toEqual([
+			{
+				name: "Bruno",
+				note: "the neighbour",
+				id: "Characters/Bruno.md",
+			},
+		]);
+	});
+
+	test("a tie written against another of the page's names still finds it", () => {
+		expect(
+			linksOf(new Map([["the island", "where she grew up"]]), cast),
+		).toEqual([
+			{
+				name: "the island",
+				note: "where she grew up",
+				id: "Locations/Ithaca.md",
+			},
+		]);
+	});
+
+	test("a title beats another page's alias", () => {
+		const named = [
+			{ id: "Characters/Alias.md", title: "Someone", names: ["Bruno"] },
+			...cast,
+		];
+
+		expect(linksOf(new Map([["Bruno", ""]]), named)[0].id).toBe(
+			"Characters/Bruno.md",
+		);
+	});
+
+	test("a name with no page behind it keeps its note and gets no id", () => {
+		expect(linksOf(new Map([["Marta", "her aunt"]]), cast)).toEqual([
+			{ name: "Marta", note: "her aunt", id: null },
+		]);
+	});
+
+	test("the file's order is kept", () => {
+		const links = linksOf(
+			new Map([
+				["Bruno", ""],
+				["Ana Ferrer", "her sister"],
+			]),
+			cast,
+		);
+
+		expect(links.map((link) => link.name)).toEqual(["Bruno", "Ana Ferrer"]);
+	});
+
+	test("a page with no relationships has no links", () => {
+		expect(linksOf(new Map(), cast)).toEqual([]);
 	});
 });

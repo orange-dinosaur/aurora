@@ -554,6 +554,30 @@ export default function Project({
 		setActiveKey(opening.key);
 	}
 
+	/**
+	 * Moving from one subject's page to another's, by turning the tab rather
+	 * than opening a second one. Following a relationship is reading, and a
+	 * chain of them would otherwise leave a tab behind at every step. A page
+	 * that is already open somewhere else is raised instead.
+	 */
+	function turnSubject(key: string, subject: ProjectDocument) {
+		const already = tabs.find(
+			(tab) => tab.kind === "subject" && tab.subject.id === subject.id,
+		);
+		if (already !== undefined) {
+			setActiveKey(already.key);
+			return;
+		}
+
+		setTabs((open) =>
+			open.map((tab) =>
+				tab.key === key && tab.kind === "subject"
+					? { ...tab, subject }
+					: tab,
+			),
+		);
+	}
+
 	// Reached from the window as well as from the titlebar, so it reads the
 	// tabs through the ref rather than closing over them.
 	function openSearch() {
@@ -1232,6 +1256,9 @@ export default function Project({
 									}
 									onDraft={() =>
 										void openDocument(active.subject)
+									}
+									onSubject={(document) =>
+										turnSubject(active.key, document)
 									}
 								/>
 							</div>

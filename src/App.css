@@ -3803,6 +3803,57 @@ body.dragging * {
 	color: var(--text-dim);
 }
 
+/* The relationships, at the foot of the page. They wrap across rather than
+   running down: each is a name and a few words, and a column of them would
+   leave the page mostly empty. */
+.subject__links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.subject__link {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	max-width: 100%;
+	padding: 0.55rem 0.75rem;
+	font: inherit;
+	font-size: 0.9375rem;
+	letter-spacing: normal;
+	line-height: 1.3;
+	text-transform: none;
+	text-align: left;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	cursor: pointer;
+	overflow-wrap: anywhere;
+}
+
+.subject__link:hover:not(:disabled) {
+	border-color: var(--border-strong);
+	background: var(--bg-hover);
+}
+
+.subject__link:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* A tie whose name has no page behind it. It still says what the writer wrote:
+   the name may be someone they have not made a page for yet. */
+.subject__link:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.subject__tie {
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
 .trash {
 	display: flex;
 	flex-direction: column;

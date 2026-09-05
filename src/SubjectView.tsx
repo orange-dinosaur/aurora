@@ -3,9 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCorpus } from "./corpus";
 import { failure } from "./errors";
 import type { Seed } from "./find";
-import { list, parse, split, text, type Fields } from "./frontmatter";
-import { mentionsIn } from "./mentions";
-import { factsOf } from "./subjects";
+import { list, parse, split, text, ties, type Fields } from "./frontmatter";
+import { mentionsIn, subjectsIn } from "./mentions";
+import { factsOf, linksOf } from "./subjects";
 import type { ProjectDocument } from "./types";
 
 // A page about a person or a place, read rather than written. The same document
@@ -28,6 +28,8 @@ type Props = {
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 	/** Opens the subject's own document, which is the way back to writing. */
 	onDraft: () => void;
+	/** Turns this page to another subject's, rather than opening a second one. */
+	onSubject: (document: ProjectDocument) => void;
 };
 
 const EMPTY: Fields = new Map();
@@ -44,6 +46,7 @@ export default function SubjectView({
 	live,
 	onOpen,
 	onDraft,
+	onSubject,
 }: Props) {
 	const [held, setHeld] = useState<Held>({ kind: "reading" });
 
@@ -122,12 +125,30 @@ export default function SubjectView({
 		[subject.trail, fields, appearances],
 	);
 
+	const links = useMemo(
+		() =>
+			corpus.kind === "ready"
+				? linksOf(ties(fields, "relationships"), subjectsIn(documents))
+				: [],
+		[corpus.kind, documents, fields],
+	);
+
 	// A row on screen came out of the corpus, so its document is in hand.
+	function known(id: string): ProjectDocument | undefined {
+		return corpus.kind === "ready" ? corpus.known.get(id) : undefined;
+	}
+
 	function show(id: string) {
-		const known =
-			corpus.kind === "ready" ? corpus.known.get(id) : undefined;
-		if (known !== undefined) {
-			onOpen(known, null);
+		const found = known(id);
+		if (found !== undefined) {
+			onOpen(found, null);
+		}
+	}
+
+	function turn(id: string) {
+		const found = known(id);
+		if (found !== undefined) {
+			onSubject(found);
 		}
 	}
 
@@ -142,8 +163,9 @@ export default function SubjectView({
 	}
 
 	const notes = text(fields, "remarks");
-	const scenes =
-		subject.trail[0] === "Locations" ? "Scenes set here" : "Appears in";
+	const place = subject.trail[0] === "Locations";
+	const scenes = place ? "Scenes set here" : "Appears in";
+	const connected = place ? "Who is here" : "Connected to";
 
 	return (
 		<section className="subject">
@@ -213,6 +235,40 @@ export default function SubjectView({
 						</li>
 					))}
 				</ul>
+			)}
+
+			<h3 className="subject__heading">{connected}</h3>
+			{links.length === 0 ? (
+				<p className="subject__note">
+					Nothing written yet. Relationships are added in the Info
+					panel of the draft.
+				</p>
+			) : (
+				<div className="subject__links">
+					{links.map((link) => (
+						<button
+							key={link.name}
+							type="button"
+							className="subject__link"
+							disabled={link.id === null}
+							title={
+								link.id === null
+									? "No page in this project answers to that name"
+									: undefined
+							}
+							onClick={() => {
+								if (link.id !== null) {
+									turn(link.id);
+								}
+							}}
+						>
+							{link.name}
+							<span className="subject__tie">
+								{link.note === "" ? "Not said yet" : link.note}
+							</span>
+						</button>
+					))}
+				</div>
 			)}
 		</section>
 	);
