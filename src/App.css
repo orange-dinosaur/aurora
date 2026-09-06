@@ -5783,7 +5783,9 @@ body.dragging * {
 	min-width: 0;
 }
 
-.book__pair > .field:last-child {
+/* For a second field that is a number rather than a name: a series number gets
+   a box the size of the answer, not half the line. */
+.book__pair--tight > .field:last-child {
 	flex: none;
 	width: 6rem;
 }

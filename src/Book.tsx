@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { TextBox } from "./Field";
+import { Chips, TextBox } from "./Field";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import { ROLES, added, changed, kept, removed, titled } from "./contributors";
@@ -232,7 +232,7 @@ export default function BookView({ root }: Props) {
 						</button>
 					</div>
 
-					<div className="book__pair">
+					<div className="book__pair book__pair--tight">
 						<TextBox
 							label="Series"
 							value={book.series}
@@ -285,6 +285,55 @@ export default function BookView({ root }: Props) {
 							}
 						</Menu>
 					</div>
+
+					<TextBox
+						label="Blurb"
+						value={book.blurb}
+						placeholder="What the back cover says"
+						rows={5}
+						onChange={(blurb) => edit({ ...book, blurb })}
+					/>
+					<TextBox
+						label="Publisher"
+						value={book.publisher}
+						placeholder="Who is putting it out"
+						rows={1}
+						onChange={(publisher) => edit({ ...book, publisher })}
+					/>
+
+					<div className="book__pair">
+						<TextBox
+							label="Published"
+							value={book.publicationDate}
+							placeholder="2026, or 2026-09-06"
+							rows={1}
+							onChange={(publicationDate) =>
+								edit({ ...book, publicationDate })
+							}
+						/>
+						<TextBox
+							label="ISBN"
+							value={book.isbn}
+							placeholder="978-0-000-00000-0"
+							rows={1}
+							onChange={(isbn) => edit({ ...book, isbn })}
+						/>
+					</div>
+
+					<Chips
+						label="Keywords"
+						hint="What a shop would file it under. Enter adds one."
+						placeholder="Add a keyword"
+						values={book.keywords}
+						onChange={(keywords) => edit({ ...book, keywords })}
+					/>
+					<TextBox
+						label="Copyright"
+						value={book.copyright}
+						placeholder="© 2026 Your name. All rights reserved."
+						rows={3}
+						onChange={(copyright) => edit({ ...book, copyright })}
+					/>
 				</div>
 			)}
 		</div>
