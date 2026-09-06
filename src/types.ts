@@ -22,7 +22,14 @@ export type FormatLayout = {
 };
 
 /** `project::Role` */
-export type Role = "editor" | "illustrator" | "translator" | "narrator";
+export type Role =
+	| "editor"
+	| "copyEditor"
+	| "proofreader"
+	| "coverDesigner"
+	| "illustrator"
+	| "translator"
+	| "narrator";
 
 /** `project::Contributor` */
 export type Contributor = {

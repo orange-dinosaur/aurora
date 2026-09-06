@@ -117,6 +117,9 @@ pub const MANIFEST_VERSION: u32 = 4;
 #[serde(rename_all = "camelCase")]
 pub enum Role {
 	Editor,
+	CopyEditor,
+	Proofreader,
+	CoverDesigner,
 	Illustrator,
 	Translator,
 	Narrator,

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TextBox } from "./Field";
+import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
+import { ROLES, added, changed, kept, removed, titled } from "./contributors";
 import { failure } from "./errors";
 import { named, offered } from "./languages";
-import type { Book } from "./types";
+import type { Book, Contributor } from "./types";
 
 type Props = {
 	root: string;
@@ -70,7 +72,11 @@ export default function BookView({ root }: Props) {
 		}
 
 		try {
-			await invoke("write_book", { root: where.current, book: next });
+			await invoke("write_book", {
+				root: where.current,
+				// A row the writer opened and never named is not a contributor.
+				book: { ...next, contributors: kept(next.contributors) },
+			});
 			setTrouble("");
 		} catch (error) {
 			setTrouble(failure(error).message);
@@ -85,6 +91,12 @@ export default function BookView({ root }: Props) {
 			window.clearTimeout(timer.current);
 		}
 		timer.current = window.setTimeout(() => void write(), AUTOSAVE_MS);
+	}
+
+	function people(contributors: Contributor[]) {
+		if (book !== null) {
+			edit({ ...book, contributors });
+		}
 	}
 
 	const languages = offered(navigator.language);
@@ -130,6 +142,95 @@ export default function BookView({ root }: Props) {
 						rows={1}
 						onChange={(author) => edit({ ...book, author })}
 					/>
+
+					<div className="field">
+						<span className="field__label">Contributors</span>
+						{book.contributors.length > 0 && (
+							<ul className="people">
+								{/* Keyed by place, which is what a contributor
+								    is held by: two rows can be blank, or the
+								    same name in two roles. */}
+								{book.contributors.map((person, at) => (
+									<li key={at} className="person">
+										<input
+											className="field__line"
+											type="text"
+											value={person.name}
+											placeholder="Their name"
+											aria-label={`Contributor ${at + 1}`}
+											onChange={(event) =>
+												people(
+													changed(
+														book.contributors,
+														at,
+														{
+															...person,
+															name: event.target
+																.value,
+														},
+													),
+												)
+											}
+										/>
+										<Menu
+											label={`Role of contributor ${at + 1}`}
+											icon="chevron-down"
+											text={titled(person.role)}
+											trailing
+											wrapper="book__picker book__picker--role"
+											className="book__pick"
+										>
+											{(close) =>
+												ROLES.map((role) => (
+													<MenuItem
+														key={role}
+														onSelect={() => {
+															close();
+															people(
+																changed(
+																	book.contributors,
+																	at,
+																	{
+																		...person,
+																		role,
+																	},
+																),
+															);
+														}}
+													>
+														{titled(role)}
+													</MenuItem>
+												))
+											}
+										</Menu>
+										<button
+											type="button"
+											className="field__remove"
+											aria-label={`Remove contributor ${at + 1}`}
+											onClick={() =>
+												people(
+													removed(
+														book.contributors,
+														at,
+													),
+												)
+											}
+										>
+											<Icon name="x" />
+										</button>
+									</li>
+								))}
+							</ul>
+						)}
+						<button
+							type="button"
+							className="book__add"
+							onClick={() => people(added(book.contributors))}
+						>
+							<Icon name="plus" />
+							Add someone
+						</button>
+					</div>
 
 					<div className="book__pair">
 						<TextBox
