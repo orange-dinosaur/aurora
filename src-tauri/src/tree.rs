@@ -23,6 +23,9 @@ use crate::document::Document;
 pub enum Value {
 	Text(String),
 	List(Vec<String>),
+	/// A yes-or-no, which is what Aurora's own switches write. Only a no is
+	/// ever stored: a folder that has not been switched off says nothing.
+	Flag(bool),
 }
 
 /// A folder's fields, in the order the manifest lists them, which is alphabetical.

@@ -585,6 +585,9 @@ pub fn in_book(text: &str) -> bool {
 /// field like the rest of them.
 pub fn folder_in_book(fields: &Fields) -> bool {
 	match fields.get(IN_BOOK) {
+		Some(tree::Value::Flag(said)) => *said,
+		// A writer who typed the field into the manifest themselves wrote it
+		// as text, and meant it.
 		Some(tree::Value::Text(said)) => !denied(said),
 		_ => true,
 	}
@@ -2952,6 +2955,23 @@ mod tests {
 			IN_BOOK.to_owned(),
 			tree::Value::Text("false".to_owned())
 		)])));
+		assert!(!folder_in_book(&Fields::from([(
+			IN_BOOK.to_owned(),
+			tree::Value::Flag(false)
+		)])));
+	}
+
+	#[test]
+	fn a_folder_keeps_a_switch_as_a_yes_or_no() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = folder_id(&root, "Manuscript");
+		let said = Fields::from([(IN_BOOK.to_owned(), tree::Value::Flag(false))]);
+
+		set_folder_fields(root.clone(), id, said.clone()).unwrap();
+
+		assert_eq!(folder_fields(root.clone(), id).unwrap(), said);
+		assert!(!folder_in_book(&folder_fields(root, id).unwrap()));
 	}
 
 	#[test]

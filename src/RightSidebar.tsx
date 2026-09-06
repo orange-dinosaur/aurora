@@ -11,6 +11,7 @@ import type { Limit, Sessions } from "./sessions";
 import type { FolderRef } from "./tree";
 import type { Seed } from "./find";
 import type { OutlineHandle } from "./outline";
+import { MANUSCRIPT } from "./kinds";
 import { isSubject } from "./subjects";
 import type { ProjectDocument, RightSidebarTab, SprintUnit } from "./types";
 
@@ -185,6 +186,7 @@ export default function RightSidebar({
 							about?.kind === "document" &&
 							isSubject(about.page.trail)
 						}
+						manuscript={inManuscript(about)}
 						root={root}
 						changed={changed}
 						onOpenTag={onOpenTag}
@@ -203,4 +205,20 @@ export default function RightSidebar({
 			/>
 		</aside>
 	);
+}
+
+/**
+ * Whether what the panel is about is part of the book. The Manuscript itself is
+ * not: a section is the project's shape, and a book with its manuscript
+ * switched off is not a thing anyone means.
+ */
+function inManuscript(about: About | null): boolean {
+	if (about === null) {
+		return false;
+	}
+
+	const trail = about.kind === "document" ? about.page.trail : about.trail;
+	const own = about.kind === "document" ? 0 : 1;
+
+	return trail[0] === MANUSCRIPT && trail.length > own;
 }

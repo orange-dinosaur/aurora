@@ -1,6 +1,14 @@
 import { AddField, Chips, TextBox, TieList } from "./Field";
 import { useFieldNames, useSubjectNames, type FieldsHandle } from "./fields";
-import { BUILT_IN, custom, list, text, ties } from "./frontmatter";
+import {
+	BUILT_IN,
+	IN_BOOK,
+	custom,
+	flag,
+	list,
+	text,
+	ties,
+} from "./frontmatter";
 
 // The Info tab: what this document answers to, what it is filed under, what the
 // writer wants to remember about it, and any field they added themselves.
@@ -8,6 +16,8 @@ import { BUILT_IN, custom, list, text, ties } from "./frontmatter";
 type Props = FieldsHandle & {
 	/** Whether this is a page about a person or a place, which has names. */
 	subject: boolean;
+	/** Whether this is inside the Manuscript, which is what gets exported. */
+	manuscript: boolean;
 	root: string;
 	/** Bumped whenever the project changes, so the suggestions are read again. */
 	changed: number;
@@ -20,6 +30,7 @@ export default function Info({
 	fields,
 	setField,
 	subject,
+	manuscript,
 	root,
 	changed,
 	onOpenTag,
@@ -37,8 +48,35 @@ export default function Info({
 		setField(key, values.length === 0 ? null : values);
 	}
 
+	const inBook = flag(fields, IN_BOOK);
+
 	return (
 		<>
+			{/* Only inside the Manuscript, because nothing else is exported.
+			    First in the panel: it decides whether any of the rest of this
+			    ends up in the book at all. */}
+			{manuscript && (
+				<div className="info__switch">
+					<div className="info__about">
+						<p className="info__label">In the book</p>
+						<p className="info__hint">
+							Off leaves it out of an export and dims it in the
+							sidebar.
+						</p>
+					</div>
+					<button
+						type="button"
+						className="info__toggle"
+						role="switch"
+						aria-checked={inBook}
+						aria-label="In the book"
+						onClick={() => setField(IN_BOOK, inBook ? false : null)}
+					>
+						<span className="info__knob" />
+					</button>
+				</div>
+			)}
+
 			{/* Above the fields rather than below them: it is the way out of
 			    this panel, not one more thing in it. */}
 			{subject && (
