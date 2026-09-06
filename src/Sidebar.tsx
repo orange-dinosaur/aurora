@@ -57,11 +57,14 @@ type Props = {
 	/** The id of the folder whose overview is showing, if one is. */
 	selectedFolder: string | null;
 	selectedTrash: boolean;
+	selectedBook: boolean;
 	onSelect: (document: ProjectDocument) => void;
 	/** Opens the page about a character or a place, for the rows that are one. */
 	onSubject: (document: ProjectDocument) => void;
 	onOpenFolder: (folder: FolderRef) => void;
 	onOpenTrash: () => void;
+	/** Opens the page about the book the project adds up to. */
+	onOpenBook: () => void;
 	onCreated: (document: ProjectDocument) => void;
 	/** The renamed document, and the title it answered to before. */
 	onRenamed: (document: ProjectDocument, was: string) => void;
@@ -94,10 +97,12 @@ export default function Sidebar({
 	selectedId,
 	selectedFolder,
 	selectedTrash,
+	selectedBook,
 	onSelect,
 	onSubject,
 	onOpenFolder,
 	onOpenTrash,
+	onOpenBook,
 	onCreated,
 	onRenamed,
 	onFolderRenamed,
@@ -549,6 +554,19 @@ export default function Sidebar({
 					{status.kind === "error" ? status.message : ""}
 				</p>
 			</div>
+
+			{/* On its own line above the foot. The book is somewhere to go
+			    rather than a way out, and a third button on that line pushed
+			    Close project off the sidebar's edge. */}
+			<button
+				type="button"
+				className="sidebar__leave sidebar__page"
+				aria-current={selectedBook ? "page" : undefined}
+				onClick={onOpenBook}
+			>
+				<Icon name="book" />
+				Book
+			</button>
 
 			<div className="sidebar__foot">
 				<button

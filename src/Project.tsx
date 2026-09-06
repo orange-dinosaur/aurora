@@ -16,6 +16,7 @@ import Tabs from "./Tabs";
 import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
+import BookView from "./Book";
 import type {
 	DocumentText,
 	FolderNode,
@@ -91,6 +92,11 @@ type FolderTab = {
 	folder: FolderRef;
 };
 
+type BookTab = {
+	kind: "book";
+	key: string;
+};
+
 type TrashTab = {
 	kind: "trash";
 	key: string;
@@ -114,7 +120,14 @@ type SubjectTab = {
 	subject: ProjectDocument;
 };
 
-type Tab = DocumentTab | FolderTab | TrashTab | SearchTab | TagTab | SubjectTab;
+type Tab =
+	| DocumentTab
+	| FolderTab
+	| BookTab
+	| TrashTab
+	| SearchTab
+	| TagTab
+	| SubjectTab;
 
 /**
  * What is being offered after a document was renamed out from under the tags
@@ -154,6 +167,14 @@ function strip(tab: Tab): TabView {
 				kind: "folder",
 				folder: null,
 				title: tab.folder.name,
+				dirty: false,
+			};
+		case "book":
+			return {
+				key: tab.key,
+				kind: "book",
+				folder: null,
+				title: "Book",
 				dirty: false,
 			};
 		case "trash":
@@ -489,6 +510,18 @@ export default function Project({
 			key: freshKey(),
 			folder,
 		};
+		setTabs((open) => [...open, opening]);
+		setActiveKey(opening.key);
+	}
+
+	function openBook() {
+		const already = tabs.find((tab) => tab.kind === "book");
+		if (already !== undefined) {
+			setActiveKey(already.key);
+			return;
+		}
+
+		const opening: BookTab = { kind: "book", key: freshKey() };
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
 	}
@@ -1173,10 +1206,12 @@ export default function Project({
 						active?.kind === "folder" ? active.folder.id : null
 					}
 					selectedTrash={active?.kind === "trash"}
+					selectedBook={active?.kind === "book"}
 					onSelect={(document) => void openDocument(document)}
 					onSubject={openSubject}
 					onOpenFolder={openFolder}
 					onOpenTrash={openTrash}
+					onOpenBook={openBook}
 					onCreated={(document) => void created(document)}
 					onRenamed={renamed}
 					onFolderRenamed={renamedFolder}
@@ -1269,6 +1304,10 @@ export default function Project({
 									onDelete={remove}
 									onDeleteFolder={removeFolder}
 								/>
+							</div>
+						) : active.kind === "book" ? (
+							<div className="project__pane">
+								<BookView key={active.key} root={root} />
 							</div>
 						) : active.kind === "trash" ? (
 							<div className="project__pane">

@@ -21,6 +21,40 @@ export type FormatLayout = {
 	available: boolean;
 };
 
+/** `project::Role` */
+export type Role = "editor" | "illustrator" | "translator" | "narrator";
+
+/** `project::Contributor` */
+export type Contributor = {
+	name: string;
+	role: Role;
+};
+
+/**
+ * `project::Book` — what the project's one book says about itself. Everything
+ * is the writer's to fill in and may be empty; the identifier is generated once
+ * and is not theirs to change.
+ */
+export type Book = {
+	identifier: string;
+	title: string;
+	subtitle: string;
+	author: string;
+	contributors: Contributor[];
+	series: string;
+	seriesNumber: string;
+	/** A BCP 47 tag such as `en` or `pt-BR`. */
+	language: string;
+	blurb: string;
+	/** Where the cover image is, relative to the project root. */
+	cover: string;
+	publisher: string;
+	publicationDate: string;
+	isbn: string;
+	keywords: string[];
+	copyright: string;
+};
+
 /** `store::RecentProject` */
 export type RecentProject = {
 	name: string;

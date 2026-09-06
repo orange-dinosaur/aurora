@@ -12,6 +12,7 @@ export type IconName =
 	| "panel-left"
 	| "panel-right"
 	| "folder"
+	| "book"
 	| "link"
 	| "plus"
 	| "refresh"
@@ -74,6 +75,9 @@ const SHAPES: Record<IconName, ReactNode> = {
 	),
 	folder: (
 		<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+	),
+	book: (
+		<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" />
 	),
 	"panel-left": (
 		<>
