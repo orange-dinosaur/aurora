@@ -2808,6 +2808,13 @@ body.dragging * {
 	opacity: 0.4;
 }
 
+/* Out of the book: still there to open and edit, but plainly not part of what
+   an export would take. Faint rather than struck through or greyed to nothing,
+   because the writer is meant to keep working in it. */
+.documents__item--out {
+	opacity: 0.55;
+}
+
 /* Aimed at the middle of a folder, where the node would go inside it: the
    folder itself is ringed, since that is what it would join. */
 .documents__item[data-over="into"] .folder {

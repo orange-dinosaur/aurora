@@ -17,12 +17,21 @@ function folder(
 	name: string,
 	children: TreeNode[] = [],
 	kind: FolderKind | null = null,
+	inBook = true,
 ): TreeNode {
-	return { node: "folder", id: `id-${name}`, name, kind, children, words: 0 };
+	return {
+		node: "folder",
+		id: `id-${name}`,
+		name,
+		kind,
+		children,
+		words: 0,
+		inBook,
+	};
 }
 
 /** A document written as the path it sits at, the way Rust sends it. */
-function document(path: string): TreeNode {
+function document(path: string, inBook = true): TreeNode {
 	const name = path.slice(path.lastIndexOf("/") + 1);
 	return {
 		node: "document",
@@ -31,6 +40,7 @@ function document(path: string): TreeNode {
 		trail: path.split("/").slice(0, -1),
 		title: name.replace(/\.md$/, ""),
 		target: null,
+		inBook,
 	};
 }
 
@@ -80,6 +90,36 @@ describe("laying a level out as rows", () => {
 			"document Chapter 1 1",
 			"folder Chapter Two 1",
 			"document Epilogue 0",
+		]);
+	});
+
+	test("a row out of the book is drawn faint, and so is everything in it", () => {
+		const section = [
+			folder("Part One", [
+				document("Manuscript/Part One/Chapter 1.md"),
+				folder(
+					"Chapter Two",
+					[document("Manuscript/Part One/Chapter Two/Scene.md")],
+					null,
+					false,
+				),
+			]),
+			document("Manuscript/Epilogue.md", false),
+			document("Manuscript/Afterword.md"),
+		];
+
+		expect(
+			rows(section, "root").map((row) => [
+				row.kind === "folder" ? row.name : row.document.title,
+				row.dim,
+			]),
+		).toEqual([
+			["Part One", false],
+			["Chapter 1", false],
+			["Chapter Two", true],
+			["Scene", true],
+			["Epilogue", true],
+			["Afterword", false],
 		]);
 	});
 
@@ -388,6 +428,7 @@ describe("counting a whole project", () => {
 			kind: null,
 			children: [],
 			words,
+			inBook: true,
 		};
 	}
 

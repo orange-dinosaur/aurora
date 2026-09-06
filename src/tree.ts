@@ -48,6 +48,13 @@ type Place = {
 	 * something the writer did not ask for.
 	 */
 	group: string;
+	/**
+	 * Whether the row is drawn faint: it is out of the book, or a folder above
+	 * it is. Nothing else in the sidebar cares which of the two it was, and a
+	 * scene under a switched-off chapter is out of the book whatever its own
+	 * front matter says.
+	 */
+	dim: boolean;
 };
 
 export type Row =
@@ -78,6 +85,9 @@ export type Row =
  * `above` is the folders these nodes already sit in, from the section down. The
  * sidebar walks a section's children and so passes its name; a caller with the
  * whole tree in hand starts from nothing.
+ *
+ * `out` says a folder above these nodes is out of the book, which takes
+ * everything under it out with it.
  */
 export function rows(
 	nodes: TreeNode[],
@@ -85,9 +95,16 @@ export function rows(
 	open: ReadonlySet<string> | null = null,
 	depth = 0,
 	above: string[] = [],
+	out = false,
 ): Row[] {
 	return nodes.flatMap((node, index) => {
-		const place = { depth, index, siblings: nodes.length, group };
+		const place = {
+			depth,
+			index,
+			siblings: nodes.length,
+			group,
+			dim: out || !node.inBook,
+		};
 
 		if (node.node === "document") {
 			const document: ProjectDocument = {
@@ -115,7 +132,17 @@ export function rows(
 			trail,
 		};
 		return expanded
-			? [row, ...rows(node.children, node.id, open, depth + 1, trail)]
+			? [
+					row,
+					...rows(
+						node.children,
+						node.id,
+						open,
+						depth + 1,
+						trail,
+						place.dim,
+					),
+				]
 			: [row];
 	});
 }

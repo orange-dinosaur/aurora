@@ -86,7 +86,15 @@ export default function FolderRow({
 	}
 
 	return (
-		<li className="documents__item" style={indent(row.depth)} {...drag}>
+		<li
+			className={
+				row.dim
+					? "documents__item documents__item--out"
+					: "documents__item"
+			}
+			style={indent(row.depth)}
+			{...drag}
+		>
 			{/* Over the row rather than inside it, for the reason the menus at
 			    the other end are: the row is itself a button. A folder holding
 			    nothing has nothing to open, so it draws no chevron and leaves

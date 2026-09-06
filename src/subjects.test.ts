@@ -4,7 +4,15 @@ import { factsOf, linksOf, subjectNames } from "./subjects";
 import type { TreeNode } from "./types";
 
 function folder(name: string, children: TreeNode[]): TreeNode {
-	return { node: "folder", id: name, name, kind: null, children, words: 0 };
+	return {
+		node: "folder",
+		id: name,
+		name,
+		kind: null,
+		children,
+		words: 0,
+		inBook: true,
+	};
 }
 
 function document(title: string, trail: string[]): TreeNode {
@@ -15,6 +23,7 @@ function document(title: string, trail: string[]): TreeNode {
 		trail,
 		title,
 		target: null,
+		inBook: true,
 	};
 }
 

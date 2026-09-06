@@ -152,8 +152,21 @@ pub enum NodeView {
 		children: Vec<NodeView>,
 		/// The words in every document below it, however deep.
 		words: usize,
+		/// Whether an export takes it. The sidebar draws what is out of the
+		/// book faint, so this rides along with the tree rather than being
+		/// asked for a node at a time the way a folder's other fields are.
+		///
+		/// Spelled out because `rename_all` on an enum renames its variants
+		/// and not the fields inside them.
+		#[serde(rename = "inBook")]
+		in_book: bool,
 	},
-	Document(DocumentView),
+	Document {
+		#[serde(flatten)]
+		document: DocumentView,
+		#[serde(rename = "inBook")]
+		in_book: bool,
+	},
 }
 
 impl NodeView {
@@ -161,7 +174,7 @@ impl NodeView {
 	pub fn id(&self) -> Uuid {
 		match self {
 			NodeView::Folder { id, .. } => *id,
-			NodeView::Document(document) => document.id,
+			NodeView::Document { document, .. } => document.id,
 		}
 	}
 }
@@ -174,12 +187,21 @@ fn canonical(root: &Path) -> PathBuf {
 	root.canonicalize().unwrap_or_else(|_| root.to_path_buf())
 }
 
-/// What one file looked like when its words were last counted.
+/// What a tree read needs out of one document: how many words it holds and
+/// whether the writer has left it in the book. Both come out of the same read,
+/// so they are worked out and cached together.
+#[derive(Clone, Copy)]
+struct Tally {
+	words: usize,
+	in_book: bool,
+}
+
+/// What one file looked like when it was last read.
 #[derive(Clone, Copy)]
 struct Counted {
 	modified: SystemTime,
 	len: u64,
-	words: usize,
+	tally: Tally,
 }
 
 /// Every file this process has counted, by canonical path, held until it
@@ -209,16 +231,28 @@ fn remember(path: &Path, counted: Counted) {
 		.insert(path.to_path_buf(), counted);
 }
 
-/// The words in one document, from its path under a canonical root. A file
+/// The words in one document, from its path under a canonical root.
+fn words_in(root: &Path, relative: &str) -> usize {
+	tally_of(root, relative).words
+}
+
+/// What one document amounts to, from its path under a canonical root. A file
 /// that cannot be read counts as nothing rather than failing the whole tree,
 /// and so does one the manifest points outside the project: `aurora.json` is a
-/// file a writer can edit, so a name in it is not to be trusted.
-fn words_in(root: &Path, relative: &str) -> usize {
+/// file a writer can edit, so a name in it is not to be trusted. Either way it
+/// stays in the book, because a file nobody can read is not a file anyone has
+/// switched off.
+fn tally_of(root: &Path, relative: &str) -> Tally {
+	let nothing = Tally {
+		words: 0,
+		in_book: true,
+	};
+
 	let Ok(path) = root.join(relative).canonicalize() else {
-		return 0;
+		return nothing;
 	};
 	if !path.starts_with(root) {
-		return 0;
+		return nothing;
 	}
 
 	// A stat costs a fraction of opening a file and splitting it, and a file
@@ -233,14 +267,17 @@ fn words_in(root: &Path, relative: &str) -> usize {
 	});
 
 	if let Some(held) = held {
-		return held.words;
+		return held.tally;
 	}
 
 	let Ok(bytes) = fs::read(&path) else {
-		return 0;
+		return nothing;
 	};
 	let text = String::from_utf8(bytes).unwrap_or_default();
-	let words = body(&text).split_whitespace().count();
+	let tally = Tally {
+		words: body(&text).split_whitespace().count(),
+		in_book: in_book(&text),
+	};
 
 	if let Some((modified, len)) = stamp {
 		remember(
@@ -248,12 +285,12 @@ fn words_in(root: &Path, relative: &str) -> usize {
 			Counted {
 				modified,
 				len,
-				words,
+				tally,
 			},
 		);
 	}
 
-	words
+	tally
 }
 
 /// The words under `nodes`, however deep they sit. For a card that has to say
@@ -281,13 +318,16 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 
 	for node in nodes {
 		match node {
-			// The tree is about shape and counts. What the writer said about a
-			// folder is asked for on its own, by the one panel that shows it.
+			// The tree is about shape and counts, and the one thing the
+			// sidebar draws differently. The rest of what the writer said
+			// about a folder is asked for on its own, by the panel that shows
+			// it.
 			Node::Folder {
 				id,
 				name,
 				kind,
 				children,
+				fields,
 				..
 			} => {
 				let (children, words) = views(root, children, &format!("{prefix}{name}/"));
@@ -298,6 +338,7 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 					kind: *kind,
 					children,
 					words,
+					in_book: folder_in_book(fields),
 				});
 			}
 			Node::Document { id, name, target } => {
@@ -306,8 +347,12 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 					path: format!("{prefix}{name}"),
 					target: *target,
 				};
-				total += words_in(root, &document.path);
-				built.push(NodeView::Document((&document).into()));
+				let tally = tally_of(root, &document.path);
+				total += tally.words;
+				built.push(NodeView::Document {
+					document: (&document).into(),
+					in_book: tally.in_book,
+				});
 			}
 		}
 	}
@@ -2172,7 +2217,10 @@ mod tests {
 			"a folder read from a flat manifest has no kind"
 		);
 
-		let NodeView::Document(chapter) = &children[0] else {
+		let NodeView::Document {
+			document: chapter, ..
+		} = &children[0]
+		else {
 			panic!("the chapter sits inside the part");
 		};
 		assert_eq!(chapter.path, "Manuscript/Part One/Chapter 1.md");
@@ -2195,6 +2243,62 @@ mod tests {
 		assert_eq!(notes["kind"], serde_json::Value::Null);
 		assert_eq!(notes["children"][0]["node"], "document");
 		assert_eq!(notes["children"][0]["title"], "Notes");
+		// The flag sits beside the document's own fields rather than under a
+		// key of its own, which is the shape the sidebar reads.
+		assert_eq!(notes["inBook"], true);
+		assert_eq!(notes["children"][0]["inBook"], true);
+	}
+
+	#[test]
+	fn the_tree_says_what_the_writer_has_taken_out_of_the_book() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = root.join("Manuscript");
+		fs::write(manuscript.join("Kept.md"), "Sing to me.").unwrap();
+		fs::write(
+			manuscript.join("Cut.md"),
+			"---\ninBook: false\n---\nSing to me.",
+		)
+		.unwrap();
+		refresh_documents(root.clone()).unwrap();
+		set_folder_fields(
+			root.clone(),
+			folder_id(&root, "Notes"),
+			Fields::from([(IN_BOOK.to_owned(), tree::Value::Flag(false))]),
+		)
+		.unwrap();
+
+		let tree = document_tree(root).unwrap();
+
+		assert!(
+			in_the_book(&tree, "Kept"),
+			"a scene that says nothing is in"
+		);
+		assert!(!in_the_book(&tree, "Cut"));
+		assert!(!in_the_book(&tree, "Notes"), "a folder carries it too");
+		assert!(in_the_book(&tree, "Manuscript"));
+	}
+
+	/// Whether the node of this name, wherever it sits in the tree, is in the
+	/// book.
+	fn in_the_book(nodes: &[NodeView], name: &str) -> bool {
+		found_in_book(nodes, name).expect("the node is somewhere in the tree")
+	}
+
+	fn found_in_book(nodes: &[NodeView], name: &str) -> Option<bool> {
+		nodes.iter().find_map(|node| match node {
+			NodeView::Folder {
+				name: found,
+				children,
+				in_book,
+				..
+			} => (found == name)
+				.then_some(*in_book)
+				.or_else(|| found_in_book(children, name)),
+			NodeView::Document { document, in_book } => {
+				(document.title == name).then_some(*in_book)
+			}
+		})
 	}
 
 	#[test]

@@ -140,8 +140,11 @@ export type TreeNode =
 			children: TreeNode[];
 			/** The words in every document below it, however deep. */
 			words: number;
+			/** Whether an export takes it. False dims its row and everything
+			 * drawn under it. */
+			inBook: boolean;
 	  }
-	| ({ node: "document" } & ProjectDocument);
+	| ({ node: "document"; inBook: boolean } & ProjectDocument);
 
 /** The folder half of a `TreeNode`, for the commands that only return one. */
 export type FolderNode = Extract<TreeNode, { node: "folder" }>;

@@ -66,7 +66,15 @@ export default function DocumentRow({
 	}
 
 	return (
-		<li className="documents__item" style={indent(row.depth)} {...drag}>
+		<li
+			className={
+				row.dim
+					? "documents__item documents__item--out"
+					: "documents__item"
+			}
+			style={indent(row.depth)}
+			{...drag}
+		>
 			<button
 				type="button"
 				className="document"
