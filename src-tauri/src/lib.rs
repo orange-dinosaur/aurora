@@ -47,7 +47,9 @@ pub fn run() {
 			store::read_preferences,
 			store::write_preferences,
 			store::read_expanded,
-			store::write_expanded
+			store::write_expanded,
+			store::read_folded,
+			store::write_folded
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

@@ -11,7 +11,7 @@ use tauri::AppHandle;
 
 use crate::project::{Error, Result, store_path, write_json};
 
-pub const STORE_VERSION: u32 = 8;
+pub const STORE_VERSION: u32 = 9;
 
 /// How many projects are worth offering on the welcome screen.
 const MAX_RECENT: usize = 10;
@@ -203,6 +203,13 @@ pub struct Store {
 	/// stays behind. Absent from a store written before version 5.
 	#[serde(default)]
 	pub expanded: BTreeMap<PathBuf, Vec<Uuid>>,
+	/// The groups the writer has folded shut on a project's Book page. Shut
+	/// rather than open, which is the other way round from `expanded`: a page
+	/// nobody has touched has no entry at all, and every group there starts
+	/// open, so the two states the sidebar cannot tell apart do not arise here.
+	/// Absent from a store written before version 9.
+	#[serde(default)]
+	pub folded: BTreeMap<PathBuf, Vec<String>>,
 }
 
 impl Default for Store {
@@ -213,6 +220,7 @@ impl Default for Store {
 			recent: Vec::new(),
 			preferences: Preferences::default(),
 			expanded: BTreeMap::new(),
+			folded: BTreeMap::new(),
 		}
 	}
 }
@@ -256,6 +264,7 @@ impl Store {
 		// A project Aurora has been told to forget leaves nothing behind, and
 		// a folder it no longer knows about could not be opened again anyway.
 		self.expanded.remove(root);
+		self.folded.remove(root);
 	}
 }
 
@@ -274,8 +283,9 @@ pub fn load(path: &Path) -> Result<Store> {
 /// Version 2 had no preferences, version 3 no `sidebar`, version 4 no
 /// `expanded`, version 5 no right sidebar, version 6 neither the sidebar
 /// widths nor the theme and manuscript font, and version 7 none of the session
-/// preferences; serde's defaults are the whole migration for all six, and each
-/// of them is the behaviour that version already had.
+/// preferences, and version 8 no folded groups on the Book page; serde's
+/// defaults are the whole migration for all seven, and each of them is the
+/// behaviour that version already had.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
 	if store.version < STORE_VERSION {
@@ -350,6 +360,36 @@ pub fn read_expanded(app: AppHandle, root: PathBuf) -> Result<Vec<Uuid>> {
 #[tauri::command]
 pub fn write_expanded(app: AppHandle, root: PathBuf, open: Vec<Uuid>) -> Result<()> {
 	set_expanded(&store_path(&app)?, root, open)
+}
+
+fn folded(path: &Path, root: &Path) -> Result<Vec<String>> {
+	Ok(load(path)?.folded.remove(root).unwrap_or_default())
+}
+
+/// Nothing folded drops the project's entry, the same way the sidebar's does:
+/// a page with every group open is the page nobody has touched.
+fn set_folded(path: &Path, root: PathBuf, shut: Vec<String>) -> Result<()> {
+	let mut store = load(path)?;
+
+	if shut.is_empty() {
+		store.folded.remove(&root);
+	} else {
+		store.folded.insert(root, shut);
+	}
+
+	save(path, &store)
+}
+
+/// The groups folded shut on one project's Book page, which is none at all for
+/// a project the writer has not folded anything in.
+#[tauri::command]
+pub fn read_folded(app: AppHandle, root: PathBuf) -> Result<Vec<String>> {
+	folded(&store_path(&app)?, &root)
+}
+
+#[tauri::command]
+pub fn write_folded(app: AppHandle, root: PathBuf, shut: Vec<String>) -> Result<()> {
+	set_folded(&store_path(&app)?, root, shut)
 }
 
 #[cfg(test)]
@@ -746,15 +786,47 @@ mod tests {
 	}
 
 	#[test]
+	fn the_groups_folded_shut_come_back_project_by_project() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		let ithaca = PathBuf::from("/writing/Ithaca");
+		let rooks = PathBuf::from("/writing/Rooks");
+
+		set_folded(&path, ithaca.clone(), vec!["publication".to_owned()]).unwrap();
+
+		assert_eq!(folded(&path, &ithaca).unwrap(), ["publication"]);
+		assert!(
+			folded(&path, &rooks).unwrap().is_empty(),
+			"one project's Book page is not another's"
+		);
+	}
+
+	#[test]
+	fn opening_every_group_again_leaves_no_entry_behind() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		let ithaca = PathBuf::from("/writing/Ithaca");
+
+		set_folded(&path, ithaca.clone(), vec!["people".to_owned()]).unwrap();
+		set_folded(&path, ithaca, Vec::new()).unwrap();
+
+		assert!(load(&path).unwrap().folded.is_empty());
+	}
+
+	#[test]
 	fn forgetting_a_project_forgets_which_folders_were_open() {
 		let mut store = Store::default();
 		let root = PathBuf::from("/writing/Ithaca");
 		store.remember("Ithaca", root.clone(), at(1));
 		store.expanded.insert(root.clone(), vec![Uuid::new_v4()]);
+		store
+			.folded
+			.insert(root.clone(), vec!["identity".to_owned()]);
 
 		store.forget(&root);
 
 		assert!(store.expanded.is_empty());
+		assert!(store.folded.is_empty());
 	}
 
 	#[test]
