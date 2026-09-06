@@ -870,13 +870,22 @@ pub fn close_project(app: AppHandle) -> Result<()> {
 }
 
 /// What the project's book says about itself.
+///
+/// A project written before books existed grows one on the way past, and this
+/// saves it. Reading does not usually rewrite the manifest, but the identifier
+/// is generated fresh every time it is missing, so leaving it unsaved would
+/// give the same project a different identity on every read.
 #[tauri::command]
 pub fn read_book(root: PathBuf) -> Result<Book> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
 
-	Ok(read_manifest(&root)?.book)
+	let mut manifest = read_manifest(&root)?;
+	if manifest.version < MANIFEST_VERSION {
+		write_manifest(&root, &mut manifest)?;
+	}
+	Ok(manifest.book)
 }
 
 /// Replaces everything the writer has said about the book, which arrives whole
@@ -1085,6 +1094,22 @@ mod tests {
 			manifest.book.title, "Ithaca",
 			"a project that never had a book is one about itself"
 		);
+	}
+
+	#[test]
+	fn reading_a_book_settles_its_identifier() {
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+
+		let first = read_book(root.clone()).unwrap();
+
+		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
+		assert!(
+			json.contains("\"identifier\""),
+			"the book a version three project grew is saved, not grown again"
+		);
+		assert_eq!(read_book(root).unwrap().identifier, first.identifier);
 	}
 
 	#[test]
