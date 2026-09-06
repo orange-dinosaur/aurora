@@ -9,7 +9,8 @@ import type { Book } from "./types";
  * What the store records. A key rather than the heading, so a heading can be
  * reworded without every writer's folded groups springing open.
  */
-export type GroupKey = "identity" | "people" | "itself" | "publication";
+export type GroupKey =
+	"identity" | "people" | "itself" | "publication" | "export";
 
 export type Group = {
 	key: GroupKey;
@@ -21,6 +22,7 @@ export const GROUPS: Group[] = [
 	{ key: "people", name: "People" },
 	{ key: "itself", name: "The book itself" },
 	{ key: "publication", name: "Publication" },
+	{ key: "export", name: "Export" },
 ];
 
 /** How many of a group's fields the writer has said something in. */
@@ -45,6 +47,8 @@ export function filled(book: Book, key: GroupKey): number {
 				book.isbn,
 				book.copyright,
 			]);
+		case "export":
+			return said([book.cover]);
 	}
 }
 

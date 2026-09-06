@@ -320,6 +320,8 @@ pub enum Error {
 	BadDocumentPath,
 	OutsideProject,
 	NotText,
+	NotAnImage,
+	CoverMissing,
 	AlreadyExists,
 	UnsupportedFormat(Format),
 	Trash(trash::Error),
@@ -371,6 +373,8 @@ impl fmt::Display for Error {
 				write!(f, "that document is outside the project folder")
 			}
 			Error::NotText => write!(f, "that document is not text Aurora can read"),
+			Error::NotAnImage => write!(f, "a cover has to be a PNG or a JPEG image"),
+			Error::CoverMissing => write!(f, "the cover image is no longer in the project"),
 			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
@@ -403,6 +407,8 @@ impl Error {
 			Error::BadDocumentPath => "badDocumentPath",
 			Error::OutsideProject => "outsideProject",
 			Error::NotText => "notText",
+			Error::NotAnImage => "notAnImage",
+			Error::CoverMissing => "coverMissing",
 			Error::AlreadyExists => "alreadyExists",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::Trash(_) => "trash",
@@ -442,6 +448,8 @@ impl std::error::Error for Error {
 			| Error::BadDocumentPath
 			| Error::OutsideProject
 			| Error::NotText
+			| Error::NotAnImage
+			| Error::CoverMissing
 			| Error::AlreadyExists
 			| Error::UnsupportedFormat(_) => None,
 			Error::Trash(e) => Some(e),
@@ -908,6 +916,125 @@ pub fn write_book(root: PathBuf, book: Book) -> Result<()> {
 	write_manifest(&root, &mut manifest)
 }
 
+/// What a cover copy can be called. The extension is the one the writer's file
+/// had, so the copy is what it claims to be.
+const COVER_NAMES: [&str; 2] = ["cover.png", "cover.jpg"];
+
+/// Takes the image the writer chose into the project and records it on the
+/// book. The project keeps its own copy beside the manifest, so the cover
+/// travels with the folder and nothing breaks when the original is moved,
+/// renamed or thrown away.
+#[tauri::command]
+pub fn set_cover(root: PathBuf, source: PathBuf) -> Result<String> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let name = cover_name(&source)?;
+	let mut manifest = read_manifest(&root)?;
+	let destination = root.join(name);
+
+	// Choosing the project's own copy again is a no-op, not a file copied over
+	// itself, which would leave nothing behind.
+	if !same_file(&source, &destination) {
+		// A JPEG replacing a PNG would otherwise leave the old copy in the
+		// project folder for good.
+		for old in COVER_NAMES {
+			if old != name {
+				remove_if_there(&root.join(old))?;
+			}
+		}
+		fs::copy(&source, &destination)?;
+	}
+
+	manifest.book.cover = name.to_owned();
+	write_manifest(&root, &mut manifest)?;
+	Ok(name.to_owned())
+}
+
+/// The bytes of the project's cover, for the page to show. They come through a
+/// command rather than the asset protocol, which would need a path scope wide
+/// enough to reach wherever the writer keeps their projects.
+#[tauri::command]
+pub fn read_cover(root: PathBuf) -> Result<tauri::ipc::Response> {
+	// Raw bytes rather than the default JSON, which would send an image across
+	// as a list of several million numbers.
+	Ok(tauri::ipc::Response::new(cover_bytes(&root)?))
+}
+
+fn cover_bytes(root: &Path) -> Result<Vec<u8>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let name = read_manifest(root)?.book.cover;
+	if name.is_empty() {
+		return Err(Error::CoverMissing);
+	}
+	// The manifest is a file the writer can edit, so what it names has to be
+	// checked: a cover is one file in the project, never a path out of it.
+	if Path::new(&name).file_name() != Some(std::ffi::OsStr::new(&name)) {
+		return Err(Error::OutsideProject);
+	}
+
+	fs::read(root.join(&name)).map_err(|e| match e.kind() {
+		io::ErrorKind::NotFound => Error::CoverMissing,
+		_ => Error::Io(e),
+	})
+}
+
+/// Forgets the cover and takes the project's copy of it away with it.
+#[tauri::command]
+pub fn clear_cover(root: PathBuf) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let mut manifest = read_manifest(&root)?;
+	manifest.book.cover = String::new();
+	write_manifest(&root, &mut manifest)?;
+
+	for name in COVER_NAMES {
+		remove_if_there(&root.join(name))?;
+	}
+	Ok(())
+}
+
+/// What the copy inside the project is called, from the extension of the file
+/// the writer chose. Anything that is not a PNG or a JPEG is refused here,
+/// before it has been copied anywhere.
+fn cover_name(source: &Path) -> Result<&'static str> {
+	let extension = source
+		.extension()
+		.and_then(|e| e.to_str())
+		.unwrap_or_default()
+		.to_ascii_lowercase();
+
+	match extension.as_str() {
+		"png" => Ok("cover.png"),
+		"jpg" | "jpeg" => Ok("cover.jpg"),
+		_ => Err(Error::NotAnImage),
+	}
+}
+
+/// Whether two paths lead to the same file on disk. A path that leads nowhere
+/// is not the same as anything, including another path that leads nowhere.
+fn same_file(one: &Path, other: &Path) -> bool {
+	match (fs::canonicalize(one), fs::canonicalize(other)) {
+		(Ok(one), Ok(other)) => one == other,
+		_ => false,
+	}
+}
+
+/// Deletes a file if it is there. A file that was already gone is the state
+/// the caller wanted, not a failure.
+fn remove_if_there(path: &Path) -> Result<()> {
+	match fs::remove_file(path) {
+		Err(e) if e.kind() != io::ErrorKind::NotFound => Err(Error::Io(e)),
+		_ => Ok(()),
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1179,6 +1306,161 @@ mod tests {
 		));
 		assert!(matches!(
 			write_book(relative, Book::new("Ithaca")).unwrap_err(),
+			Error::RelativePath
+		));
+	}
+
+	/// A file of the writer's, somewhere that is not the project.
+	fn picture(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
+		let path = dir.join(name);
+		fs::write(&path, bytes).unwrap();
+		path
+	}
+
+	#[test]
+	fn a_cover_is_copied_into_the_project() {
+		let elsewhere = tempfile::tempdir().unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+		let chosen = picture(elsewhere.path(), "seascape.PNG", b"one");
+
+		let name = set_cover(root.clone(), chosen.clone()).unwrap();
+
+		assert_eq!(name, "cover.png", "the extension is kept, in lower case");
+		assert_eq!(read_book(root.clone()).unwrap().cover, "cover.png");
+		assert_eq!(cover_bytes(&root).unwrap(), b"one");
+
+		// The writer's own file is theirs to do what they like with.
+		fs::remove_file(&chosen).unwrap();
+		assert_eq!(cover_bytes(&root).unwrap(), b"one");
+	}
+
+	#[test]
+	fn a_second_cover_replaces_the_first() {
+		let elsewhere = tempfile::tempdir().unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+
+		set_cover(root.clone(), picture(elsewhere.path(), "first.png", b"one")).unwrap();
+		let name = set_cover(
+			root.clone(),
+			picture(elsewhere.path(), "second.jpeg", b"two"),
+		)
+		.unwrap();
+
+		assert_eq!(
+			name, "cover.jpg",
+			"a JPEG is a JPEG whichever way it is spelt"
+		);
+		assert_eq!(cover_bytes(&root).unwrap(), b"two");
+		assert!(
+			!root.join("cover.png").exists(),
+			"the copy that is no longer the cover does not stay in the project"
+		);
+	}
+
+	#[test]
+	fn choosing_the_projects_own_copy_keeps_it() {
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+		set_cover(root.clone(), picture(dir.path(), "art.png", b"one")).unwrap();
+
+		set_cover(root.clone(), root.join("cover.png")).unwrap();
+
+		assert_eq!(cover_bytes(&root).unwrap(), b"one");
+	}
+
+	#[test]
+	fn only_a_png_or_a_jpeg_is_a_cover() {
+		let elsewhere = tempfile::tempdir().unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+
+		let err =
+			set_cover(root.clone(), picture(elsewhere.path(), "notes.txt", b"one")).unwrap_err();
+
+		assert!(matches!(err, Error::NotAnImage));
+		assert_eq!(read_book(root).unwrap().cover, "");
+	}
+
+	#[test]
+	fn a_cover_that_is_gone_says_so() {
+		let elsewhere = tempfile::tempdir().unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+
+		assert!(
+			matches!(cover_bytes(&root).unwrap_err(), Error::CoverMissing),
+			"a book with nothing chosen has no cover to read"
+		);
+
+		set_cover(root.clone(), picture(elsewhere.path(), "art.png", b"one")).unwrap();
+		fs::remove_file(root.join("cover.png")).unwrap();
+
+		assert!(matches!(
+			cover_bytes(&root).unwrap_err(),
+			Error::CoverMissing
+		));
+		assert_eq!(
+			read_book(root).unwrap().cover,
+			"cover.png",
+			"the book still names the cover it was given, so the page can complain about it"
+		);
+	}
+
+	#[test]
+	fn a_cover_out_of_the_project_is_refused() {
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+		write_book(
+			root.clone(),
+			Book {
+				cover: "../cover.png".to_owned(),
+				..read_book(root.clone()).unwrap()
+			},
+		)
+		.unwrap();
+
+		assert!(matches!(
+			cover_bytes(&root).unwrap_err(),
+			Error::OutsideProject
+		));
+	}
+
+	#[test]
+	fn clearing_a_cover_takes_the_copy_with_it() {
+		let elsewhere = tempfile::tempdir().unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+		set_cover(root.clone(), picture(elsewhere.path(), "art.png", b"one")).unwrap();
+
+		clear_cover(root.clone()).unwrap();
+
+		assert_eq!(read_book(root.clone()).unwrap().cover, "");
+		assert!(!root.join("cover.png").exists());
+		clear_cover(root).unwrap();
+	}
+
+	#[test]
+	fn the_cover_refuses_a_relative_path() {
+		let relative = PathBuf::from("some/where");
+		assert!(matches!(
+			set_cover(relative.clone(), PathBuf::from("/tmp/art.png")).unwrap_err(),
+			Error::RelativePath
+		));
+		assert!(matches!(
+			cover_bytes(&relative).unwrap_err(),
+			Error::RelativePath
+		));
+		assert!(matches!(
+			clear_cover(relative).unwrap_err(),
 			Error::RelativePath
 		));
 	}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import Cover from "./Cover";
 import { Chips, TextBox } from "./Field";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
@@ -411,6 +412,15 @@ export default function BookView({ root }: Props) {
 								}
 							/>
 						</>,
+					)}
+
+					{group(
+						"export",
+						<Cover
+							root={root}
+							cover={book.cover}
+							onChange={(cover) => edit({ ...book, cover })}
+						/>,
 					)}
 				</div>
 			)}
