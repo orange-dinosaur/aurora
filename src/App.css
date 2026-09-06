@@ -5851,8 +5851,19 @@ body.dragging * {
 	margin-top: 0;
 }
 
+/* `.menu` is absolute by default, because everywhere else it hangs off a row or
+   a card that is already positioned. Here it is a field in the flow, so it has
+   to place itself and be what its own dropdown is measured from. */
 .book__picker {
+	position: relative;
 	display: block;
+}
+
+/* Lined up under the box it drops from, rather than hung off its right edge. */
+.book__picker .menu__items {
+	left: 0;
+	right: auto;
+	min-width: 100%;
 }
 
 .book__picker--role {
