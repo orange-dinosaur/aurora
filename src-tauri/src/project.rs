@@ -7,6 +7,7 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tauri::{AppHandle, Manager};
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 use crate::document::{Document, refresh};
 use crate::store;
@@ -107,7 +108,92 @@ pub fn format_layouts() -> Vec<FormatLayout> {
 }
 
 /// Bumped when the on-disk shape changes in a way older builds cannot read.
-pub const MANIFEST_VERSION: u32 = 3;
+pub const MANIFEST_VERSION: u32 = 4;
+
+/// What someone did on the book besides write it. Every format Aurora exports
+/// wants the relationship named rather than a free line of text, so the set is
+/// fixed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Role {
+	Editor,
+	Illustrator,
+	Translator,
+	Narrator,
+}
+
+/// Someone who worked on the book, and what they did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Contributor {
+	pub name: String,
+	pub role: Role,
+}
+
+/// What the project's one book says about itself. Everything here is the
+/// writer's to fill in and may stay empty; an export takes what it finds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Book {
+	/// Generated once and never rewritten. A reader tells one book from another
+	/// by this, so a new one would make every earlier export a different book.
+	pub identifier: Uuid,
+	pub title: String,
+	#[serde(default)]
+	pub subtitle: String,
+	#[serde(default)]
+	pub author: String,
+	#[serde(default)]
+	pub contributors: Vec<Contributor>,
+	#[serde(default)]
+	pub series: String,
+	/// Where in the series this one falls. Text, because a book can be 1.5.
+	#[serde(default)]
+	pub series_number: String,
+	/// A BCP 47 tag such as `en` or `pt-BR`.
+	#[serde(default)]
+	pub language: String,
+	#[serde(default)]
+	pub blurb: String,
+	/// Where the cover image is, relative to the project root.
+	#[serde(default)]
+	pub cover: String,
+	#[serde(default)]
+	pub publisher: String,
+	/// As the writer typed it: a year alone is as valid an answer as a date.
+	#[serde(default)]
+	pub publication_date: String,
+	#[serde(default)]
+	pub isbn: String,
+	#[serde(default)]
+	pub keywords: Vec<String>,
+	#[serde(default)]
+	pub copyright: String,
+}
+
+impl Book {
+	/// A book the writer has said nothing about yet. The project's own name is
+	/// a better first guess at the title than an empty box.
+	pub fn new(title: impl Into<String>) -> Self {
+		Self {
+			identifier: Uuid::new_v4(),
+			title: title.into(),
+			subtitle: String::new(),
+			author: String::new(),
+			contributors: Vec::new(),
+			series: String::new(),
+			series_number: String::new(),
+			language: String::new(),
+			blurb: String::new(),
+			cover: String::new(),
+			publisher: String::new(),
+			publication_date: String::new(),
+			isbn: String::new(),
+			keywords: Vec::new(),
+			copyright: String::new(),
+		}
+	}
+}
 
 /// The contents of `aurora.json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -118,6 +204,9 @@ pub struct Manifest {
 	pub format: Format,
 	#[serde(with = "time::serde::rfc3339")]
 	pub created_at: OffsetDateTime,
+	/// A project holds exactly one book, whether or not the writer has filled
+	/// anything in about it.
+	pub book: Book,
 	/// Everything the project holds: its sections in the order it was made
 	/// with, and under each of them the folders and documents the writer put
 	/// there. A project keeps its own sections even if the format's definition
@@ -127,9 +216,11 @@ pub struct Manifest {
 
 impl Manifest {
 	pub fn new(name: impl Into<String>, format: Format, created_at: OffsetDateTime) -> Self {
+		let name = name.into();
 		Self {
 			version: MANIFEST_VERSION,
-			name: name.into(),
+			book: Book::new(name.clone()),
+			name,
 			format,
 			// The manifest is meant to be readable; sub-second precision is noise.
 			created_at: created_at
@@ -166,9 +257,9 @@ impl Manifest {
 
 /// A manifest as it might be found on disk, of any version Aurora has written.
 /// Version 2 recorded a list of section names and a flat list of documents;
-/// version 3 records one tree. Which fields are there decides how it is read,
-/// rather than the version number, because that number is a line in a file the
-/// writer can edit.
+/// version 3 records one tree; version 4 adds the book. Which fields are there
+/// decides how it is read, rather than the version number, because that number
+/// is a line in a file the writer can edit.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Stored {
@@ -182,6 +273,7 @@ struct Stored {
 	#[serde(default)]
 	documents: Vec<Document>,
 	nodes: Option<Vec<Node>>,
+	book: Option<Book>,
 }
 
 impl<'de> Deserialize<'de> for Manifest {
@@ -189,6 +281,12 @@ impl<'de> Deserialize<'de> for Manifest {
 		let stored = Stored::deserialize(deserializer)?;
 		Ok(Self {
 			version: stored.version,
+			// A project written before books existed is given one, named after
+			// itself. The identifier is settled the next time anything writes
+			// the manifest.
+			book: stored
+				.book
+				.unwrap_or_else(|| Book::new(stored.name.as_str())),
 			name: stored.name,
 			format: stored.format,
 			created_at: stored.created_at,
@@ -771,6 +869,33 @@ pub fn close_project(app: AppHandle) -> Result<()> {
 	close(&store_path(&app)?)
 }
 
+/// What the project's book says about itself.
+#[tauri::command]
+pub fn read_book(root: PathBuf) -> Result<Book> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	Ok(read_manifest(&root)?.book)
+}
+
+/// Replaces everything the writer has said about the book, which arrives whole
+/// because the page that sends it holds the whole of it. The identifier is not
+/// theirs to change and is kept from the manifest on disk.
+#[tauri::command]
+pub fn write_book(root: PathBuf, book: Book) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let mut manifest = read_manifest(&root)?;
+	manifest.book = Book {
+		identifier: manifest.book.identifier,
+		..book
+	};
+	write_manifest(&root, &mut manifest)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -914,6 +1039,120 @@ mod tests {
 		let manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
 		let json = serde_json::to_string(&manifest).unwrap();
 		assert_eq!(serde_json::from_str::<Manifest>(&json).unwrap(), manifest);
+	}
+
+	#[test]
+	fn a_new_project_has_a_book_named_after_it() {
+		let manifest = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		assert_eq!(manifest.book.title, "Ithaca");
+		assert_eq!(manifest.book.author, "");
+		assert!(manifest.book.contributors.is_empty());
+	}
+
+	#[test]
+	fn two_projects_are_two_books() {
+		let one = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		let other = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		assert_ne!(one.book.identifier, other.book.identifier);
+	}
+
+	/// A project written by the Aurora before books existed: a tree, but nothing
+	/// said about what the tree adds up to.
+	fn version_three_project(dir: &Path) {
+		fs::write(
+			dir.join(MANIFEST_FILE),
+			format!(
+				r#"{{"version":3,"name":"Ithaca","format":"novel",
+				   "createdAt":"2023-11-14T22:13:20Z",
+				   "nodes":[
+				     {{"node":"folder","id":"{}","name":"Manuscript","children":[]}}
+				   ]}}"#,
+				Uuid::new_v4()
+			),
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn a_version_three_manifest_gains_a_book() {
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+
+		let manifest = read_manifest(dir.path()).unwrap();
+
+		assert_eq!(manifest.folders(), ["Manuscript"]);
+		assert_eq!(
+			manifest.book.title, "Ithaca",
+			"a project that never had a book is one about itself"
+		);
+	}
+
+	#[test]
+	fn the_identifier_survives_two_writes() {
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+
+		let first = read_book(root.clone()).unwrap();
+		write_book(
+			root.clone(),
+			Book {
+				author: "Homer".to_owned(),
+				..first
+			},
+		)
+		.unwrap();
+		let settled = read_book(root.clone()).unwrap().identifier;
+
+		write_book(
+			root.clone(),
+			Book {
+				title: "Odyssey".to_owned(),
+				// The writer's own guess at an identifier is ignored.
+				identifier: Uuid::new_v4(),
+				..read_book(root.clone()).unwrap()
+			},
+		)
+		.unwrap();
+
+		let book = read_book(root).unwrap();
+		assert_eq!(book.identifier, settled);
+		assert_eq!(book.title, "Odyssey");
+		assert_eq!(book.author, "Homer", "and the rest is left as it was");
+	}
+
+	#[test]
+	fn writing_a_book_leaves_the_project_alone() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let before = read_manifest(&root).unwrap();
+
+		write_book(
+			root.clone(),
+			Book {
+				keywords: vec!["myth".to_owned(), "sea".to_owned()],
+				..read_book(root.clone()).unwrap()
+			},
+		)
+		.unwrap();
+
+		let after = read_manifest(&root).unwrap();
+		assert_eq!(after.nodes, before.nodes);
+		assert_eq!(after.name, before.name);
+		assert_eq!(after.book.keywords, ["myth", "sea"]);
+	}
+
+	#[test]
+	fn the_book_refuses_a_relative_path() {
+		let relative = PathBuf::from("some/where");
+		assert!(matches!(
+			read_book(relative.clone()).unwrap_err(),
+			Error::RelativePath
+		));
+		assert!(matches!(
+			write_book(relative, Book::new("Ithaca")).unwrap_err(),
+			Error::RelativePath
+		));
 	}
 
 	#[test]
@@ -1062,11 +1301,14 @@ mod tests {
 
 		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
 		let manifest: Manifest = serde_json::from_str(&json).unwrap();
-		// Every node carries a random id, so the tree is checked on its own.
+		// Every node carries a random id, and so does the book, so the tree is
+		// checked on its own and the book is checked by its title.
 		let fresh = Manifest::new("Ithaca", Format::Novel, fixed_time());
+		assert_eq!(manifest.book.title, fresh.book.title);
 		assert_eq!(
 			Manifest {
 				nodes: Vec::new(),
+				book: fresh.book.clone(),
 				..manifest
 			},
 			Manifest {

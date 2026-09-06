@@ -18,6 +18,8 @@ pub fn run() {
 			project::close_project,
 			project::open_project,
 			project::recent_projects,
+			project::read_book,
+			project::write_book,
 			document::document_tree,
 			document::refresh_documents,
 			document::read_document,
