@@ -3,6 +3,7 @@ import {
 	destinations,
 	documentsIn,
 	documentsOf,
+	folded,
 	folderOf,
 	inside,
 	rows,
@@ -398,5 +399,35 @@ describe("counting a whole project", () => {
 
 	test("a project with nothing in it holds no words", () => {
 		expect(wordsIn([])).toBe(0);
+	});
+});
+
+describe("folding every section at once", () => {
+	const tree = [folder("Manuscript"), folder("Notes")];
+
+	test("one section open folds them all", () => {
+		const open = new Set(["id-Manuscript", "id-Part One"]);
+
+		expect([...folded(open, tree)]).toEqual(["id-Part One"]);
+	});
+
+	test("none open opens them all", () => {
+		const open = new Set(["id-Part One"]);
+
+		expect([...folded(open, tree)].sort()).toEqual([
+			"id-Manuscript",
+			"id-Notes",
+			"id-Part One",
+		]);
+	});
+
+	test("a part keeps its state through both", () => {
+		const open = new Set(["id-Manuscript", "id-Part One"]);
+
+		expect([...folded(folded(open, tree), tree)].sort()).toEqual([
+			"id-Manuscript",
+			"id-Notes",
+			"id-Part One",
+		]);
 	});
 });

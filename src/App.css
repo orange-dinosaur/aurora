@@ -2602,6 +2602,15 @@ body.dragging * {
 	background: var(--accent-wash);
 }
 
+/* Everything inside a section stands one column right of its header, so a part
+   reads as something in the Manuscript rather than a sibling of it. The header
+   keeps its own chevron at the sidebar's edge. Every row, every chevron and
+   every drop-line inside a section is placed from here; the fallback is what
+   the same rows use anywhere else. */
+.section {
+	--nest: 1.25rem;
+}
+
 .section + .section {
 	margin-top: 1.25rem;
 }
@@ -2611,6 +2620,34 @@ body.dragging * {
 	align-items: center;
 	gap: 0.25rem;
 	margin-bottom: 0.25rem;
+}
+
+/* The section's own chevron, in the slot the rows below keep for theirs. Laid
+   out in the header's flex row rather than over it, which is what the + at the
+   other end does; a row's chevron floats because the row itself is a button
+   and cannot hold one. */
+.section__fold {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 1rem;
+	height: 1rem;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.section__fold:hover {
+	color: var(--text);
+}
+
+.section__fold:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 /* An eyebrow rather than a heading: the sidebar is an index of the writing,
@@ -2739,7 +2776,7 @@ body.dragging * {
 	content: "";
 	position: absolute;
 	right: 0.25rem;
-	left: calc(0.25rem + var(--depth, 0) * 0.75rem + 1rem);
+	left: calc(var(--nest, 0rem) + 0.25rem + var(--depth, 0) * 0.75rem + 1rem);
 	height: 2px;
 	background: var(--accent);
 	border-radius: 1px;
@@ -2763,7 +2800,8 @@ body.dragging * {
 	   The left is how far down the tree the row sits, plus the column the
 	   folders' chevrons stand in, which every row leaves clear so that names
 	   line up whether or not the row beside them opens. */
-	padding: 0 1.4rem 0 calc(0.25rem + var(--depth, 0) * 0.75rem + 1rem);
+	padding: 0 1.4rem 0
+		calc(var(--nest, 0rem) + 0.25rem + var(--depth, 0) * 0.75rem + 1rem);
 	font: inherit;
 	font-size: 0.8125rem;
 	text-align: left;
@@ -2782,7 +2820,8 @@ body.dragging * {
 	gap: 0.5rem;
 	width: 100%;
 	height: 28px;
-	padding: 0 2.8rem 0 calc(0.25rem + var(--depth, 0) * 0.75rem + 1rem);
+	padding: 0 2.8rem 0
+		calc(var(--nest, 0rem) + 0.25rem + var(--depth, 0) * 0.75rem + 1rem);
 	font: inherit;
 	font-size: 0.8125rem;
 	font-weight: 600;
@@ -2829,7 +2868,7 @@ body.dragging * {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: calc(var(--depth, 0) * 0.75rem);
+	left: calc(var(--nest, 0rem) + var(--depth, 0) * 0.75rem);
 	display: flex;
 	align-items: center;
 	justify-content: center;

@@ -469,9 +469,9 @@ describe("the keyboard the settings dialog lists", () => {
 		for (const action of ACTIONS) {
 			expect(listed).toContain(action.label);
 		}
-		// The actions, and the seven bindings that do something to the app
+		// The actions, and the eight bindings that do something to the app
 		// rather than to the text. Nothing else is bound.
-		expect(rows).toHaveLength(ACTIONS.length + 7);
+		expect(rows).toHaveLength(ACTIONS.length + 8);
 	});
 
 	test("an action is listed under the keys it is bound to", () => {

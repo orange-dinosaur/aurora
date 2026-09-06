@@ -257,6 +257,12 @@ export const SESSION: Keys = { key: "k", shift: false };
  * preferences are not a project's and the welcome screen wants them too. */
 export const SETTINGS: Keys = { key: ",", shift: false };
 
+/** Folds every section in the sidebar, and opens them all again when none of
+ * them is open. One key both ways round, like the session chord. Not the
+ * arrows a tree usually takes: Ctrl+Shift+← selects a word in the editor, and
+ * a writer types far more often than they fold. */
+export const FOLD: Keys = { key: "a", shift: true };
+
 const COMMAND_KEY = IS_APPLE ? "⌘" : "Ctrl+";
 const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift+";
 
@@ -278,7 +284,7 @@ function named({ label, keys }: Action): Shortcut {
 /**
  * Every binding Aurora makes, grouped for reading. The last two groups are
  * built from the lists the editor answers key presses from, so a key that
- * moves there moves here with it; the first names the seven constants above,
+ * moves there moves here with it; the first names the eight constants above,
  * which have no labels of their own. A new binding has to be added here by
  * hand, and `formatting.test.ts` is what notices when one is not.
  */
@@ -293,6 +299,7 @@ export const KEYBOARD: ShortcutGroup[] = [
 			{ label: "Outline", keys: OUTLINE },
 			{ label: "Formatting bar", keys: TOOLBAR },
 			{ label: "Start or stop a session", keys: SESSION },
+			{ label: "Fold or unfold every section", keys: FOLD },
 		],
 	},
 	{ heading: "Marks", rows: MARKS.map(named) },

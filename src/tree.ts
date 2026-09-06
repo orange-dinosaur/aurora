@@ -155,6 +155,30 @@ export function sections(nodes: TreeNode[]) {
 }
 
 /**
+ * The open set with every section folded, or with every section open when none
+ * of them is. Folders deeper down keep whatever state they had, so unfolding a
+ * section brings back the chapters that were open inside it.
+ */
+export function folded(
+	open: ReadonlySet<string>,
+	nodes: TreeNode[],
+): ReadonlySet<string> {
+	const next = new Set(open);
+	const ids = sections(nodes).map((section) => section.id);
+	const anyOpen = ids.some((id) => next.has(id));
+
+	for (const id of ids) {
+		if (anyOpen) {
+			next.delete(id);
+		} else {
+			next.add(id);
+		}
+	}
+
+	return next;
+}
+
+/**
  * Every word in the project. The tree already carries a count on each section,
  * so this asks no file anything.
  */

@@ -17,11 +17,12 @@ import {
 	renameFolder,
 } from "./documents";
 import { failure } from "./errors";
+import { FOLD, pressed } from "./formatting";
 import { useReorder } from "./reorder";
 import type { Renaming } from "./rows";
 import { indent, retitling, spot } from "./rows";
 import { timed } from "./timing";
-import { documentsIn, inside, rows, sections, wordsIn } from "./tree";
+import { documentsIn, folded, inside, rows, sections, wordsIn } from "./tree";
 import type { FolderRef, Row } from "./tree";
 
 /** Nothing is being dragged, so no row is inside anything. */
@@ -143,13 +144,28 @@ export default function Sidebar({
 		void load();
 	}, [load, reload]);
 
-	// Which folders were open last time. A store that cannot be read leaves
-	// the sidebar folded rather than stopping the project from opening.
+	// Which folders were open last time, read once the tree is here so that a
+	// project nothing has ever been folded in can open on its sections rather
+	// than on five headings with nothing under them. A store that cannot be
+	// read leaves the sidebar folded rather than stopping the project opening.
+	const restored = useRef<string | null>(null);
+
 	useEffect(() => {
+		if (tree.length === 0 || restored.current === root) {
+			return;
+		}
+
+		restored.current = root;
 		invoke<string[]>("read_expanded", { root })
-			.then((ids) => setOpen(new Set(ids)))
+			.then((ids) =>
+				setOpen(
+					ids.length > 0
+						? new Set(ids)
+						: new Set(sections(tree).map((each) => each.id)),
+				),
+			)
 			.catch(() => setOpen(new Set()));
-	}, [root]);
+	}, [root, tree]);
 
 	async function toggle(id: string) {
 		const next = new Set(open);
@@ -164,6 +180,33 @@ export default function Sidebar({
 			setStatus({ kind: "error", message: failure(error).message });
 		}
 	}
+
+	// Every section folded, or every one open when none of them is. Bound on
+	// the window rather than on an editor, the way search is: the sidebar is
+	// there whatever has focus, and a writer folding the tree is usually
+	// looking at it rather than typing into it.
+	const fold = useCallback(async () => {
+		const next = folded(open, tree);
+		setOpen(next);
+
+		try {
+			await invoke("write_expanded", { root, open: [...next] });
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
+		}
+	}, [open, tree, root]);
+
+	useEffect(() => {
+		function onKeyDown(event: KeyboardEvent) {
+			if (pressed(event, FOLD)) {
+				event.preventDefault();
+				void fold();
+			}
+		}
+
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [fold]);
 
 	async function move(id: string, parentId: string, index: number) {
 		try {
@@ -260,7 +303,15 @@ export default function Sidebar({
 			<div className="sidebar__list">
 				<div className="sidebar__sections">
 					{sections(tree).map((section) => {
-						const list = rows(section.children, section.id, open);
+						// A section folds through the same set as every folder
+						// under it, so one press of the chord reaches all of
+						// them and a section remembers itself like the rest.
+						const shut = !open.has(section.id);
+						const verb = shut ? "Unfold" : "Fold";
+						const glyph = shut ? "chevron-right" : "chevron-down";
+						const list = shut
+							? []
+							: rows(section.children, section.id, open);
 						// Nowhere inside what is being dragged can be where it
 						// lands. Only the section holding it has any such rows;
 						// for the others this comes back empty.
@@ -275,6 +326,21 @@ export default function Sidebar({
 						return (
 							<section key={section.id} className="section">
 								<div className="section__header">
+									{/* In the slot every row below keeps for
+									    its own chevron, so the eyebrow starts
+									    where their names do. */}
+									<button
+										type="button"
+										className="section__fold"
+										aria-expanded={!shut}
+										aria-label={`${verb} ${section.name}`}
+										onClick={() => void toggle(section.id)}
+									>
+										<Icon
+											name={glyph}
+											className="disclosure__glyph"
+										/>
+									</button>
 									<h3 className="section__title">
 										<button
 											type="button"
@@ -468,9 +534,11 @@ export default function Sidebar({
 										)}
 									</ul>
 								) : (
-									<p className="section__empty">
-										Nothing here yet
-									</p>
+									!shut && (
+										<p className="section__empty">
+											Nothing here yet
+										</p>
+									)
 								)}
 							</section>
 						);
