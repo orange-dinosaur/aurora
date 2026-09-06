@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
+	IN_BOOK,
 	custom,
 	fieldNames,
+	flag,
 	list,
 	parse,
 	serialize,
+	setFlag,
 	split,
 	text,
 	ties,
@@ -404,5 +407,42 @@ describe("relationships", () => {
 
 		expect(list(found, "relationships")).toEqual(["Ana: her sister"]);
 		expect(text(found, "relationships")).toBe("Ana: her sister");
+	});
+});
+
+describe("in the book", () => {
+	test("a document nobody has switched off is in", () => {
+		expect(flag(new Map(), IN_BOOK)).toBe(true);
+		expect(flag(parse(block("tags: []")), IN_BOOK)).toBe(true);
+		expect(flag(parse(block("inBook: true")), IN_BOOK)).toBe(true);
+	});
+
+	test("a plain no takes it out, however it was spelled", () => {
+		expect(flag(parse(block("inBook: false")), IN_BOOK)).toBe(false);
+		expect(flag(parse(block("inBook: no")), IN_BOOK)).toBe(false);
+		expect(flag(parse(block("inBook: Off")), IN_BOOK)).toBe(false);
+	});
+
+	test("switching off writes the key and switching on takes it away", () => {
+		const off = setFlag(parse(block("tags: []")), IN_BOOK, false);
+
+		expect(serialize(off, block("tags: []"))).toBe(
+			block("tags: []", "inBook: false"),
+		);
+		expect(setFlag(off, IN_BOOK, true).has(IN_BOOK)).toBe(false);
+		expect(serialize(setFlag(off, IN_BOOK, true), block("tags: []"))).toBe(
+			block("tags: []"),
+		);
+	});
+
+	test("the answer is written bare, not as the word", () => {
+		const written = serialize(setFlag(new Map(), IN_BOOK, false));
+
+		expect(written).toBe(block("inBook: false"));
+		expect(flag(parse(written), IN_BOOK)).toBe(false);
+	});
+
+	test("the switch is Aurora's, not one of the writer's own fields", () => {
+		expect(custom(setFlag(new Map(), IN_BOOK, false))).toEqual([]);
 	});
 });

@@ -12,8 +12,13 @@
 /** A field that pairs names with a line each, which is what `relationships` is. */
 export type Ties = Map<string, string>;
 
-/** What one field holds: a line of text, a list of them, or named lines. */
-export type Value = string | string[] | Ties;
+/**
+ * What one field holds: a line of text, a list of them, named lines, or a
+ * plain yes-or-no. Only Aurora's own switches put a boolean here; a `false` a
+ * writer typed themselves stays the text they typed, so their file is never
+ * reinterpreted behind them.
+ */
+export type Value = string | string[] | Ties | boolean;
 
 /**
  * The block some note-taking apps fence off at the top of a file. Its fence is
@@ -23,6 +28,13 @@ export type Value = string | string[] | Ties;
  */
 const FRONT_MATTER = /^---\n[\s\S]*?\n---[ \t]*\n?/;
 
+/**
+ * The key a scene carries when the writer has taken it out of the book. It is
+ * written only when it is `false`, so a document that says nothing is in: a
+ * project written before the switch existed exports whole.
+ */
+export const IN_BOOK = "inBook";
+
 /** The fields Aurora has controls of its own for. The rest are the writer's. */
 export const BUILT_IN = [
 	"names",
@@ -30,6 +42,7 @@ export const BUILT_IN = [
 	"synopsis",
 	"remarks",
 	"relationships",
+	IN_BOOK,
 ];
 
 /** A document's fields, in the order its file lists them. */
@@ -191,6 +204,10 @@ function emit(key: string, value: Value): string[] {
 	if (typeof value === "string") {
 		return [`${key}: ${quote(value)}`];
 	}
+	// Bare, because a quoted "false" is the word rather than the answer.
+	if (typeof value === "boolean") {
+		return [`${key}: ${value ? "true" : "false"}`];
+	}
 	if (value instanceof Map) {
 		if (value.size === 0) {
 			return [`${key}: {}`];
@@ -228,7 +245,12 @@ function same(one: Value, other: Value): boolean {
 			)
 		);
 	}
-	if (typeof one === "string" || typeof other === "string") {
+	if (
+		typeof one === "string" ||
+		typeof other === "string" ||
+		typeof one === "boolean" ||
+		typeof other === "boolean"
+	) {
 		return one === other;
 	}
 
@@ -342,6 +364,9 @@ export function text(fields: Fields, key: string): string {
 	if (typeof value === "string") {
 		return value;
 	}
+	if (typeof value === "boolean") {
+		return value ? "true" : "false";
+	}
 
 	return list(fields, key).join(", ");
 }
@@ -355,6 +380,9 @@ export function list(fields: Fields, key: string): string[] {
 	}
 	if (typeof value === "string") {
 		return value === "" ? [] : [value];
+	}
+	if (typeof value === "boolean") {
+		return [value ? "true" : "false"];
 	}
 	if (value instanceof Map) {
 		return [...value].map(([name, note]) =>
@@ -378,6 +406,44 @@ export function ties(fields: Fields, key: string): Ties {
 	}
 
 	return new Map(list(fields, key).map((item) => [item, ""]));
+}
+
+/** What YAML reads as no, whichever way the writer spelled it. */
+const DENIED = /^(?:false|no|off)$/i;
+
+/**
+ * A yes-or-no field, which is yes unless the file says otherwise. A key that
+ * is not there is an answer nobody has given, and Aurora's switches are all
+ * on by default, so only a plain no takes one off.
+ */
+export function flag(fields: Fields, key: string): boolean {
+	const value = fields.get(key);
+
+	if (typeof value === "boolean") {
+		return value;
+	}
+	if (typeof value === "string") {
+		return !DENIED.test(value.trim());
+	}
+
+	return true;
+}
+
+/**
+ * The fields with a yes-or-no answered. Yes takes the key out rather than
+ * writing `true`: the default belongs in one place, and a file the writer
+ * never switched off should look like one.
+ */
+export function setFlag(fields: Fields, key: string, on: boolean): Fields {
+	const next = new Map(fields);
+
+	if (on) {
+		next.delete(key);
+	} else {
+		next.set(key, false);
+	}
+
+	return next;
 }
 
 /** A file in two pieces: the block at its top, fences and all, and the prose. */

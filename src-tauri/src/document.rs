@@ -97,8 +97,9 @@ pub struct DocumentSummary {
 	pub words: usize,
 	pub excerpt: String,
 	/// The document's front matter block, fences and all, for the other end to
-	/// read its fields out of. Empty when the file has none. Rust does not look
-	/// inside it: what a field is, is defined once, in `src/frontmatter.ts`.
+	/// read its fields out of. Empty when the file has none. What a field is
+	/// stays defined once, in `src/frontmatter.ts`; the only thing Rust picks
+	/// out of a block itself is `inBook`, which the compile walk needs.
 	pub front: String,
 	#[serde(with = "time::serde::rfc3339::option")]
 	pub modified: Option<OffsetDateTime>,
@@ -556,6 +557,49 @@ fn split(text: &str) -> (&str, &str) {
 /// A document's prose, with any front matter block lifted off the top.
 fn body(text: &str) -> &str {
 	split(text).1
+}
+
+/// The key a scene carries in its front matter, and a folder in its fields,
+/// when the writer has taken it out of the book. It is written only when it is
+/// `false`, so anything that says nothing is in: a project written before the
+/// switch existed exports whole.
+pub const IN_BOOK: &str = "inBook";
+
+/// Whether a document is in the book, from its text. What a field is stays
+/// defined in `src/frontmatter.ts`; this looks for the one key the compile
+/// walk cannot ask the other end about, since it never opens these files.
+pub fn in_book(text: &str) -> bool {
+	let (front, _) = split(text);
+
+	!front.lines().any(|line| {
+		// Only at the left margin: a key of the same name indented under
+		// another field belongs to that field, not to Aurora.
+		line.strip_prefix(IN_BOOK)
+			.and_then(|rest| rest.strip_prefix(':'))
+			.is_some_and(denied)
+	})
+}
+
+/// Whether a folder is in the book, from the fields the manifest holds for it.
+/// A folder has no file of its own to keep front matter in, so its flag is a
+/// field like the rest of them.
+pub fn folder_in_book(fields: &Fields) -> bool {
+	match fields.get(IN_BOOK) {
+		Some(tree::Value::Text(said)) => !denied(said),
+		_ => true,
+	}
+}
+
+/// What YAML reads as no, whichever way it was spelled, and whether or not the
+/// writer put quotes round it.
+fn denied(value: &str) -> bool {
+	let value = value.trim();
+	let value = value
+		.strip_prefix(['"', '\''])
+		.and_then(|rest| rest.strip_suffix(['"', '\'']))
+		.unwrap_or(value);
+
+	matches!(value.to_ascii_lowercase().as_str(), "false" | "no" | "off")
 }
 
 /// The opening of a document collapsed onto one line and cut to something a
@@ -2869,6 +2913,45 @@ mod tests {
 		assert_eq!(split("---\ntags: []\n---  \n").0, "---\ntags: []\n---");
 		assert_eq!(split("Sing to me.").0, "");
 		assert_eq!(split("---\ntags: []\n").0, "");
+	}
+
+	#[test]
+	fn a_document_is_in_the_book_unless_it_says_otherwise() {
+		assert!(in_book("Sing to me."), "a file with no block is in");
+		assert!(in_book("---\ntags: []\n---\nSing to me."));
+		assert!(in_book("---\ninBook: true\n---\nSing to me."));
+		assert!(!in_book("---\ninBook: false\n---\nSing to me."));
+		assert!(!in_book("---\ntags: []\ninBook: no\n---\nSing to me."));
+		assert!(!in_book("---\ninBook: \"false\"\n---\nSing to me."));
+	}
+
+	#[test]
+	fn only_the_key_at_the_margin_takes_a_document_out() {
+		assert!(
+			in_book("---\nrelationships:\n  inBook: false\n---\nSing to me."),
+			"a pair under another field belongs to that field"
+		);
+		assert!(
+			in_book("---\ninBookish: false\n---\nSing to me."),
+			"a longer name that starts the same way is another field"
+		);
+		assert!(
+			in_book("Sing to me.\n\ninBook: false"),
+			"the prose is prose, whatever it says"
+		);
+	}
+
+	#[test]
+	fn a_folder_carries_the_same_flag() {
+		assert!(folder_in_book(&Fields::new()));
+		assert!(folder_in_book(&Fields::from([(
+			IN_BOOK.to_owned(),
+			tree::Value::Text("true".to_owned())
+		)])));
+		assert!(!folder_in_book(&Fields::from([(
+			IN_BOOK.to_owned(),
+			tree::Value::Text("false".to_owned())
+		)])));
 	}
 
 	#[test]
