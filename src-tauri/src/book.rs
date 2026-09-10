@@ -16,6 +16,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::document::{DocumentView, NodeView, body, document_tree};
+use crate::docx::docx;
 use crate::epub::{Flavour, epub};
 use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, cover_bytes, matter, read_book};
 use crate::tree::FolderKind;
@@ -432,6 +433,7 @@ pub fn export(
 			ExportFormat::Markdown => markdown(&book, &compiled, &prose).into_bytes(),
 			ExportFormat::Epub => epub_for(Flavour::Plain)?,
 			ExportFormat::Kepub => epub_for(Flavour::Kobo)?,
+			ExportFormat::Docx => docx(&book, &compiled, &prose)?,
 		};
 		fs::write(folder.join(&name), bytes)?;
 		written.push(name);
@@ -445,6 +447,7 @@ fn extension(format: ExportFormat) -> &'static str {
 		ExportFormat::Markdown => "md",
 		ExportFormat::Epub => "epub",
 		ExportFormat::Kepub => "kepub.epub",
+		ExportFormat::Docx => "docx",
 	}
 }
 
@@ -1107,6 +1110,7 @@ mod tests {
 				ExportFormat::Markdown,
 				ExportFormat::Epub,
 				ExportFormat::Kepub,
+				ExportFormat::Docx,
 			],
 			|_| {},
 		)
@@ -1114,7 +1118,12 @@ mod tests {
 
 		assert_eq!(
 			written,
-			vec!["Ithaca.md", "Ithaca.epub", "Ithaca.kepub.epub"]
+			vec![
+				"Ithaca.md",
+				"Ithaca.epub",
+				"Ithaca.kepub.epub",
+				"Ithaca.docx",
+			]
 		);
 		let text = fs::read_to_string(out.path().join("Ithaca.md")).unwrap();
 		assert!(text.starts_with("# Ithaca\n"));

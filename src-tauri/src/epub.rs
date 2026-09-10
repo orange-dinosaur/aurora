@@ -170,7 +170,7 @@ pub fn epub(
 }
 
 /// The title the book goes by. A reader has to be given one.
-fn title_of(book: &Book) -> &str {
+pub fn title_of(book: &Book) -> &str {
 	match book.title.trim() {
 		"" => "Untitled",
 		title => title,
@@ -642,7 +642,7 @@ fn modified(now: OffsetDateTime) -> String {
 }
 
 /// Text made safe to sit in XML, between tags or inside an attribute's quotes.
-fn escaped(text: &str) -> String {
+pub fn escaped(text: &str) -> String {
 	let mut out = String::with_capacity(text.len());
 	for c in text.chars() {
 		match c {
