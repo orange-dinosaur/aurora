@@ -19,6 +19,9 @@ const SLOW_MS = 200;
 
 type Props = {
 	root: string;
+	/** Goes up whenever a document or the manifest is written, so the count
+	 * is read again when a scene is switched out of the book or moved. */
+	changed: number;
 	formats: ExportFormat[];
 	onFormats: (formats: ExportFormat[]) => void;
 	/** Whether the book has a cover, which an EPUB wants. */
@@ -35,6 +38,7 @@ type Props = {
  */
 export default function Export({
 	root,
+	changed,
 	formats,
 	onFormats,
 	hasCover,
@@ -62,7 +66,7 @@ export default function Export({
 		return () => {
 			gone = true;
 		};
-	}, [root]);
+	}, [root, changed]);
 
 	async function run() {
 		const folder = await open({

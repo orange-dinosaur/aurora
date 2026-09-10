@@ -1307,7 +1307,11 @@ export default function Project({
 							</div>
 						) : active.kind === "book" ? (
 							<div className="project__pane">
-								<BookView key={active.key} root={root} />
+								<BookView
+									key={active.key}
+									root={root}
+									changed={listing + written}
+								/>
 							</div>
 						) : active.kind === "trash" ? (
 							<div className="project__pane">
