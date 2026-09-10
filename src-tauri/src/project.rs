@@ -235,6 +235,7 @@ pub struct Book {
 #[serde(rename_all = "kebab-case")]
 pub enum ExportFormat {
 	Markdown,
+	Epub,
 }
 
 impl Book {

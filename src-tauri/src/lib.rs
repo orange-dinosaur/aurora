@@ -1,5 +1,7 @@
+pub mod archive;
 pub mod book;
 pub mod document;
+pub mod epub;
 pub mod history;
 pub mod project;
 pub mod store;

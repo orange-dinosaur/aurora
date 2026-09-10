@@ -65,7 +65,7 @@ export type Book = {
 };
 
 /** `project::ExportFormat` */
-export type ExportFormat = "markdown";
+export type ExportFormat = "markdown" | "epub";
 
 /** `book::Extent` — how much an export of the book would take. */
 export type Extent = {

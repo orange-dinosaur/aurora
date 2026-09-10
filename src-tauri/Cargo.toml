@@ -45,9 +45,9 @@ serde_json = "1"
 time = { version = "0.3", features = ["serde-well-known"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 trash = "5.2.7"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+# Deflate is the only compression an EPUB uses.
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
 tempfile = "3"
-# Only the tests that check Aurora's Markdown can be read back need this. The
-# EPUB and DOCX renderers will want it in the build itself.
-pulldown-cmark = "0.13"

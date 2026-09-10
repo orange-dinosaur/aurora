@@ -12,9 +12,11 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use tauri::ipc::Channel;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::document::{DocumentView, NodeView, body, document_tree};
+use crate::epub::epub;
 use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, matter, read_book};
 use crate::tree::FolderKind;
 
@@ -302,19 +304,25 @@ fn piece(blocks: &mut Vec<String>, scene: &Scene, prose: &Prose) {
 
 fn chapter_blocks(blocks: &mut Vec<String>, chapter: &Chapter, prose: &Prose) {
 	blocks.push(format!("## {}", chapter.title));
+	blocks.extend(broken(&chapter.scenes, prose));
+}
 
-	for (at, text) in told(&chapter.scenes, prose).into_iter().enumerate() {
+/// The prose of a chapter's scenes, with a break between each and the next.
+pub fn broken(scenes: &[Scene], prose: &Prose) -> Vec<String> {
+	let mut blocks = Vec::new();
+	for (at, text) in told(scenes, prose).into_iter().enumerate() {
 		if at > 0 {
 			blocks.push(BREAK.to_owned());
 		}
 		blocks.push(text);
 	}
+	blocks
 }
 
 /// The prose of the scenes that have any. A scene that could not be read, or
 /// that holds nothing but its front matter, is passed over here rather than
 /// leaving an empty block or a break with nothing on either side of it.
-fn told(scenes: &[Scene], prose: &Prose) -> Vec<String> {
+pub fn told(scenes: &[Scene], prose: &Prose) -> Vec<String> {
 	scenes
 		.iter()
 		.filter_map(|scene| prose.get(&scene.id))
@@ -413,10 +421,11 @@ pub fn export(
 			name: name.clone(),
 		});
 
-		let text = match format {
-			ExportFormat::Markdown => markdown(&book, &compiled, &prose),
+		let bytes = match format {
+			ExportFormat::Markdown => markdown(&book, &compiled, &prose).into_bytes(),
+			ExportFormat::Epub => epub(&book, &compiled, &prose, OffsetDateTime::now_utc())?,
 		};
-		fs::write(folder.join(&name), text)?;
+		fs::write(folder.join(&name), bytes)?;
 		written.push(name);
 	}
 	Ok(written)
@@ -426,6 +435,7 @@ pub fn export(
 fn extension(format: ExportFormat) -> &'static str {
 	match format {
 		ExportFormat::Markdown => "md",
+		ExportFormat::Epub => "epub",
 	}
 }
 
@@ -449,9 +459,8 @@ fn file_stem(title: &str) -> String {
 
 /// Whether `pulldown-cmark` reads back everything Aurora's editor writes. The
 /// list mirrors `src/markdown.test.ts`, which is where what the editor writes
-/// is settled, so a construct added there belongs here too. Nothing in the
-/// build parses Markdown yet; the EPUB and DOCX renderers will, and this is
-/// what they will stand on.
+/// is settled, so a construct added there belongs here too. The EPUB renderer
+/// reads with the same options, `epub::options`, so this is what it stands on.
 #[cfg(test)]
 mod reading_back {
 	use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
@@ -1085,14 +1094,16 @@ mod tests {
 		let written = export(
 			&ithaca(parent.path()),
 			out.path(),
-			&[ExportFormat::Markdown],
+			&[ExportFormat::Markdown, ExportFormat::Epub],
 			|_| {},
 		)
 		.unwrap();
 
-		assert_eq!(written, vec!["Ithaca.md"]);
+		assert_eq!(written, vec!["Ithaca.md", "Ithaca.epub"]);
 		let text = fs::read_to_string(out.path().join("Ithaca.md")).unwrap();
 		assert!(text.starts_with("# Ithaca\n"));
+		let epub = fs::read(out.path().join("Ithaca.epub")).unwrap();
+		assert!(epub.starts_with(b"PK\x03\x04"));
 	}
 
 	#[test]

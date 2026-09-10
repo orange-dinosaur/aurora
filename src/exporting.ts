@@ -4,6 +4,7 @@ import type { ExportFormat, ExportProgress, Extent } from "./types";
 /** Every format the Export panel offers, in the order it lists them. */
 export const FORMATS: { key: ExportFormat; name: string }[] = [
 	{ key: "markdown", name: "Markdown" },
+	{ key: "epub", name: "EPUB" },
 ];
 
 /**
