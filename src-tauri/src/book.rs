@@ -6,10 +6,14 @@
 //! documents make up each one. Nothing here opens a file, so a renderer decides
 //! for itself when to read the text a scene points at.
 
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+
 use uuid::Uuid;
 
-use crate::document::{DocumentView, NodeView};
-use crate::project::{MANUSCRIPT, matter};
+use crate::document::{DocumentView, NodeView, body};
+use crate::project::{Book, MANUSCRIPT, matter};
 use crate::tree::FolderKind;
 
 /// One document the book takes, with where its text is. The title is the file
@@ -192,6 +196,393 @@ fn scene(document: &DocumentView) -> Scene {
 fn kept(node: &NodeView) -> bool {
 	match node {
 		NodeView::Folder { in_book, .. } | NodeView::Document { in_book, .. } => *in_book,
+	}
+}
+
+/// What every scene of the book holds, by id. The compile walk says what the
+/// book is made of and this says what is in it, which is the one thing the
+/// walk cannot work out without opening a file.
+pub type Prose = HashMap<Uuid, String>;
+
+/// How a scene change is written. Aurora's editor reads every spelling of a
+/// thematic break and writes this one back, in `SCENE_BREAK` in
+/// `src/markdown.ts`; an export the writer opens in Aurora again should meet
+/// what it would have written itself.
+const BREAK: &str = "---";
+
+/// Every scene the book holds, in reading order.
+pub fn all_scenes(compiled: &Compiled) -> Vec<&Scene> {
+	let chapters = compiled.body.iter().flat_map(|division| match division {
+		Division::Part(part) => part.chapters.iter().collect::<Vec<_>>(),
+		Division::Chapter(chapter) => vec![chapter],
+	});
+
+	compiled
+		.front
+		.iter()
+		.chain(chapters.flat_map(|chapter| chapter.scenes.iter()))
+		.chain(compiled.back.iter())
+		.collect()
+}
+
+/// Reads the prose of every scene in the book, with each one's front matter
+/// block lifted off. A scene whose file will not open is left out and renders
+/// as nothing rather than stopping the export: the tree comes from the
+/// manifest, and the manifest can name a file that is no longer there.
+pub fn prose(root: &Path, compiled: &Compiled) -> Prose {
+	all_scenes(compiled)
+		.into_iter()
+		.filter_map(|scene| {
+			let text = fs::read_to_string(root.join(&scene.path)).ok()?;
+			Some((scene.id, body(&text).trim().to_owned()))
+		})
+		.collect()
+}
+
+/// The whole book as one Markdown document: the title and author, then what
+/// comes before the story, the story itself, and what comes after.
+///
+/// A part and a piece of matter are both `#`, since both are a division of the
+/// book, and a chapter is `##` whether it is a folder of scenes or the one
+/// document that is the whole of it. Scenes inside a chapter run together with
+/// a break between them, because a scene is a fragment of a chapter rather than
+/// something with a name of its own.
+pub fn markdown(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
+	let mut blocks = Vec::new();
+
+	if !book.title.is_empty() {
+		blocks.push(format!("# {}", book.title));
+	}
+	if !book.author.is_empty() {
+		blocks.push(format!("by {}", book.author));
+	}
+
+	for scene in &compiled.front {
+		piece(&mut blocks, scene, prose);
+	}
+	for division in &compiled.body {
+		match division {
+			Division::Part(part) => {
+				blocks.push(format!("# {}", part.title));
+				for chapter in &part.chapters {
+					chapter_blocks(&mut blocks, chapter, prose);
+				}
+			}
+			Division::Chapter(chapter) => chapter_blocks(&mut blocks, chapter, prose),
+		}
+	}
+	for scene in &compiled.back {
+		piece(&mut blocks, scene, prose);
+	}
+
+	// One blank line between blocks, and a newline at the end: a text file ends
+	// in one, and every tool that reads Markdown expects it.
+	let mut out = blocks.join("\n\n");
+	if !out.is_empty() {
+		out.push('\n');
+	}
+	out
+}
+
+/// A document that stands on its own, which is what every piece of front and
+/// back matter is. It keeps its title, unlike a scene.
+fn piece(blocks: &mut Vec<String>, scene: &Scene, prose: &Prose) {
+	blocks.push(format!("# {}", scene.title));
+	blocks.extend(told(std::slice::from_ref(scene), prose));
+}
+
+fn chapter_blocks(blocks: &mut Vec<String>, chapter: &Chapter, prose: &Prose) {
+	blocks.push(format!("## {}", chapter.title));
+
+	for (at, text) in told(&chapter.scenes, prose).into_iter().enumerate() {
+		if at > 0 {
+			blocks.push(BREAK.to_owned());
+		}
+		blocks.push(text);
+	}
+}
+
+/// The prose of the scenes that have any. A scene that could not be read, or
+/// that holds nothing but its front matter, is passed over here rather than
+/// leaving an empty block or a break with nothing on either side of it.
+fn told(scenes: &[Scene], prose: &Prose) -> Vec<String> {
+	scenes
+		.iter()
+		.filter_map(|scene| prose.get(&scene.id))
+		.filter(|text| !text.is_empty())
+		.cloned()
+		.collect()
+}
+
+/// Whether `pulldown-cmark` reads back everything Aurora's editor writes. The
+/// list mirrors `src/markdown.test.ts`, which is where what the editor writes
+/// is settled, so a construct added there belongs here too. Nothing in the
+/// build parses Markdown yet; the EPUB and DOCX renderers will, and this is
+/// what they will stand on.
+#[cfg(test)]
+mod reading_back {
+	use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+
+	/// The parser as a renderer should ask for it. None of these three are in
+	/// CommonMark, so each has to be turned on by name: strikethrough because
+	/// Aurora's editor writes it, tables and footnotes because it keeps a
+	/// pasted one verbatim and an export must not be the place they are lost.
+	fn options() -> Options {
+		Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES
+	}
+
+	/// What the parser understood, named the way these tests talk about it.
+	fn read(markdown: &str) -> Vec<String> {
+		Parser::new_ext(markdown, options())
+			.map(|event| match event {
+				Event::Start(tag) => format!("start {}", started(&tag)),
+				Event::End(end) => format!("end {}", ended(&end)),
+				Event::Text(text) => format!("text {text}"),
+				Event::Code(text) => format!("code {text}"),
+				Event::SoftBreak => "soft break".to_owned(),
+				Event::HardBreak => "hard break".to_owned(),
+				Event::Rule => "scene break".to_owned(),
+				other => format!("{other:?}"),
+			})
+			.collect()
+	}
+
+	fn started(tag: &Tag) -> String {
+		match tag {
+			Tag::Paragraph => "paragraph".to_owned(),
+			Tag::Heading { level, .. } => format!("heading {level}"),
+			Tag::BlockQuote(_) => "quote".to_owned(),
+			Tag::CodeBlock(_) => "code block".to_owned(),
+			Tag::List(None) => "list".to_owned(),
+			Tag::List(Some(_)) => "numbered list".to_owned(),
+			Tag::Item => "item".to_owned(),
+			Tag::Emphasis => "emphasis".to_owned(),
+			Tag::Strong => "strong".to_owned(),
+			Tag::Strikethrough => "strikethrough".to_owned(),
+			Tag::Link { dest_url, .. } => format!("link {dest_url}"),
+			other => format!("{other:?}"),
+		}
+	}
+
+	fn ended(end: &TagEnd) -> String {
+		match end {
+			TagEnd::Paragraph => "paragraph".to_owned(),
+			TagEnd::Heading(_) => "heading".to_owned(),
+			TagEnd::BlockQuote(_) => "quote".to_owned(),
+			TagEnd::CodeBlock => "code block".to_owned(),
+			TagEnd::List(_) => "list".to_owned(),
+			TagEnd::Item => "item".to_owned(),
+			TagEnd::Emphasis => "emphasis".to_owned(),
+			TagEnd::Strong => "strong".to_owned(),
+			TagEnd::Strikethrough => "strikethrough".to_owned(),
+			TagEnd::Link => "link".to_owned(),
+			other => format!("{other:?}"),
+		}
+	}
+
+	#[test]
+	fn everything_the_editor_writes_reads_back() {
+		let wanted: &[(&str, &[&str])] = &[
+			(
+				"# Chapter One",
+				&["start heading h1", "text Chapter One", "end heading"],
+			),
+			(
+				"### The room above the shop",
+				&[
+					"start heading h3",
+					"text The room above the shop",
+					"end heading",
+				],
+			),
+			(
+				"She was *late* and **cross**.",
+				&[
+					"start paragraph",
+					"text She was ",
+					"start emphasis",
+					"text late",
+					"end emphasis",
+					"text  and ",
+					"start strong",
+					"text cross",
+					"end strong",
+					"text .",
+					"end paragraph",
+				],
+			),
+			(
+				"It was ~~fine~~ awful.",
+				&[
+					"start paragraph",
+					"text It was ",
+					"start strikethrough",
+					"text fine",
+					"end strikethrough",
+					"text  awful.",
+					"end paragraph",
+				],
+			),
+			(
+				"Run `cargo test` first.",
+				&[
+					"start paragraph",
+					"text Run ",
+					"code cargo test",
+					"text  first.",
+					"end paragraph",
+				],
+			),
+			(
+				"- one\n- two",
+				&[
+					"start list",
+					"start item",
+					"text one",
+					"end item",
+					"start item",
+					"text two",
+					"end item",
+					"end list",
+				],
+			),
+			(
+				"1. one\n2. two",
+				&[
+					"start numbered list",
+					"start item",
+					"text one",
+					"end item",
+					"start item",
+					"text two",
+					"end item",
+					"end list",
+				],
+			),
+			(
+				"> He never came back.",
+				&[
+					"start quote",
+					"start paragraph",
+					"text He never came back.",
+					"end paragraph",
+					"end quote",
+				],
+			),
+			(
+				"```rust\nfn main() {}\n```",
+				&["start code block", "text fn main() {}\n", "end code block"],
+			),
+			(
+				"See [the map](https://example.com/map).",
+				&[
+					"start paragraph",
+					"text See ",
+					"start link https://example.com/map",
+					"text the map",
+					"end link",
+					"text .",
+					"end paragraph",
+				],
+			),
+			(
+				"One line.\nAnd another.",
+				&[
+					"start paragraph",
+					"text One line.",
+					"soft break",
+					"text And another.",
+					"end paragraph",
+				],
+			),
+			(
+				"- one\n    - inner\n- two",
+				&[
+					"start list",
+					"start item",
+					"text one",
+					"start list",
+					"start item",
+					"text inner",
+					"end item",
+					"end list",
+					"end item",
+					"start item",
+					"text two",
+					"end item",
+					"end list",
+				],
+			),
+		];
+
+		for (markdown, events) in wanted {
+			assert_eq!(read(markdown), *events, "reading {markdown:?}");
+		}
+	}
+
+	#[test]
+	fn a_scene_break_is_read_as_a_break_and_not_as_a_heading() {
+		// The one that would bite: three dashes under a line of prose is a
+		// setext heading in Markdown, and Aurora writes a scene break this way.
+		assert_eq!(
+			read("One.\n\n---\n\nTwo."),
+			[
+				"start paragraph",
+				"text One.",
+				"end paragraph",
+				"scene break",
+				"start paragraph",
+				"text Two.",
+				"end paragraph",
+			]
+		);
+	}
+
+	#[test]
+	fn strikethrough_is_only_read_when_it_is_asked_for() {
+		let plain: Vec<String> = Parser::new_ext("It was ~~fine~~ awful.", Options::empty())
+			.filter_map(|event| match event {
+				Event::Text(text) => Some(text.to_string()),
+				_ => None,
+			})
+			.collect();
+
+		assert_eq!(plain.concat(), "It was ~~fine~~ awful.");
+		assert!(read("It was ~~fine~~ awful.").contains(&"start strikethrough".to_owned()));
+	}
+
+	#[test]
+	fn a_pasted_table_is_read_as_a_table() {
+		let table = "| a | b |\n| --- | --- |\n| 1 | 2 |";
+
+		assert!(
+			read(table)
+				.iter()
+				.any(|event| event.starts_with("start Table")),
+			"a table needs ENABLE_TABLES: without it every row reads as prose"
+		);
+	}
+
+	#[test]
+	fn a_pasted_footnote_is_read_as_a_footnote() {
+		let footnote = "Text[^1]\n\n[^1]: A note.";
+
+		assert!(
+			read(footnote)
+				.iter()
+				.any(|event| event.starts_with("FootnoteReference")),
+			"a footnote needs ENABLE_FOOTNOTES: without it the marker reads as brackets"
+		);
+	}
+
+	#[test]
+	fn an_html_comment_arrives_as_html_for_a_renderer_to_decide_about() {
+		assert!(
+			read("<!-- check this name -->\n\nProse.")
+				.iter()
+				.any(|event| event.starts_with("Html(")),
+			"a renderer has to say what it does with html rather than never meeting it"
+		);
 	}
 }
 
@@ -542,6 +933,180 @@ mod tests {
 		};
 		assert_eq!(chapter.scenes[0].path, "Manuscript/Arrival/Dawn.md");
 		assert_eq!(chapter.scenes[0].title, "Dawn");
+	}
+
+	/// A book with nothing said about it but these two.
+	fn book(title: &str, author: &str) -> Book {
+		let mut book = Book::new(title);
+		book.author = author.to_owned();
+		book
+	}
+
+	/// What the scenes hold, named by title, since their ids are made as the
+	/// tree is built.
+	fn prose_of(compiled: &Compiled, said: &[(&str, &str)]) -> Prose {
+		all_scenes(compiled)
+			.into_iter()
+			.filter_map(|scene| {
+				said.iter()
+					.find(|(title, _)| *title == scene.title)
+					.map(|(_, text)| (scene.id, (*text).to_owned()))
+			})
+			.collect()
+	}
+
+	#[test]
+	fn the_title_and_the_author_come_first() {
+		let compiled = compile(&tree(vec![doc("Opening.md")]));
+		let prose = prose_of(&compiled, &[("Opening", "She ran.")]);
+
+		assert_eq!(
+			markdown(&book("Ithaca", "Ada Lovelace"), &compiled, &prose),
+			"# Ithaca\n\nby Ada Lovelace\n\n## Opening\n\nShe ran.\n"
+		);
+	}
+
+	#[test]
+	fn a_book_with_no_author_says_nothing_about_one() {
+		let compiled = compile(&tree(vec![doc("Opening.md")]));
+		let prose = prose_of(&compiled, &[("Opening", "She ran.")]);
+
+		assert_eq!(
+			markdown(&book("Ithaca", ""), &compiled, &prose),
+			"# Ithaca\n\n## Opening\n\nShe ran.\n"
+		);
+	}
+
+	#[test]
+	fn a_part_is_one_hash_and_a_chapter_is_two() {
+		let compiled = compile(&tree(vec![part(
+			"Part One",
+			vec![chapter_folder("Arrival", vec![doc("Dawn.md")])],
+		)]));
+		let prose = prose_of(&compiled, &[("Dawn", "She arrived.")]);
+
+		assert_eq!(
+			markdown(&book("Ithaca", ""), &compiled, &prose),
+			"# Ithaca\n\n# Part One\n\n## Arrival\n\nShe arrived.\n"
+		);
+	}
+
+	#[test]
+	fn scenes_in_a_chapter_are_parted_by_a_break() {
+		let compiled = compile(&tree(vec![chapter_folder(
+			"Arrival",
+			vec![doc("Dawn.md"), doc("Dusk.md")],
+		)]));
+		let prose = prose_of(
+			&compiled,
+			&[("Dawn", "She arrived."), ("Dusk", "She left.")],
+		);
+
+		assert_eq!(
+			markdown(&book("Ithaca", ""), &compiled, &prose),
+			"# Ithaca\n\n## Arrival\n\nShe arrived.\n\n---\n\nShe left.\n"
+		);
+	}
+
+	#[test]
+	fn matter_keeps_its_own_title_and_sits_around_the_story() {
+		let compiled = compile(&tree(vec![
+			front_matter(vec![doc("Dedication.md")]),
+			doc("Opening.md"),
+			back_matter(vec![doc("Afterword.md")]),
+		]));
+		let prose = prose_of(
+			&compiled,
+			&[
+				("Dedication", "For Ada."),
+				("Opening", "She ran."),
+				("Afterword", "Thanks."),
+			],
+		);
+
+		assert_eq!(
+			markdown(&book("Ithaca", ""), &compiled, &prose),
+			"# Ithaca\n\n# Dedication\n\nFor Ada.\n\n## Opening\n\nShe ran.\n\n# Afterword\n\nThanks.\n"
+		);
+	}
+
+	#[test]
+	fn a_scene_with_nothing_in_it_leaves_no_break_behind() {
+		let compiled = compile(&tree(vec![chapter_folder(
+			"Arrival",
+			vec![doc("Dawn.md"), doc("Empty.md"), doc("Dusk.md")],
+		)]));
+		// The middle one holds nothing, and its file could not be read at all.
+		let prose = prose_of(
+			&compiled,
+			&[("Dawn", "She arrived."), ("Dusk", "She left.")],
+		);
+
+		assert_eq!(
+			markdown(&book("Ithaca", ""), &compiled, &prose),
+			"# Ithaca\n\n## Arrival\n\nShe arrived.\n\n---\n\nShe left.\n"
+		);
+	}
+
+	#[test]
+	fn a_book_with_nothing_in_it_renders_to_nothing() {
+		let compiled = compile(&[]);
+
+		assert_eq!(markdown(&book("", ""), &compiled, &Prose::new()), "");
+	}
+
+	#[test]
+	fn all_scenes_reads_front_then_story_then_back() {
+		let compiled = compile(&tree(vec![
+			back_matter(vec![doc("Afterword.md")]),
+			part(
+				"Part One",
+				vec![chapter_folder("Arrival", vec![doc("Dawn.md")])],
+			),
+			doc("Interlude.md"),
+			front_matter(vec![doc("Dedication.md")]),
+		]));
+
+		let titles: Vec<&str> = all_scenes(&compiled)
+			.into_iter()
+			.map(|scene| scene.title.as_str())
+			.collect();
+
+		assert_eq!(titles, ["Dedication", "Dawn", "Interlude", "Afterword"]);
+	}
+
+	#[test]
+	fn prose_arrives_without_the_front_matter_block() {
+		let root = tempfile::tempdir().unwrap();
+		fs::create_dir(root.path().join("Manuscript")).unwrap();
+		fs::write(
+			root.path().join("Manuscript/Dawn.md"),
+			"---\ninBook: true\n---\n\nShe arrived.\n",
+		)
+		.unwrap();
+		let compiled = compile(&tree(vec![doc("Manuscript/Dawn.md")]));
+
+		let held = prose(root.path(), &compiled);
+
+		let scene = all_scenes(&compiled)[0];
+		assert_eq!(
+			held.get(&scene.id).map(String::as_str),
+			Some("She arrived.")
+		);
+	}
+
+	#[test]
+	fn a_scene_whose_file_is_gone_is_left_out() {
+		let root = tempfile::tempdir().unwrap();
+		let compiled = compile(&tree(vec![doc("Manuscript/Missing.md")]));
+
+		let held = prose(root.path(), &compiled);
+
+		assert!(held.is_empty());
+		assert_eq!(
+			markdown(&book("Ithaca", ""), &compiled, &held),
+			"# Ithaca\n\n## Missing\n"
+		);
 	}
 
 	#[test]

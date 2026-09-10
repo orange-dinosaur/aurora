@@ -48,3 +48,6 @@ trash = "5.2.7"
 
 [dev-dependencies]
 tempfile = "3"
+# Only the tests that check Aurora's Markdown can be read back need this. The
+# EPUB and DOCX renderers will want it in the build itself.
+pulldown-cmark = "0.13"

@@ -615,7 +615,7 @@ fn split(text: &str) -> (&str, &str) {
 }
 
 /// A document's prose, with any front matter block lifted off the top.
-fn body(text: &str) -> &str {
+pub(crate) fn body(text: &str) -> &str {
 	split(text).1
 }
 
