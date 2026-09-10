@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { doing, flipped, fraction, sized, wrote } from "./exporting";
+import { doing, flipped, fraction, sized, warned, wrote } from "./exporting";
 
 describe("flipped", () => {
 	test("ticks a format that was not ticked", () => {
@@ -66,5 +66,18 @@ describe("wrote", () => {
 		expect(wrote(["Ithaca.md"], "/home/me/Exports")).toBe(
 			"Wrote Ithaca.md to /home/me/Exports.",
 		);
+	});
+});
+
+describe("warned", () => {
+	test("warns about an EPUB without a cover", () => {
+		expect(warned(["markdown", "epub"], false)).toBe(
+			"No cover: most libraries will show a blank tile.",
+		);
+	});
+
+	test("says nothing once there is a cover, or no EPUB", () => {
+		expect(warned(["epub"], true)).toBe("");
+		expect(warned(["markdown"], false)).toBe("");
 	});
 });

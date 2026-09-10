@@ -42,7 +42,16 @@ const STYLE_ITEM: &str = r#"<item id="style" href="style.css" media-type="text/c
 
 /// Only what the generated pages need. Everything else is left to the reader,
 /// where the person reading has chosen their own type and spacing.
-const CSS: &str = r#".titlepage {
+const CSS: &str = r#".cover {
+	text-align: center;
+}
+
+.cover img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+.titlepage {
 	margin-top: 25%;
 	text-align: center;
 }
@@ -80,14 +89,19 @@ struct Entry {
 	under: Vec<Entry>,
 }
 
-/// The book as an EPUB, marked as last changed at `now`.
+/// The book as an EPUB, marked as last changed at `now`. `cover` is the image
+/// the project keeps, when it has one.
 pub fn epub(
 	book: &Book,
 	compiled: &Compiled,
 	prose: &Prose,
+	cover: Option<&[u8]>,
 	now: OffsetDateTime,
 ) -> io::Result<Vec<u8>> {
 	let language = language_of(book);
+	// The cover goes in under a name of Aurora's own, so nothing the manifest
+	// holds ends up in the package's markup.
+	let cover = cover.map(|bytes| (cover_file(book), bytes));
 	let piece = |pages: &mut Vec<String>, scene: &Scene| {
 		page(
 			pages,
@@ -108,6 +122,10 @@ pub fn epub(
 	let mut pages = Vec::new();
 	let mut contents = Vec::new();
 	let title = title_of(book);
+	// Left out of the contents: a reader shows a cover without being pointed at it.
+	if let Some((file, _)) = cover {
+		add_page(&mut pages, language, "Cover", &cover_page(file, title));
+	}
 	contents.push(add_page(&mut pages, language, title, &title_page(book)));
 	if let Some(notice) = copyright_page(book) {
 		contents.push(add_page(&mut pages, language, "Copyright", &notice));
@@ -134,9 +152,14 @@ pub fn epub(
 	let mut archive = Archive::default();
 	archive.store("mimetype", b"application/epub+zip")?;
 	archive.deflate("META-INF/container.xml", CONTAINER.as_bytes())?;
-	archive.deflate(PACKAGE, package(book, pages.len(), now).as_bytes())?;
+	let opf = package(book, pages.len(), cover.map(|(file, _)| file), now);
+	archive.deflate(PACKAGE, opf.as_bytes())?;
 	archive.deflate(NAV, nav(language, &contents).as_bytes())?;
 	archive.deflate(STYLE, CSS.as_bytes())?;
+	if let Some((file, bytes)) = cover {
+		// Already compressed, as a PNG or a JPEG is.
+		archive.store(&format!("EPUB/{file}"), bytes)?;
+	}
 	for (at, text) in pages.iter().enumerate() {
 		archive.deflate(&format!("EPUB/{}.xhtml", id(at)), text.as_bytes())?;
 	}
@@ -178,6 +201,31 @@ fn add_page(pages: &mut Vec<String>, language: &str, title: &str, body: &str) ->
 		title: title.to_owned(),
 		under: Vec::new(),
 	}
+}
+
+/// What the cover is called in the EPUB. The project keeps it as a PNG or a
+/// JPEG, and its name says which.
+fn cover_file(book: &Book) -> &'static str {
+	if book.cover.ends_with(".png") {
+		"cover.png"
+	} else {
+		"cover.jpg"
+	}
+}
+
+fn media_type(file: &str) -> &'static str {
+	if file.ends_with(".png") {
+		"image/png"
+	} else {
+		"image/jpeg"
+	}
+}
+
+/// A page holding the cover alone, so the book opens on it.
+fn cover_page(file: &str, title: &str) -> String {
+	let title = escaped(title);
+	let image = format!(r#"<img src="{file}" alt="{title}" />"#);
+	section("cover", &[image])
 }
 
 /// The title page: the title, any subtitle, and who wrote it.
@@ -297,11 +345,20 @@ fn listed(out: &mut String, entries: &[Entry]) {
 
 /// The package document: what the book is, every file in it, and the order
 /// they are read in.
-fn package(book: &Book, pages: usize, now: OffsetDateTime) -> String {
+fn package(book: &Book, pages: usize, cover: Option<&str>, now: OffsetDateTime) -> String {
 	let language = escaped(language_of(book));
 
 	let nav = format!(r#"<item id="nav" href="nav.xhtml" {XHTML} properties="nav" />"#);
 	let mut manifest = vec![nav, STYLE_ITEM.to_owned()];
+	let mut metadata = described(book, now);
+	if let Some(file) = cover {
+		let media = media_type(file);
+		manifest.push(format!(
+			r#"<item id="cover" href="{file}" media-type="{media}" properties="cover-image" />"#
+		));
+		// What readers older than EPUB 3 find the cover by.
+		metadata.push(r#"<meta name="cover" content="cover" />"#.to_owned());
+	}
 	let mut spine = Vec::new();
 	for at in 0..pages {
 		let name = id(at);
@@ -311,7 +368,7 @@ fn package(book: &Book, pages: usize, now: OffsetDateTime) -> String {
 		spine.push(format!(r#"<itemref idref="{name}" />"#));
 	}
 
-	let metadata = described(book, now).join("\n\t\t");
+	let metadata = metadata.join("\n\t\t");
 	let manifest = manifest.join("\n\t\t");
 	let spine = spine.join("\n\t\t");
 	format!(
@@ -548,7 +605,7 @@ mod tests {
 					.map(|(_, text)| (scene.id, (*text).to_owned()))
 			})
 			.collect();
-		epub(book, compiled, &prose, now()).unwrap()
+		epub(book, compiled, &prose, None, now()).unwrap()
 	}
 
 	fn read(epub: &[u8], name: &str) -> String {
@@ -793,5 +850,33 @@ mod tests {
 		assert_eq!(position(" 1.5 "), Some("1.5"));
 		assert_eq!(position("Two"), None);
 		assert_eq!(position(""), None);
+	}
+
+	#[test]
+	fn a_cover_is_the_first_page_and_named_in_the_package() {
+		let mut book = Book::new("Ithaca");
+		book.cover = "cover.png".to_owned();
+		let image: &[u8] = b"\x89PNG not really";
+		let compiled = Compiled::default();
+		let prose = Prose::new();
+		let epub = epub(&book, &compiled, &prose, Some(image), now()).unwrap();
+
+		let package = read(&epub, PACKAGE);
+		assert!(package.contains(r#"properties="cover-image""#));
+		assert!(package.contains("image/png"));
+		assert!(package.contains(r#"name="cover" content="cover""#));
+
+		let page = read(&epub, "EPUB/text-1.xhtml");
+		assert!(page.contains(r#"<img src="cover.png" alt="Ithaca" />"#));
+		assert!(!read(&epub, NAV).contains("Cover"));
+
+		let mut archive = ZipArchive::new(Cursor::new(epub.as_slice())).unwrap();
+		let mut stored = Vec::new();
+		archive
+			.by_name("EPUB/cover.png")
+			.unwrap()
+			.read_to_end(&mut stored)
+			.unwrap();
+		assert_eq!(stored, image);
 	}
 }

@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::document::{DocumentView, NodeView, body, document_tree};
 use crate::epub::epub;
-use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, matter, read_book};
+use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, cover_bytes, matter, read_book};
 use crate::tree::FolderKind;
 
 /// One document the book takes, with where its text is. The title is the file
@@ -423,7 +423,13 @@ pub fn export(
 
 		let bytes = match format {
 			ExportFormat::Markdown => markdown(&book, &compiled, &prose).into_bytes(),
-			ExportFormat::Epub => epub(&book, &compiled, &prose, OffsetDateTime::now_utc())?,
+			ExportFormat::Epub => {
+				// A cover that has gone missing leaves the book without one
+				// rather than stopping the export.
+				let cover = cover_bytes(root).ok();
+				let now = OffsetDateTime::now_utc();
+				epub(&book, &compiled, &prose, cover.as_deref(), now)?
+			}
 		};
 		fs::write(folder.join(&name), bytes)?;
 		written.push(name);

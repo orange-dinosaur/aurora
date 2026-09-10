@@ -51,3 +51,10 @@ export function fraction(progress: ExportProgress): number {
 export function wrote(files: string[], folder: string): string {
 	return `Wrote ${files.join(", ")} to ${folder}.`;
 }
+
+/** What the panel warns about before an export, if anything. */
+export function warned(formats: ExportFormat[], hasCover: boolean): string {
+	return formats.includes("epub") && !hasCover
+		? "No cover: most libraries will show a blank tile."
+		: "";
+}

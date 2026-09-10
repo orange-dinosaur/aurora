@@ -1031,7 +1031,8 @@ pub fn read_cover(root: PathBuf) -> Result<tauri::ipc::Response> {
 	Ok(tauri::ipc::Response::new(cover_bytes(&root)?))
 }
 
-fn cover_bytes(root: &Path) -> Result<Vec<u8>> {
+/// The cover image as the project keeps it.
+pub fn cover_bytes(root: &Path) -> Result<Vec<u8>> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}

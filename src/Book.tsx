@@ -433,6 +433,7 @@ export default function BookView({ root }: Props) {
 							/>
 							<Export
 								root={root}
+								hasCover={book.cover !== ""}
 								formats={book.exportFormats}
 								onFormats={(exportFormats) =>
 									edit({ ...book, exportFormats })
