@@ -200,13 +200,15 @@ pub struct Store {
 	/// project they belong to. Kept here rather than in the project's manifest
 	/// because it is how one writer is looking at the project on one machine,
 	/// not part of the story: a copy of the project carries the words, and this
-	/// stays behind. Absent from a store written before version 5.
+	/// stays behind. An empty list means everything is shut; no entry means the
+	/// writer has never touched the sidebar. Absent from a store written before
+	/// version 5.
 	#[serde(default)]
 	pub expanded: BTreeMap<PathBuf, Vec<Uuid>>,
 	/// The groups the writer has folded shut on a project's Book page. Shut
 	/// rather than open, which is the other way round from `expanded`: a page
 	/// nobody has touched has no entry at all, and every group there starts
-	/// open, so the two states the sidebar cannot tell apart do not arise here.
+	/// open.
 	/// Absent from a store written before version 9.
 	#[serde(default)]
 	pub folded: BTreeMap<PathBuf, Vec<String>>,
@@ -331,22 +333,18 @@ pub fn write_preferences(app: AppHandle, preferences: Preferences) -> Result<()>
 	set_preferences(&store_path(&app)?, preferences)
 }
 
-fn expanded(path: &Path, root: &Path) -> Result<Vec<Uuid>> {
-	Ok(load(path)?.expanded.remove(root).unwrap_or_default())
+/// The folders left open in one project, or `None` for a project the writer has
+/// never opened or shut anything in.
+fn expanded(path: &Path, root: &Path) -> Result<Option<Vec<Uuid>>> {
+	Ok(load(path)?.expanded.remove(root))
 }
 
-/// An empty list drops the project's entry rather than writing one: a writer
-/// who folds everything shut is back where they started, and the store should
-/// say so rather than keep a row saying nothing.
+/// An empty list is kept rather than dropping the project's entry, so a writer
+/// who folds everything shut is not taken on the next launch for one who has
+/// never touched the sidebar.
 fn set_expanded(path: &Path, root: PathBuf, open: Vec<Uuid>) -> Result<()> {
 	let mut store = load(path)?;
-
-	if open.is_empty() {
-		store.expanded.remove(&root);
-	} else {
-		store.expanded.insert(root, open);
-	}
-
+	store.expanded.insert(root, open);
 	save(path, &store)
 }
 
@@ -354,7 +352,7 @@ fn set_expanded(path: &Path, root: PathBuf, open: Vec<Uuid>) -> Result<()> {
 /// writer has not expanded anything in yet.
 #[tauri::command]
 pub fn read_expanded(app: AppHandle, root: PathBuf) -> Result<Vec<Uuid>> {
-	expanded(&store_path(&app)?, &root)
+	Ok(expanded(&store_path(&app)?, &root)?.unwrap_or_default())
 }
 
 #[tauri::command]
@@ -766,23 +764,26 @@ mod tests {
 
 		set_expanded(&path, ithaca.clone(), vec![part]).unwrap();
 
-		assert_eq!(expanded(&path, &ithaca).unwrap(), vec![part]);
-		assert!(
-			expanded(&path, &rooks).unwrap().is_empty(),
+		assert_eq!(expanded(&path, &ithaca).unwrap(), Some(vec![part]));
+		assert_eq!(
+			expanded(&path, &rooks).unwrap(),
+			None,
 			"one project's open folders are not another's"
 		);
 	}
 
 	#[test]
-	fn folding_everything_shut_leaves_no_entry_behind() {
+	fn folding_everything_shut_is_not_taken_for_never_touched() {
 		let dir = tempfile::tempdir().unwrap();
 		let path = dir.path().join("store.json");
 		let ithaca = PathBuf::from("/writing/Ithaca");
+		let rooks = PathBuf::from("/writing/Rooks");
 
 		set_expanded(&path, ithaca.clone(), vec![Uuid::new_v4()]).unwrap();
-		set_expanded(&path, ithaca, Vec::new()).unwrap();
+		set_expanded(&path, ithaca.clone(), Vec::new()).unwrap();
 
-		assert!(load(&path).unwrap().expanded.is_empty());
+		assert_eq!(expanded(&path, &ithaca).unwrap(), Some(Vec::new()));
+		assert_eq!(expanded(&path, &rooks).unwrap(), None);
 	}
 
 	#[test]
