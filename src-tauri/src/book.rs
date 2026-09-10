@@ -9,7 +9,7 @@
 use uuid::Uuid;
 
 use crate::document::{DocumentView, NodeView};
-use crate::project::{FRONT_MATTER, MANUSCRIPT, matter};
+use crate::project::{MANUSCRIPT, matter};
 use crate::tree::FolderKind;
 
 /// One document the book takes, with where its text is. The title is the file
@@ -73,15 +73,13 @@ pub fn compile(nodes: &[NodeView]) -> Compiled {
 		return compiled;
 	};
 
-	// What the two matter folders are called only means anything directly
-	// inside the Manuscript, which is where this walk is.
-	let prefix = format!("{MANUSCRIPT}/");
-
 	for node in manuscript.iter().filter(|node| kept(node)) {
 		match node {
-			NodeView::Folder { name, children, .. } if matter(&prefix, name) => {
+			// Only here: a matter kind can exist nowhere but directly inside
+			// the Manuscript, so nothing deeper down is ever asked.
+			NodeView::Folder { kind, children, .. } if matter(*kind) => {
 				let matter_scenes = scenes(children);
-				if name == FRONT_MATTER {
+				if *kind == Some(FolderKind::FrontMatter) {
 					compiled.front.extend(matter_scenes);
 				} else {
 					compiled.back.extend(matter_scenes);
@@ -254,6 +252,28 @@ mod tests {
 		folder_node(name, Some(FolderKind::Part), false, children)
 	}
 
+	fn front_matter(children: Vec<NodeView>) -> NodeView {
+		folder_node(
+			"Front Matter",
+			Some(FolderKind::FrontMatter),
+			true,
+			children,
+		)
+	}
+
+	fn off_front_matter(children: Vec<NodeView>) -> NodeView {
+		folder_node(
+			"Front Matter",
+			Some(FolderKind::FrontMatter),
+			false,
+			children,
+		)
+	}
+
+	fn back_matter(children: Vec<NodeView>) -> NodeView {
+		folder_node("Back Matter", Some(FolderKind::BackMatter), true, children)
+	}
+
 	fn chapter_folder(name: &str, children: Vec<NodeView>) -> NodeView {
 		folder_node(name, Some(FolderKind::Chapter), true, children)
 	}
@@ -383,9 +403,9 @@ mod tests {
 	#[test]
 	fn matter_comes_out_by_role_and_not_by_where_it_sits() {
 		let compiled = compile(&tree(vec![
-			folder("Back Matter", vec![doc("Afterword.md")]),
+			back_matter(vec![doc("Afterword.md")]),
 			doc("Opening.md"),
-			folder(FRONT_MATTER, vec![doc("Dedication.md")]),
+			front_matter(vec![doc("Dedication.md")]),
 		]));
 
 		assert_eq!(
@@ -401,24 +421,24 @@ mod tests {
 
 	#[test]
 	fn matter_flattens_the_folders_inside_it() {
-		let compiled = compile(&tree(vec![folder(
-			FRONT_MATTER,
-			vec![
-				doc("Dedication.md"),
-				folder("Praise", vec![doc("The Times.md")]),
-			],
-		)]));
+		let compiled = compile(&tree(vec![front_matter(vec![
+			doc("Dedication.md"),
+			folder("Praise", vec![doc("The Times.md")]),
+		])]));
 
 		assert_eq!(outline(&compiled), ["front Dedication", "front The Times"]);
 	}
 
 	#[test]
-	fn the_matter_names_mean_nothing_below_the_manuscript() {
+	fn matter_is_only_looked_for_at_the_top_of_the_manuscript() {
+		// `tree::may_hold` will not let this be made, and a renderer that met
+		// one anyway should still get something it can draw.
 		let compiled = compile(&tree(vec![part(
 			"Part One",
-			vec![folder(FRONT_MATTER, vec![doc("Epigraph.md")])],
+			vec![front_matter(vec![doc("Epigraph.md")])],
 		)]));
 
+		assert!(compiled.front.is_empty());
 		assert_eq!(
 			outline(&compiled),
 			["part Part One", "chapter Front Matter", "scene Epigraph"]
@@ -461,7 +481,7 @@ mod tests {
 	#[test]
 	fn front_matter_out_of_the_book_leaves_nothing_in_front() {
 		let compiled = compile(&tree(vec![
-			off_folder(FRONT_MATTER, vec![doc("Dedication.md")]),
+			off_front_matter(vec![doc("Dedication.md")]),
 			doc("Opening.md"),
 		]));
 

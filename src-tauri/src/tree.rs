@@ -38,6 +38,22 @@ pub type Fields = BTreeMap<String, Value>;
 pub enum FolderKind {
 	Part,
 	Chapter,
+	/// What comes before the story: a dedication, an epigraph, a title page.
+	/// A kind rather than a folder called `Front Matter`, so that a renamed
+	/// folder is still what it was and nothing has to match on a name.
+	FrontMatter,
+	/// What comes after it: an afterword, acknowledgements, a glossary.
+	BackMatter,
+}
+
+impl FolderKind {
+	/// Whether this is one of the two folders that surround the story rather
+	/// than holding part of it. The counts pass these over and every renderer
+	/// gives them their own place, so nearly everything that cares about a
+	/// folder's kind asks this rather than naming the variants.
+	pub fn is_matter(self) -> bool {
+		matches!(self, FolderKind::FrontMatter | FolderKind::BackMatter)
+	}
 }
 
 /// One entry in a project's tree.
@@ -86,14 +102,20 @@ pub enum Node {
 ///
 /// The Manuscript is the only place a folder has a kind at all. A part goes
 /// directly in it, a chapter goes in it or in a part, and a chapter holds
-/// documents rather than folders. Everywhere else a folder is just a folder,
-/// at any depth.
+/// documents rather than folders. The front and back matter go directly in it
+/// too, and hold documents the way a chapter does. Everywhere else a folder is
+/// just a folder, at any depth.
+///
+/// This says nothing about how many: that the Manuscript holds one front matter
+/// and one back matter is [`crate::document::create_folder`]'s to enforce, since
+/// it is the only caller that can see what is already there.
 pub fn may_hold(in_manuscript: bool, parent: Option<FolderKind>, kind: Option<FolderKind>) -> bool {
 	match (in_manuscript, parent) {
 		(false, _) => kind.is_none(),
 		(true, None) => kind.is_some(),
 		(true, Some(FolderKind::Part)) => kind == Some(FolderKind::Chapter),
 		(true, Some(FolderKind::Chapter)) => false,
+		(true, Some(FolderKind::FrontMatter | FolderKind::BackMatter)) => false,
 	}
 }
 
@@ -707,6 +729,8 @@ mod tests {
 	const PART: Option<FolderKind> = Some(FolderKind::Part);
 	const CHAPTER: Option<FolderKind> = Some(FolderKind::Chapter);
 	const PLAIN: Option<FolderKind> = None;
+	const FRONT: Option<FolderKind> = Some(FolderKind::FrontMatter);
+	const BACK: Option<FolderKind> = Some(FolderKind::BackMatter);
 
 	#[test]
 	fn the_manuscript_takes_a_part_or_a_chapter() {
@@ -715,10 +739,28 @@ mod tests {
 	}
 
 	#[test]
+	fn the_manuscript_takes_the_matter_that_surrounds_the_story() {
+		assert!(may_hold(true, PLAIN, FRONT));
+		assert!(may_hold(true, PLAIN, BACK));
+	}
+
+	#[test]
+	fn matter_holds_documents_and_no_folder_at_all() {
+		for parent in [FRONT, BACK] {
+			assert!(!may_hold(true, parent, PART));
+			assert!(!may_hold(true, parent, CHAPTER));
+			assert!(!may_hold(true, parent, PLAIN));
+			assert!(!may_hold(true, parent, FRONT));
+		}
+	}
+
+	#[test]
 	fn a_part_takes_a_chapter_and_nothing_else() {
 		assert!(may_hold(true, PART, CHAPTER));
 		assert!(!may_hold(true, PART, PART), "a part inside a part");
 		assert!(!may_hold(true, PART, PLAIN), "a plain folder inside a part");
+		assert!(!may_hold(true, PART, FRONT), "front matter inside a part");
+		assert!(!may_hold(true, PART, BACK), "back matter inside a part");
 	}
 
 	#[test]
@@ -742,5 +784,14 @@ mod tests {
 		);
 		assert!(!may_hold(false, PLAIN, PART));
 		assert!(!may_hold(false, PLAIN, CHAPTER));
+		assert!(!may_hold(false, PLAIN, FRONT), "front matter in Notes");
+	}
+
+	#[test]
+	fn only_the_two_matter_kinds_are_matter() {
+		assert!(FolderKind::FrontMatter.is_matter());
+		assert!(FolderKind::BackMatter.is_matter());
+		assert!(!FolderKind::Part.is_matter());
+		assert!(!FolderKind::Chapter.is_matter());
 	}
 }

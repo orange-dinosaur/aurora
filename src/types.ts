@@ -121,8 +121,12 @@ export type DocumentText = ProjectDocument & {
 	text: string | null;
 };
 
-/** `tree::FolderKind` — what a folder inside the Manuscript is. */
-export type FolderKind = "part" | "chapter";
+/**
+ * `tree::FolderKind` — what a folder inside the Manuscript is. The last two are
+ * what surrounds the story rather than holding part of it, and a folder is one
+ * of them because of its kind and not because of what it is called.
+ */
+export type FolderKind = "part" | "chapter" | "front-matter" | "back-matter";
 
 /**
  * `document::NodeView` — one entry in the project's tree, tagged so the caller

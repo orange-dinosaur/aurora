@@ -12,8 +12,8 @@ use time::{Date, Month, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::project::{
-	Error, MANUSCRIPT, Manifest, Result, matter, read_manifest, validate_name, write_atomic,
-	write_manifest,
+	Error, MANUSCRIPT, Manifest, Result, adopt_matter, matter, read_manifest, validate_name,
+	write_atomic, write_manifest,
 };
 use crate::tree::{self, Fields, FolderKind, Node};
 
@@ -306,7 +306,7 @@ fn words_under(root: &Path, nodes: &[Node], prefix: &str) -> usize {
 	nodes
 		.iter()
 		.map(|node| match node {
-			Node::Folder { name, .. } if matter(prefix, name) => 0,
+			Node::Folder { kind, .. } if matter(*kind) => 0,
 			Node::Folder { name, children, .. } => {
 				words_under(root, children, &format!("{prefix}{name}/"))
 			}
@@ -342,7 +342,7 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 				// The front and back matter keep the count they have earned,
 				// and the Manuscript above them does not take it: the total the
 				// sidebar shows is the story.
-				if !matter(prefix, name) {
+				if !matter(*kind) {
 					total += words;
 				}
 				built.push(NodeView::Folder {
@@ -526,7 +526,9 @@ pub fn reconcile(manifest: &mut Manifest, found: &[Node]) -> bool {
 
 	let changed = sections != manifest.nodes;
 	manifest.nodes = sections;
-	changed
+	// A matter folder the writer made in a file manager arrives here with no
+	// kind, the way it would in a project written before kinds existed.
+	adopt_matter(&mut manifest.nodes) || changed
 }
 
 /// One level of the project against the same level on disk.
@@ -923,12 +925,19 @@ pub fn create_folder(
 	if !tree::may_hold(chain[0].name() == MANUSCRIPT, parent, kind) {
 		return Err(Error::FolderNotAllowed);
 	}
-	if tree::children(&manifest.nodes, parent_id)
-		.unwrap_or_default()
-		.iter()
-		.any(|node| node.name() == name)
-	{
+	let siblings = tree::children(&manifest.nodes, parent_id).unwrap_or_default();
+	if siblings.iter().any(|node| node.name() == name) {
 		return Err(Error::AlreadyExists);
+	}
+	// One front matter and one back matter to a Manuscript, whatever they end
+	// up called. The + stops offering a kind once it is there, so this is only
+	// what a second attempt meets.
+	if matter(kind)
+		&& siblings
+			.iter()
+			.any(|node| matches!(node, Node::Folder { kind: held, .. } if *held == kind))
+	{
+		return Err(Error::FolderNotAllowed);
 	}
 
 	let directory = folder_path(&manifest, &root, &format!("{inside}/{name}"))?;
@@ -4062,6 +4071,38 @@ mod tests {
 		refresh_documents(root.to_path_buf()).unwrap();
 	}
 
+	/// The kind of the first folder of that name anywhere in the tree. The
+	/// outer `Option` is whether it was found at all.
+	fn folder_kind(nodes: &[NodeView], name: &str) -> Option<Option<FolderKind>> {
+		nodes.iter().find_map(|node| match node {
+			NodeView::Folder {
+				name: found,
+				kind,
+				children,
+				..
+			} => (found == name)
+				.then_some(*kind)
+				.or_else(|| folder_kind(children, name)),
+			NodeView::Document { .. } => None,
+		})
+	}
+
+	/// What the first folder of that name holds, for looking inside one section
+	/// when another has a folder of the same name.
+	fn folder_children(nodes: &[NodeView], name: &str) -> Vec<NodeView> {
+		nodes
+			.iter()
+			.find_map(|node| match node {
+				NodeView::Folder {
+					name: found,
+					children,
+					..
+				} => (found == name).then(|| children.clone()),
+				NodeView::Document { .. } => None,
+			})
+			.unwrap_or_default()
+	}
+
 	/// The words on the first folder of that name anywhere in the tree.
 	fn folder_words(nodes: &[NodeView], name: &str) -> Option<usize> {
 		nodes.iter().find_map(|node| match node {
@@ -4134,6 +4175,135 @@ mod tests {
 		let manuscript = folder_id(&root, "Manuscript");
 
 		assert_eq!(folder_progress(root, manuscript).unwrap().words, 3);
+	}
+
+	#[test]
+	fn the_manuscript_takes_a_matter_folder() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = folder_id(&root, "Manuscript");
+
+		let view = create_folder(
+			root,
+			manuscript,
+			"Front Matter".to_owned(),
+			Some(FolderKind::FrontMatter),
+		)
+		.unwrap();
+
+		let NodeView::Folder { kind, .. } = view else {
+			panic!("a folder went in");
+		};
+		assert_eq!(kind, Some(FolderKind::FrontMatter));
+	}
+
+	#[test]
+	fn the_manuscript_takes_only_one_of_each_matter() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = folder_id(&root, "Manuscript");
+		let front = Some(FolderKind::FrontMatter);
+		create_folder(root.clone(), manuscript, "Front Matter".to_owned(), front).unwrap();
+
+		// A different name, so it is the kind that is refused and not the name.
+		let refused = create_folder(root.clone(), manuscript, "Prelims".to_owned(), front);
+
+		assert!(matches!(refused, Err(Error::FolderNotAllowed)));
+		// The other one is still free.
+		create_folder(
+			root,
+			manuscript,
+			"Back Matter".to_owned(),
+			Some(FolderKind::BackMatter),
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn a_part_takes_no_matter_folder() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = folder_id(&root, "Manuscript");
+		let part = create_folder(
+			root.clone(),
+			manuscript,
+			"Part 1".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap();
+
+		let refused = create_folder(
+			root,
+			part.id(),
+			"Front Matter".to_owned(),
+			Some(FolderKind::FrontMatter),
+		);
+
+		assert!(matches!(refused, Err(Error::FolderNotAllowed)));
+	}
+
+	#[test]
+	fn a_matter_folder_made_outside_aurora_is_adopted() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		matter_folder(&root, "Manuscript", "Front Matter", "one two three");
+		matter_folder(&root, "Manuscript", "Back Matter", "four five");
+		matter_folder(&root, "Notes", "Front Matter", "six");
+
+		let tree = document_tree(root).unwrap();
+
+		assert_eq!(
+			folder_kind(&tree, "Front Matter"),
+			Some(Some(FolderKind::FrontMatter))
+		);
+		assert_eq!(
+			folder_kind(&tree, "Back Matter"),
+			Some(Some(FolderKind::BackMatter))
+		);
+		let notes = folder_children(&tree, "Notes");
+		assert_eq!(folder_kind(&notes, "Front Matter"), Some(None));
+	}
+
+	#[test]
+	fn a_chapter_the_writer_called_front_matter_stays_a_chapter() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = folder_id(&root, "Manuscript");
+		create_folder(
+			root.clone(),
+			manuscript,
+			"Front Matter".to_owned(),
+			Some(FolderKind::Chapter),
+		)
+		.unwrap();
+		fs::write(
+			root.join("Manuscript/Front Matter").join("Scene.md"),
+			"one two three",
+		)
+		.unwrap();
+		refresh_documents(root.clone()).unwrap();
+
+		let tree = document_tree(root).unwrap();
+
+		assert_eq!(
+			folder_kind(&tree, "Front Matter"),
+			Some(Some(FolderKind::Chapter))
+		);
+		assert_eq!(folder_words(&tree, "Manuscript"), Some(3));
+	}
+
+	#[test]
+	fn a_renamed_matter_folder_is_still_matter() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(root.join("Manuscript").join("Chapter 1.md"), "one two").unwrap();
+		matter_folder(&root, "Manuscript", "Front Matter", "three four five");
+		let front = folder_id(&root, "Manuscript/Front Matter");
+		rename_folder(root.clone(), front, "Prelims".to_owned()).unwrap();
+
+		let manuscript = folder_id(&root, "Manuscript");
+
+		assert_eq!(folder_progress(root, manuscript).unwrap().words, 2);
 	}
 
 	#[test]

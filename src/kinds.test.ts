@@ -70,10 +70,17 @@ describe("what a folder may hold", () => {
 		["a chapter holds documents only", true, "chapter", "chapter", false],
 		["a chapter takes no part", true, "chapter", "part", false],
 		["a chapter takes no plain folder", true, "chapter", null, false],
+		["the Manuscript takes front matter", true, null, "front-matter", true],
+		["the Manuscript takes back matter", true, null, "back-matter", true],
+		["a part takes no front matter", true, "part", "front-matter", false],
+		["matter holds documents only", true, "front-matter", null, false],
+		["matter takes no chapter", true, "front-matter", "chapter", false],
+		["matter takes no matter", true, "back-matter", "front-matter", false],
 		["a section elsewhere takes a folder", false, null, null, true],
 		["a folder elsewhere takes a folder", false, null, null, true],
 		["nowhere else takes a part", false, null, "part", false],
 		["nowhere else takes a chapter", false, null, "chapter", false],
+		["nowhere else takes matter", false, null, "front-matter", false],
 	] as const)("%s", (_what, inManuscript, parent, kind, allowed) => {
 		expect(mayHold(inManuscript, parent, kind)).toBe(allowed);
 	});

@@ -26,6 +26,10 @@ function mark(kind: FolderKind | null) {
 			return "PT";
 		case "chapter":
 			return "CH";
+		case "front-matter":
+			return "FM";
+		case "back-matter":
+			return "BM";
 		case null:
 			return <Icon name="folder" className="folder__glyph" />;
 	}

@@ -11,6 +11,15 @@ import type { FolderKind } from "./types";
  */
 export const MANUSCRIPT = "Manuscript";
 
+/**
+ * What the two matter folders are called when Aurora makes one. Rust holds the
+ * same names in `project::FRONT_MATTER` and `project::BACK_MATTER`, where they
+ * are also what an adopted folder is recognised by. Once a folder exists its
+ * kind is what it is, so the writer may rename it to anything.
+ */
+export const FRONT_MATTER = "Front Matter";
+export const BACK_MATTER = "Back Matter";
+
 /** One thing a + offers. */
 export type Making = {
 	/** Which command makes it. */
@@ -78,6 +87,10 @@ export function folderPlaceholder(kind: FolderKind | null): string {
 			return PART.placeholder;
 		case "chapter":
 			return CHAPTER.placeholder;
+		case "front-matter":
+			return FRONT_MATTER;
+		case "back-matter":
+			return BACK_MATTER;
 		case null:
 			return FOLDER.placeholder;
 	}
@@ -91,8 +104,9 @@ export function folderPlaceholder(kind: FolderKind | null): string {
  *
  * The Manuscript is the only place a folder has a kind at all. A part goes
  * directly in it, a chapter goes in it or in a part, and a chapter holds
- * documents rather than folders. Everywhere else a folder is just a folder, at
- * any depth.
+ * documents rather than folders. The front and back matter go directly in it
+ * too and hold documents the way a chapter does. Everywhere else a folder is
+ * just a folder, at any depth.
  */
 export function mayHold(
 	inManuscript: boolean,
@@ -109,6 +123,8 @@ export function mayHold(
 		case "part":
 			return kind === "chapter";
 		case "chapter":
+		case "front-matter":
+		case "back-matter":
 			return false;
 	}
 }

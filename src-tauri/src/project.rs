@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::document::{Document, refresh};
 use crate::store;
-use crate::tree::{self, Node, tree_from_flat};
+use crate::tree::{self, FolderKind, Node, tree_from_flat};
 
 /// A folder inside a project, together with the document it starts life with.
 /// A section with no seed is created empty.
@@ -38,13 +38,51 @@ pub const MANUSCRIPT: &str = "Manuscript";
 pub const FRONT_MATTER: &str = "Front Matter";
 pub const BACK_MATTER: &str = "Back Matter";
 
-/// Whether a folder called `name`, sitting directly under `prefix`, is the
-/// Manuscript's front or back matter. An acknowledgement is words the writer
-/// wrote and not words of the story, so the counts pass these two over. They
-/// are only themselves directly inside the Manuscript; a `Front Matter` folder
-/// under `Notes` is an ordinary folder with an unlucky name.
-pub fn matter(prefix: &str, name: &str) -> bool {
-	prefix.strip_suffix('/') == Some(MANUSCRIPT) && (name == FRONT_MATTER || name == BACK_MATTER)
+/// Whether a folder of this kind is the Manuscript's front or back matter. An
+/// acknowledgement is words the writer wrote and not words of the story, so the
+/// counts pass these two over.
+///
+/// The kind is what decides it, not the name: the folder may be called anything
+/// once it exists, and only the Manuscript can hold one at all.
+pub fn matter(kind: Option<FolderKind>) -> bool {
+	kind.is_some_and(FolderKind::is_matter)
+}
+
+/// Gives the two matter folders their kind in a project made before the kind
+/// existed, and in one where the writer made the folder outside Aurora. A
+/// folder directly inside the Manuscript, with no kind and one of the two
+/// names, is what it says it is. Says whether it changed anything, so a caller
+/// knows whether the manifest is worth writing back.
+///
+/// This is the one place a name still decides a kind, and it only ever looks at
+/// a folder that has none: renaming an adopted folder afterwards leaves it
+/// front matter, and a `Front Matter` deeper in the Manuscript stays the
+/// ordinary folder it has always been.
+pub(crate) fn adopt_matter(nodes: &mut [Node]) -> bool {
+	let Some(Node::Folder { children, .. }) = nodes
+		.iter_mut()
+		.find(|node| node.name() == MANUSCRIPT && matches!(node, Node::Folder { .. }))
+	else {
+		return false;
+	};
+
+	let mut adopted = false;
+	for node in children.iter_mut() {
+		let Node::Folder { name, kind, .. } = node else {
+			continue;
+		};
+		if kind.is_some() {
+			continue;
+		}
+		*kind = match name.as_str() {
+			FRONT_MATTER => Some(FolderKind::FrontMatter),
+			BACK_MATTER => Some(FolderKind::BackMatter),
+			_ => continue,
+		};
+		adopted = true;
+	}
+
+	adopted
 }
 
 const NOVEL: &[Section] = &[
@@ -122,7 +160,7 @@ pub fn format_layouts() -> Vec<FormatLayout> {
 }
 
 /// Bumped when the on-disk shape changes in a way older builds cannot read.
-pub const MANIFEST_VERSION: u32 = 4;
+pub const MANIFEST_VERSION: u32 = 5;
 
 /// What someone did on the book besides write it. Every format Aurora exports
 /// wants the relationship named rather than a free line of text, so the set is
@@ -740,7 +778,7 @@ pub fn read_manifest(root: &Path) -> Result<Manifest> {
 		io::ErrorKind::NotFound => Error::NotAProject,
 		_ => Error::Io(e),
 	})?;
-	let manifest: Manifest = serde_json::from_slice(&bytes)?;
+	let mut manifest: Manifest = serde_json::from_slice(&bytes)?;
 	// An older Aurora cannot know what a newer one added, so refuse rather than
 	// silently dropping fields and writing them away on the next save.
 	if manifest.version > MANIFEST_VERSION {
@@ -749,6 +787,10 @@ pub fn read_manifest(root: &Path) -> Result<Manifest> {
 			supported: MANIFEST_VERSION,
 		});
 	}
+	// Every read agrees about what the matter folders are, whatever version
+	// wrote them. What is on disk catches up the next time anything is saved,
+	// which is the same bargain the rest of the manifest is read under.
+	adopt_matter(&mut manifest.nodes);
 	Ok(manifest)
 }
 
