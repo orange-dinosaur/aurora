@@ -3,6 +3,7 @@
 // of the overview is a shape, and the writer looks at that themselves.
 
 import { parse, text } from "./frontmatter";
+import { isMatter } from "./kinds";
 import type { FolderKind, OverviewCard } from "./types";
 
 /** A document card's count, which says what it is aiming at if it is. */
@@ -77,12 +78,16 @@ export function trashed(inside: number) {
 /**
  * What the folder amounts to, for the line under its name. The documents are
  * the ones sitting in it, since a folder below it is not one; the words are
- * the whole of what is written under it, which every card now carries.
+ * the whole of what is written under it, which every card now carries. Front
+ * and back matter are left out of the words, as they are in the sidebar.
  */
 export function summarised(cards: OverviewCard[]) {
 	let words = 0;
 	let documents = 0;
 	for (const card of cards) {
+		if (card.node === "folder" && isMatter(card.kind)) {
+			continue;
+		}
 		words += card.words;
 		if (card.node === "document") {
 			documents += 1;

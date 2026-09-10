@@ -7,11 +7,11 @@ import {
 	summarised,
 	trashed,
 } from "./cards";
-import type { OverviewCard } from "./types";
+import type { FolderKind, OverviewCard } from "./types";
 
 function folder(
 	name: string,
-	kind: "part" | "chapter" | null,
+	kind: FolderKind | null,
 	held: number,
 	words = 0,
 ) {
@@ -129,6 +129,16 @@ describe("the line under a folder's name", () => {
 				document("Epilogue", 120),
 			]),
 		).toBe("1 document · 8,120 words");
+	});
+
+	test("front and back matter bring no words", () => {
+		expect(
+			summarised([
+				folder("Front Matter", "front-matter", 2, 300),
+				folder("Part One", "part", 4, 8_000),
+				folder("Back Matter", "back-matter", 1, 150),
+			]),
+		).toBe("0 documents · 8,000 words");
 	});
 });
 
