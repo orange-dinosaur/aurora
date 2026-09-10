@@ -348,11 +348,11 @@ fn set_expanded(path: &Path, root: PathBuf, open: Vec<Uuid>) -> Result<()> {
 	save(path, &store)
 }
 
-/// The folders left open in one project, which is none at all for a project the
-/// writer has not expanded anything in yet.
+/// The folders left open in one project, or `null` for a project the writer
+/// has never folded or unfolded anything in, which opens on its sections.
 #[tauri::command]
-pub fn read_expanded(app: AppHandle, root: PathBuf) -> Result<Vec<Uuid>> {
-	Ok(expanded(&store_path(&app)?, &root)?.unwrap_or_default())
+pub fn read_expanded(app: AppHandle, root: PathBuf) -> Result<Option<Vec<Uuid>>> {
+	expanded(&store_path(&app)?, &root)
 }
 
 #[tauri::command]

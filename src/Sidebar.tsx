@@ -152,8 +152,9 @@ export default function Sidebar({
 
 	// Which folders were open last time, read once the tree is here so that a
 	// project nothing has ever been folded in can open on its sections rather
-	// than on five headings with nothing under them. A store that cannot be
-	// read leaves the sidebar folded rather than stopping the project opening.
+	// than on five headings with nothing under them. One the writer shut
+	// everything in comes back shut. A store that cannot be read leaves the
+	// sidebar folded rather than stopping the project opening.
 	const restored = useRef<string | null>(null);
 
 	useEffect(() => {
@@ -162,13 +163,9 @@ export default function Sidebar({
 		}
 
 		restored.current = root;
-		invoke<string[]>("read_expanded", { root })
+		invoke<string[] | null>("read_expanded", { root })
 			.then((ids) =>
-				setOpen(
-					ids.length > 0
-						? new Set(ids)
-						: new Set(sections(tree).map((each) => each.id)),
-				),
+				setOpen(new Set(ids ?? sections(tree).map((each) => each.id))),
 			)
 			.catch(() => setOpen(new Set()));
 	}, [root, tree]);
