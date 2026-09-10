@@ -1005,6 +1005,32 @@ pub fn refresh_documents(root: PathBuf) -> Result<()> {
 
 /// Gives a document a new title, which is to say a new file name. It stays in
 /// its section, and keeps its id and its place in the order.
+/// Whether going from `from` to `to` changes nothing but the case of the name.
+fn case_only(from: &Path, to: &Path) -> bool {
+	from != to && from.to_string_lossy().to_lowercase() == to.to_string_lossy().to_lowercase()
+}
+
+/// Whether something other than `from` is already at `to`. On a filesystem that
+/// ignores case, a name differing from `from` only by case finds `from` itself,
+/// so there it counts only when the folder lists it spelled exactly as asked.
+fn taken(from: &Path, to: &Path) -> Result<bool> {
+	if !to.exists() {
+		return Ok(false);
+	}
+	if !case_only(from, to) {
+		return Ok(true);
+	}
+	let (Some(dir), Some(name)) = (to.parent(), to.file_name()) else {
+		return Ok(true);
+	};
+	for entry in fs::read_dir(dir)? {
+		if entry?.file_name().as_os_str() == name {
+			return Ok(true);
+		}
+	}
+	Ok(false)
+}
+
 #[tauri::command]
 pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<DocumentView> {
 	if !root.is_absolute() {
@@ -1042,7 +1068,7 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 	}
 
 	let to = document_path(&manifest, &root, &path)?;
-	if to.exists() {
+	if taken(&from, &to)? {
 		return Err(Error::DocumentExists);
 	}
 
@@ -1129,7 +1155,7 @@ pub fn rename_folder(root: PathBuf, id: Uuid, name: String) -> Result<NodeView> 
 	// The manifest has already said no sibling is called this. Anything at the
 	// new name is something Aurora does not know about, and is not to be
 	// written over.
-	if to.exists() {
+	if taken(&from, &to)? {
 		return Err(Error::AlreadyExists);
 	}
 
@@ -5388,5 +5414,33 @@ mod tests {
 	fn reading_everything_refuses_a_relative_path() {
 		let err = read_all_documents(PathBuf::from("some/where")).unwrap_err();
 		assert!(matches!(err, Error::RelativePath));
+	}
+
+	#[test]
+	fn a_change_of_case_alone_is_told_apart() {
+		let dir = Path::new("/project/Manuscript");
+		let chapter = dir.join("Chapter 1.md");
+
+		assert!(case_only(&chapter, &dir.join("chapter 1.md")));
+		assert!(!case_only(&chapter, &chapter));
+		assert!(!case_only(&chapter, &dir.join("Chapter 2.md")));
+	}
+
+	#[test]
+	fn a_name_is_taken_only_by_something_other_than_the_one_renamed() {
+		let dir = tempfile::tempdir().unwrap();
+		let from = dir.path().join("Chapter 1.md");
+		let lower = dir.path().join("chapter 1.md");
+		let notes = dir.path().join("Notes.md");
+		fs::write(&from, "").unwrap();
+		fs::write(&notes, "").unwrap();
+
+		assert!(!taken(&from, &lower).unwrap());
+		assert!(taken(&notes, &from).unwrap());
+
+		// Linux keeps both spellings as separate files, so this one is not
+		// the file being renamed and must not be written over.
+		fs::write(&lower, "").unwrap();
+		assert!(taken(&from, &lower).unwrap());
 	}
 }
