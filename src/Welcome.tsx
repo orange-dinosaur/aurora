@@ -3,51 +3,50 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import ThemeToggle from "./ThemeToggle";
-import type { FormatLayout, OpenProject, RecentSummary, Theme } from "./types";
+import type {
+	Format,
+	FormatLayout,
+	OpenProject,
+	RecentSummary,
+	Theme,
+} from "./types";
 import { AccountChip } from "./Account";
 import Menu, { MenuItem } from "./Menu";
 import { contents } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
 
-type Format = {
-	id: string;
+type FormatOption = {
+	id: Format;
 	name: string;
 	description: string;
 	folders: string[];
 	available: boolean;
 };
 
-// Rust owns which formats exist, what they create and whether they can be
-const COPY: Record<string, { name: string; description: string } | undefined> =
-	{
-		novel: {
-			name: "Novel",
-			description: "Long-form fiction, organised into chapters.",
-		},
-		screenplay: {
-			name: "Screenplay",
-			description: "Film or television, in standard screenplay form.",
-		},
-		"short-stories": {
-			name: "Short Stories",
-			description: "A collection of shorter pieces.",
-		},
-		"stage-play": {
-			name: "Stage Play",
-			description: "Theatre, organised into acts and scenes.",
-		},
-	};
+// Rust owns which formats exist, what they create and whether they are ready.
+// The words for each live here, keyed by Rust's list so none can be missing.
+const COPY: Record<Format, { name: string; description: string }> = {
+	novel: {
+		name: "Novel",
+		description: "Long-form fiction, organised into chapters.",
+	},
+	screenplay: {
+		name: "Screenplay",
+		description: "Film or television, in standard screenplay form.",
+	},
+	"short-stories": {
+		name: "Short Stories",
+		description: "A collection of shorter pieces.",
+	},
+	"stage-play": {
+		name: "Stage Play",
+		description: "Theatre, organised into acts and scenes.",
+	},
+};
 
-function describe({ format, folders, available }: FormatLayout): Format {
-	const copy = COPY[format];
-	return {
-		id: format,
-		name: copy?.name ?? format,
-		description: copy?.description ?? "",
-		folders,
-		available,
-	};
+function describe({ format, folders, available }: FormatLayout): FormatOption {
+	return { id: format, ...COPY[format], folders, available };
 }
 
 // How big a project is and when it was last open. A project whose manifest
@@ -85,7 +84,7 @@ export default function Welcome({
 	const [reason, setReason] = useState(notice);
 	const [stage, setStage] = useState<"format" | "details">("format");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
-	const [formats, setFormats] = useState<Format[]>([]);
+	const [formats, setFormats] = useState<FormatOption[]>([]);
 	const [name, setName] = useState("");
 	const [parent, setParent] = useState<string | null>(null);
 	const [recents, setRecents] = useState<RecentSummary[]>([]);

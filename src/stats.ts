@@ -128,7 +128,7 @@ export function sessionKind(session: PastSession): string {
 		return "Automatic";
 	}
 
-	if (session.limit === undefined) {
+	if (!session.limit) {
 		return "Session";
 	}
 
