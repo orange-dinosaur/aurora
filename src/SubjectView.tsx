@@ -169,16 +169,6 @@ export default function SubjectView({
 		}
 	}
 
-	if (held.kind === "failed") {
-		return (
-			<section className="subject">
-				<p className="subject__note subject__note--error">
-					{held.message}
-				</p>
-			</section>
-		);
-	}
-
 	const remarks = text(fields, "remarks");
 	// What the box holds while the writer is in it. For the 800 ms before the
 	// file catches up, this is newer than anything read back from it.
@@ -190,6 +180,25 @@ export default function SubjectView({
 		setDraft(null);
 		setTrouble("");
 	}, [subject.id]);
+
+	// Once the file says what the box says, the box follows the file again,
+	// so a change made anywhere else shows up here. Only on a match: a read
+	// that lands while the writer is still typing is older than the box.
+	useEffect(() => {
+		if (draft !== null && draft === remarks) {
+			setDraft(null);
+		}
+	}, [draft, remarks]);
+
+	if (held.kind === "failed") {
+		return (
+			<section className="subject">
+				<p className="subject__note subject__note--error">
+					{held.message}
+				</p>
+			</section>
+		);
+	}
 
 	// This page's copy of the file with the remarks replaced. `serialize` keeps
 	// every other field spelled the way the file spells it.

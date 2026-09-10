@@ -891,8 +891,13 @@ export default function Project({
 			id,
 			window.setTimeout(() => {
 				timers.current.delete(id);
+				// Counted like any other save, so the page reads back what it
+				// wrote and lets go of the text it was holding.
 				void invoke("write_document", { root, id, text })
-					.then(() => filed(root, id, text))
+					.then(() => {
+						filed(root, id, text);
+						setWritten((times) => times + 1);
+					})
 					.catch((error: unknown) => failed(failure(error).message));
 			}, AUTOSAVE_MS),
 		);
