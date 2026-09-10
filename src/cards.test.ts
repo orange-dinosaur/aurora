@@ -89,6 +89,15 @@ describe("a folder card's line", () => {
 	test("one item is not one items", () => {
 		expect(described("part", 1, 1)).toBe("Part · 1 item · 1 word");
 	});
+
+	test("front and back matter are named, not taken for chapters", () => {
+		expect(described("front-matter", 2, 300)).toBe(
+			"Front matter · 2 items · 300 words",
+		);
+		expect(described("back-matter", 1, 150)).toBe(
+			"Back matter · 1 item · 150 words",
+		);
+	});
 });
 
 describe("a folder row's count", () => {

@@ -14,6 +14,13 @@ export function counted(words: number, target: number | null) {
 	return words === 1 ? "1 word" : `${words.toLocaleString()} words`;
 }
 
+const KIND_NAMES: Record<FolderKind, string> = {
+	part: "Part",
+	chapter: "Chapter",
+	"front-matter": "Front matter",
+	"back-matter": "Back matter",
+};
+
 /**
  * What a folder card says it is. A folder outside the Manuscript is only ever
  * a folder, so it says so rather than naming a kind it does not have. The
@@ -25,8 +32,7 @@ export function described(
 	children: number,
 	words: number,
 ) {
-	const what =
-		kind === null ? "Folder" : kind === "part" ? "Part" : "Chapter";
+	const what = kind === null ? "Folder" : KIND_NAMES[kind];
 	const held = children === 1 ? "1 item" : `${children} items`;
 	return `${what} · ${held} · ${counted(words, null)}`;
 }
