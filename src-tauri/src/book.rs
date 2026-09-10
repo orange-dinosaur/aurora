@@ -19,6 +19,7 @@ use crate::document::{DocumentView, NodeView, body, document_tree};
 use crate::docx::docx;
 use crate::epub::{Flavour, epub};
 use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, cover_bytes, matter, read_book};
+use crate::text::text;
 use crate::tree::FolderKind;
 
 /// One document the book takes, with where its text is. The title is the file
@@ -434,6 +435,7 @@ pub fn export(
 			ExportFormat::Epub => epub_for(Flavour::Plain)?,
 			ExportFormat::Kepub => epub_for(Flavour::Kobo)?,
 			ExportFormat::Docx => docx(&book, &compiled, &prose)?,
+			ExportFormat::Text => text(&book, &compiled, &prose).into_bytes(),
 		};
 		fs::write(folder.join(&name), bytes)?;
 		written.push(name);
@@ -448,6 +450,7 @@ fn extension(format: ExportFormat) -> &'static str {
 		ExportFormat::Epub => "epub",
 		ExportFormat::Kepub => "kepub.epub",
 		ExportFormat::Docx => "docx",
+		ExportFormat::Text => "txt",
 	}
 }
 

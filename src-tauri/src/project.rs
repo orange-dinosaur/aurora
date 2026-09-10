@@ -238,6 +238,7 @@ pub enum ExportFormat {
 	Epub,
 	Kepub,
 	Docx,
+	Text,
 }
 
 impl Book {

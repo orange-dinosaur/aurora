@@ -7,6 +7,7 @@ export const FORMATS: { key: ExportFormat; name: string }[] = [
 	{ key: "epub", name: "EPUB" },
 	{ key: "kepub", name: "KEPUB" },
 	{ key: "docx", name: "DOCX" },
+	{ key: "text", name: "Plain text" },
 ];
 
 /**

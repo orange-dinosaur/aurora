@@ -6,6 +6,7 @@ pub mod epub;
 pub mod history;
 pub mod project;
 pub mod store;
+pub mod text;
 pub mod tree;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
