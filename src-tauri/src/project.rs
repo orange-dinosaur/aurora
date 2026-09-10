@@ -33,6 +33,20 @@ pub enum Format {
 /// folder and nothing more.
 pub const MANUSCRIPT: &str = "Manuscript";
 
+/// The two folders that hold what surrounds the story. Nothing on disk marks
+/// them: a writer makes them by spelling the name.
+pub const FRONT_MATTER: &str = "Front Matter";
+pub const BACK_MATTER: &str = "Back Matter";
+
+/// Whether a folder called `name`, sitting directly under `prefix`, is the
+/// Manuscript's front or back matter. An acknowledgement is words the writer
+/// wrote and not words of the story, so the counts pass these two over. They
+/// are only themselves directly inside the Manuscript; a `Front Matter` folder
+/// under `Notes` is an ordinary folder with an unlucky name.
+pub fn matter(prefix: &str, name: &str) -> bool {
+	prefix.strip_suffix('/') == Some(MANUSCRIPT) && (name == FRONT_MATTER || name == BACK_MATTER)
+}
+
 const NOVEL: &[Section] = &[
 	Section {
 		folder: "Manuscript",

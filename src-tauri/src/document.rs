@@ -12,7 +12,8 @@ use time::{Date, Month, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::project::{
-	Error, MANUSCRIPT, Manifest, Result, read_manifest, validate_name, write_atomic, write_manifest,
+	Error, MANUSCRIPT, Manifest, Result, matter, read_manifest, validate_name, write_atomic,
+	write_manifest,
 };
 use crate::tree::{self, Fields, FolderKind, Node};
 
@@ -150,7 +151,8 @@ pub enum NodeView {
 		/// a document's target is.
 		kind: Option<FolderKind>,
 		children: Vec<NodeView>,
-		/// The words in every document below it, however deep.
+		/// The words in every document below it, however deep, less anything in
+		/// the Manuscript's front or back matter.
 		words: usize,
 		/// Whether an export takes it. The sidebar draws what is out of the
 		/// book faint, so this rides along with the tree rather than being
@@ -293,12 +295,18 @@ fn tally_of(root: &Path, relative: &str) -> Tally {
 	tally
 }
 
-/// The words under `nodes`, however deep they sit. For a card that has to say
-/// what a folder amounts to without building the views of everything in it.
+/// The words under `nodes`, however deep they sit, leaving out the Manuscript's
+/// front and back matter. For a card that has to say what a folder amounts to
+/// without building the views of everything in it.
+///
+/// The matter folders drop out here, where a parent adds its children up, and
+/// nowhere else. Asked about one of them directly the walk starts inside it, so
+/// it still says what it holds.
 fn words_under(root: &Path, nodes: &[Node], prefix: &str) -> usize {
 	nodes
 		.iter()
 		.map(|node| match node {
+			Node::Folder { name, .. } if matter(prefix, name) => 0,
 			Node::Folder { name, children, .. } => {
 				words_under(root, children, &format!("{prefix}{name}/"))
 			}
@@ -331,7 +339,12 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 				..
 			} => {
 				let (children, words) = views(root, children, &format!("{prefix}{name}/"));
-				total += words;
+				// The front and back matter keep the count they have earned,
+				// and the Manuscript above them does not take it: the total the
+				// sidebar shows is the story.
+				if !matter(prefix, name) {
+					total += words;
+				}
 				built.push(NodeView::Folder {
 					id: *id,
 					name: name.clone(),
@@ -1172,7 +1185,8 @@ pub fn set_folder_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Result
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderProgress {
-	/// The words in every document below it, however deep.
+	/// The words in every document below it, however deep, less anything in the
+	/// Manuscript's front or back matter.
 	pub words: usize,
 	pub target: Option<u32>,
 }
@@ -4037,6 +4051,89 @@ mod tests {
 
 		assert_eq!(folder_progress(root.clone(), manuscript).unwrap().words, 5);
 		assert_eq!(folder_progress(root, part).unwrap().words, 3);
+	}
+
+	/// Writes a folder of that name inside `parent` with one document in it,
+	/// and brings the manifest up to date.
+	fn matter_folder(root: &Path, parent: &str, name: &str, text: &str) {
+		let dir = root.join(parent).join(name);
+		fs::create_dir_all(&dir).unwrap();
+		fs::write(dir.join("Note.md"), text).unwrap();
+		refresh_documents(root.to_path_buf()).unwrap();
+	}
+
+	/// The words on the first folder of that name anywhere in the tree.
+	fn folder_words(nodes: &[NodeView], name: &str) -> Option<usize> {
+		nodes.iter().find_map(|node| match node {
+			NodeView::Folder {
+				name: found,
+				words,
+				children,
+				..
+			} => (found == name)
+				.then_some(*words)
+				.or_else(|| folder_words(children, name)),
+			NodeView::Document { .. } => None,
+		})
+	}
+
+	#[test]
+	fn the_manuscript_leaves_its_front_and_back_matter_out_of_its_count() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(root.join("Manuscript").join("Chapter 1.md"), "one two").unwrap();
+		matter_folder(&root, "Manuscript", "Front Matter", "three four five");
+		matter_folder(&root, "Manuscript", "Back Matter", "six seven");
+
+		let manuscript = folder_id(&root, "Manuscript");
+		let front = folder_id(&root, "Manuscript/Front Matter");
+		let back = folder_id(&root, "Manuscript/Back Matter");
+
+		assert_eq!(folder_progress(root.clone(), manuscript).unwrap().words, 2);
+		// Asked about directly, each still says what it holds.
+		assert_eq!(folder_progress(root.clone(), front).unwrap().words, 3);
+		assert_eq!(folder_progress(root, back).unwrap().words, 2);
+	}
+
+	#[test]
+	fn the_tree_keeps_the_matter_counts_on_their_own_rows() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::write(root.join("Manuscript").join("Chapter 1.md"), "one two").unwrap();
+		matter_folder(&root, "Manuscript", "Front Matter", "three four five");
+
+		let tree = document_tree(root).unwrap();
+
+		assert_eq!(folder_words(&tree, "Manuscript"), Some(2));
+		assert_eq!(folder_words(&tree, "Front Matter"), Some(3));
+	}
+
+	#[test]
+	fn front_matter_outside_the_manuscript_is_an_ordinary_folder() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		matter_folder(&root, "Notes", "Front Matter", "one two three");
+
+		assert_eq!(
+			folder_progress(root.clone(), folder_id(&root, "Notes"))
+				.unwrap()
+				.words,
+			3
+		);
+		assert_eq!(
+			folder_words(&document_tree(root).unwrap(), "Notes"),
+			Some(3)
+		);
+	}
+
+	#[test]
+	fn a_folder_called_front_matter_deeper_in_the_manuscript_still_counts() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		matter_folder(&root, "Manuscript/Part 1", "Front Matter", "one two three");
+		let manuscript = folder_id(&root, "Manuscript");
+
+		assert_eq!(folder_progress(root, manuscript).unwrap().words, 3);
 	}
 
 	#[test]
