@@ -31,6 +31,11 @@ export type Making = {
 	/** As the field asks for it: "Name of the new part in Manuscript". */
 	noun: string;
 	placeholder: string;
+	/**
+	 * The name it is made under, when the whole point of the entry is that the
+	 * writer does not type one. Everything else opens the name field instead.
+	 */
+	name?: string;
 };
 
 /**
@@ -76,6 +81,46 @@ const FOLDER: Making = {
 	noun: "folder",
 	placeholder: "Research",
 };
+
+// The two the + spells for the writer. A folder of either kind is made under
+// the name Aurora gives it and renamed afterwards if the writer wants
+// something else, because the kind is what makes it matter.
+const FRONT: Making = {
+	what: "folder",
+	kind: "front-matter",
+	label: "New front matter",
+	noun: "front matter",
+	placeholder: FRONT_MATTER,
+	name: FRONT_MATTER,
+};
+
+const BACK: Making = {
+	what: "folder",
+	kind: "back-matter",
+	label: "New back matter",
+	noun: "back matter",
+	placeholder: BACK_MATTER,
+	name: BACK_MATTER,
+};
+
+/** Whether a kind is one of the two that surround the story. */
+export function isMatter(kind: FolderKind | null): boolean {
+	return kind === "front-matter" || kind === "back-matter";
+}
+
+/**
+ * The kinds of the folders in a list of nodes, which is what `creatable` needs
+ * to know whether the matter it would offer is already there. Written against
+ * what a tree node and an overview card have in common, since a + is drawn over
+ * both.
+ */
+export function folderKinds(
+	nodes: readonly (
+		{ node: "folder"; kind: FolderKind | null } | { node: "document" }
+	)[],
+): (FolderKind | null)[] {
+	return nodes.flatMap((node) => (node.node === "folder" ? [node.kind] : []));
+}
 
 /**
  * What an empty field suggests for a folder of this kind. The + knows what it
@@ -136,14 +181,24 @@ export function mayHold(
  * A document may sit at any level, so it is always on offer, called a scene in
  * the Manuscript and a document elsewhere. Which folders follow it is
  * `mayHold`, so the + and a move answer to the same rules.
+ *
+ * `held` is what the folder already holds. A Manuscript keeps one front matter
+ * and one back matter, so the entry goes once there is one; Rust refuses a
+ * second either way, and this is what stops the writer being offered it.
  */
-export function creatable(kind: FolderKind | null, section: string): Making[] {
+export function creatable(
+	kind: FolderKind | null,
+	section: string,
+	held: readonly (FolderKind | null)[] = [],
+): Making[] {
 	const inManuscript = section === MANUSCRIPT;
 
 	return [
 		inManuscript ? SCENE : DOCUMENT,
-		...[PART, CHAPTER, FOLDER].filter((making) =>
-			mayHold(inManuscript, kind, making.kind),
+		...[PART, CHAPTER, FRONT, BACK, FOLDER].filter(
+			(making) =>
+				mayHold(inManuscript, kind, making.kind) &&
+				!(isMatter(making.kind) && held.includes(making.kind)),
 		),
 	];
 }

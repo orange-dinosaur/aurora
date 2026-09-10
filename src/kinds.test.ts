@@ -1,18 +1,66 @@
 import { describe, expect, test } from "vitest";
-import { creatable, mayHold } from "./kinds";
+import { creatable, folderKinds, mayHold } from "./kinds";
+import type { FolderKind } from "./types";
 
 /** What the + would offer, written the way the menu reads. */
-function offered(kind: "part" | "chapter" | null, section: string) {
-	return creatable(kind, section).map((making) => making.label);
+function offered(
+	kind: FolderKind | null,
+	section: string,
+	held: (FolderKind | null)[] = [],
+) {
+	return creatable(kind, section, held).map((making) => making.label);
 }
 
 describe("what a + offers in the Manuscript", () => {
-	test("the Manuscript itself takes a part, a chapter or a scene", () => {
+	test("the Manuscript itself takes a part, a chapter, a scene or matter", () => {
 		expect(offered(null, "Manuscript")).toEqual([
 			"New scene",
 			"New part",
 			"New chapter",
+			"New front matter",
+			"New back matter",
 		]);
+	});
+
+	test("matter it already holds is not offered again", () => {
+		expect(offered(null, "Manuscript", ["front-matter"])).toEqual([
+			"New scene",
+			"New part",
+			"New chapter",
+			"New back matter",
+		]);
+		expect(
+			offered(null, "Manuscript", ["front-matter", "back-matter"]),
+		).toEqual(["New scene", "New part", "New chapter"]);
+	});
+
+	test("a part or a chapter it holds changes nothing", () => {
+		expect(offered(null, "Manuscript", ["part", "chapter", null])).toEqual([
+			"New scene",
+			"New part",
+			"New chapter",
+			"New front matter",
+			"New back matter",
+		]);
+	});
+
+	test("matter is made under the name Aurora gives it", () => {
+		const made = creatable(null, "Manuscript").filter(
+			(making) => making.name,
+		);
+
+		expect(made.map((making) => [making.kind, making.name])).toEqual([
+			["front-matter", "Front Matter"],
+			["back-matter", "Back Matter"],
+		]);
+	});
+
+	test("everything else asks for a name", () => {
+		const asked = creatable(null, "Notes").concat(
+			creatable("part", "Manuscript"),
+		);
+
+		expect(asked.every((making) => making.name === undefined)).toBe(true);
 	});
 
 	test("a part takes chapters, not more parts", () => {
@@ -40,6 +88,12 @@ describe("what a + offers in the Manuscript", () => {
 });
 
 describe("what a + offers everywhere else", () => {
+	test("matter is offered nowhere but the Manuscript", () => {
+		expect(offered(null, "Notes")).toEqual(["New document", "New folder"]);
+		expect(offered("part", "Manuscript")).not.toContain("New front matter");
+		expect(offered("front-matter", "Manuscript")).toEqual(["New scene"]);
+	});
+
 	test("a section outside the Manuscript offers a plain folder", () => {
 		expect(offered(null, "Notes")).toEqual(["New document", "New folder"]);
 		// A folder there is never a part or a chapter.
@@ -54,6 +108,19 @@ describe("what a + offers everywhere else", () => {
 			"New document",
 			"New folder",
 		]);
+	});
+});
+
+describe("what a folder already holds", () => {
+	test("only its folders count, and a plain one counts as no kind", () => {
+		expect(
+			folderKinds([
+				{ node: "folder", kind: "part" },
+				{ node: "document" },
+				{ node: "folder", kind: "front-matter" },
+				{ node: "folder", kind: null },
+			]),
+		).toEqual(["part", "front-matter", null]);
 	});
 });
 

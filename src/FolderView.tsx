@@ -7,7 +7,7 @@ import NameField from "./NameField";
 import NewMenu from "./NewMenu";
 import type { FolderNode, OverviewCard, ProjectDocument } from "./types";
 import type { Making } from "./kinds";
-import { folderPlaceholder } from "./kinds";
+import { folderKinds, folderPlaceholder } from "./kinds";
 import type { FolderRef } from "./tree";
 import { counted, described, previewed, summarised } from "./cards";
 import {
@@ -218,9 +218,14 @@ export default function FolderView({
 					label={`New in ${folder.name}`}
 					kind={folder.kind}
 					section={folder.section}
+					held={folderKinds(cards)}
 					text="New"
 					className="overview__new"
-					onChoose={(making) => setNaming({ kind: "open", making })}
+					onChoose={(making) =>
+						making.name
+							? void create(making, making.name)
+							: setNaming({ kind: "open", making })
+					}
 				/>
 			</header>
 
@@ -416,10 +421,13 @@ export default function FolderView({
 							label={`New in ${folder.name}`}
 							kind={folder.kind}
 							section={folder.section}
+							held={folderKinds(cards)}
 							text="New"
 							className="card card--new"
 							onChoose={(making) =>
-								setNaming({ kind: "open", making })
+								making.name
+									? void create(making, making.name)
+									: setNaming({ kind: "open", making })
 							}
 						/>
 					) : (

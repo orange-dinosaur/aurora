@@ -9,6 +9,7 @@ import NameField from "./NameField";
 import NewMenu from "./NewMenu";
 import type { FolderNode, ProjectDocument, TreeNode } from "./types";
 import type { Making } from "./kinds";
+import { folderKinds } from "./kinds";
 import {
 	createDocument,
 	createFolder,
@@ -375,12 +376,19 @@ export default function Sidebar({
 										label={`New in ${section.name}`}
 										kind={section.kind}
 										section={section.name}
+										held={folderKinds(section.children)}
 										onChoose={(making) =>
-											setNaming({
-												kind: "open",
-												at: section.id,
-												making,
-											})
+											making.name
+												? void create(
+														section.id,
+														making,
+														making.name,
+													)
+												: setNaming({
+														kind: "open",
+														at: section.id,
+														making,
+													})
 										}
 									/>
 								</div>

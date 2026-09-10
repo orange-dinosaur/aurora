@@ -11,6 +11,11 @@ type Props = {
 	/** The kind of the folder the + sits in, and the section it lives under. */
 	kind: FolderKind | null;
 	section: string;
+	/**
+	 * The kinds of the folders already inside it, which is what takes the front
+	 * and back matter off the menu once they are there.
+	 */
+	held?: readonly (FolderKind | null)[];
 	text?: string;
 	className?: string;
 	onChoose: (making: Making) => void;
@@ -20,11 +25,12 @@ export default function NewMenu({
 	label,
 	kind,
 	section,
+	held,
 	text,
 	className,
 	onChoose,
 }: Props) {
-	const offered = creatable(kind, section);
+	const offered = creatable(kind, section, held);
 
 	// A chapter holds scenes and nothing else, so there is nothing to choose
 	// between: the + asks for the name straight away rather than opening a
