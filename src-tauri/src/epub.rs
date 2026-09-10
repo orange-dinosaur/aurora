@@ -10,7 +10,7 @@
 use std::io;
 use std::slice;
 
-use pulldown_cmark::{Event, Options, Parser, html};
+use pulldown_cmark::{Event, Options, Parser, Tag, html};
 use time::{OffsetDateTime, UtcOffset};
 
 use crate::archive::Archive;
@@ -76,6 +76,20 @@ const CSS: &str = r#".cover {
 }
 "#;
 
+/// Kobo lays each page out inside these two boxes.
+const KOBO_OPEN: &str = "<div id=\"book-columns\">\n<div id=\"book-inner\">\n";
+const KOBO_CLOSE: &str = "</div>\n</div>\n";
+
+/// Which reader the EPUB is written for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Flavour {
+	/// Any reader.
+	Plain,
+	/// A Kobo, which reads a KEPUB: the same book with Kobo's markers threaded
+	/// through the prose, so it can keep its place and a highlight.
+	Kobo,
+}
+
 /// What the Markdown parser is asked to read beyond the core. The editor
 /// writes strikethrough, and keeps a pasted table or footnote as it came.
 pub fn options() -> Options {
@@ -89,70 +103,59 @@ struct Entry {
 	under: Vec<Entry>,
 }
 
-/// The book as an EPUB, marked as last changed at `now`. `cover` is the image
-/// the project keeps, when it has one.
+/// The book as an EPUB for `flavour` of reader, marked as last changed at
+/// `now`. `cover` is the image the project keeps, when it has one.
 pub fn epub(
 	book: &Book,
 	compiled: &Compiled,
 	prose: &Prose,
 	cover: Option<&[u8]>,
+	flavour: Flavour,
 	now: OffsetDateTime,
 ) -> io::Result<Vec<u8>> {
 	let language = language_of(book);
 	// The cover goes in under a name of Aurora's own, so nothing the manifest
 	// holds ends up in the package's markup.
 	let cover = cover.map(|bytes| (cover_file(book), bytes));
-	let piece = |pages: &mut Vec<String>, scene: &Scene| {
-		page(
-			pages,
-			language,
-			&scene.title,
-			&told(slice::from_ref(scene), prose),
-		)
-	};
-	let chaptered = |pages: &mut Vec<String>, chapter: &Chapter| {
-		page(
-			pages,
-			language,
-			&chapter.title,
-			&broken(&chapter.scenes, prose),
-		)
-	};
-
-	let mut pages = Vec::new();
-	let mut contents = Vec::new();
 	let title = title_of(book);
+
+	let mut pages = Pages {
+		language,
+		flavour,
+		written: Vec::new(),
+	};
+	let mut contents = Vec::new();
 	// Left out of the contents: a reader shows a cover without being pointed at it.
 	if let Some((file, _)) = cover {
-		add_page(&mut pages, language, "Cover", &cover_page(file, title));
+		pages.add("Cover", &cover_page(file, title));
 	}
-	contents.push(add_page(&mut pages, language, title, &title_page(book)));
+	contents.push(pages.add(title, &title_page(book)));
 	if let Some(notice) = copyright_page(book) {
-		contents.push(add_page(&mut pages, language, "Copyright", &notice));
+		contents.push(pages.add("Copyright", &notice));
 	}
 	for scene in &compiled.front {
-		contents.push(piece(&mut pages, scene));
+		contents.push(pages.piece(scene, prose));
 	}
 	for division in &compiled.body {
 		contents.push(match division {
 			Division::Part(part) => {
-				let mut entry = page(&mut pages, language, &part.title, &[]);
+				let mut entry = pages.prose(&part.title, &[]);
 				for chapter in &part.chapters {
-					entry.under.push(chaptered(&mut pages, chapter));
+					entry.under.push(pages.chapter(chapter, prose));
 				}
 				entry
 			}
-			Division::Chapter(chapter) => chaptered(&mut pages, chapter),
+			Division::Chapter(chapter) => pages.chapter(chapter, prose),
 		});
 	}
 	for scene in &compiled.back {
-		contents.push(piece(&mut pages, scene));
+		contents.push(pages.piece(scene, prose));
 	}
 
 	let mut archive = Archive::default();
 	archive.store("mimetype", b"application/epub+zip")?;
 	archive.deflate("META-INF/container.xml", CONTAINER.as_bytes())?;
-	let opf = package(book, pages.len(), cover.map(|(file, _)| file), now);
+	let opf = package(book, pages.written.len(), cover.map(|(file, _)| file), now);
 	archive.deflate(PACKAGE, opf.as_bytes())?;
 	archive.deflate(NAV, nav(language, &contents).as_bytes())?;
 	archive.deflate(STYLE, CSS.as_bytes())?;
@@ -160,7 +163,7 @@ pub fn epub(
 		// Already compressed, as a PNG or a JPEG is.
 		archive.store(&format!("EPUB/{file}"), bytes)?;
 	}
-	for (at, text) in pages.iter().enumerate() {
+	for (at, text) in pages.written.iter().enumerate() {
 		archive.deflate(&format!("EPUB/{}.xhtml", id(at)), text.as_bytes())?;
 	}
 	archive.finish()
@@ -183,23 +186,45 @@ fn language_of(book: &Book) -> &str {
 	}
 }
 
-/// Adds a page holding a heading and the prose under it, and answers with its
-/// line in the contents.
-fn page(pages: &mut Vec<String>, language: &str, title: &str, blocks: &[String]) -> Entry {
-	let heading = escaped(title);
-	let prose = rendered(&blocks.join("\n\n"));
-	let body = format!("<h1>{heading}</h1>\n{prose}");
-	add_page(pages, language, title, &body)
+/// The book's pages as they are written, in reading order.
+struct Pages<'a> {
+	language: &'a str,
+	flavour: Flavour,
+	written: Vec<String>,
 }
 
-/// Adds a page around `body`, and answers with its line in the contents.
-fn add_page(pages: &mut Vec<String>, language: &str, title: &str, body: &str) -> Entry {
-	pages.push(xhtml(language, title, body));
+impl Pages<'_> {
+	/// Adds a page around `body`, and answers with its line in the contents.
+	fn add(&mut self, title: &str, body: &str) -> Entry {
+		let body = match self.flavour {
+			Flavour::Plain => body.to_owned(),
+			Flavour::Kobo => format!("{KOBO_OPEN}{body}{KOBO_CLOSE}"),
+		};
+		self.written.push(xhtml(self.language, title, &body));
 
-	Entry {
-		href: format!("{}.xhtml", id(pages.len() - 1)),
-		title: title.to_owned(),
-		under: Vec::new(),
+		Entry {
+			href: format!("{}.xhtml", id(self.written.len() - 1)),
+			title: title.to_owned(),
+			under: Vec::new(),
+		}
+	}
+
+	/// Adds a page holding a heading and the prose under it.
+	fn prose(&mut self, title: &str, blocks: &[String]) -> Entry {
+		let heading = escaped(title);
+		let prose = rendered(&blocks.join("\n\n"), self.flavour);
+		let body = format!("<h1>{heading}</h1>\n{prose}");
+		self.add(title, &body)
+	}
+
+	/// Adds a piece of front or back matter, which keeps its own title.
+	fn piece(&mut self, scene: &Scene, prose: &Prose) -> Entry {
+		self.prose(&scene.title, &told(slice::from_ref(scene), prose))
+	}
+
+	/// Adds a chapter, its scenes parted by breaks.
+	fn chapter(&mut self, chapter: &Chapter, prose: &Prose) -> Entry {
+		self.prose(&chapter.title, &broken(&chapter.scenes, prose))
 	}
 }
 
@@ -292,13 +317,90 @@ fn id(at: usize) -> String {
 /// Markdown as XHTML. Raw HTML is left out: the editor keeps what it cannot
 /// show as it came, a comment the writer left for themselves among it, and
 /// none of it was meant to be read in the book or can be trusted to be
-/// well-formed XML.
-fn rendered(markdown: &str) -> String {
+/// well-formed XML. For a Kobo, every sentence is marked as well.
+fn rendered(markdown: &str, flavour: Flavour) -> String {
 	let events = Parser::new_ext(markdown, options())
 		.filter(|event| !matches!(event, Event::Html(_) | Event::InlineHtml(_)));
 	let mut out = String::new();
-	html::push_html(&mut out, events);
+	match flavour {
+		Flavour::Plain => html::push_html(&mut out, events),
+		Flavour::Kobo => html::push_html(&mut out, spanned(events).into_iter()),
+	}
 	out
+}
+
+/// `events` with each sentence of text wrapped in one of Kobo's markers. A
+/// block starts the next paragraph number and each sentence in it the next
+/// sentence number, which is how a Kobo keeps its place and a highlight.
+fn spanned<'a>(events: impl Iterator<Item = Event<'a>>) -> Vec<Event<'a>> {
+	let mut out = Vec::new();
+	let (mut paragraph, mut sentence) = (0, 0);
+	for event in events {
+		match event {
+			Event::Start(tag) if block(&tag) => {
+				paragraph += 1;
+				sentence = 0;
+				out.push(Event::Start(tag));
+			}
+			Event::Text(text) if !text.trim().is_empty() => {
+				for piece in sentences(&text) {
+					sentence += 1;
+					out.push(Event::InlineHtml(kobo_span(paragraph, sentence).into()));
+					out.push(Event::Text(piece.to_owned().into()));
+					out.push(Event::InlineHtml("</span>".into()));
+				}
+			}
+			event => out.push(event),
+		}
+	}
+	out
+}
+
+/// Whether `tag` opens a block of its own, as far as Kobo's numbering goes.
+fn block(tag: &Tag) -> bool {
+	matches!(
+		tag,
+		Tag::Paragraph | Tag::Heading { .. } | Tag::Item | Tag::TableCell | Tag::CodeBlock(_)
+	)
+}
+
+/// The opening of Kobo's marker around one sentence.
+fn kobo_span(paragraph: usize, sentence: usize) -> String {
+	format!(r#"<span class="koboSpan" id="kobo.{paragraph}.{sentence}">"#)
+}
+
+/// Where a reading of the text has got to, for cutting it into sentences.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Reading {
+	Words,
+	/// Just past the punctuation that ends a sentence.
+	Stop,
+	/// In the space after it.
+	Gap,
+}
+
+/// `text` cut after each sentence. Every piece but the last ends with its
+/// closing punctuation, any closing quotes, and the space after.
+fn sentences(text: &str) -> Vec<&str> {
+	let mut pieces = Vec::new();
+	let mut start = 0;
+	let mut reading = Reading::Words;
+	for (at, c) in text.char_indices() {
+		if reading == Reading::Gap && !c.is_whitespace() {
+			pieces.push(&text[start..at]);
+			start = at;
+		}
+		reading = match (reading, c) {
+			(_, '.' | '!' | '?' | '…') => Reading::Stop,
+			(Reading::Stop, '"' | '\'' | '”' | '’' | ')') => Reading::Stop,
+			(Reading::Stop | Reading::Gap, c) if c.is_whitespace() => Reading::Gap,
+			_ => Reading::Words,
+		};
+	}
+	if start < text.len() {
+		pieces.push(&text[start..]);
+	}
+	pieces
 }
 
 /// A whole XHTML document around `body`.
@@ -564,6 +666,7 @@ mod tests {
 
 	use super::*;
 	use crate::book::{Part, all_scenes};
+	use crate::epub::Flavour::{Kobo, Plain};
 	use crate::project::Contributor;
 
 	/// 2026-09-10 at 12:34:56 in UTC.
@@ -597,15 +700,20 @@ mod tests {
 	/// The EPUB of `compiled`, each scene holding what `said` gives for its
 	/// title.
 	fn exported(book: &Book, compiled: &Compiled, said: &[(&str, &str)]) -> Vec<u8> {
-		let prose = all_scenes(compiled)
+		let prose = prose_of(compiled, said);
+		epub(book, compiled, &prose, None, Plain, now()).unwrap()
+	}
+
+	/// What the scenes of `compiled` hold, each what `said` gives for its title.
+	fn prose_of(compiled: &Compiled, said: &[(&str, &str)]) -> Prose {
+		all_scenes(compiled)
 			.into_iter()
 			.filter_map(|scene| {
 				said.iter()
 					.find(|(title, _)| *title == scene.title)
 					.map(|(_, text)| (scene.id, (*text).to_owned()))
 			})
-			.collect();
-		epub(book, compiled, &prose, None, now()).unwrap()
+			.collect()
 	}
 
 	fn read(epub: &[u8], name: &str) -> String {
@@ -859,7 +967,7 @@ mod tests {
 		let image: &[u8] = b"\x89PNG not really";
 		let compiled = Compiled::default();
 		let prose = Prose::new();
-		let epub = epub(&book, &compiled, &prose, Some(image), now()).unwrap();
+		let epub = epub(&book, &compiled, &prose, Some(image), Plain, now()).unwrap();
 
 		let package = read(&epub, PACKAGE);
 		assert!(package.contains(r#"properties="cover-image""#));
@@ -878,5 +986,35 @@ mod tests {
 			.read_to_end(&mut stored)
 			.unwrap();
 		assert_eq!(stored, image);
+	}
+
+	#[test]
+	fn a_kobo_page_marks_each_sentence_inside_kobos_boxes() {
+		let compiled = alone(chapter("Home", vec![scene("a")]));
+		let prose = prose_of(&compiled, &[("a", "She ran. He *stayed*.\n\nThe end.")]);
+		let written = epub(&Book::new("Ithaca"), &compiled, &prose, None, Kobo, now());
+
+		let page = read(&written.unwrap(), "EPUB/text-2.xhtml");
+		assert!(page.contains(concat!(
+			"<div id=\"book-columns\">\n",
+			"<div id=\"book-inner\">\n",
+			"<h1>Home</h1>\n",
+		)));
+		assert!(page.contains(concat!(
+			"<p><span class=\"koboSpan\" id=\"kobo.1.1\">She ran. </span>",
+			"<span class=\"koboSpan\" id=\"kobo.1.2\">He </span>",
+			"<em><span class=\"koboSpan\" id=\"kobo.1.3\">stayed</span></em>",
+			"<span class=\"koboSpan\" id=\"kobo.1.4\">.</span></p>\n",
+			"<p><span class=\"koboSpan\" id=\"kobo.2.1\">The end.</span></p>\n",
+			"</div>\n</div>\n",
+		)));
+	}
+
+	#[test]
+	fn text_is_cut_after_each_sentence() {
+		assert_eq!(sentences("She ran. He sat."), ["She ran. ", "He sat."]);
+		assert_eq!(sentences("“Go!” she said."), ["“Go!” ", "she said."]);
+		assert_eq!(sentences("Wait... what?"), ["Wait... ", "what?"]);
+		assert_eq!(sentences("It cost 3.50 in all"), ["It cost 3.50 in all"]);
 	}
 }

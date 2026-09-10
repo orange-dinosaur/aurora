@@ -16,7 +16,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::document::{DocumentView, NodeView, body, document_tree};
-use crate::epub::epub;
+use crate::epub::{Flavour, epub};
 use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, cover_bytes, matter, read_book};
 use crate::tree::FolderKind;
 
@@ -411,6 +411,13 @@ pub fn export(
 		})
 	});
 	let stem = file_stem(&book.title);
+	let epub_for = |flavour| {
+		// A cover that has gone missing leaves the book without one rather
+		// than stopping the export.
+		let cover = cover_bytes(root).ok();
+		let now = OffsetDateTime::now_utc();
+		epub(&book, &compiled, &prose, cover.as_deref(), flavour, now)
+	};
 
 	let mut written = Vec::new();
 	for &format in formats {
@@ -423,13 +430,8 @@ pub fn export(
 
 		let bytes = match format {
 			ExportFormat::Markdown => markdown(&book, &compiled, &prose).into_bytes(),
-			ExportFormat::Epub => {
-				// A cover that has gone missing leaves the book without one
-				// rather than stopping the export.
-				let cover = cover_bytes(root).ok();
-				let now = OffsetDateTime::now_utc();
-				epub(&book, &compiled, &prose, cover.as_deref(), now)?
-			}
+			ExportFormat::Epub => epub_for(Flavour::Plain)?,
+			ExportFormat::Kepub => epub_for(Flavour::Kobo)?,
 		};
 		fs::write(folder.join(&name), bytes)?;
 		written.push(name);
@@ -442,6 +444,7 @@ fn extension(format: ExportFormat) -> &'static str {
 	match format {
 		ExportFormat::Markdown => "md",
 		ExportFormat::Epub => "epub",
+		ExportFormat::Kepub => "kepub.epub",
 	}
 }
 
@@ -1100,12 +1103,19 @@ mod tests {
 		let written = export(
 			&ithaca(parent.path()),
 			out.path(),
-			&[ExportFormat::Markdown, ExportFormat::Epub],
+			&[
+				ExportFormat::Markdown,
+				ExportFormat::Epub,
+				ExportFormat::Kepub,
+			],
 			|_| {},
 		)
 		.unwrap();
 
-		assert_eq!(written, vec!["Ithaca.md", "Ithaca.epub"]);
+		assert_eq!(
+			written,
+			vec!["Ithaca.md", "Ithaca.epub", "Ithaca.kepub.epub"]
+		);
 		let text = fs::read_to_string(out.path().join("Ithaca.md")).unwrap();
 		assert!(text.starts_with("# Ithaca\n"));
 		let epub = fs::read(out.path().join("Ithaca.epub")).unwrap();

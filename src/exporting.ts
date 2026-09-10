@@ -5,6 +5,7 @@ import type { ExportFormat, ExportProgress, Extent } from "./types";
 export const FORMATS: { key: ExportFormat; name: string }[] = [
 	{ key: "markdown", name: "Markdown" },
 	{ key: "epub", name: "EPUB" },
+	{ key: "kepub", name: "KEPUB" },
 ];
 
 /**
@@ -54,7 +55,8 @@ export function wrote(files: string[], folder: string): string {
 
 /** What the panel warns about before an export, if anything. */
 export function warned(formats: ExportFormat[], hasCover: boolean): string {
-	return formats.includes("epub") && !hasCover
+	const epub = formats.includes("epub") || formats.includes("kepub");
+	return epub && !hasCover
 		? "No cover: most libraries will show a blank tile."
 		: "";
 }

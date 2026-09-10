@@ -236,6 +236,7 @@ pub struct Book {
 pub enum ExportFormat {
 	Markdown,
 	Epub,
+	Kepub,
 }
 
 impl Book {

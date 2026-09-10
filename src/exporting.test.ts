@@ -76,6 +76,10 @@ describe("warned", () => {
 		);
 	});
 
+	test("warns about a KEPUB without a cover too", () => {
+		expect(warned(["kepub"], false)).not.toBe("");
+	});
+
 	test("says nothing once there is a cover, or no EPUB", () => {
 		expect(warned(["epub"], true)).toBe("");
 		expect(warned(["markdown"], false)).toBe("");
