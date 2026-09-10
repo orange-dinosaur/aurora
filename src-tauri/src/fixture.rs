@@ -267,7 +267,7 @@ fn words(tree: &[NodeView]) -> usize {
 	tree.iter()
 		.map(|node| match node {
 			NodeView::Folder { words, .. } => *words,
-			NodeView::Document(_) => 0,
+			NodeView::Document { .. } => 0,
 		})
 		.sum()
 }

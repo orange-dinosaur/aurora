@@ -24,6 +24,8 @@ pub fn run() {
 			project::set_cover,
 			project::read_cover,
 			project::clear_cover,
+			book::book_extent,
+			book::export_book,
 			document::document_tree,
 			document::refresh_documents,
 			document::read_document,

@@ -224,6 +224,17 @@ pub struct Book {
 	pub keywords: Vec<String>,
 	#[serde(default)]
 	pub copyright: String,
+	/// The formats ticked on the Export panel, so the next export starts from
+	/// the choice the last one made.
+	#[serde(default)]
+	pub export_formats: Vec<ExportFormat>,
+}
+
+/// A kind of file the book can be exported as.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExportFormat {
+	Markdown,
 }
 
 impl Book {
@@ -246,6 +257,7 @@ impl Book {
 			isbn: String::new(),
 			keywords: Vec::new(),
 			copyright: String::new(),
+			export_formats: Vec::new(),
 		}
 	}
 }
@@ -1330,6 +1342,26 @@ mod tests {
 		assert_eq!(book.identifier, settled);
 		assert_eq!(book.title, "Odyssey");
 		assert_eq!(book.author, "Homer", "and the rest is left as it was");
+	}
+
+	#[test]
+	fn the_export_ticks_are_remembered() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		write_book(
+			root.clone(),
+			Book {
+				export_formats: vec![ExportFormat::Markdown],
+				..read_book(root.clone()).unwrap()
+			},
+		)
+		.unwrap();
+
+		assert_eq!(
+			read_book(root).unwrap().export_formats,
+			vec![ExportFormat::Markdown]
+		);
 	}
 
 	#[test]

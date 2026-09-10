@@ -60,6 +60,17 @@ export type Book = {
 	isbn: string;
 	keywords: string[];
 	copyright: string;
+	/** The formats ticked on the Export panel. */
+	exportFormats: ExportFormat[];
+};
+
+/** `project::ExportFormat` */
+export type ExportFormat = "markdown";
+
+/** `book::Extent` — how much an export of the book would take. */
+export type Extent = {
+	scenes: number;
+	words: number;
 };
 
 /** `store::RecentProject` */

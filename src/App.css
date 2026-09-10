@@ -6047,7 +6047,8 @@ body.dragging * {
 	gap: 0.5rem;
 }
 
-.cover__button {
+.cover__button,
+.export__button {
 	height: 28px;
 	padding: 0 0.625rem;
 	font: inherit;
@@ -6059,12 +6060,14 @@ body.dragging * {
 	cursor: pointer;
 }
 
-.cover__button:hover {
+.cover__button:hover,
+.export__button:hover {
 	color: var(--text);
 	background: var(--bg-hover);
 }
 
-.cover__button:focus-visible {
+.cover__button:focus-visible,
+.export__button:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 }
@@ -6074,4 +6077,99 @@ body.dragging * {
 	font-size: 0.6875rem;
 	line-height: 1.5;
 	color: var(--text-dim);
+}
+
+/* The formats to write and the button that writes them, under the cover. */
+.export {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-top: 1.25rem;
+}
+
+.export__formats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem 1rem;
+}
+
+.export__format {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	height: 28px;
+	padding: 0 0.25rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	color: var(--text);
+	background: none;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.export__format:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.export__tick {
+	position: relative;
+	flex: none;
+	width: 14px;
+	height: 14px;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+}
+
+.export__format:hover .export__tick {
+	border-color: var(--text-dim);
+}
+
+.export__format[aria-checked="true"] .export__tick {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+/* The tick itself: two sides of a narrow box, turned. */
+.export__format[aria-checked="true"] .export__tick::after {
+	content: "";
+	position: absolute;
+	top: 1px;
+	left: 4px;
+	width: 4px;
+	height: 8px;
+	border: solid var(--bg-card);
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+}
+
+.export__action {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.export__button:disabled {
+	color: var(--text-dim);
+	background: none;
+	opacity: 0.5;
+	cursor: default;
+}
+
+.export__size {
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Always drawn and a line tall, so what an export says moves nothing. */
+.export__said {
+	min-height: 1.5em;
+	margin: 0;
+	font-size: 0.6875rem;
+	line-height: 1.5;
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
 }

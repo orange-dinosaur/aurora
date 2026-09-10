@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Cover from "./Cover";
+import Export from "./Export";
 import { Chips, TextBox } from "./Field";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
@@ -97,6 +98,14 @@ export default function BookView({ root }: Props) {
 		} catch (error) {
 			setTrouble(failure(error).message);
 		}
+	}
+
+	/** Writes now whatever is still waiting on the countdown. */
+	async function flush() {
+		if (timer.current !== null) {
+			window.clearTimeout(timer.current);
+		}
+		await write();
 	}
 
 	function edit(next: Book) {
@@ -416,11 +425,21 @@ export default function BookView({ root }: Props) {
 
 					{group(
 						"export",
-						<Cover
-							root={root}
-							cover={book.cover}
-							onChange={(cover) => edit({ ...book, cover })}
-						/>,
+						<>
+							<Cover
+								root={root}
+								cover={book.cover}
+								onChange={(cover) => edit({ ...book, cover })}
+							/>
+							<Export
+								root={root}
+								formats={book.exportFormats}
+								onFormats={(exportFormats) =>
+									edit({ ...book, exportFormats })
+								}
+								onBeforeExport={flush}
+							/>
+						</>,
 					)}
 				</div>
 			)}

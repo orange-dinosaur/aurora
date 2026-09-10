@@ -18,6 +18,7 @@ const empty: Book = {
 	isbn: "",
 	keywords: [],
 	copyright: "",
+	exportFormats: [],
 };
 
 describe("filled", () => {
@@ -70,6 +71,16 @@ describe("filled", () => {
 		};
 
 		expect(filled(book, "publication")).toBe(4);
+	});
+
+	test("counts the cover and each format ticked", () => {
+		const book: Book = {
+			...empty,
+			cover: "cover.png",
+			exportFormats: ["markdown"],
+		};
+
+		expect(filled(book, "export")).toBe(2);
 	});
 });
 

@@ -8,12 +8,13 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use uuid::Uuid;
 
-use crate::document::{DocumentView, NodeView, body};
-use crate::project::{Book, MANUSCRIPT, matter};
+use crate::document::{DocumentView, NodeView, body, document_tree};
+use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, matter, read_book};
 use crate::tree::FolderKind;
 
 /// One document the book takes, with where its text is. The title is the file
@@ -312,6 +313,74 @@ fn told(scenes: &[Scene], prose: &Prose) -> Vec<String> {
 		.filter(|text| !text.is_empty())
 		.cloned()
 		.collect()
+}
+
+/// How much the book holds, for the Export panel to say before anything is
+/// written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Extent {
+	pub scenes: usize,
+	pub words: usize,
+}
+
+/// What an export would take, with the words counted the way the sidebar
+/// counts them.
+#[tauri::command]
+pub fn book_extent(root: PathBuf) -> Result<Extent> {
+	let compiled = compile(&document_tree(root.clone())?);
+	let words = prose(&root, &compiled)
+		.values()
+		.map(|text| text.split_whitespace().count())
+		.sum();
+
+	Ok(Extent {
+		scenes: all_scenes(&compiled).len(),
+		words,
+	})
+}
+
+/// Writes the book into `folder` once for each format ticked and answers with
+/// the names of the files written. A file already there under the same name is
+/// replaced: exporting again into the same folder is asking for the new book,
+/// not a second copy beside the old one.
+#[tauri::command]
+pub fn export_book(
+	root: PathBuf,
+	folder: PathBuf,
+	formats: Vec<ExportFormat>,
+) -> Result<Vec<String>> {
+	let book = read_book(root.clone())?;
+	let compiled = compile(&document_tree(root.clone())?);
+	let prose = prose(&root, &compiled);
+	let stem = file_stem(&book.title);
+
+	let mut written = Vec::new();
+	for format in formats {
+		let (name, text) = match format {
+			ExportFormat::Markdown => (format!("{stem}.md"), markdown(&book, &compiled, &prose)),
+		};
+		fs::write(folder.join(&name), text)?;
+		written.push(name);
+	}
+	Ok(written)
+}
+
+/// What an exported file is called: the book's title, less anything a file
+/// name cannot hold on one system or another, since an export is as likely to
+/// be copied onto a stick as kept where it was written.
+fn file_stem(title: &str) -> String {
+	let kept: String = title
+		.chars()
+		.filter(|c| !c.is_control() && !r#"/\:*?"<>|"#.contains(*c))
+		.collect();
+	// A leading dot would hide the file.
+	let stem = kept.trim().trim_start_matches('.').trim();
+
+	if stem.is_empty() {
+		"Untitled".to_owned()
+	} else {
+		stem.to_owned()
+	}
 }
 
 /// Whether `pulldown-cmark` reads back everything Aurora's editor writes. The
@@ -936,6 +1005,34 @@ mod tests {
 	}
 
 	/// A book with nothing said about it but these two.
+	#[test]
+	fn a_title_makes_a_file_name() {
+		assert_eq!(file_stem("The Odyssey"), "The Odyssey");
+		assert_eq!(file_stem("Either/Or: A Fragment"), "EitherOr A Fragment");
+		assert_eq!(file_stem(".hidden"), "hidden");
+		assert_eq!(file_stem("  ?  "), "Untitled");
+	}
+
+	#[test]
+	fn an_export_writes_one_file_per_format() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = crate::project::create(
+			parent.path(),
+			"Ithaca",
+			crate::project::Format::Novel,
+			time::OffsetDateTime::now_utc(),
+		)
+		.unwrap();
+		let out = tempfile::tempdir().unwrap();
+
+		let written =
+			export_book(root, out.path().to_path_buf(), vec![ExportFormat::Markdown]).unwrap();
+
+		assert_eq!(written, vec!["Ithaca.md"]);
+		let text = fs::read_to_string(out.path().join("Ithaca.md")).unwrap();
+		assert!(text.starts_with("# Ithaca\n"));
+	}
+
 	fn book(title: &str, author: &str) -> Book {
 		let mut book = Book::new(title);
 		book.author = author.to_owned();
