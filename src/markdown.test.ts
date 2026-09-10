@@ -33,6 +33,7 @@ describe("a document survives being parsed and written back", () => {
 		["a scene break", "One.\n\n---\n\nTwo."],
 		["a nested list", "- one\n    - inner\n- two"],
 		["a nested numbered list", "1. one\n    1. inner\n2. two"],
+		["a list inside a code block", "```\n- one\n  - inner\n```"],
 		["several blocks together", "# Chapter One\n\nShe *ran*.\n\n- a\n- b"],
 	])("keeps %s", (_what, markdown) => {
 		expect(roundTrip(markdown)).toBe(markdown);
@@ -65,12 +66,17 @@ describe("what the default vocabulary changes", () => {
 		);
 	});
 
-	// Lexical measures one level of nesting as four spaces. Two-space
-	// indentation is common enough elsewhere that this is worth stating: the
-	// nesting is lost, though only once, and never on a file Aurora wrote.
-	test("a list nested by two spaces is flattened", () => {
-		expect(roundTrip("- one\n  - inner\n- two")).toBe(
-			"- one\n- inner\n- two",
+	// Lexical measures one level of nesting as four spaces, so a list nested
+	// more tightly keeps its levels but comes back in Lexical's spacing.
+	test("a list nested by two spaces comes back nested by four", () => {
+		expect(roundTrip("- one\n  - inner\n    - deeper\n- two")).toBe(
+			"- one\n    - inner\n        - deeper\n- two",
+		);
+	});
+
+	test("a numbered list nested by three spaces comes back nested by four", () => {
+		expect(roundTrip("1. one\n   1. inner\n2. two")).toBe(
+			"1. one\n    1. inner\n2. two",
 		);
 	});
 
@@ -122,6 +128,7 @@ describe("a second pass changes nothing", () => {
 		"The 5 * 3 grid.",
 		"One.\n\n* * *\n\nTwo.",
 		"- one\n  - inner\n- two",
+		"1. one\n   1. inner\n2. two",
 		"- one\n    - inner\n        - deeper\n- two",
 		"---\ntitle: The Sea\n---\n\nProse.",
 		"---\ntitle: The Sea\n---\n\nOne.\n\n***\n\nTwo.",

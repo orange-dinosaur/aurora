@@ -81,10 +81,69 @@ export function $setFrontMatter(block: string): void {
 	$setState($getRoot(), frontMatter, block);
 }
 
+// A list item as Lexical's transformers recognise one, and the fence that
+// opens or closes a code block.
+const LIST_ITEM = /^([ \t]*)(?:[-*+]|\d+\.)[ \t]/;
+const FENCE = /^[ \t]*(?:```|~~~)/;
+
+function columns(indent: string): number {
+	let width = 0;
+	for (const character of indent) {
+		width += character === "\t" ? 4 : 1;
+	}
+	return width;
+}
+
+// Lexical counts four spaces or a tab as one level of nesting, so a list
+// nested by two spaces, or by three under a number, would arrive flat. Each
+// item is re-indented by how deep it sits against the items above it, four
+// spaces a level, which is also how Lexical writes a list back.
+function renested(body: string): string {
+	let fenced = false;
+	// The indent of every level open above the current line, outermost first.
+	let levels: number[] = [];
+
+	return body
+		.split("\n")
+		.map((line) => {
+			if (FENCE.test(line)) {
+				fenced = !fenced;
+				levels = [];
+				return line;
+			}
+			if (fenced) {
+				return line;
+			}
+
+			const item = LIST_ITEM.exec(line);
+			if (item === null) {
+				// Prose back at the margin ends the list.
+				if (/^\S/.test(line)) {
+					levels = [];
+				}
+				return line;
+			}
+
+			const indent = columns(item[1]);
+			while (levels.length > 0 && levels[levels.length - 1] > indent) {
+				levels.pop();
+			}
+			if (levels.length === 0 || levels[levels.length - 1] < indent) {
+				levels.push(indent);
+			}
+			const depth = levels.length - 1;
+			return "    ".repeat(depth) + line.slice(item[1].length);
+		})
+		.join("\n");
+}
+
 /** Replaces the document with the tree a markdown string describes. */
 export function $fromMarkdown(text: string): void {
 	const { block, body } = split(text);
-	$convertFromMarkdownString(body.replace(/^\n+/, ""), MARKDOWN_TRANSFORMERS);
+	$convertFromMarkdownString(
+		renested(body.replace(/^\n+/, "")),
+		MARKDOWN_TRANSFORMERS,
+	);
 	$setFrontMatter(block);
 }
 
