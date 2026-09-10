@@ -9,11 +9,42 @@ pub mod store;
 pub mod text;
 pub mod tree;
 
+/// Tauri hands the window's minimum to GTK as a hint, and on GNOME under
+/// Wayland the hint is lost. A size request on the window's contents is how
+/// every GTK app gets its own minimum across, so the config's is set that way.
+#[cfg(target_os = "linux")]
+fn hold_minimum(app: &tauri::App) -> tauri::Result<()> {
+	use gtk::prelude::WidgetExt;
+	use tauri::Manager;
+
+	let Some(config) = app.config().app.windows.first() else {
+		return Ok(());
+	};
+	let (Some(width), Some(height)) = (config.min_width, config.min_height) else {
+		return Ok(());
+	};
+	if let Some(window) = app.get_webview_window(&config.label) {
+		window
+			.default_vbox()?
+			.set_size_request(width as i32, height as i32);
+	}
+	Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn hold_minimum(_app: &tauri::App) -> tauri::Result<()> {
+	Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	tauri::Builder::default()
 		.plugin(tauri_plugin_opener::init())
 		.plugin(tauri_plugin_dialog::init())
+		.setup(|app| {
+			hold_minimum(app)?;
+			Ok(())
+		})
 		.invoke_handler(tauri::generate_handler![
 			project::format_layouts,
 			project::create_project,

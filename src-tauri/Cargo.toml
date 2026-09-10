@@ -51,5 +51,9 @@ pulldown-cmark = { version = "0.13", default-features = false, features = ["html
 # Deflate is the only compression an EPUB uses.
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
+# The same GTK Tauri already builds on, to hold the window's minimum size.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
 [dev-dependencies]
 tempfile = "3"
