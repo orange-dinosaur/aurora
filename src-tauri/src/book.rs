@@ -11,6 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use tauri::ipc::Channel;
 use uuid::Uuid;
 
 use crate::document::{DocumentView, NodeView, body, document_tree};
@@ -231,11 +232,18 @@ pub fn all_scenes(compiled: &Compiled) -> Vec<&Scene> {
 /// as nothing rather than stopping the export: the tree comes from the
 /// manifest, and the manifest can name a file that is no longer there.
 pub fn prose(root: &Path, compiled: &Compiled) -> Prose {
+	read_prose(root, compiled, |_| {})
+}
+
+/// `prose`, telling `read` how many scenes it has been through after each one.
+fn read_prose(root: &Path, compiled: &Compiled, mut read: impl FnMut(usize)) -> Prose {
 	all_scenes(compiled)
 		.into_iter()
-		.filter_map(|scene| {
-			let text = fs::read_to_string(root.join(&scene.path)).ok()?;
-			Some((scene.id, body(&text).trim().to_owned()))
+		.enumerate()
+		.filter_map(|(at, scene)| {
+			let text = fs::read_to_string(root.join(&scene.path));
+			read(at + 1);
+			Some((scene.id, body(&text.ok()?).trim().to_owned()))
 		})
 		.collect()
 }
@@ -339,30 +347,86 @@ pub fn book_extent(root: PathBuf) -> Result<Extent> {
 	})
 }
 
-/// Writes the book into `folder` once for each format ticked and answers with
-/// the names of the files written. A file already there under the same name is
-/// replaced: exporting again into the same folder is asking for the new book,
-/// not a second copy beside the old one.
-#[tauri::command]
+/// How far an export has got. Every scene read is one step towards `total` and
+/// so is every file written, so `done` over `total` is how full the bar is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "stage", rename_all = "camelCase")]
+pub enum Progress {
+	Reading {
+		done: usize,
+		total: usize,
+		scenes: usize,
+	},
+	Writing {
+		done: usize,
+		total: usize,
+		name: String,
+	},
+}
+
+/// Writes the book into `folder` once for each format ticked, reporting as it
+/// goes, and answers with the names of the files written.
+///
+/// It runs off the main thread. A command on it holds its reports back until
+/// it returns, and the bar would only ever be seen full.
+#[tauri::command(async)]
 pub fn export_book(
 	root: PathBuf,
 	folder: PathBuf,
 	formats: Vec<ExportFormat>,
+	progress: Channel<Progress>,
 ) -> Result<Vec<String>> {
-	let book = read_book(root.clone())?;
-	let compiled = compile(&document_tree(root.clone())?);
-	let prose = prose(&root, &compiled);
+	export(&root, &folder, &formats, |step| {
+		// A report that goes astray costs the writer the bar, not the book.
+		let _ = progress.send(step);
+	})
+}
+
+/// The export itself. A file already there under the same name is replaced:
+/// exporting again into the same folder is asking for the new book, not a
+/// second copy beside the old one.
+pub fn export(
+	root: &Path,
+	folder: &Path,
+	formats: &[ExportFormat],
+	mut report: impl FnMut(Progress),
+) -> Result<Vec<String>> {
+	let book = read_book(root.to_path_buf())?;
+	let compiled = compile(&document_tree(root.to_path_buf())?);
+	let scenes = all_scenes(&compiled).len();
+	let total = scenes + formats.len();
+	let prose = read_prose(root, &compiled, |done| {
+		report(Progress::Reading {
+			done,
+			total,
+			scenes,
+		})
+	});
 	let stem = file_stem(&book.title);
 
 	let mut written = Vec::new();
-	for format in formats {
-		let (name, text) = match format {
-			ExportFormat::Markdown => (format!("{stem}.md"), markdown(&book, &compiled, &prose)),
+	for &format in formats {
+		let name = format!("{stem}.{}", extension(format));
+		report(Progress::Writing {
+			done: scenes + written.len(),
+			total,
+			name: name.clone(),
+		});
+
+		let text = match format {
+			ExportFormat::Markdown => markdown(&book, &compiled, &prose),
 		};
 		fs::write(folder.join(&name), text)?;
 		written.push(name);
 	}
 	Ok(written)
+}
+
+/// What a file in each format ends in.
+fn extension(format: ExportFormat) -> &'static str {
+	match format {
+		ExportFormat::Markdown => "md",
+	}
 }
 
 /// What an exported file is called: the book's title, less anything a file
@@ -1016,21 +1080,66 @@ mod tests {
 	#[test]
 	fn an_export_writes_one_file_per_format() {
 		let parent = tempfile::tempdir().unwrap();
-		let root = crate::project::create(
-			parent.path(),
-			"Ithaca",
-			crate::project::Format::Novel,
-			time::OffsetDateTime::now_utc(),
-		)
-		.unwrap();
 		let out = tempfile::tempdir().unwrap();
 
-		let written =
-			export_book(root, out.path().to_path_buf(), vec![ExportFormat::Markdown]).unwrap();
+		let written = export(
+			&ithaca(parent.path()),
+			out.path(),
+			&[ExportFormat::Markdown],
+			|_| {},
+		)
+		.unwrap();
 
 		assert_eq!(written, vec!["Ithaca.md"]);
 		let text = fs::read_to_string(out.path().join("Ithaca.md")).unwrap();
 		assert!(text.starts_with("# Ithaca\n"));
+	}
+
+	#[test]
+	fn an_export_reports_each_scene_read_then_each_file_written() {
+		let parent = tempfile::tempdir().unwrap();
+		let out = tempfile::tempdir().unwrap();
+		let mut steps = Vec::new();
+
+		export(
+			&ithaca(parent.path()),
+			out.path(),
+			&[ExportFormat::Markdown],
+			|step| steps.push(step),
+		)
+		.unwrap();
+
+		let (last, reading) = steps.split_last().expect("an export reports something");
+		let scenes = reading.len();
+		let total = scenes + 1;
+		for (at, step) in reading.iter().enumerate() {
+			assert_eq!(
+				*step,
+				Progress::Reading {
+					done: at + 1,
+					total,
+					scenes,
+				}
+			);
+		}
+		assert_eq!(
+			*last,
+			Progress::Writing {
+				done: scenes,
+				total,
+				name: "Ithaca.md".to_owned(),
+			}
+		);
+	}
+
+	fn ithaca(parent: &Path) -> PathBuf {
+		crate::project::create(
+			parent,
+			"Ithaca",
+			crate::project::Format::Novel,
+			time::OffsetDateTime::now_utc(),
+		)
+		.unwrap()
 	}
 
 	fn book(title: &str, author: &str) -> Book {

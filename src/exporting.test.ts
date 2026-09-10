@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { flipped, sized, wrote } from "./exporting";
+import { doing, flipped, fraction, sized, wrote } from "./exporting";
 
 describe("flipped", () => {
 	test("ticks a format that was not ticked", () => {
@@ -20,6 +20,44 @@ describe("sized", () => {
 
 	test("does not make one of either plural", () => {
 		expect(sized({ scenes: 1, words: 1 })).toBe("1 scene · 1 word");
+	});
+});
+
+describe("doing", () => {
+	test("counts the scenes while reading them", () => {
+		expect(
+			doing({ stage: "reading", done: 120, total: 402, scenes: 401 }),
+		).toBe("Reading scenes, 120 of 401");
+	});
+
+	test("names the file being written", () => {
+		expect(
+			doing({
+				stage: "writing",
+				done: 401,
+				total: 402,
+				name: "Ithaca.md",
+			}),
+		).toBe("Writing Ithaca.md");
+	});
+});
+
+describe("fraction", () => {
+	test("is the steps done over all of them", () => {
+		expect(
+			fraction({
+				stage: "writing",
+				done: 1,
+				total: 4,
+				name: "Ithaca.md",
+			}),
+		).toBe(0.25);
+	});
+
+	test("is nothing for an export with nothing to do", () => {
+		expect(
+			fraction({ stage: "reading", done: 0, total: 0, scenes: 0 }),
+		).toBe(0);
 	});
 });
 

@@ -1,5 +1,5 @@
 import { counted } from "./cards";
-import type { ExportFormat, Extent } from "./types";
+import type { ExportFormat, ExportProgress, Extent } from "./types";
 
 /** Every format the Export panel offers, in the order it lists them. */
 export const FORMATS: { key: ExportFormat; name: string }[] = [
@@ -29,6 +29,21 @@ export function sized(extent: Extent): string {
 			: `${extent.scenes.toLocaleString()} scenes`;
 
 	return `${scenes} · ${counted(extent.words, null)}`;
+}
+
+/** What the line under the bar says while an export runs. */
+export function doing(progress: ExportProgress): string {
+	if (progress.stage === "writing") {
+		return `Writing ${progress.name}`;
+	}
+
+	const { done, scenes } = progress;
+	return `Reading scenes, ${done.toLocaleString()} of ${scenes.toLocaleString()}`;
+}
+
+/** How full the bar is, from 0 to 1. */
+export function fraction(progress: ExportProgress): number {
+	return progress.total === 0 ? 0 : progress.done / progress.total;
 }
 
 /** What an export wrote, and where. */

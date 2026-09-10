@@ -73,6 +73,11 @@ export type Extent = {
 	words: number;
 };
 
+/** `book::Progress` — how far an export has got. */
+export type ExportProgress =
+	| { stage: "reading"; done: number; total: number; scenes: number }
+	| { stage: "writing"; done: number; total: number; name: string };
+
 /** `store::RecentProject` */
 export type RecentProject = {
 	name: string;

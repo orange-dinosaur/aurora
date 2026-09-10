@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { failure } from "./errors";
-import { FORMATS, flipped, sized, wrote } from "./exporting";
-import type { ExportFormat, Extent } from "./types";
+import { FORMATS, doing, flipped, fraction, sized, wrote } from "./exporting";
+import type { ExportFormat, ExportProgress, Extent } from "./types";
+
+/** How long an export runs before its bar is shown, so a quick one does not
+ * flash it on and off. */
+const SLOW_MS = 200;
 
 type Props = {
 	root: string;
@@ -27,6 +31,8 @@ export default function Export({
 }: Props) {
 	const [extent, setExtent] = useState<Extent | null>(null);
 	const [busy, setBusy] = useState(false);
+	const [slow, setSlow] = useState(false);
+	const [progress, setProgress] = useState<ExportProgress | null>(null);
 	const [said, setSaid] = useState("");
 
 	useEffect(() => {
@@ -58,6 +64,17 @@ export default function Export({
 			return;
 		}
 
+		// A report arriving after the export has answered is about an export
+		// that is over, and must not bring the bar back.
+		let over = false;
+		const channel = new Channel<ExportProgress>();
+		channel.onmessage = (step) => {
+			if (!over) {
+				setProgress(step);
+			}
+		};
+		const timer = window.setTimeout(() => setSlow(true), SLOW_MS);
+
 		setBusy(true);
 		try {
 			await onBeforeExport();
@@ -65,14 +82,23 @@ export default function Export({
 				root,
 				folder,
 				formats,
+				progress: channel,
 			});
 			setSaid(wrote(files, folder));
 		} catch (error) {
 			setSaid(failure(error).message);
 		} finally {
+			over = true;
+			window.clearTimeout(timer);
 			setBusy(false);
+			setSlow(false);
+			setProgress(null);
 		}
 	}
+
+	// The bar has something to show only once an export has run for a while.
+	const current = busy && slow ? progress : null;
+	const percent = current === null ? 0 : Math.round(fraction(current) * 100);
 
 	return (
 		<div className="export">
@@ -106,9 +132,25 @@ export default function Export({
 				</p>
 			</div>
 
-			{/* Always drawn, so the line an export leaves moves nothing. */}
+			{/* The bar and the line under it are always drawn, so neither an
+			    export starting nor what it says at the end moves anything. */}
+			<div
+				className="export__track"
+				role="progressbar"
+				aria-label="Export progress"
+				aria-valuemin={0}
+				aria-valuemax={100}
+				aria-valuenow={percent}
+				data-shown={current !== null}
+			>
+				<div
+					className="export__fill"
+					style={{ width: `${percent}%` }}
+				/>
+			</div>
+
 			<p className="export__said" role="status">
-				{said}
+				{current === null ? said : doing(current)}
 			</p>
 		</div>
 	);
