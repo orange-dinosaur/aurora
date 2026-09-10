@@ -33,7 +33,9 @@ export function AccountChip({
 					<span className="account__avatar">
 						<Icon name="user" />
 					</span>
-					{SIGNED_IN ? "Account" : "Sign in"}
+					<span className="titlebar__label">
+						{SIGNED_IN ? "Account" : "Sign in"}
+					</span>
 					<Icon name="chevron-down" />
 				</>
 			}

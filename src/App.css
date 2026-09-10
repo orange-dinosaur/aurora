@@ -913,11 +913,18 @@ body,
 	min-width: 15.5rem;
 }
 
+/* The name gives way before any control does: a long one wraps onto a second
+   line inside the bar rather than pushing the buttons off the row. */
+.menu.titlebar__menu--project {
+	flex: 0 1 auto;
+}
+
 .titlebar__name {
 	display: flex;
 	align-items: center;
 	gap: 0.4rem;
-	height: 26px;
+	max-width: 100%;
+	min-height: 26px;
 	padding: 0 0.4rem;
 	/* Pulled back by its own padding, so the name still starts on the
 	   header's left edge and only its hover has room. */
@@ -933,7 +940,7 @@ body,
 	border: 0;
 	border-radius: 6px;
 	cursor: pointer;
-	white-space: nowrap;
+	text-align: left;
 }
 
 .titlebar__name:hover,
@@ -998,6 +1005,11 @@ body,
    running is the whole reason it is drawn up here. */
 .titlebar__session--running {
 	color: var(--accent);
+}
+
+/* The timer stands in for the words only when the window is narrow. */
+.titlebar__session--idle svg {
+	display: none;
 }
 
 /* The buttons sit closer to each other than to the readouts they follow, so
@@ -1110,6 +1122,42 @@ body,
 .account__avatar--big {
 	width: 32px;
 	height: 32px;
+}
+
+/* Under this width the header cannot hold its words as well as its controls,
+   so the two controls that have an icon drop their words. A running session
+   keeps its readout: seeing it is the reason it is up there. */
+@media (max-width: 48rem) {
+	.titlebar__label,
+	.account__chip > svg {
+		display: none;
+	}
+
+	.account__chip {
+		padding: 0 0.2rem;
+	}
+
+	.titlebar__session--idle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: 6px;
+	}
+
+	.titlebar__session--idle svg {
+		display: block;
+	}
+
+	.titlebar__session--idle:hover {
+		text-decoration: none;
+		background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	}
+
+	.titlebar__session--idle:focus-visible {
+		border-radius: 6px;
+	}
 }
 
 .account__avatar--big svg {

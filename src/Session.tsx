@@ -3,6 +3,7 @@
 // that gives one a limit.
 
 import { useEffect, useRef, useState } from "react";
+import Icon from "./Icon";
 import { sessionReading } from "./stats";
 import type { Limit, Running } from "./sessions";
 import type { SprintUnit } from "./types";
@@ -78,11 +79,13 @@ export default function Session({
 	return session === null ? (
 		<button
 			type="button"
-			className="titlebar__session"
+			className="titlebar__session titlebar__session--idle"
+			aria-label="Start session"
 			title={`Start a writing session (${shortcut})`}
 			onClick={onStart}
 		>
-			Start session
+			<Icon name="timer" />
+			<span className="titlebar__label">Start session</span>
 		</button>
 	) : (
 		<button

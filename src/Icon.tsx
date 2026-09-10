@@ -5,6 +5,7 @@ export type IconName =
 	| "list"
 	| "contrast"
 	| "arrows-vertical"
+	| "timer"
 	| "chevron-down"
 	| "chevron-left"
 	| "chevron-right"
@@ -54,6 +55,13 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="M12 2v20" />
 			<path d="m8 6 4-4 4 4" />
 			<path d="m8 18 4 4 4-4" />
+		</>
+	),
+	timer: (
+		<>
+			<path d="M10 2h4" />
+			<path d="m12 14 3-3" />
+			<circle cx="12" cy="14" r="8" />
 		</>
 	),
 	"chevron-down": <path d="m6 9 6 6 6-6" />,
