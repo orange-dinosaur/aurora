@@ -101,7 +101,7 @@ export default function Search({
 
 	const { corpus, documents } = useCorpus({
 		root,
-		changed,
+		moved: changed,
 		live,
 		wanted: active && query.length >= MIN_QUERY,
 		retry: asked,

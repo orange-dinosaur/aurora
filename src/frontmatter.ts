@@ -429,23 +429,6 @@ export function flag(fields: Fields, key: string): boolean {
 	return true;
 }
 
-/**
- * The fields with a yes-or-no answered. Yes takes the key out rather than
- * writing `true`: the default belongs in one place, and a file the writer
- * never switched off should look like one.
- */
-export function setFlag(fields: Fields, key: string, on: boolean): Fields {
-	const next = new Map(fields);
-
-	if (on) {
-		next.delete(key);
-	} else {
-		next.set(key, false);
-	}
-
-	return next;
-}
-
 /** A file in two pieces: the block at its top, fences and all, and the prose. */
 export function split(text: string): { block: string; body: string } {
 	const found = FRONT_MATTER.exec(text);

@@ -220,11 +220,11 @@ export function refile(root: string): void {
 type Asked = {
 	root: string;
 	/**
-	 * Counts the times the project has changed under what was read. It no
-	 * longer decides anything here — `filed` and `refile` do that — but it
-	 * still makes a mounted panel look again when the project moves.
+	 * Bumped when the project moves under what was read, so a mounted panel
+	 * looks again. Whether a document needs reading again is for `filed` and
+	 * `refile` to say, not this.
 	 */
-	changed: number;
+	moved: number;
 	/**
 	 * The text of every open document as its tab holds it, by id. Newer than
 	 * the file for the 800 ms after a keystroke, and newer than anything the
@@ -241,7 +241,7 @@ type Asked = {
  * The project as search and recognition read it, with the documents already
  * merged with whatever their open tabs hold.
  */
-export function useCorpus({ root, changed, live, wanted, retry = 0 }: Asked): {
+export function useCorpus({ root, moved, live, wanted, retry = 0 }: Asked): {
 	corpus: Corpus;
 	documents: Mentionable[];
 } {
@@ -294,7 +294,7 @@ export function useCorpus({ root, changed, live, wanted, retry = 0 }: Asked): {
 		const timer = window.setTimeout(() => ask(held), SWEEP_MS);
 
 		return () => window.clearTimeout(timer);
-	}, [held, wanted, corpus, changed]);
+	}, [held, wanted, corpus, moved]);
 
 	// What the open tabs hold, parsed once the writer stops typing. A tab
 	// changes on every keystroke, and parsing all of them on each one — with

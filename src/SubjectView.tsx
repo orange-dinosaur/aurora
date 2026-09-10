@@ -101,7 +101,7 @@ export default function SubjectView({
 
 	const { corpus, documents } = useCorpus({
 		root,
-		changed,
+		moved: changed,
 		live,
 		wanted: true,
 	});

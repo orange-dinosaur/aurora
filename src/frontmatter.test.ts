@@ -7,7 +7,6 @@ import {
 	list,
 	parse,
 	serialize,
-	setFlag,
 	split,
 	text,
 	ties,
@@ -423,26 +422,17 @@ describe("in the book", () => {
 		expect(flag(parse(block("inBook: Off")), IN_BOOK)).toBe(false);
 	});
 
-	test("switching off writes the key and switching on takes it away", () => {
-		const off = setFlag(parse(block("tags: []")), IN_BOOK, false);
-
-		expect(serialize(off, block("tags: []"))).toBe(
-			block("tags: []", "inBook: false"),
-		);
-		expect(setFlag(off, IN_BOOK, true).has(IN_BOOK)).toBe(false);
-		expect(serialize(setFlag(off, IN_BOOK, true), block("tags: []"))).toBe(
-			block("tags: []"),
-		);
-	});
-
 	test("the answer is written bare, not as the word", () => {
-		const written = serialize(setFlag(new Map(), IN_BOOK, false));
+		const fields: Fields = new Map([[IN_BOOK, false]]);
+		const written = serialize(fields);
 
 		expect(written).toBe(block("inBook: false"));
 		expect(flag(parse(written), IN_BOOK)).toBe(false);
 	});
 
 	test("the switch is Aurora's, not one of the writer's own fields", () => {
-		expect(custom(setFlag(new Map(), IN_BOOK, false))).toEqual([]);
+		const fields: Fields = new Map([[IN_BOOK, false]]);
+
+		expect(custom(fields)).toEqual([]);
 	});
 });

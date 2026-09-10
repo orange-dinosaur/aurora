@@ -20,7 +20,7 @@ type Props = {
 export default function TagView({ root, tag, changed, live, onOpen }: Props) {
 	const { corpus, documents } = useCorpus({
 		root,
-		changed,
+		moved: changed,
 		live,
 		wanted: true,
 	});

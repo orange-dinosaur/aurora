@@ -8,6 +8,12 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
 	plugins: [react()],
 
+	// The app is one chunk read from disk, not the network, so Rollup's 500 kB
+	// warning only says the bundle grew. Set just above its size today.
+	build: {
+		chunkSizeWarningLimit: 750,
+	},
+
 	// Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
 	//
 	// 1. prevent Vite from obscuring rust errors
