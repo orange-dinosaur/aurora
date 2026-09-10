@@ -335,7 +335,8 @@ pub fn told(scenes: &[Scene], prose: &Prose) -> Vec<String> {
 
 /// How much the book holds, for the Export panel to say before anything is
 /// written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct Extent {
 	pub scenes: usize,
 	pub words: usize,
@@ -359,8 +360,9 @@ pub fn book_extent(root: PathBuf) -> Result<Extent> {
 
 /// How far an export has got. Every scene read is one step towards `total` and
 /// so is every file written, so `done` over `total` is how full the bar is.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(tag = "stage", rename_all = "camelCase")]
+#[ts(export)]
 pub enum Progress {
 	Reading {
 		done: usize,

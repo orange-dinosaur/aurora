@@ -28,7 +28,7 @@ pub const HISTORY_FILE: &str = "history.json";
 /// underneath as the writer types; a deliberate one is opened by hand and sits
 /// over them. Every number Aurora shows has to say which layer it came from, so
 /// the layer is recorded on the session rather than guessed at afterwards.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum Layer {
 	Automatic,
@@ -37,7 +37,7 @@ pub enum Layer {
 
 /// What a sprint was aiming at. A sprint is a deliberate session carrying one
 /// of these; without it, a deliberate session runs until the writer ends it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(tag = "unit", content = "amount", rename_all = "camelCase")]
 pub enum Limit {
 	Minutes(u32),
@@ -46,15 +46,16 @@ pub enum Limit {
 
 /// What one document gained and lost during a session, summed from the changes
 /// the editor sees. Neither number can know about a document deleted whole.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 pub struct Tally {
 	pub written: u32,
 	pub removed: u32,
 }
 
 /// One session, as it is kept forever.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Session {
 	/// The record needs a key of its own: a deliberate session can start on the
 	/// same keystroke as the automatic one beneath it, so the times do not tell
@@ -64,8 +65,10 @@ pub struct Session {
 	pub id: Uuid,
 	pub layer: Layer,
 	#[serde(with = "time::serde::rfc3339")]
+	#[ts(type = "string")]
 	pub start: OffsetDateTime,
 	#[serde(with = "time::serde::rfc3339")]
+	#[ts(type = "string")]
 	pub end: OffsetDateTime,
 	/// Absent unless the session was a sprint.
 	#[serde(default, skip_serializing_if = "Option::is_none")]

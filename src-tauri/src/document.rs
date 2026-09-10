@@ -54,7 +54,8 @@ impl Document {
 }
 
 /// A document as the sidebar shows it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct DocumentView {
 	pub id: Uuid,
 	pub path: String,
@@ -91,7 +92,8 @@ const EXCERPT_CHARS: usize = 240;
 
 /// A document as the section overview shows it: the sidebar's view plus enough
 /// of the file to tell one chapter from another without opening it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct DocumentSummary {
 	#[serde(flatten)]
 	pub document: DocumentView,
@@ -103,6 +105,7 @@ pub struct DocumentSummary {
 	/// out of a block itself is `inBook`, which the compile walk needs.
 	pub front: String,
 	#[serde(with = "time::serde::rfc3339::option")]
+	#[ts(type = "string | null")]
 	pub modified: Option<OffsetDateTime>,
 }
 
@@ -122,8 +125,9 @@ impl DocumentSummary {
 /// One of a folder's children, as the overview draws it. A document gets the
 /// card it has always had; a folder says what it is, how much it holds and how
 /// much has been written under it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(tag = "node", rename_all = "camelCase")]
+#[ts(export)]
 pub enum ChildSummary {
 	Folder {
 		id: Uuid,
@@ -141,8 +145,9 @@ pub enum ChildSummary {
 /// with the things a node's place decides already worked out. A document
 /// carries the same view every other command sends, so nothing outside Rust
 /// ever takes a path apart.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(tag = "node", rename_all = "camelCase")]
+#[ts(export)]
 pub enum NodeView {
 	Folder {
 		id: Uuid,
@@ -377,7 +382,8 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 /// The text is `None` when the file could not be read, which the front end
 /// shows rather than swallows: a document nobody could look at must not read
 /// as a document with nothing in it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct DocumentText {
 	#[serde(flatten)]
 	pub document: DocumentView,
@@ -1191,8 +1197,9 @@ pub fn set_folder_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Result
 
 /// How a folder stands against what it is aiming at: everything written under
 /// it, and the target on it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct FolderProgress {
 	/// The words in every document below it, however deep, less anything in the
 	/// Manuscript's front or back matter.
@@ -1260,7 +1267,8 @@ pub fn set_folder_fields(root: PathBuf, id: Uuid, fields: Fields) -> Result<()> 
 }
 
 /// One document in the project's trash, as the Trash view shows it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct TrashEntry {
 	/// Where it is, relative to the trash, in the same `section/file` shape a
 	/// document's own path uses.
@@ -1271,6 +1279,7 @@ pub struct TrashEntry {
 	/// When it was deleted, or nothing at all if its name does not carry a
 	/// moment Aurora recognises.
 	#[serde(with = "time::serde::rfc3339::option")]
+	#[ts(type = "string | null")]
 	pub deleted: Option<OffsetDateTime>,
 	/// Nothing when the entry is a document on its own. When it is a whole
 	/// folder, how many documents went into the trash inside it.

@@ -1,0 +1,4 @@
+# ts-rs writes each exported type here when `cargo test` runs, beside the
+# frontend that imports them.
+[env]
+TS_RS_EXPORT_DIR = { value = "../src/bindings", relative = true }

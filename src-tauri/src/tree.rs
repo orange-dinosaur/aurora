@@ -33,8 +33,9 @@ pub type Fields = BTreeMap<String, Value>;
 
 /// What a folder inside the Manuscript is. A folder anywhere else has no kind:
 /// it is a folder with a name and nothing more.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "kebab-case")]
+#[ts(export)]
 pub enum FolderKind {
 	Part,
 	Chapter,

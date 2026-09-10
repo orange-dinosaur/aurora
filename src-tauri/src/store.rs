@@ -18,8 +18,9 @@ const MAX_RECENT: usize = 10;
 
 /// How the writer likes to write, which follows them into every project rather
 /// than belonging to any one of them.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Preferences {
 	/// Whether the bar under the document title is showing.
 	pub toolbar: bool,
@@ -104,7 +105,7 @@ fn idle_minutes() -> u32 {
 
 /// What a sprint counts. The pair the Stats tab already offers, named here so
 /// the preference and the control cannot drift apart.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub enum SprintUnit {
 	#[default]
@@ -113,8 +114,9 @@ pub enum SprintUnit {
 }
 
 /// Whether the desktop decides how Aurora is lit, or the writer does.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub enum Theme {
 	#[default]
 	System,
@@ -124,8 +126,9 @@ pub enum Theme {
 
 /// The six faces the manuscript can be set in. Five are vendored; the sixth is
 /// whatever the desktop calls its interface font.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub enum ManuscriptFont {
 	#[default]
 	Newsreader,
@@ -137,7 +140,7 @@ pub enum ManuscriptFont {
 }
 
 /// The four things the right sidebar can be showing.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub enum RightSidebarTab {
 	#[default]
@@ -172,12 +175,14 @@ impl Default for Preferences {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct RecentProject {
 	pub name: String,
 	pub root: PathBuf,
 	#[serde(with = "time::serde::rfc3339")]
+	#[ts(type = "string")]
 	pub last_opened: OffsetDateTime,
 }
 

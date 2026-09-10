@@ -20,8 +20,9 @@ pub struct Section {
 	pub seed: Option<&'static str>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "kebab-case")]
+#[ts(export)]
 pub enum Format {
 	Novel,
 	Screenplay,
@@ -131,7 +132,8 @@ impl Format {
 }
 
 /// A format as the Welcome screen needs to describe it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct FormatLayout {
 	pub format: Format,
 	pub folders: Vec<String>,
@@ -165,8 +167,9 @@ pub const MANIFEST_VERSION: u32 = 5;
 /// What someone did on the book besides write it. Every format Aurora exports
 /// wants the relationship named rather than a free line of text, so the set is
 /// fixed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub enum Role {
 	Editor,
 	CopyEditor,
@@ -178,8 +181,9 @@ pub enum Role {
 }
 
 /// Someone who worked on the book, and what they did.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Contributor {
 	pub name: String,
 	pub role: Role,
@@ -187,8 +191,9 @@ pub struct Contributor {
 
 /// What the project's one book says about itself. Everything here is the
 /// writer's to fill in and may stay empty; an export takes what it finds.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Book {
 	/// Generated once and never rewritten. A reader tells one book from another
 	/// by this, so a new one would make every earlier export a different book.
@@ -231,8 +236,9 @@ pub struct Book {
 }
 
 /// A kind of file the book can be exported as.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "kebab-case")]
+#[ts(export)]
 pub enum ExportFormat {
 	Markdown,
 	Epub,
@@ -702,8 +708,9 @@ fn fill(
 }
 
 /// What the frontend should show on launch.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
 pub enum LastProject {
 	None,
 	Open { name: String, root: PathBuf },
@@ -782,8 +789,9 @@ pub fn create_project(
 }
 
 /// A project as the frontend refers to it once it is open.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct OpenedProject {
 	pub name: String,
 	pub root: PathBuf,
@@ -848,8 +856,9 @@ fn available_recents(store_path: &Path) -> Result<Vec<store::RecentProject>> {
 
 /// A remembered project as the welcome screen shows it: what the store holds,
 /// with the size of the writing counted from the files themselves.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct RecentSummary {
 	#[serde(flatten)]
 	pub project: store::RecentProject,
