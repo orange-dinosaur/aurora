@@ -2,7 +2,7 @@
 name = "aurora"
 version = "0.1.0"
 description = "Aurora is an application for writers to help them organize their ideas and write their stories."
-license = "MIT"
+license = "GPL-3.0-or-later"
 authors = ["orange-dinosaur"]
 edition = "2024"
 # Two binaries means `cargo run` has to be told which one, and `tauri dev`
