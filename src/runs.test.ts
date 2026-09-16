@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { matches } from "./find";
+import { matches } from "./lib/find";
 import { runsOf } from "./runs";
 
 /** The text of each run, which is what matching reads. */

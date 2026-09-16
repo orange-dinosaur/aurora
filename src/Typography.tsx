@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { nudged, SETTINGS, type Setting } from "./typography";
+import { nudged, SETTINGS, type Setting } from "./lib/typography";
 import type { Preferences } from "./types";
 
 type Props = {

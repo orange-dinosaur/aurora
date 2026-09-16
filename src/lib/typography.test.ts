@@ -7,7 +7,7 @@ import {
 	SETTINGS,
 	type Setting,
 } from "./typography";
-import type { Preferences } from "./types";
+import type { Preferences } from "../types";
 
 function find(id: Setting["id"]): Setting {
 	const setting = SETTINGS.find((each) => each.id === id);

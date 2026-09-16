@@ -2,9 +2,9 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import Account from "./Account";
 import Icon from "./Icon";
 import { UNITS } from "./Session";
-import { bounded } from "./settings";
+import { bounded } from "./lib/settings";
 import { KEYBOARD, shortcutLabel } from "./formatting";
-import { face, FACES, nudged, SETTINGS, type Setting } from "./typography";
+import { face, FACES, nudged, SETTINGS, type Setting } from "./lib/typography";
 import type { Preferences, Theme } from "./types";
 
 type Section =

@@ -29,8 +29,8 @@ import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import { documentsOf, folderOf, rows } from "./tree";
 import { deleteDocument, deleteFolder } from "./documents";
-import type { Seed } from "./find";
-import type { OutlineHandle } from "./outline";
+import type { Seed } from "./lib/find";
+import type { OutlineHandle } from "./lib/outline";
 // `changed` under another name: this file already has one of its own.
 import {
 	changed as asChange,

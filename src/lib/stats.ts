@@ -2,11 +2,11 @@
 // numbers live: the sessions running now, which are only in memory, and the
 // ones the history file already holds.
 
-import type { Running, Sessions } from "./sessions";
+import type { Running, Sessions } from "../sessions";
 // The words half of a sprint is the same claim as a word target, so it is
 // worded by the same function rather than by a second one that drifts from it.
-import { reading } from "./Target";
-import type { PastSession } from "./types";
+import { reading } from "../Target";
+import type { PastSession } from "../types";
 
 /**
  * A number for each layer. They are kept apart everywhere rather than added

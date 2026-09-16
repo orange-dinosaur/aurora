@@ -8,7 +8,7 @@ import {
 	type LexicalEditor,
 } from "lexical";
 import { useEffect, useRef, useState } from "react";
-import { matches, type Match, type Reading, type Seed } from "./find";
+import { matches, type Match, type Reading, type Seed } from "./lib/find";
 import { REPLACE, shortcutLabel } from "./formatting";
 import Icon from "./Icon";
 import { $runs } from "./runs";

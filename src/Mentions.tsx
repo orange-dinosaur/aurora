@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { contextOf } from "./context";
 import { useCorpus } from "./corpus";
-import type { Seed } from "./find";
+import type { Seed } from "./lib/find";
 import Icon from "./Icon";
 import {
 	appearancesIn,
@@ -11,7 +11,7 @@ import {
 	subjectsIn,
 	under,
 	type Subject,
-} from "./mentions";
+} from "./lib/mentions";
 import { Line, toggled } from "./Search";
 import { isSubject } from "./subjects";
 import type { ProjectDocument } from "./types";

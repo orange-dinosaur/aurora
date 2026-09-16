@@ -24,12 +24,12 @@ import {
 	MARKDOWN_TRANSFORMERS,
 } from "./markdown";
 import { useFields, type FieldsHandle } from "./fields";
-import type { Seed } from "./find";
+import type { Seed } from "./lib/find";
 import { FIND, OUTLINE, shortcutLabel, TOOLBAR } from "./formatting";
 import Find from "./Find";
 import Focus from "./Focus";
 import Links from "./Links";
-import { useOutline, type OutlineHandle } from "./outline";
+import { useOutline, type OutlineHandle } from "./lib/outline";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
 import Target from "./Target";

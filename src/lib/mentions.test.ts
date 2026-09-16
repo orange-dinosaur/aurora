@@ -10,7 +10,7 @@ import {
 	subjectsIn,
 	under,
 } from "./mentions";
-import { runsOf } from "./runs";
+import { runsOf } from "../runs";
 
 function subject(title: string, ...names: string[]): Subject {
 	return { id: `Characters/${title}.md`, title, names };

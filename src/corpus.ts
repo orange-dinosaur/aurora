@@ -15,7 +15,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { failure } from "./errors";
 import { list, parse, split } from "./frontmatter";
-import type { Mentionable } from "./mentions";
+import type { Mentionable } from "./lib/mentions";
 import { runsOf } from "./runs";
 import { timed } from "./timing";
 import type { DocumentText, ProjectDocument } from "./types";

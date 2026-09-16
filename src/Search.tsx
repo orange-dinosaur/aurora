@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { contextOf, type Context } from "./context";
 import { useCorpus } from "./corpus";
-import type { Seed } from "./find";
+import type { Seed } from "./lib/find";
 import Icon from "./Icon";
-import { MIN_QUERY, search } from "./search";
+import { MIN_QUERY, search } from "./lib/search";
 import type { ProjectDocument } from "./types";
 
 type Props = {

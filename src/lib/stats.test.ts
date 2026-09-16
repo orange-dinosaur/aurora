@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { changed, start, wrote, IDLE } from "./sessions";
-import type { Limit, Running } from "./sessions";
+import { changed, start, wrote, IDLE } from "../sessions";
+import type { Limit, Running } from "../sessions";
 import {
 	byDay,
 	clock,
@@ -17,7 +17,7 @@ import {
 	unexplained,
 	visits,
 } from "./stats";
-import type { PastSession } from "./types";
+import type { PastSession } from "../types";
 
 /** Noon on the fourth, where the writer is: a day is a local thing. */
 const NOON = new Date(2026, 8, 4, 12).getTime();

@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { OutlineHandle } from "./outline";
+import type { OutlineHandle } from "./lib/outline";
 
 // The open document's headings, listed under its synopsis. Both the reading
 // and the jump come from the editor the document is open in; this only draws

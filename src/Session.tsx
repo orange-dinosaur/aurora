@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
-import { sessionReading } from "./stats";
+import { sessionReading } from "./lib/stats";
 import type { Limit, Running } from "./sessions";
 import type { SprintUnit } from "./types";
 

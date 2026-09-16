@@ -2,7 +2,7 @@
 // moves each of them. Kept apart from the popover so the arithmetic can be
 // tested without a browser.
 
-import type { ManuscriptFont, Preferences } from "./types";
+import type { ManuscriptFont, Preferences } from "../types";
 
 /** A preference the writer nudges rather than types. */
 export type Setting = {

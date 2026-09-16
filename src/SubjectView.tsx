@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useCorpus } from "./corpus";
 import { failure } from "./errors";
-import type { Seed } from "./find";
+import type { Seed } from "./lib/find";
 import {
 	list,
 	parse,
@@ -12,7 +12,7 @@ import {
 	ties,
 	type Fields,
 } from "./frontmatter";
-import { mentionsIn, subjectsIn } from "./mentions";
+import { mentionsIn, subjectsIn } from "./lib/mentions";
 import { factsOf, linksOf } from "./subjects";
 import type { ProjectDocument } from "./types";
 

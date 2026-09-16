@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { runsOf } from "./runs";
+import { runsOf } from "../runs";
 import { MIN_QUERY, search, type Searchable } from "./search";
 
 /** A document search can read, with its runs taken from real markdown. */

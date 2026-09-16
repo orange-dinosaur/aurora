@@ -7,7 +7,7 @@ import { createHeadlessEditor } from "@lexical/headless";
 import { $isListItemNode } from "@lexical/list";
 import { $findMatchingParent } from "@lexical/utils";
 import { $getRoot, type TextNode } from "lexical";
-import type { Run } from "./find";
+import type { Run } from "./lib/find";
 import { $fromMarkdown, EDITOR_NODES } from "./markdown";
 
 /**

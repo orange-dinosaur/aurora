@@ -5,8 +5,15 @@
 
 import { useState } from "react";
 import { timeOfDay, when } from "./dates";
-import { byDay, entries, firstOf, lasted, sessionKind, visits } from "./stats";
-import type { Entry } from "./stats";
+import {
+	byDay,
+	entries,
+	firstOf,
+	lasted,
+	sessionKind,
+	visits,
+} from "./lib/stats";
+import type { Entry } from "./lib/stats";
 import type { PastSession } from "./types";
 
 /** How many sessions before the list caps itself, as search does. */

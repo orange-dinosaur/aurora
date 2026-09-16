@@ -9,7 +9,7 @@
 
 import { type Match, type Run, matches } from "./find";
 import { lineOf, locate, type Searchable, type Unreadable } from "./search";
-import { isSubject } from "./subjects";
+import { isSubject } from "../subjects";
 
 /** A document the writer keeps a page about, and what it answers to. */
 export type Subject = {

@@ -9,7 +9,7 @@ import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
 import { pressed, SETTINGS } from "./formatting";
-import { face } from "./typography";
+import { face } from "./lib/typography";
 
 // What Aurora looks like before the store has answered, and what it falls back
 // to if the store cannot be read at all.

@@ -2,7 +2,7 @@ import Outline from "./Outline";
 import { TextBox } from "./Field";
 import type { FieldsHandle } from "./fields";
 import { text } from "./frontmatter";
-import type { OutlineHandle } from "./outline";
+import type { OutlineHandle } from "./lib/outline";
 
 // The Synopsis tab: what this document is about, in the writer's own words,
 // and under it the shape of the document itself.
