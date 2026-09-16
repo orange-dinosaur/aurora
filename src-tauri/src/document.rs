@@ -5438,9 +5438,13 @@ mod tests {
 		assert!(!taken(&from, &lower).unwrap());
 		assert!(taken(&notes, &from).unwrap());
 
-		// Linux keeps both spellings as separate files, so this one is not
-		// the file being renamed and must not be written over.
-		fs::write(&lower, "").unwrap();
-		assert!(taken(&from, &lower).unwrap());
+		// Where both spellings can exist side by side, the lower one is not the
+		// file being renamed and must not be written over. A file system that
+		// ignores case has nothing to collide with: the name is already the
+		// one file, which the assertion above covers.
+		if !lower.exists() {
+			fs::write(&lower, "").unwrap();
+			assert!(taken(&from, &lower).unwrap());
+		}
 	}
 }
