@@ -1,0 +1,81 @@
+name: Checks
+
+on:
+  push:
+    branches:
+      - main
+  workflow_call:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install the Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Formatting
+        run: npx prettier --check .
+
+      - name: Frontend tests
+        run: npx vitest run
+
+      - name: Frontend build
+        run: npx vite build
+
+      - name: Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy -- -D warnings
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Generated bindings are current
+        run: |
+          if [ -n "$(git status --porcelain -- src/bindings)" ]; then
+            echo "cargo test rewrote src/bindings; commit the result."
+            git diff -- src/bindings
+            exit 1
+          fi
