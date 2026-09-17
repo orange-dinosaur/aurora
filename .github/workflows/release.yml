@@ -41,31 +41,36 @@ jobs:
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
           tag="v$version"
           tree=$(git rev-parse 'HEAD^{tree}')
+          releases="repos/$GITHUB_REPOSITORY/releases"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-          build=true
-          if found=$(gh release view "$tag" --json isDraft,body); then
-            if [ "$(jq -r .isDraft <<< "$found")" != true ]; then
-              echo "::error::$tag is already published. Raise the version in src-tauri/Cargo.toml."
-              exit 1
-            fi
-            if [ "$GITHUB_REF_NAME" = release ] &&
-              jq -e --arg tree "tree: $tree" '.body | contains($tree)' <<< "$found" > /dev/null; then
-              build=false
-            fi
+          if gh api "$releases/tags/$tag" > /dev/null 2>&1; then
+            echo "::error::$tag is already published. Raise the version in src-tauri/Cargo.toml."
+            exit 1
           fi
 
-          if [ "$build" = true ]; then
-            while gh release view "$tag" --json isDraft --jq .isDraft 2> /dev/null | grep -qx true; do
-              gh release delete "$tag" --yes
+          # Drafts have no tag yet, so several can share one. Work by id from here on: the
+          # release list can lag behind a create or delete.
+          drafts=$(gh api --paginate "$releases" \
+            --jq ".[] | select(.draft and .tag_name == \"$tag\") | {id, body}")
+
+          release_id=""
+          if [ "$GITHUB_REF_NAME" = release ]; then
+            release_id=$(jq -rn --arg tree "tree: $tree" \
+              '[inputs | select((.body // "") | contains($tree)) | .id] | first // empty' <<< "$drafts")
+          fi
+
+          if [ -n "$release_id" ]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            for id in $(jq -r .id <<< "$drafts"); do
+              gh api -X DELETE "$releases/$id"
             done
-            gh release create "$tag" --draft --target "$GITHUB_SHA" \
-              --title "Aurora $version" --notes "<!-- tree: $tree -->"
+            release_id=$(gh api -X POST "$releases" --jq .id \
+              -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" -f name="Aurora $version" \
+              -f body="<!-- tree: $tree -->" -F draft=true)
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "build=$build" >> "$GITHUB_OUTPUT"
-
-          release_id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
-            --jq ".[] | select(.tag_name == \"$tag\") | .id" | head -1)
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
   build:
@@ -131,22 +136,36 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
-      TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
 
     steps:
+      - name: Download latest.json and the AppImage from the draft
+        run: |
+          releases="repos/$GITHUB_REPOSITORY/releases"
+          assets=$(gh api "$releases/$RELEASE_ID" --jq '.assets[] | {id, name}')
+          jq -r .name <<< "$assets"
+
+          download() {
+            local id
+            id=$(jq -rn --arg suffix "$1" '[inputs | select(.name | endswith($suffix)) | .id] | first // empty' <<< "$assets")
+            if [ -z "$id" ]; then
+              echo "::error::The draft has no asset ending in $1."
+              exit 1
+            fi
+            gh api -H 'Accept: application/octet-stream' "$releases/assets/$id" > "$2"
+          }
+          download latest.json latest.json
+          download .AppImage Aurora.AppImage
+
       - name: Check latest.json covers every platform
         run: |
-          gh release view "$TAG" --json assets --jq '.assets[].name'
-          gh release download "$TAG" -p latest.json
           jq '.platforms | keys' latest.json
           jq -e '.platforms | has("darwin-aarch64") and has("darwin-x86_64") and has("linux-x86_64") and has("windows-x86_64")' latest.json
 
       - name: Check the AppImage leaves out the Wayland libraries
         run: |
-          gh release download "$TAG" -p '*.AppImage'
-          chmod +x ./*.AppImage
-          ./*.AppImage --appimage-extract > /dev/null
+          chmod +x Aurora.AppImage
+          ./Aurora.AppImage --appimage-extract > /dev/null
           bundled=$(find squashfs-root -name 'libwayland-*')
           if [ -n "$bundled" ]; then
             echo "::error::The AppImage still bundles Wayland libraries:"
@@ -160,9 +179,10 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
-      TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
 
     steps:
       - name: Publish the draft
-        run: gh release edit "$TAG" --draft=false --latest --target "$GITHUB_SHA"
+        run: |
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > /dev/null \
+            -F draft=false -f make_latest=true -f target_commitish="$GITHUB_SHA"
