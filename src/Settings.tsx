@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import Account from "./Account";
 import Icon from "./Icon";
 import { UNITS } from "./Session";
@@ -8,12 +9,18 @@ import { face, FACES, nudged, SETTINGS, type Setting } from "./lib/typography";
 import type { Preferences, Theme } from "./types";
 
 type Section =
-	"account" | "appearance" | "typography" | "sessions" | "shortcuts";
+	| "account"
+	| "general"
+	| "appearance"
+	| "typography"
+	| "sessions"
+	| "shortcuts";
 
 /** The rail, in the order it is read. Each label is also the heading over the
  * pane, so the two cannot drift apart. */
 const SECTIONS: { id: Section; label: string }[] = [
 	{ id: "account", label: "Account" },
+	{ id: "general", label: "General" },
 	{ id: "appearance", label: "Appearance" },
 	{ id: "typography", label: "Typography" },
 	{ id: "sessions", label: "Sessions & targets" },
@@ -137,6 +144,12 @@ export default function Settings({
 
 					<div className="settings__body">
 						{section === "account" && <Account onLogin={onLogin} />}
+						{section === "general" && (
+							<General
+								preferences={preferences}
+								onPreferences={onPreferences}
+							/>
+						)}
 						{section === "appearance" && (
 							<Appearance
 								preferences={preferences}
@@ -196,6 +209,75 @@ function Appearance({
 			</span>
 		</div>
 	);
+}
+
+/** Aurora itself rather than the manuscript: how it keeps itself current, and
+ * which version is running. */
+function General({
+	preferences,
+	onPreferences,
+}: {
+	preferences: Preferences;
+	onPreferences: (next: Preferences) => void;
+}) {
+	const version = useVersion();
+
+	return (
+		<>
+			<div className="settings__row">
+				<div className="settings__about">
+					<p className="settings__label">
+						Check for updates when Aurora starts
+					</p>
+					<p className="settings__hint">
+						Aurora asks once, on the way in, and says nothing unless
+						there is a newer version.
+					</p>
+				</div>
+				<button
+					type="button"
+					className="settings__switch"
+					role="switch"
+					aria-checked={preferences.checkForUpdates}
+					aria-label="Check for updates when Aurora starts"
+					onClick={() =>
+						onPreferences({
+							...preferences,
+							checkForUpdates: !preferences.checkForUpdates,
+						})
+					}
+				>
+					<span className="settings__knob" />
+				</button>
+			</div>
+
+			{version !== "" && (
+				<p className="settings__hint">Aurora {version}</p>
+			)}
+		</>
+	);
+}
+
+/** The running build's version, once it has been asked for. */
+function useVersion(): string {
+	const [version, setVersion] = useState("");
+
+	useEffect(() => {
+		let live = true;
+		void getVersion()
+			.then((found) => {
+				if (live) {
+					setVersion(found);
+				}
+			})
+			.catch((error: unknown) => console.error(error));
+
+		return () => {
+			live = false;
+		};
+	}, []);
+
+	return version;
 }
 
 function Typography({

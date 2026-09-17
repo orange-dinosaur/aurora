@@ -195,7 +195,9 @@ function App() {
 				/>
 			)}
 
-			<UpdateNotice />
+			{boot.kind !== "loading" && preferences.checkForUpdates && (
+				<UpdateNotice />
+			)}
 		</main>
 	);
 }
