@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - next
+      - release
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  prepare:
+    needs: checks
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      build: ${{ steps.release.outputs.build }}
+      release_id: ${{ steps.release.outputs.release_id }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Find or create the draft release
+        id: release
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+          tag="v$version"
+          tree=$(git rev-parse 'HEAD^{tree}')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          build=true
+          if found=$(gh release view "$tag" --json isDraft,body); then
+            if [ "$(jq -r .isDraft <<< "$found")" != true ]; then
+              echo "::error::$tag is already published. Raise the version in src-tauri/Cargo.toml."
+              exit 1
+            fi
+            if [ "$GITHUB_REF_NAME" = release ] &&
+              jq -e --arg tree "tree: $tree" '.body | contains($tree)' <<< "$found" > /dev/null; then
+              build=false
+            fi
+          fi
+
+          if [ "$build" = true ]; then
+            while gh release view "$tag" --json isDraft --jq .isDraft 2> /dev/null | grep -qx true; do
+              gh release delete "$tag" --yes
+            done
+            gh release create "$tag" --draft --target "$GITHUB_SHA" \
+              --title "Aurora $version" --notes "<!-- tree: $tree -->"
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
+          release_id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+            --jq ".[] | select(.tag_name == \"$tag\") | .id" | head -1)
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            args: --bundles appimage,deb,rpm
+          - os: macos-latest
+            args: --target universal-apple-darwin --bundles app,dmg
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - os: windows-latest
+            args: --bundles nsis
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install the Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          tauriScript: pnpm tauri
+          args: ${{ matrix.args }}
+          uploadUpdaterJson: true
+
+  verify:
+    needs: [prepare, build]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+
+    steps:
+      - name: Check latest.json covers every platform
+        run: |
+          gh release view "$TAG" --json assets --jq '.assets[].name'
+          gh release download "$TAG" -p latest.json
+          jq '.platforms | keys' latest.json
+          jq -e '.platforms | has("darwin-aarch64") and has("darwin-x86_64") and has("linux-x86_64") and has("windows-x86_64")' latest.json
+
+  publish:
+    needs: [prepare, verify]
+    if: ${{ !cancelled() && needs.verify.result == 'success' && github.ref == 'refs/heads/release' }}
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+
+    steps:
+      - name: Publish the draft
+        run: gh release edit "$TAG" --draft=false --latest --target "$GITHUB_SHA"
