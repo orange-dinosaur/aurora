@@ -6238,3 +6238,69 @@ body.dragging * {
 	color: var(--text-dim);
 	overflow-wrap: anywhere;
 }
+
+/* An update is the only thing Aurora interrupts the writer with, so it floats
+   in the corner rather than taking a place in the layout: nothing that was
+   already on screen moves when it appears. It sits below the overlays at 50,
+   so opening Settings covers it. */
+.update {
+	position: fixed;
+	right: 1rem;
+	bottom: 1rem;
+	z-index: 40;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	max-width: calc(100vw - 2rem);
+	padding: 0.4rem 0.4rem 0.4rem 0.75rem;
+	font-size: 0.8125rem;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	box-shadow: var(--shadow-pop);
+}
+
+.update__message {
+	overflow-wrap: anywhere;
+}
+
+.update__action {
+	flex: none;
+	height: 26px;
+	padding: 0 0.6rem;
+	font: inherit;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--bg);
+	background: var(--accent);
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.update__dismiss {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.update__dismiss:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.update__action:focus-visible,
+.update__dismiss:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}

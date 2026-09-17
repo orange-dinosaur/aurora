@@ -5,6 +5,7 @@ import Project from "./Project";
 import Settings from "./Settings";
 import Login from "./Login";
 import Profile from "./Profile";
+import UpdateNotice from "./UpdateNotice";
 import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
@@ -192,6 +193,8 @@ function App() {
 					onTheme={(theme) => save({ ...preferences, theme })}
 				/>
 			)}
+
+			<UpdateNotice />
 		</main>
 	);
 }
