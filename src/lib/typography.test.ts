@@ -33,6 +33,7 @@ const DEFAULTS: Preferences = {
 	defaultTarget: null,
 	idleMinutes: 30,
 	sessionClock: true,
+	checkForUpdates: true,
 	measure: 68,
 	fontSize: 16,
 	lineHeight: 1.7,

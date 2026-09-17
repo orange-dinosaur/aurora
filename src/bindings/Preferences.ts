@@ -83,6 +83,12 @@ idleMinutes: number,
  */
 sessionClock: boolean, 
 /**
+ * Whether Aurora asks GitHub for a newer version when it starts.
+ * Defaulted on, and on for a store written before this field existed: an
+ * update nobody hears about fixes nothing.
+ */
+checkForUpdates: boolean, 
+/**
  * The width of the column of text, in characters.
  */
 measure: number, 

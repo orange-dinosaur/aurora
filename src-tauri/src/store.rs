@@ -78,6 +78,11 @@ pub struct Preferences {
 	/// only place a session is visible with both sidebars hidden.
 	#[serde(default = "shown")]
 	pub session_clock: bool,
+	/// Whether Aurora asks GitHub for a newer version when it starts.
+	/// Defaulted on, and on for a store written before this field existed: an
+	/// update nobody hears about fixes nothing.
+	#[serde(default = "shown")]
+	pub check_for_updates: bool,
 	/// The width of the column of text, in characters.
 	pub measure: u32,
 	/// In pixels.
@@ -168,6 +173,7 @@ impl Default for Preferences {
 			default_target: None,
 			idle_minutes: idle_minutes(),
 			session_clock: true,
+			check_for_updates: true,
 			measure: 68,
 			font_size: 16,
 			line_height: 1.7,
@@ -678,12 +684,14 @@ mod tests {
 		);
 		// The session preferences all come back as the behaviour a store this
 		// old already had: no default sprint, no target on a new document, a
-		// gap of half an hour and a clock in the titlebar.
+		// gap of half an hour, a clock in the titlebar, and an eye on new
+		// versions.
 		assert_eq!(store.preferences.default_sprint, None);
 		assert_eq!(store.preferences.default_sprint_unit, SprintUnit::Words);
 		assert_eq!(store.preferences.default_target, None);
 		assert_eq!(store.preferences.idle_minutes, 30);
 		assert!(store.preferences.session_clock);
+		assert!(store.preferences.check_for_updates);
 	}
 
 	#[test]
@@ -706,6 +714,7 @@ mod tests {
 			default_target: Some(1500),
 			idle_minutes: 45,
 			session_clock: false,
+			check_for_updates: false,
 			measure: 80,
 			font_size: 19,
 			line_height: 2.0,
