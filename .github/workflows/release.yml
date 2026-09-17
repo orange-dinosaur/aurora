@@ -126,6 +126,8 @@ jobs:
           tauriScript: pnpm tauri
           args: ${{ matrix.args }}
           uploadUpdaterJson: true
+          # GitHub occasionally answers an asset upload with a 500.
+          retryAttempts: 2
 
   verify:
     needs: [prepare, build]
