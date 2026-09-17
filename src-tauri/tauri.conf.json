@@ -27,6 +27,7 @@
 	"bundle": {
 		"active": true,
 		"targets": ["deb", "rpm", "appimage", "nsis", "app", "dmg"],
+		"createUpdaterArtifacts": true,
 		"category": "Productivity",
 		"shortDescription": "A desktop app for writers, to organize ideas and write stories.",
 		"longDescription": "Aurora is an application for writers to help them organize their ideas and write their stories.",
@@ -45,5 +46,16 @@
 			"icons/icon.icns",
 			"icons/icon.ico"
 		]
+	},
+	"plugins": {
+		"updater": {
+			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhEMzY1NDNDNjVCMEI1QjEKUldTeHRiQmxQRlEyamVrcHU1MUV0cnZhU3RMeDdjYkFqTU9ES3hBT3RleEFTZkFPQlREaTl1VlYK",
+			"endpoints": [
+				"https://github.com/orange-dinosaur/aurora/releases/latest/download/latest.json"
+			],
+			"windows": {
+				"installMode": "passive"
+			}
+		}
 	}
 }
