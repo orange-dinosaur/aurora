@@ -116,6 +116,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # The AppImage must use the host's Wayland libraries. Ubuntu 22.04's copies break
+          # EGL against newer Mesa, as on Fedora 44.
+          LINUXDEPLOY_EXCLUDED_LIBRARIES: libwayland-*
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           tauriScript: pnpm tauri
@@ -138,6 +141,18 @@ jobs:
           gh release download "$TAG" -p latest.json
           jq '.platforms | keys' latest.json
           jq -e '.platforms | has("darwin-aarch64") and has("darwin-x86_64") and has("linux-x86_64") and has("windows-x86_64")' latest.json
+
+      - name: Check the AppImage leaves out the Wayland libraries
+        run: |
+          gh release download "$TAG" -p '*.AppImage'
+          chmod +x ./*.AppImage
+          ./*.AppImage --appimage-extract > /dev/null
+          bundled=$(find squashfs-root -name 'libwayland-*')
+          if [ -n "$bundled" ]; then
+            echo "::error::The AppImage still bundles Wayland libraries:"
+            echo "$bundled"
+            exit 1
+          fi
 
   publish:
     needs: [prepare, verify]
