@@ -717,11 +717,51 @@ pub enum LastProject {
 	Missing { name: String, root: PathBuf },
 }
 
+/// The store an installed Aurora keeps its recent projects in.
+const STORE_FILE: &str = "store.json";
+
+/// A dev build writes beside the installed one instead of into it, so a day of
+/// `pnpm tauri dev` cannot disturb the real list of projects.
+const DEV_STORE_FILE: &str = "store-dev.json";
+
+fn store_file() -> &'static str {
+	if cfg!(debug_assertions) {
+		DEV_STORE_FILE
+	} else {
+		STORE_FILE
+	}
+}
+
 pub(crate) fn store_path(app: &AppHandle) -> Result<PathBuf> {
 	app.path()
 		.app_config_dir()
-		.map(|dir| dir.join("store.json"))
+		.map(|dir| dir.join(store_file()))
 		.map_err(|_| Error::NoConfigDir)
+}
+
+/// Start a dev store off as a copy of the installed build's, so a dev window
+/// opens with the same recent projects. Once the dev store exists it goes its
+/// own way and is never overwritten.
+#[cfg(debug_assertions)]
+fn copy_when_missing(from: &Path, to: &Path) -> Result<()> {
+	if to.exists() || !from.is_file() {
+		return Ok(());
+	}
+	if let Some(parent) = to.parent() {
+		fs::create_dir_all(parent)?;
+	}
+	fs::copy(from, to)?;
+	Ok(())
+}
+
+/// Seed this dev build's store from the installed build's, if there is one.
+#[cfg(debug_assertions)]
+pub fn seed_dev_store(app: &AppHandle) -> Result<()> {
+	let dir = app
+		.path()
+		.app_config_dir()
+		.map_err(|_| Error::NoConfigDir)?;
+	copy_when_missing(&dir.join(STORE_FILE), &dir.join(DEV_STORE_FILE))
 }
 
 fn create_and_remember(
@@ -1929,6 +1969,31 @@ mod tests {
 			)
 			.is_err()
 		);
+	}
+
+	#[test]
+	fn a_dev_store_starts_as_a_copy_of_the_installed_one() {
+		let dir = tempfile::tempdir().unwrap();
+		let installed = dir.path().join(STORE_FILE);
+		let dev = dir.path().join(DEV_STORE_FILE);
+		fs::write(&installed, "installed").unwrap();
+
+		copy_when_missing(&installed, &dev).unwrap();
+
+		assert_eq!(fs::read_to_string(&dev).unwrap(), "installed");
+	}
+
+	#[test]
+	fn an_existing_dev_store_is_left_alone() {
+		let dir = tempfile::tempdir().unwrap();
+		let installed = dir.path().join(STORE_FILE);
+		let dev = dir.path().join(DEV_STORE_FILE);
+		fs::write(&installed, "installed").unwrap();
+		fs::write(&dev, "my own").unwrap();
+
+		copy_when_missing(&installed, &dev).unwrap();
+
+		assert_eq!(fs::read_to_string(&dev).unwrap(), "my own");
 	}
 
 	#[test]

@@ -36,6 +36,23 @@ fn hold_minimum(_app: &tauri::App) -> tauri::Result<()> {
 	Ok(())
 }
 
+/// A dev build says so in its titlebar, and reads and writes its own store.
+#[cfg(debug_assertions)]
+fn mark_as_dev(app: &tauri::App) -> tauri::Result<()> {
+	use tauri::Manager;
+
+	let _ = project::seed_dev_store(app.handle());
+	if let Some(window) = app.get_webview_window("main") {
+		window.set_title("Aurora Dev")?;
+	}
+	Ok(())
+}
+
+#[cfg(not(debug_assertions))]
+fn mark_as_dev(_app: &tauri::App) -> tauri::Result<()> {
+	Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	tauri::Builder::default()
@@ -43,6 +60,7 @@ pub fn run() {
 		.plugin(tauri_plugin_dialog::init())
 		.setup(|app| {
 			hold_minimum(app)?;
+			mark_as_dev(app)?;
 			Ok(())
 		})
 		.invoke_handler(tauri::generate_handler![
