@@ -8,6 +8,7 @@ import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import { ROLES, added, changed, kept, removed, titled } from "./contributors";
 import { failure } from "./errors";
+import { holdUnsaved } from "./flushing";
 import { GROUPS, filled, known, toggled } from "./groups";
 import type { GroupKey } from "./groups";
 import { named, offered } from "./languages";
@@ -109,6 +110,10 @@ export default function BookView({ root, changed: moved }: Props) {
 		}
 		await write();
 	}
+
+	// Everything this screen writes goes through refs, so the flush held here
+	// on the first render still sees the latest edit when the window closes.
+	useEffect(() => holdUnsaved(flush), []);
 
 	function edit(next: Book) {
 		setBook(next);

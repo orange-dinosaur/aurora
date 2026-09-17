@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { filed, refile } from "./corpus";
 import Editor from "./Editor";
 import { useFolderFields, type FieldsHandle } from "./fields";
+import { flushAll, holdUnsaved } from "./flushing";
 import { list } from "./frontmatter";
 import type { About } from "./Mentions";
 import Search from "./Search";
@@ -433,9 +434,10 @@ export default function Project({
 
 	// Quitting must not lose what the debounce has not written yet. Tauri waits
 	// for this handler before it closes the window, so awaiting the writes here
-	// is what holds the door.
+	// is what holds the door. It flushes every screen rather than this one,
+	// because the Book screen holds its own unwritten edits.
 	useEffect(() => {
-		const stopping = getCurrentWindow().onCloseRequested(() => flush());
+		const stopping = getCurrentWindow().onCloseRequested(() => flushAll());
 		return () => {
 			void stopping.then((stop) => stop());
 		};
@@ -443,7 +445,11 @@ export default function Project({
 
 	// Closing the project unmounts this view, and loses the same edits.
 	useEffect(() => {
-		return () => void flush();
+		const letGo = holdUnsaved(flush);
+		return () => {
+			letGo();
+			void flush();
+		};
 	}, [root]);
 
 	function stopTimer(id: string) {
