@@ -14,7 +14,7 @@ Get the latest version from the [Releases](https://github.com/orange-dinosaur/au
 
 The apps aren't signed, so the first launch needs an extra click:
 
-- **macOS:** open Aurora, close the warning, then go to System Settings → Privacy & Security and click **Open Anyway**.
+- **macOS:** open Aurora, close the warning, then go to System Settings → Privacy & Security and click **Open Anyway**. The first launch after that can take several minutes while macOS scans the app, with the icon bouncing and no window. Later launches are immediate.
 - **Windows:** click **More info**, then **Run anyway**.
 
 Aurora checks for updates when it starts and asks before installing anything. You can turn this off in Settings.
