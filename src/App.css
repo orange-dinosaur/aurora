@@ -913,17 +913,22 @@ body,
 	min-width: 15.5rem;
 }
 
-/* The name gives way before any control does: a long one wraps onto a second
-   line inside the bar rather than pushing the buttons off the row. */
+/* The name keeps to one line while there is room for it. The path gives way
+   first, and only when it is gone does a long name wrap, so the buttons never
+   leave the row. The wrapper is a flex row so the button shrinks as an item;
+   a percentage max-width on it made WebKitGTK size the name as narrow as its
+   longest word, wrapping even a short name in an empty row. */
 .menu.titlebar__menu--project {
 	flex: 0 1 auto;
+	display: flex;
+	min-width: 0;
 }
 
 .titlebar__name {
 	display: flex;
 	align-items: center;
 	gap: 0.4rem;
-	max-width: 100%;
+	min-width: 0;
 	min-height: 26px;
 	padding: 0 0.4rem;
 	/* Pulled back by its own padding, so the name still starts on the
