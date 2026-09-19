@@ -15,6 +15,58 @@ const FLUSH_BEFORE_EXIT: &str = "flush-before-exit";
 /// How long the quit waits for those writes before going anyway.
 const FLUSH_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
 
+/// Aurora's own Quit, which macOS would otherwise handle without telling us.
+#[cfg(target_os = "macos")]
+const QUIT_ID: &str = "quit-aurora";
+
+/// Ask the frontend to write what it holds, then quit once it has had its say.
+/// The frontend's own exit carries a code, which is how the exit handler knows
+/// to let it through.
+fn quit_after_flush(handle: &tauri::AppHandle) {
+	use tauri::Emitter;
+
+	let handle = handle.clone();
+	std::thread::spawn(move || {
+		let _ = handle.emit(FLUSH_BEFORE_EXIT, ());
+		// A frontend that never answers must not wedge the app.
+		std::thread::sleep(FLUSH_GRACE);
+		handle.exit(0);
+	});
+}
+
+/// ⌘Q is a menu command macOS acts on by itself, so Tauri never sees it and
+/// the window's flush never runs. Aurora takes Tauri's own menu and swaps its
+/// Quit for one of ours, leaving every other entry, ⌘C and ⌘Z among them, as
+/// it found them.
+#[cfg(target_os = "macos")]
+fn own_the_quit(app: &tauri::App) -> tauri::Result<()> {
+	use tauri::menu::{Menu, MenuItem, MenuItemKind};
+
+	let handle = app.handle();
+	let menu = Menu::default(handle)?;
+	let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.first().cloned() else {
+		return Ok(());
+	};
+	// Tauri builds the app menu with Quit last.
+	if let Some(quit) = app_menu.items()?.len().checked_sub(1) {
+		app_menu.remove_at(quit)?;
+	}
+	app_menu.append(&MenuItem::with_id(
+		handle,
+		QUIT_ID,
+		"Quit Aurora",
+		true,
+		Some("Cmd+Q"),
+	)?)?;
+	app.set_menu(menu)?;
+	Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn own_the_quit(_app: &tauri::App) -> tauri::Result<()> {
+	Ok(())
+}
+
 /// Tauri hands the window's minimum to GTK as a hint, and on GNOME under
 /// Wayland the hint is lost. A size request on the window's contents is how
 /// every GTK app gets its own minimum across, so the config's is set that way.
@@ -68,8 +120,19 @@ pub fn run() {
 		.plugin(tauri_plugin_process::init())
 		.setup(|app| {
 			hold_minimum(app)?;
+			own_the_quit(app)?;
 			mark_as_dev(app)?;
 			Ok(())
+		})
+		.on_menu_event(|handle, event| {
+			#[cfg(target_os = "macos")]
+			if event.id() == QUIT_ID {
+				quit_after_flush(handle);
+			}
+			#[cfg(not(target_os = "macos"))]
+			{
+				let _ = (handle, event);
+			}
 		})
 		.invoke_handler(tauri::generate_handler![
 			project::format_layouts,
@@ -128,14 +191,7 @@ pub fn run() {
 				&& code.is_none()
 			{
 				api.prevent_exit();
-				let handle = handle.clone();
-				std::thread::spawn(move || {
-					use tauri::Emitter;
-					let _ = handle.emit(FLUSH_BEFORE_EXIT, ());
-					// A frontend that never answers must not wedge the app.
-					std::thread::sleep(FLUSH_GRACE);
-					handle.exit(0);
-				});
+				quit_after_flush(handle);
 			}
 		});
 }
