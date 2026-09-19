@@ -9,6 +9,12 @@ pub mod store;
 pub mod text;
 pub mod tree;
 
+/// Asks every screen holding unwritten text to write it before the app quits.
+const FLUSH_BEFORE_EXIT: &str = "flush-before-exit";
+
+/// How long the quit waits for those writes before going anyway.
+const FLUSH_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// Tauri hands the window's minimum to GTK as a hint, and on GNOME under
 /// Wayland the hint is lost. A size request on the window's contents is how
 /// every GTK app gets its own minimum across, so the config's is set that way.
@@ -112,6 +118,24 @@ pub fn run() {
 			store::read_folded,
 			store::write_folded
 		])
-		.run(tauri::generate_context!())
-		.expect("error while running tauri application");
+		.build(tauri::generate_context!())
+		.expect("error while building tauri application")
+		.run(|handle, event| {
+			// Closing the window waits for the frontend's flush, but quitting
+			// (macOS ⌘Q, the Dock, logging out) does not go through the window
+			// at all. Hold the quit, ask for the writes, and go when they land.
+			if let tauri::RunEvent::ExitRequested { api, code, .. } = &event
+				&& code.is_none()
+			{
+				api.prevent_exit();
+				let handle = handle.clone();
+				std::thread::spawn(move || {
+					use tauri::Emitter;
+					let _ = handle.emit(FLUSH_BEFORE_EXIT, ());
+					// A frontend that never answers must not wedge the app.
+					std::thread::sleep(FLUSH_GRACE);
+					handle.exit(0);
+				});
+			}
+		});
 }

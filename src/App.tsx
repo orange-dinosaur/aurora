@@ -9,6 +9,7 @@ import UpdateNotice from "./UpdateNotice";
 import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
+import { flushBeforeQuitting } from "./quitting";
 import { pressed, SETTINGS } from "./formatting";
 import { face } from "./lib/typography";
 
@@ -61,6 +62,8 @@ function App() {
 	// would close the documents the writer had open.
 	const [login, setLogin] = useState(false);
 	const [profile, setProfile] = useState(false);
+
+	useEffect(flushBeforeQuitting, []);
 
 	// Both are read before anything is drawn, so the bar cannot appear and then
 	// vanish on a writer who had hidden it. A store that will not answer costs
