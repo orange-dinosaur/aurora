@@ -1,21 +1,79 @@
 //! Every project keeps its versions as a git repository at its own root.
 
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use git2::{Commit, ErrorCode, IndexAddOption, Oid, Repository, Signature, Tree};
-use serde::Deserialize;
+use git2::{Commit, ErrorCode, IndexAddOption, Oid, Repository, Signature, Sort, Tree};
+use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
+use uuid::Uuid;
 
 use crate::document::TRASH_DIR;
 use crate::history::HISTORY_FILE;
-use crate::project::{Error, Result, read_manifest};
+use crate::project::{Error, MANIFEST_FILE, Manifest, Result, read_manifest};
 
 const FIRST_VERSION: &str = "Versions begin";
 const AUTHOR_EMAIL: &str = "aurora@localhost";
 
 /// Marks a commit as one Aurora kept, so it is never named by its subject.
 const KIND_TRAILER: &str = "Aurora-Kind";
+const MINUTES_TRAILER: &str = "Aurora-Minutes";
+const WRITTEN_TRAILER: &str = "Aurora-Written";
+const REMOVED_TRAILER: &str = "Aurora-Removed";
+
+/// Why Aurora kept a version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum Kind {
+	Named,
+	Session,
+	Closing,
+	BeforePuttingBack,
+}
+
+impl Kind {
+	const ALL: [Kind; 4] = [
+		Kind::Named,
+		Kind::Session,
+		Kind::Closing,
+		Kind::BeforePuttingBack,
+	];
+
+	fn as_str(self) -> &'static str {
+		match self {
+			Kind::Named => "named",
+			Kind::Session => "session",
+			Kind::Closing => "closing",
+			Kind::BeforePuttingBack => "beforePuttingBack",
+		}
+	}
+
+	fn parse(text: &str) -> Option<Kind> {
+		Kind::ALL.into_iter().find(|kind| kind.as_str() == text)
+	}
+}
+
+/// One row of the Versions tab.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Version {
+	pub id: String,
+	#[serde(with = "time::serde::rfc3339")]
+	#[ts(type = "string")]
+	pub at: OffsetDateTime,
+	/// None for a commit Aurora did not make.
+	pub kind: Option<Kind>,
+	pub name: Option<String>,
+	pub minutes: Option<u32>,
+	pub written: Option<u32>,
+	pub removed: Option<u32>,
+	pub author: String,
+}
 
 /// A version the frontend asks to keep. Every count is in words.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, ts_rs::TS)]
@@ -41,12 +99,12 @@ pub enum Keep {
 }
 
 impl Keep {
-	fn kind(&self) -> &'static str {
+	fn kind(&self) -> Kind {
 		match self {
-			Keep::Named { .. } => "named",
-			Keep::Session { .. } => "session",
-			Keep::Closing { .. } => "closing",
-			Keep::BeforePuttingBack { .. } => "beforePuttingBack",
+			Keep::Named { .. } => Kind::Named,
+			Keep::Session { .. } => Kind::Session,
+			Keep::Closing { .. } => Kind::Closing,
+			Keep::BeforePuttingBack { .. } => Kind::BeforePuttingBack,
 		}
 	}
 
@@ -61,7 +119,7 @@ impl Keep {
 	/// A subject someone reading `git log` can follow, then the trailers the
 	/// Versions tab reads its labels from.
 	fn message(&self) -> String {
-		let mut trailers = vec![format!("{KIND_TRAILER}: {}", self.kind())];
+		let mut trailers = vec![format!("{KIND_TRAILER}: {}", self.kind().as_str())];
 		let subject = match self {
 			Keep::Named { .. } | Keep::BeforePuttingBack { .. } => self.name().unwrap_or_default(),
 			Keep::Session {
@@ -69,16 +127,16 @@ impl Keep {
 				written,
 				removed,
 			} => {
-				trailers.push(format!("Aurora-Minutes: {minutes}"));
-				trailers.push(format!("Aurora-Written: {written}"));
-				trailers.push(format!("Aurora-Removed: {removed}"));
+				trailers.push(format!("{MINUTES_TRAILER}: {minutes}"));
+				trailers.push(format!("{WRITTEN_TRAILER}: {written}"));
+				trailers.push(format!("{REMOVED_TRAILER}: {removed}"));
 				format!(
 					"A session of {minutes} minutes, {written} words written and {removed} removed"
 				)
 			}
 			Keep::Closing { written, removed } => {
-				trailers.push(format!("Aurora-Written: {written}"));
-				trailers.push(format!("Aurora-Removed: {removed}"));
+				trailers.push(format!("{WRITTEN_TRAILER}: {written}"));
+				trailers.push(format!("{REMOVED_TRAILER}: {removed}"));
 				format!("Left the project, {written} words written and {removed} removed")
 			}
 		};
@@ -216,6 +274,11 @@ pub fn keep(root: &Path, keep: &Keep, author: &str) -> Result<Oid> {
 /// A version's name. A note always wins, and an empty one means no name. A
 /// commit Aurora did not make is otherwise named by its subject line.
 pub fn name_of(repo: &Repository, commit: &Commit) -> Result<Option<String>> {
+	let ours = trailers(commit)?.iter().any(|(key, _)| key == KIND_TRAILER);
+	name(repo, commit, ours)
+}
+
+fn name(repo: &Repository, commit: &Commit, ours: bool) -> Result<Option<String>> {
 	match repo.find_note(None, commit.id()) {
 		Ok(note) => {
 			let name = note.message()?.trim();
@@ -224,13 +287,101 @@ pub fn name_of(repo: &Repository, commit: &Commit) -> Result<Option<String>> {
 		Err(e) if e.code() == ErrorCode::NotFound => {}
 		Err(e) => return Err(e.into()),
 	}
-	let ours = git2::message_trailers_strs(commit.message()?)?
-		.iter()
-		.any(|(key, _)| key == KIND_TRAILER);
 	if ours {
 		return Ok(None);
 	}
 	Ok(commit.summary()?.map(str::to_owned))
+}
+
+fn trailers(commit: &Commit) -> Result<Vec<(String, String)>> {
+	Ok(git2::message_trailers_strs(commit.message()?)?
+		.iter()
+		.map(|(key, value)| (key.to_owned(), value.to_owned()))
+		.collect())
+}
+
+fn describe(repo: &Repository, commit: &Commit) -> Result<Version> {
+	let trailers = trailers(commit)?;
+	let value = |key: &str| {
+		trailers
+			.iter()
+			.find(|(k, _)| k == key)
+			.map(|(_, v)| v.as_str())
+	};
+	let count = |key: &str| value(key).and_then(|v| v.parse().ok());
+	Ok(Version {
+		id: commit.id().to_string(),
+		at: OffsetDateTime::from_unix_timestamp(commit.time().seconds())
+			.unwrap_or(OffsetDateTime::UNIX_EPOCH),
+		kind: value(KIND_TRAILER).and_then(Kind::parse),
+		name: name(repo, commit, value(KIND_TRAILER).is_some())?,
+		minutes: count(MINUTES_TRAILER),
+		written: count(WRITTEN_TRAILER),
+		removed: count(REMOVED_TRAILER),
+		author: commit.author().name().unwrap_or_default().to_owned(),
+	})
+}
+
+/// The blob holding a document's text in one version, found by its id in
+/// that version's manifest so a rename or a move does not lose it. None when
+/// the document is not there, or the manifest cannot be read.
+///
+/// Most versions share their manifest with the one before, so `paths`
+/// remembers the document's path by manifest and each is parsed once.
+fn text_in(
+	repo: &Repository,
+	commit: &Commit,
+	document: Uuid,
+	paths: &mut HashMap<Oid, Option<String>>,
+) -> Result<Option<Oid>> {
+	let tree = commit.tree()?;
+	let Ok(entry) = tree.get_path(Path::new(MANIFEST_FILE)) else {
+		return Ok(None);
+	};
+	if let Entry::Vacant(slot) = paths.entry(entry.id()) {
+		let blob = repo.find_blob(entry.id())?;
+		let path = serde_json::from_slice::<Manifest>(blob.content())
+			.ok()
+			.and_then(|manifest| {
+				manifest
+					.documents()
+					.into_iter()
+					.find(|d| d.id == document)
+					.map(|d| d.path)
+			});
+		slot.insert(path);
+	}
+	let Some(path) = &paths[&entry.id()] else {
+		return Ok(None);
+	};
+	Ok(tree.get_path(Path::new(path)).ok().map(|e| e.id()))
+}
+
+/// Every version, newest first along first parents. With a document, only
+/// the versions in which its text changed.
+pub fn list(root: &Path, document: Option<Uuid>) -> Result<Vec<Version>> {
+	let repo = Repository::open(root)?;
+	let mut walk = repo.revwalk()?;
+	walk.set_sorting(Sort::TOPOLOGICAL)?;
+	walk.simplify_first_parent()?;
+	walk.push_head()?;
+
+	let mut versions = Vec::new();
+	let mut paths = HashMap::new();
+	for id in walk {
+		let commit = repo.find_commit(id?)?;
+		if let Some(document) = document {
+			let before = match commit.parent(0) {
+				Ok(parent) => text_in(&repo, &parent, document, &mut paths)?,
+				Err(_) => None,
+			};
+			if text_in(&repo, &commit, document, &mut paths)? == before {
+				continue;
+			}
+		}
+		versions.push(describe(&repo, &commit)?);
+	}
+	Ok(versions)
 }
 
 /// Writes a name onto a version, replacing any it had. An empty name is
@@ -256,6 +407,14 @@ fn author(root: &Path) -> Result<String> {
 pub fn keep_version(root: PathBuf, keep: Keep) -> Result<String> {
 	let author = author(&root)?;
 	Ok(self::keep(&root, &keep, &author)?.to_string())
+}
+
+#[tauri::command]
+pub fn list_versions(root: PathBuf, document: Option<Uuid>) -> Result<Vec<Version>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	list(&root, document)
 }
 
 #[tauri::command]
@@ -288,6 +447,9 @@ fn enclosing(root: &Path, repo: &Repository) -> Result<Option<PathBuf>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::document::{create_document, move_node, rename_document, write_document};
+	use crate::project::{Format, create};
+	use crate::tree::Node;
 
 	fn project() -> tempfile::TempDir {
 		let dir = tempfile::tempdir().unwrap();
@@ -414,14 +576,6 @@ mod tests {
 		(dir, repo)
 	}
 
-	fn trailers(commit: &Commit) -> Vec<(String, String)> {
-		git2::message_trailers_strs(commit.message().unwrap())
-			.unwrap()
-			.iter()
-			.map(|(key, value)| (key.to_owned(), value.to_owned()))
-			.collect()
-	}
-
 	fn pair(key: &str, value: &str) -> (String, String) {
 		(key.to_owned(), value.to_owned())
 	}
@@ -439,7 +593,7 @@ mod tests {
 		let commit = repo.find_commit(id).unwrap();
 		assert_eq!(commit.parent_count(), 1);
 		assert_eq!(
-			trailers(&commit),
+			trailers(&commit).unwrap(),
 			[
 				pair("Aurora-Kind", "session"),
 				pair("Aurora-Minutes", "25"),
@@ -460,7 +614,7 @@ mod tests {
 		let id = keep(dir.path(), &closing, "").unwrap();
 
 		assert_eq!(
-			trailers(&repo.find_commit(id).unwrap()),
+			trailers(&repo.find_commit(id).unwrap()).unwrap(),
 			[
 				pair("Aurora-Kind", "closing"),
 				pair("Aurora-Written", "5"),
@@ -478,7 +632,7 @@ mod tests {
 		let id = keep(dir.path(), &named, "").unwrap();
 
 		let commit = repo.find_commit(id).unwrap();
-		assert_eq!(trailers(&commit), [pair("Aurora-Kind", "named")]);
+		assert_eq!(trailers(&commit).unwrap(), [pair("Aurora-Kind", "named")]);
 		assert_eq!(
 			name_of(&repo, &commit).unwrap().as_deref(),
 			Some("Before the storm")
@@ -495,7 +649,7 @@ mod tests {
 
 		let commit = repo.find_commit(id).unwrap();
 		assert_eq!(
-			trailers(&commit),
+			trailers(&commit).unwrap(),
 			[pair("Aurora-Kind", "beforePuttingBack")]
 		);
 		assert_eq!(
@@ -596,6 +750,108 @@ mod tests {
 		);
 		set_name(dir.path(), &id, "", "").unwrap();
 		assert_eq!(name_of(&repo, &head).unwrap(), None);
+	}
+
+	#[test]
+	fn versions_come_newest_first_with_their_names_and_counts() {
+		let (dir, _repo) = changed();
+		let session = Keep::Session {
+			minutes: 25,
+			written: 3,
+			removed: 0,
+		};
+		keep(dir.path(), &session, "").unwrap();
+		fs::write(dir.path().join("Manuscript/two.md"), "More").unwrap();
+		let named = Keep::Named {
+			name: "Draft one".to_owned(),
+		};
+		keep(dir.path(), &named, "Herman Melville").unwrap();
+
+		let listed = list(dir.path(), None).unwrap();
+		let rows: Vec<_> = listed
+			.iter()
+			.map(|v| (v.kind, v.name.as_deref(), v.minutes, v.written))
+			.collect();
+		assert_eq!(
+			rows,
+			[
+				(Some(Kind::Named), Some("Draft one"), None, None),
+				(Some(Kind::Session), None, Some(25), Some(3)),
+				(Some(Kind::Named), Some(FIRST_VERSION), None, None),
+			]
+		);
+		assert_eq!(listed[0].author, "Herman Melville");
+		assert_eq!(listed[2].author, "Aurora");
+	}
+
+	#[test]
+	fn a_document_lists_only_the_versions_that_changed_its_text() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			OffsetDateTime::UNIX_EPOCH,
+		)
+		.unwrap();
+		ensure_repository(&root, "").unwrap();
+		let manifest = read_manifest(&root).unwrap();
+		let seeded = &manifest.documents()[0];
+		let document = seeded.id;
+		let elsewhere = manifest
+			.nodes
+			.iter()
+			.find_map(|node| match node {
+				Node::Folder { id, name, .. } if !seeded.path.starts_with(&format!("{name}/")) => {
+					Some(*id)
+				}
+				_ => None,
+			})
+			.unwrap();
+		let session = || Keep::Session {
+			minutes: 1,
+			written: 1,
+			removed: 0,
+		};
+		let mut expected = vec![repo_head(&root)];
+
+		write_document(root.clone(), document, "One".to_owned()).unwrap();
+		expected.push(keep(&root, &session(), "").unwrap());
+
+		let other = create_document(root.clone(), elsewhere, "Other".to_owned())
+			.unwrap()
+			.id;
+		let other_added = keep(&root, &session(), "").unwrap();
+
+		rename_document(root.clone(), document, "Renamed".to_owned()).unwrap();
+		keep(&root, &session(), "").unwrap();
+
+		write_document(root.clone(), document, "One two".to_owned()).unwrap();
+		expected.push(keep(&root, &session(), "").unwrap());
+
+		move_node(root.clone(), document, elsewhere, 0).unwrap();
+		write_document(root.clone(), document, "One two three".to_owned()).unwrap();
+		expected.push(keep(&root, &session(), "").unwrap());
+
+		let ids = |document| -> Vec<Oid> {
+			list(&root, Some(document))
+				.unwrap()
+				.iter()
+				.map(|v| Oid::from_str(&v.id).unwrap())
+				.collect()
+		};
+		expected.reverse();
+		assert_eq!(ids(document), expected);
+		assert_eq!(ids(other), [other_added]);
+	}
+
+	fn repo_head(root: &Path) -> Oid {
+		Repository::open(root)
+			.unwrap()
+			.head()
+			.unwrap()
+			.target()
+			.unwrap()
 	}
 
 	#[test]

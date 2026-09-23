@@ -3,4 +3,4 @@
 /**
  * The four things the right sidebar can be showing.
  */
-export type RightSidebarTab = "synopsis" | "info" | "mentions" | "stats";
+export type RightSidebarTab = "synopsis" | "info" | "mentions" | "stats" | "versions";

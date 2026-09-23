@@ -153,6 +153,7 @@ pub enum RightSidebarTab {
 	Info,
 	Mentions,
 	Stats,
+	Versions,
 }
 
 impl Default for Preferences {

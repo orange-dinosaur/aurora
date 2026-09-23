@@ -176,6 +176,7 @@ pub fn run() {
 			history::read_history,
 			history::append_session,
 			versions::keep_version,
+			versions::list_versions,
 			versions::rename_version,
 			versions::unname_version,
 			store::read_preferences,
