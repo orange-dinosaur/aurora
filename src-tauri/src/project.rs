@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::document::{Document, refresh};
 use crate::store;
 use crate::tree::{self, FolderKind, Node, tree_from_flat};
+use crate::versions;
 
 /// A folder inside a project, together with the document it starts life with.
 /// A section with no seed is created empty.
@@ -399,6 +400,7 @@ pub enum Error {
 	AlreadyExists,
 	UnsupportedFormat(Format),
 	Trash(trash::Error),
+	Git(git2::Error),
 	Io(io::Error),
 	Json(serde_json::Error),
 }
@@ -454,6 +456,7 @@ impl fmt::Display for Error {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
 			Error::Trash(e) => write!(f, "the desktop's trash would not take the folder: {e}"),
+			Error::Git(e) => write!(f, "Aurora could not keep this project's versions: {e}"),
 			Error::Io(e) => write!(f, "{e}"),
 			Error::Json(e) => write!(f, "{e}"),
 		}
@@ -486,6 +489,7 @@ impl Error {
 			Error::AlreadyExists => "alreadyExists",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::Trash(_) => "trash",
+			Error::Git(_) => "git",
 			Error::Io(_) => "io",
 			Error::Json(_) => "json",
 		}
@@ -527,6 +531,7 @@ impl std::error::Error for Error {
 			| Error::AlreadyExists
 			| Error::UnsupportedFormat(_) => None,
 			Error::Trash(e) => Some(e),
+			Error::Git(e) => Some(e),
 			Error::Io(e) => Some(e),
 			Error::Json(e) => Some(e),
 		}
@@ -542,6 +547,12 @@ impl From<NameError> for Error {
 impl From<io::Error> for Error {
 	fn from(e: io::Error) -> Self {
 		Error::Io(e)
+	}
+}
+
+impl From<git2::Error> for Error {
+	fn from(e: git2::Error) -> Self {
+		Error::Git(e)
 	}
 }
 
@@ -835,6 +846,9 @@ pub fn create_project(
 pub struct OpenedProject {
 	pub name: String,
 	pub root: PathBuf,
+	/// The folder of a git repository the project sits inside, until the
+	/// writer has been told once that the project keeps its own versions.
+	pub enclosing_repository: Option<PathBuf>,
 }
 
 pub fn read_manifest(root: &Path) -> Result<Manifest> {
@@ -873,6 +887,8 @@ fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Resu
 	// The manifest holds the name, not the folder, so a renamed folder still
 	// opens under the name the writer gave it.
 	let manifest = refresh(root)?;
+	// Every way into a project comes through here, a new one included.
+	let enclosing_repository = versions::ensure_repository(root, &manifest.book.author)?;
 	let mut store = store::load(store_path)?;
 	store.remember(manifest.name.clone(), root.to_path_buf(), at);
 	store::save(store_path, &store)?;
@@ -880,6 +896,7 @@ fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Resu
 	Ok(OpenedProject {
 		name: manifest.name,
 		root: root.to_path_buf(),
+		enclosing_repository,
 	})
 }
 
@@ -2213,6 +2230,7 @@ mod tests {
 			OpenedProject {
 				name: "Ithaca".to_owned(),
 				root: root.clone(),
+				enclosing_repository: None,
 			}
 		);
 	}

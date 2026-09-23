@@ -73,12 +73,14 @@ function App() {
 			invoke<LastProject>("last_project"),
 			invoke<Preferences>("read_preferences").catch(() => DEFAULTS),
 		])
-			.then(([last, saved]) => {
+			.then(async ([last, saved]) => {
 				setPreferences(saved);
 				if (last.kind === "open") {
 					setBoot({
 						kind: "project",
-						project: { name: last.name, root: last.root },
+						project: await invoke<OpenProject>("open_project", {
+							root: last.root,
+						}),
 					});
 				} else if (last.kind === "missing") {
 					setBoot({

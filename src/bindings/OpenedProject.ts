@@ -3,4 +3,9 @@
 /**
  * A project as the frontend refers to it once it is open.
  */
-export type OpenedProject = { name: string, root: string, };
+export type OpenedProject = { name: string, root: string, 
+/**
+ * The folder of a git repository the project sits inside, until the
+ * writer has been told once that the project keeps its own versions.
+ */
+enclosingRepository: string | null, };

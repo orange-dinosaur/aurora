@@ -135,7 +135,7 @@ export default function Welcome({
 				name,
 				format: chosen.id,
 			});
-			onOpened({ name, root });
+			onOpened(await invoke<OpenProject>("open_project", { root }));
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}

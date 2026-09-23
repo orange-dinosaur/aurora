@@ -8,6 +8,7 @@ pub mod project;
 pub mod store;
 pub mod text;
 pub mod tree;
+pub mod versions;
 
 /// Asks every screen holding unwritten text to write it before the app quits.
 const FLUSH_BEFORE_EXIT: &str = "flush-before-exit";
