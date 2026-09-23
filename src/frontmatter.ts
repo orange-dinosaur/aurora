@@ -76,7 +76,7 @@ const NUMERIC = /^[-+]?(?:\d[\d_]*(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$/;
  * One run of lines: either a field Aurora understands, or a stretch it keeps
  * verbatim.
  */
-type Segment =
+export type Segment =
 	| { key: string; value: Value; text: string[] }
 	| { key: null; value: null; text: string[] };
 
@@ -261,7 +261,7 @@ function same(one: Value, other: Value): boolean {
 }
 
 /** The block broken into the fields it sets and the lines it keeps. */
-function segments(block: string): Segment[] {
+export function segments(block: string): Segment[] {
 	const source = lines(block);
 	const found: Segment[] = [];
 	let at = 0;
