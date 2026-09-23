@@ -4,8 +4,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
 	type CSSProperties,
+	type PointerEvent,
 	type ReactNode,
+	type RefObject,
+	type UIEvent,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -13,7 +17,14 @@ import {
 import { differences } from "./differences";
 import { failure } from "./errors";
 import Icon from "./Icon";
-import { type Block, blocks, type Run, tally } from "./lib/compare";
+import {
+	type Block,
+	blocks,
+	change,
+	follow,
+	type Run,
+	tally,
+} from "./lib/compare";
 import { byDay, counts, detail } from "./lib/versions";
 import { timeOfDay } from "./dates";
 import type { ProjectDocument, Version } from "./types";
@@ -37,6 +48,11 @@ type Then = { text: string | null };
 
 type Field = { index: number; text: string };
 
+// A difference's mark on the strip, at a fraction of the way down B.
+type Tick = { index: number; at: number; change: ReturnType<typeof change> };
+
+type Pair = [number, number];
+
 export default function Compare({
 	root,
 	document,
@@ -51,7 +67,14 @@ export default function Compare({
 	const [then, setThen] = useState<Then | null>(null);
 	const [current, setCurrent] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const columns = useRef<HTMLDivElement>(null);
+	const [ticks, setTicks] = useState<Tick[]>([]);
+	const left = useRef<HTMLDivElement>(null);
+	const right = useRef<HTMLDivElement>(null);
+	const view = useRef<HTMLDivElement>(null);
+	// Heights down A and B that line up, and the column whose scroll was set
+	// by the other, so its own scroll event is not passed back.
+	const pairs = useRef<Pair[]>([]);
+	const driven = useRef<HTMLElement | null>(null);
 
 	useEffect(() => {
 		let live = true;
@@ -130,14 +153,107 @@ export default function Compare({
 		);
 	}
 
-	useEffect(() => {
-		if (current === null) {
+	useLayoutEffect(() => {
+		const a = left.current;
+		const b = right.current;
+		if (a === null || b === null) {
 			return;
 		}
-		columns.current
-			?.querySelectorAll(`[data-difference="${current}"]`)
-			.forEach((mark) => mark.scrollIntoView({ block: "center" }));
-	}, [current]);
+
+		const measure = () => {
+			const inA = marks(a);
+			const inB = marks(b);
+			const lined: Pair[] = [];
+			const marked: Tick[] = [];
+			found.forEach((difference, index) => {
+				const there = inA.get(index);
+				const here = inB.get(index);
+				if (there !== undefined && here !== undefined) {
+					lined.push(
+						[there.top, here.top],
+						[there.bottom, here.bottom],
+					);
+				}
+				if (here !== undefined) {
+					marked.push({
+						index,
+						at: here.top / b.scrollHeight,
+						change: change(difference),
+					});
+				}
+			});
+			lined.push([a.scrollHeight, b.scrollHeight]);
+			pairs.current = lined;
+			setTicks(marked);
+			place(b);
+		};
+
+		measure();
+		// Wrapping changes with the window's width, and every height with it.
+		const observer = new ResizeObserver(measure);
+		observer.observe(a);
+		observer.observe(b);
+		return () => observer.disconnect();
+	}, [found, sides]);
+
+	// Where the strip shows B's visible part.
+	function place(b: HTMLElement) {
+		const style = view.current?.style;
+		if (style !== undefined) {
+			style.top = `${(b.scrollTop / b.scrollHeight) * 100}%`;
+			style.height = `${(b.clientHeight / b.scrollHeight) * 100}%`;
+		}
+	}
+
+	// Keeps the line across the middle of both columns on the same passage.
+	function scrolled(
+		source: HTMLElement,
+		target: HTMLElement | null,
+		lined: Pair[],
+	) {
+		if (driven.current === source) {
+			driven.current = null;
+			return;
+		}
+		if (target === null) {
+			return;
+		}
+		const middle =
+			follow(lined, source.scrollTop + source.clientHeight / 2) -
+			target.clientHeight / 2;
+		const top = Math.max(
+			0,
+			Math.min(middle, target.scrollHeight - target.clientHeight),
+		);
+		// A column already where it should be fires no scroll event to clear
+		// `driven`, so it is only set when the column will move.
+		if (Math.abs(top - target.scrollTop) >= 1) {
+			driven.current = target;
+			target.scrollTop = top;
+		}
+	}
+
+	// Centres B on the height pressed on the strip, and A follows.
+	function seek(event: PointerEvent<HTMLDivElement>) {
+		const b = right.current;
+		if (b === null) {
+			return;
+		}
+		const box = event.currentTarget.getBoundingClientRect();
+		b.scrollTop =
+			((event.clientY - box.top) / box.height) * b.scrollHeight -
+			b.clientHeight / 2;
+	}
+
+	// B leads when it has a mark for the difference, and A follows it.
+	function go(index: number) {
+		setCurrent(index);
+		const selector = `[data-difference="${index}"]`;
+		(
+			right.current?.querySelector(selector) ??
+			left.current?.querySelector(selector)
+		)?.scrollIntoView({ block: "center" });
+	}
 
 	const today = new Date();
 	const days = byDay(versions, today);
@@ -204,7 +320,6 @@ export default function Compare({
 				<div className="compare__main">
 					<div
 						className="compare__columns"
-						ref={columns}
 						style={
 							{
 								"--font-size": `${fontSize}px`,
@@ -220,10 +335,19 @@ export default function Compare({
 									? ""
 									: `${byDay([a], today)[0].heading} ${timeOfDay(a.at)} · ${words(prose(before)).toLocaleString()} words`
 							}
+							side="then"
 							fields={fieldsOf(before, "then")}
 							body={sides.a}
 							current={current}
 							missing={then !== null && then.text === null}
+							scroller={left}
+							onScroll={(event) =>
+								scrolled(
+									event.currentTarget,
+									right.current,
+									pairs.current,
+								)
+							}
 						/>
 						<Column
 							letter="B"
@@ -235,11 +359,61 @@ export default function Compare({
 							]
 								.filter((part) => part !== "")
 								.join(" · ")}
+							side="now"
 							fields={fieldsOf(now, "now")}
 							body={sides.b}
 							current={current}
 							missing={false}
-						/>
+							scroller={right}
+							onScroll={(event) => {
+								place(event.currentTarget);
+								scrolled(
+									event.currentTarget,
+									left.current,
+									pairs.current.map(([a, b]): Pair => [b, a]),
+								);
+							}}
+						>
+							{/* Out of the reading order: first and next do the
+							    same for a keyboard. */}
+							<div
+								className="compare__map"
+								aria-hidden="true"
+								onPointerDown={(event) => {
+									const tick = (event.target as HTMLElement)
+										.dataset.tick;
+									if (tick !== undefined) {
+										go(Number(tick));
+										return;
+									}
+									// Held, so dragging keeps scrolling even off
+									// the strip.
+									event.currentTarget.setPointerCapture(
+										event.pointerId,
+									);
+									seek(event);
+								}}
+								onPointerMove={(event) => {
+									if (
+										event.currentTarget.hasPointerCapture(
+											event.pointerId,
+										)
+									) {
+										seek(event);
+									}
+								}}
+							>
+								<div ref={view} className="compare__view" />
+								{ticks.map((tick) => (
+									<span
+										key={tick.index}
+										className={`compare__tick compare__tick--${tick.change}`}
+										style={{ top: `${tick.at * 100}%` }}
+										data-tick={tick.index}
+									/>
+								))}
+							</div>
+						</Column>
 					</div>
 
 					<div className="compare__foot">
@@ -253,7 +427,7 @@ export default function Compare({
 							type="button"
 							className="compare__step"
 							disabled={found.length === 0}
-							onClick={() => setCurrent(0)}
+							onClick={() => go(0)}
 						>
 							first
 						</button>
@@ -263,8 +437,10 @@ export default function Compare({
 							className="compare__step"
 							disabled={found.length === 0}
 							onClick={() =>
-								setCurrent((at) =>
-									at === null ? 0 : (at + 1) % found.length,
+								go(
+									current === null
+										? 0
+										: (current + 1) % found.length,
 								)
 							}
 						>
@@ -324,21 +500,30 @@ function Column({
 	letter,
 	title,
 	detail,
+	side,
 	fields,
 	body,
 	current,
 	missing,
+	scroller,
+	onScroll,
+	children,
 }: {
 	letter: string;
 	title: string;
 	detail: string;
+	/** Then is washed as taken out, now as put in. */
+	side: "then" | "now";
 	fields: Field[];
 	body: Block[];
 	current: number | null;
 	missing: boolean;
+	scroller: RefObject<HTMLDivElement | null>;
+	onScroll: (event: UIEvent<HTMLDivElement>) => void;
+	children?: ReactNode;
 }) {
 	return (
-		<article className="compare__column">
+		<article className={`compare__column compare__column--${side}`}>
 			<header className="compare__head">
 				<span className="compare__letter">{letter}</span>
 				<span className="compare__heading">
@@ -346,25 +531,57 @@ function Column({
 					<span className="compare__detail">{detail}</span>
 				</span>
 			</header>
-			<div className="compare__scroll">
-				{missing && (
-					<p className="compare__missing">
-						This document did not exist yet in this version.
-					</p>
-				)}
-				{fields.map((field) => (
-					<p key={field.index} className="compare__field">
-						<Wash difference={field.index} current={current}>
-							{field.text}
-						</Wash>
-					</p>
-				))}
-				<div className="editor__text compare__text">
-					{body.map((block, index) => draw(block, index, current))}
+			<div className="compare__pane">
+				<div
+					className="compare__scroll"
+					ref={scroller}
+					onScroll={onScroll}
+				>
+					{missing && (
+						<p className="compare__missing">
+							This document did not exist yet in this version.
+						</p>
+					)}
+					{fields.map((field) => (
+						<p key={field.index} className="compare__field">
+							<Wash difference={field.index} current={current}>
+								{field.text}
+							</Wash>
+						</p>
+					))}
+					<div className="editor__text compare__text">
+						{body.map((block, index) =>
+							draw(block, index, current),
+						)}
+					</div>
 				</div>
+				{children}
 			</div>
 		</article>
 	);
+}
+
+// Where each difference's marks sit down a column, from the top of its text.
+function marks(
+	scroller: HTMLElement,
+): Map<number, { top: number; bottom: number }> {
+	const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
+	const found = new Map<number, { top: number; bottom: number }>();
+	scroller
+		.querySelectorAll<HTMLElement>("[data-difference]")
+		.forEach((mark) => {
+			const index = Number(mark.dataset.difference);
+			const box = mark.getBoundingClientRect();
+			const seen = found.get(index);
+			found.set(index, {
+				top: Math.min(seen?.top ?? Infinity, box.top - origin),
+				bottom: Math.max(
+					seen?.bottom ?? -Infinity,
+					box.bottom - origin,
+				),
+			});
+		});
+	return found;
 }
 
 function draw(block: Block, key: number, current: number | null): ReactNode {

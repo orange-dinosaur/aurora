@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { differences } from "../differences";
-import { blocks, tally } from "./compare";
+import { blocks, change, follow, tally } from "./compare";
 
 const plain = { strong: false, em: false, difference: null };
 
@@ -58,6 +58,45 @@ describe("blocks", () => {
 				runs: [{ ...plain, text: "Body", difference: 0 }],
 			},
 		]);
+	});
+});
+
+describe("change", () => {
+	it("tells words put in, taken out and swapped apart", () => {
+		const found = differences("a b c", "a x c d").concat(
+			differences("a b", "a"),
+		);
+		expect(found.map(change)).toEqual(["swapped", "added", "removed"]);
+	});
+});
+
+describe("follow", () => {
+	const pairs: [number, number][] = [
+		[100, 100],
+		[300, 150],
+		[500, 350],
+	];
+
+	it("moves in step where both sides match", () => {
+		expect(follow(pairs, 50)).toBe(50);
+		expect(follow(pairs, 400)).toBe(250);
+	});
+
+	it("moves in proportion across a difference", () => {
+		expect(follow(pairs, 200)).toBe(125);
+	});
+
+	it("carries on in step past the last pair", () => {
+		expect(follow(pairs, 600)).toBe(450);
+	});
+
+	it("skips a pair that runs backwards", () => {
+		const crossed: [number, number][] = [
+			[100, 100],
+			[90, 200],
+			[300, 300],
+		];
+		expect(follow(crossed, 200)).toBe(200);
 	});
 });
 

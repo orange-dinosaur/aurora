@@ -164,6 +164,39 @@ function runs(
 	return found.filter((run) => run.text !== "" || run.difference !== null);
 }
 
+/** Whether a difference only puts words in, only takes them out, or swaps them. */
+export function change(
+	difference: Difference,
+): "added" | "removed" | "swapped" {
+	if (difference.then.from === difference.then.to) {
+		return "added";
+	}
+	return difference.now.from === difference.now.to ? "removed" : "swapped";
+}
+
+/**
+ * Where height `y` in one column falls in the other, given pairs of heights
+ * that line up, from the top down. Between two pairs it moves in proportion,
+ * so a passage only one side has holds the other still. A pair that would run
+ * backwards, as two differences on one line can, is skipped.
+ */
+export function follow(pairs: [number, number][], y: number): number {
+	let last: [number, number] = [0, 0];
+	for (const pair of pairs) {
+		if (pair[0] < last[0] || pair[1] < last[1]) {
+			continue;
+		}
+		if (y <= pair[0]) {
+			const span = pair[0] - last[0];
+			return span === 0
+				? pair[1]
+				: last[1] + ((y - last[0]) / span) * (pair[1] - last[1]);
+		}
+		last = pair;
+	}
+	return last[1] + (y - last[0]);
+}
+
 /** Words the body differences take out of `then` and put into `now`. */
 export function tally(
 	then: string,

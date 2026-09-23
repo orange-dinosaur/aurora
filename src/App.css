@@ -473,6 +473,11 @@
 	--danger: oklch(0.505 0.15 22);
 	/* The tint on a match that is not the one being read. */
 	--find: oklch(0.9 0.09 95);
+	/* What a compare view shows as put in and as taken out. */
+	--added: oklch(0.6 0.13 150);
+	--added-wash: oklch(0.93 0.06 150);
+	--removed: oklch(0.58 0.16 25);
+	--removed-wash: oklch(0.93 0.045 25);
 	/* Over the app while a dialog is open. Dark in both palettes: it is the
 	   room's lights going down, not a tint. */
 	--scrim: oklch(0.2 0.02 250 / 0.34);
@@ -514,6 +519,10 @@
 		--accent-wash: oklch(0.325 0.048 205);
 		--danger: oklch(0.7 0.13 25);
 		--find: oklch(0.42 0.07 92);
+		--added: oklch(0.72 0.12 150);
+		--added-wash: oklch(0.33 0.06 150);
+		--removed: oklch(0.7 0.13 25);
+		--removed-wash: oklch(0.33 0.06 25);
 		--scrim: oklch(0.12 0.01 250 / 0.55);
 	}
 }
@@ -532,6 +541,10 @@
 	--accent-wash: oklch(0.325 0.048 205);
 	--danger: oklch(0.7 0.13 25);
 	--find: oklch(0.42 0.07 92);
+	--added: oklch(0.72 0.12 150);
+	--added-wash: oklch(0.33 0.06 150);
+	--removed: oklch(0.7 0.13 25);
+	--removed-wash: oklch(0.33 0.06 25);
 	--scrim: oklch(0.12 0.01 250 / 0.55);
 }
 
@@ -2381,8 +2394,15 @@ body.dragging * {
 	font-variant-numeric: tabular-nums;
 }
 
+.compare__pane {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
 .compare__scroll {
 	flex: 1;
+	min-width: 0;
 	min-height: 0;
 	padding: 1.25rem 1.5rem;
 	overflow-y: auto;
@@ -2415,17 +2435,82 @@ body.dragging * {
 
 .compare__wash {
 	color: inherit;
-	background: var(--accent-wash);
 	border-radius: 2px;
 }
 
-/* Words only the other side has: a caret where they would be. */
+.compare__column--then .compare__wash {
+	background: var(--removed-wash);
+}
+
+.compare__column--now .compare__wash {
+	background: var(--added-wash);
+}
+
+/* Words only the other side has: a caret where they would be, in the colour
+   they carry over there. */
 .compare__wash:empty {
 	display: inline-block;
 	width: 2px;
 	height: 1em;
 	vertical-align: -0.1em;
-	background: var(--accent);
+}
+
+.compare__column--then .compare__wash:empty {
+	background: var(--added);
+}
+
+.compare__column--now .compare__wash:empty {
+	background: var(--removed);
+}
+
+.compare__map {
+	position: relative;
+	flex: none;
+	width: 24px;
+	background: var(--bg-chrome);
+	border-left: 1px solid var(--border);
+	cursor: pointer;
+	/* A drag down the strip scrolls the text, not the page. */
+	touch-action: none;
+	user-select: none;
+}
+
+.compare__tick {
+	position: absolute;
+	left: 4px;
+	right: 4px;
+	height: 4px;
+	border-radius: 1px;
+}
+
+/* A few pixels either side, so a mark does not need a pixel-perfect press. */
+.compare__tick::before {
+	content: "";
+	position: absolute;
+	inset: -3px 0;
+}
+
+.compare__tick--added {
+	background: var(--added);
+}
+
+.compare__tick--removed {
+	background: var(--removed);
+}
+
+.compare__tick--swapped {
+	background: linear-gradient(to right, var(--removed) 50%, var(--added) 50%);
+}
+
+/* Where the writer is: under the marks, so none is hidden by it. */
+.compare__view {
+	position: absolute;
+	left: 1px;
+	right: 1px;
+	background: var(--accent-wash);
+	border: 1px solid var(--accent);
+	border-radius: 3px;
+	pointer-events: none;
 }
 
 .compare__wash--current {
