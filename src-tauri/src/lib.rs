@@ -180,6 +180,8 @@ pub fn run() {
 			versions::nested_notice_shown,
 			versions::rename_version,
 			versions::unname_version,
+			versions::version_changes,
+			versions::version_text,
 			store::read_preferences,
 			store::write_preferences,
 			store::read_expanded,

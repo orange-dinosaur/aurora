@@ -1,7 +1,7 @@
 //! Every project keeps its versions as a git repository at its own root.
 
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -13,7 +13,8 @@ use uuid::Uuid;
 
 use crate::document::{TRASH_DIR, body};
 use crate::history::HISTORY_FILE;
-use crate::project::{Error, MANIFEST_FILE, Manifest, Result, read_manifest};
+use crate::project::{Book, Error, MANIFEST_FILE, Manifest, Result, read_manifest};
+use crate::tree::Node;
 
 const FIRST_VERSION: &str = "Versions begin";
 const AUTHOR_EMAIL: &str = "aurora@localhost";
@@ -399,6 +400,152 @@ fn words_in(bytes: &[u8]) -> u32 {
 	body(&text).split_whitespace().count() as u32
 }
 
+/// How one document or folder differs between two versions. Matched by id, so
+/// a rename or a move is never read as a deletion and an addition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Change {
+	pub id: Uuid,
+	pub folder: bool,
+	/// Its path in the older version, or none when it was added.
+	pub before: Option<String>,
+	/// Its path in the newer version, or none when it was deleted.
+	pub after: Option<String>,
+	pub renamed: bool,
+	/// Into another folder, not merely under a folder that was renamed.
+	pub moved: bool,
+	/// A document whose text differs. Never set on a folder.
+	pub edited: bool,
+}
+
+/// Everything that differs between two versions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Changes {
+	/// In the newer version's order, then whatever was deleted.
+	pub nodes: Vec<Change>,
+	/// Any book detail other than the cover.
+	pub book: bool,
+	pub cover: bool,
+}
+
+/// A node where one version has it.
+struct Placed {
+	folder: bool,
+	name: String,
+	parent: Option<Uuid>,
+	path: String,
+}
+
+fn place(nodes: &[Node], parent: Option<Uuid>, prefix: &str, placed: &mut Vec<(Uuid, Placed)>) {
+	for node in nodes {
+		let (id, name, folder) = match node {
+			Node::Folder { id, name, .. } => (*id, name, true),
+			Node::Document { id, name, .. } => (*id, name, false),
+		};
+		let path = format!("{prefix}{name}");
+		placed.push((
+			id,
+			Placed {
+				folder,
+				name: name.clone(),
+				parent,
+				path: path.clone(),
+			},
+		));
+		if let Node::Folder { children, .. } = node {
+			place(children, Some(id), &format!("{path}/"), placed);
+		}
+	}
+}
+
+/// A version's tree and manifest. With no version, the project as it stands
+/// on disk, staged but not kept.
+fn side<'r>(repo: &'r Repository, version: Option<&str>) -> Result<(Tree<'r>, Manifest)> {
+	let tree = match version {
+		Some(id) => repo.find_commit(Oid::from_str(id)?)?.tree()?,
+		None => repo.find_tree(stage(repo)?)?,
+	};
+	let manifest = repo.find_blob(tree.get_path(Path::new(MANIFEST_FILE))?.id())?;
+	let manifest = serde_json::from_slice(manifest.content())?;
+	Ok((tree, manifest))
+}
+
+fn blob_at(tree: &Tree, path: &str) -> Option<Oid> {
+	tree.get_path(Path::new(path)).ok().map(|entry| entry.id())
+}
+
+/// What changed from version `a` to version `b`, where none is the project as
+/// it stands on disk.
+pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes> {
+	let repo = Repository::open(root)?;
+	let (old_tree, old) = side(&repo, a)?;
+	let (new_tree, new) = side(&repo, b)?;
+	let placed = |manifest: &Manifest| {
+		let mut placed = Vec::new();
+		place(&manifest.nodes, None, "", &mut placed);
+		placed
+	};
+	let (was, is) = (placed(&old), placed(&new));
+	let before: HashMap<Uuid, &Placed> = was.iter().map(|(id, node)| (*id, node)).collect();
+	let after: HashSet<Uuid> = is.iter().map(|(id, _)| *id).collect();
+
+	let mut nodes = Vec::new();
+	for (id, now) in &is {
+		let then = before.get(id);
+		let change = Change {
+			id: *id,
+			folder: now.folder,
+			before: then.map(|then| then.path.clone()),
+			after: Some(now.path.clone()),
+			renamed: then.is_some_and(|then| then.name != now.name),
+			moved: then.is_some_and(|then| then.parent != now.parent),
+			edited: !now.folder
+				&& then.is_some_and(|then| {
+					blob_at(&old_tree, &then.path) != blob_at(&new_tree, &now.path)
+				}),
+		};
+		if then.is_none() || change.renamed || change.moved || change.edited {
+			nodes.push(change);
+		}
+	}
+	for (id, then) in was.iter().filter(|(id, _)| !after.contains(id)) {
+		nodes.push(Change {
+			id: *id,
+			folder: then.folder,
+			before: Some(then.path.clone()),
+			after: None,
+			renamed: false,
+			moved: false,
+			edited: false,
+		});
+	}
+
+	let details = |book: &Book| Book {
+		cover: String::new(),
+		..book.clone()
+	};
+	Ok(Changes {
+		nodes,
+		book: details(&old.book) != details(&new.book),
+		cover: old.book.cover != new.book.cover
+			|| blob_at(&old_tree, &old.book.cover) != blob_at(&new_tree, &new.book.cover),
+	})
+}
+
+/// A document's full text at a version, or none when it is not there.
+pub fn text(root: &Path, version: &str, document: Uuid) -> Result<Option<String>> {
+	let repo = Repository::open(root)?;
+	let commit = repo.find_commit(Oid::from_str(version)?)?;
+	let Some(blob) = text_in(&repo, &commit, document, &mut HashMap::new())? else {
+		return Ok(None);
+	};
+	let blob = repo.find_blob(blob)?;
+	Ok(Some(String::from_utf8_lossy(blob.content()).into_owned()))
+}
+
 /// Writes a name onto a version, replacing any it had. An empty name is
 /// stored as an empty note, which is what takes a subject-line name away.
 fn set_name(root: &Path, id: &str, name: &str, author: &str) -> Result<()> {
@@ -454,6 +601,23 @@ pub fn unname_version(root: PathBuf, id: String) -> Result<()> {
 	set_name(&root, &id, "", &author(&root)?)
 }
 
+/// Either side left out is the project as it stands now.
+#[tauri::command]
+pub fn version_changes(root: PathBuf, a: Option<String>, b: Option<String>) -> Result<Changes> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	changes(&root, a.as_deref(), b.as_deref())
+}
+
+#[tauri::command]
+pub fn version_text(root: PathBuf, version: String, id: Uuid) -> Result<Option<String>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	text(&root, &version, id)
+}
+
 fn enclosing(root: &Path, repo: &Repository) -> Result<Option<PathBuf>> {
 	if repo
 		.config()?
@@ -474,8 +638,11 @@ fn enclosing(root: &Path, repo: &Repository) -> Result<Option<PathBuf>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::document::{create_document, move_node, rename_document, write_document};
-	use crate::project::{Format, create};
+	use crate::document::{
+		create_document, create_folder, delete_document, delete_folder, move_node, rename_document,
+		rename_folder, write_document,
+	};
+	use crate::project::{Format, create, set_cover, write_book};
 	use crate::tree::Node;
 
 	fn project() -> tempfile::TempDir {
@@ -913,5 +1080,176 @@ mod tests {
 		);
 		set_name(dir.path(), &id.to_string(), "", "").unwrap();
 		assert_eq!(name_of(&repo, &commit).unwrap(), None);
+	}
+
+	/// A novel with versions, its first document, and two top-level folders
+	/// that do not hold that document.
+	fn novel() -> (tempfile::TempDir, PathBuf, Uuid, Uuid, Uuid) {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			OffsetDateTime::UNIX_EPOCH,
+		)
+		.unwrap();
+		ensure_repository(&root, "").unwrap();
+		let manifest = read_manifest(&root).unwrap();
+		let seeded = manifest.documents()[0].clone();
+		let others: Vec<Uuid> = manifest
+			.nodes
+			.iter()
+			.filter_map(|node| match node {
+				Node::Folder { id, name, .. } if !seeded.path.starts_with(&format!("{name}/")) => {
+					Some(*id)
+				}
+				_ => None,
+			})
+			.collect();
+		(parent, root, seeded.id, others[0], others[1])
+	}
+
+	fn kept(root: &Path) -> String {
+		let session = Keep::Session {
+			minutes: 1,
+			written: 1,
+			removed: 0,
+		};
+		keep(root, &session, "").unwrap().to_string()
+	}
+
+	fn change_of(changes: &Changes, id: Uuid) -> Option<&Change> {
+		changes.nodes.iter().find(|change| change.id == id)
+	}
+
+	#[test]
+	fn documents_are_matched_by_id_through_every_kind_of_change() {
+		let (_parent, root, seeded, here, there) = novel();
+		write_document(root.clone(), seeded, "One".to_owned()).unwrap();
+		let add = |name: &str| {
+			create_document(root.clone(), here, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (moving, doomed, untouched) = (add("Moving"), add("Doomed"), add("Untouched"));
+		let start = kept(&root);
+
+		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
+		write_document(root.clone(), seeded, "One two".to_owned()).unwrap();
+		move_node(root.clone(), moving, there, 0).unwrap();
+		delete_document(root.clone(), doomed).unwrap();
+		let added = add("Added");
+		let end = kept(&root);
+
+		let changes = changes(&root, Some(&start), Some(&end)).unwrap();
+		assert_eq!(changes.nodes.len(), 4);
+		assert!(change_of(&changes, untouched).is_none());
+
+		let renamed = change_of(&changes, seeded).unwrap();
+		assert!(renamed.renamed && renamed.edited && !renamed.moved);
+		assert!(renamed.after.as_deref().unwrap().ends_with("Renamed.md"));
+
+		let moved = change_of(&changes, moving).unwrap();
+		assert!(moved.moved && !moved.renamed && !moved.edited);
+
+		let deleted = change_of(&changes, doomed).unwrap();
+		assert!(deleted.before.is_some() && deleted.after.is_none());
+
+		let added = change_of(&changes, added).unwrap();
+		assert!(added.before.is_none() && added.after.is_some() && !added.folder);
+		assert!(!changes.book && !changes.cover);
+	}
+
+	#[test]
+	fn a_renamed_folder_does_not_move_what_is_inside_it() {
+		let (_parent, root, _, here, there) = novel();
+		let folder = |parent: Uuid, name: &str| {
+			create_folder(root.clone(), parent, name.to_owned(), None)
+				.unwrap()
+				.id()
+		};
+		let (old, moving, doomed) = (
+			folder(here, "Old"),
+			folder(here, "Moving"),
+			folder(here, "Doomed"),
+		);
+		let inside = create_document(root.clone(), old, "Inside".to_owned())
+			.unwrap()
+			.id;
+		let start = kept(&root);
+
+		rename_folder(root.clone(), old, "New".to_owned()).unwrap();
+		move_node(root.clone(), moving, there, 0).unwrap();
+		delete_folder(root.clone(), doomed).unwrap();
+		let fresh = folder(here, "Fresh");
+		let end = kept(&root);
+
+		let changes = changes(&root, Some(&start), Some(&end)).unwrap();
+		assert!(change_of(&changes, inside).is_none());
+		let renamed = change_of(&changes, old).unwrap();
+		assert!(renamed.folder && renamed.renamed && !renamed.moved);
+		assert!(change_of(&changes, moving).unwrap().moved);
+		assert!(change_of(&changes, doomed).unwrap().after.is_none());
+		assert!(change_of(&changes, fresh).unwrap().before.is_none());
+	}
+
+	#[test]
+	fn book_details_and_the_cover_are_told_apart() {
+		let (_parent, root, ..) = novel();
+		let start = kept(&root);
+		let mut book = read_manifest(&root).unwrap().book;
+		book.title = "Odyssey".to_owned();
+		write_book(root.clone(), book).unwrap();
+		let retitled = kept(&root);
+
+		let image = root.parent().unwrap().join("cover.png");
+		fs::write(&image, b"\x89PNG\r\n\x1a\none").unwrap();
+		set_cover(root.clone(), image.clone()).unwrap();
+		let covered = kept(&root);
+		fs::write(&image, b"\x89PNG\r\n\x1a\ntwo").unwrap();
+		set_cover(root.clone(), image).unwrap();
+		let recovered = kept(&root);
+
+		let book = changes(&root, Some(&start), Some(&retitled)).unwrap();
+		assert!(book.book && !book.cover && book.nodes.is_empty());
+		let cover = changes(&root, Some(&retitled), Some(&covered)).unwrap();
+		assert!(cover.cover && !cover.book);
+		// The same file name, with other bytes in it.
+		assert!(
+			changes(&root, Some(&covered), Some(&recovered))
+				.unwrap()
+				.cover
+		);
+	}
+
+	#[test]
+	fn now_is_the_folder_on_disk_and_keeps_nothing() {
+		let (_parent, root, seeded, ..) = novel();
+		let head = repo_head(&root);
+		write_document(root.clone(), seeded, "Unkept".to_owned()).unwrap();
+
+		let changes = changes(&root, Some(&head.to_string()), None).unwrap();
+		assert!(change_of(&changes, seeded).unwrap().edited);
+		assert_eq!(repo_head(&root), head);
+	}
+
+	#[test]
+	fn a_version_gives_back_a_documents_text_wherever_it_went() {
+		let (_parent, root, seeded, _, there) = novel();
+		write_document(root.clone(), seeded, "First".to_owned()).unwrap();
+		let first = kept(&root);
+		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
+		move_node(root.clone(), seeded, there, 0).unwrap();
+		write_document(root.clone(), seeded, "Second".to_owned()).unwrap();
+		let second = kept(&root);
+
+		let body_of = |version: &str| {
+			text(&root, version, seeded)
+				.unwrap()
+				.map(|t| body(&t).to_owned())
+		};
+		assert_eq!(body_of(&first).as_deref(), Some("First"));
+		assert_eq!(body_of(&second).as_deref(), Some("Second"));
+		assert_eq!(text(&root, &first, Uuid::new_v4()).unwrap(), None);
 	}
 }
