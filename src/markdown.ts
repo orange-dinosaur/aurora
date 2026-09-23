@@ -46,10 +46,12 @@ export const EDITOR_NODES: Klass<LexicalNode>[] = [
 // Every spelling of a thematic break a writer might use, including the spaced
 // asterisks a novel marks a scene change with. Without this the asterisks read
 // as a bullet and the break becomes a list item.
+export const BREAK_LINE = /^(?:-\s*){3,}$|^(?:\*\s*){3,}$|^(?:_\s*){3,}$/;
+
 const SCENE_BREAK: ElementTransformer = {
 	dependencies: [HorizontalRuleNode],
 	export: (node) => ($isHorizontalRuleNode(node) ? "---" : null),
-	regExp: /^(?:-\s*){3,}$|^(?:\*\s*){3,}$|^(?:_\s*){3,}$/,
+	regExp: BREAK_LINE,
 	replace: (parentNode, _children, _match, isImport) => {
 		const rule = $createHorizontalRuleNode();
 		if (isImport || parentNode.getNextSibling() !== null) {

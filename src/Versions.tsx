@@ -22,6 +22,7 @@ type Props = {
 	onBeforeKeep: () => Promise<void>;
 	/** Bumped when a session has kept a version of its own. */
 	logged: number;
+	onCompare: (version: Version) => void;
 };
 
 // Which name field is open: the one for a new version, or one over a row.
@@ -35,6 +36,7 @@ export default function Versions({
 	enclosing,
 	onBeforeKeep,
 	logged,
+	onCompare,
 }: Props) {
 	const [versions, setVersions] = useState<Version[] | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -216,6 +218,11 @@ export default function Versions({
 										setNaming({ kind: "rename", version })
 									}
 									onUnname={() => unname(version)}
+									onCompare={
+										document === null
+											? null
+											: () => onCompare(version)
+									}
 								/>
 							),
 						)}
@@ -232,12 +239,15 @@ function Row({
 	onSelect,
 	onRename,
 	onUnname,
+	onCompare,
 }: {
 	version: Version;
 	selected: boolean;
 	onSelect: () => void;
 	onRename: () => void;
 	onUnname: () => void;
+	/** Null while the whole project is listed. */
+	onCompare: (() => void) | null;
 }) {
 	const named = version.name !== null;
 	const className = [
@@ -312,7 +322,12 @@ function Row({
 			</Menu>
 			{selected && (
 				<span className="versions__actions">
-					<button type="button" className="versions__action" disabled>
+					<button
+						type="button"
+						className="versions__action"
+						disabled={onCompare === null}
+						onClick={onCompare ?? undefined}
+					>
 						Compare
 					</button>
 					<button type="button" className="versions__action" disabled>

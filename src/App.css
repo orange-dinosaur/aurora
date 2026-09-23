@@ -2236,6 +2236,242 @@ body.dragging * {
 	cursor: default;
 }
 
+/* The display the body sets would otherwise beat the attribute. */
+.project__body[hidden] {
+	display: none;
+}
+
+.compare {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	background: var(--bg);
+}
+
+.compare__bar {
+	padding: 0.4rem 0.75rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.compare__back {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.2rem 0.5rem 0.2rem 0.3rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.compare__back:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.compare__back:focus-visible,
+.compare__step:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.compare__body {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+.compare__history {
+	flex: none;
+	width: 15rem;
+	padding: 1rem 0.75rem;
+	overflow-y: auto;
+	background: var(--bg-chrome);
+	border-right: 1px solid var(--border);
+}
+
+/* No menu at the end of these rows to leave room for. */
+.compare__history .versions__pick {
+	padding-right: 0.5rem;
+}
+
+.compare__title {
+	margin: 0;
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--text);
+}
+
+.compare__trail {
+	margin: 0.15rem 0 0;
+	font-size: 0.75rem;
+	color: var(--text-faint);
+}
+
+.compare__now {
+	cursor: default;
+}
+
+.compare__letter {
+	flex: none;
+	margin-left: auto;
+	font-size: 0.6875rem;
+	font-weight: 700;
+	color: var(--accent);
+}
+
+.compare__main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.compare__columns {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	flex: 1;
+	min-height: 0;
+}
+
+.compare__column {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+}
+
+.compare__column + .compare__column {
+	border-left: 1px solid var(--border);
+}
+
+.compare__head {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	padding: 0.6rem 1.5rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.compare__head .compare__letter {
+	margin-left: 0;
+	font-size: 0.75rem;
+}
+
+.compare__heading {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.compare__name {
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+.compare__detail {
+	font-size: 0.75rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.compare__scroll {
+	flex: 1;
+	min-height: 0;
+	padding: 1.25rem 1.5rem;
+	overflow-y: auto;
+}
+
+.compare__text {
+	font-size: var(--font-size);
+	color: var(--text);
+}
+
+.compare__missing {
+	margin: 0 0 1rem;
+	font-size: 0.8125rem;
+	color: var(--text-faint);
+}
+
+.compare__field {
+	margin: 0 0 0.5rem;
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	white-space: pre-wrap;
+	color: var(--text-dim);
+}
+
+.compare__item::before {
+	content: "•";
+	margin-right: 0.5em;
+	color: var(--text-faint);
+}
+
+.compare__wash {
+	color: inherit;
+	background: var(--accent-wash);
+	border-radius: 2px;
+}
+
+/* Words only the other side has: a caret where they would be. */
+.compare__wash:empty {
+	display: inline-block;
+	width: 2px;
+	height: 1em;
+	vertical-align: -0.1em;
+	background: var(--accent);
+}
+
+.compare__wash--current {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.compare__foot {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.5rem 1.5rem;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+	border-top: 1px solid var(--border);
+}
+
+.compare__count {
+	font-variant-numeric: tabular-nums;
+}
+
+.compare__step {
+	padding: 0;
+	font: inherit;
+	color: var(--accent);
+	background: none;
+	border: 0;
+	border-radius: 3px;
+	cursor: pointer;
+}
+
+.compare__step:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.compare__trouble {
+	position: absolute;
+	top: 50%;
+	right: 1.5rem;
+	margin: 0;
+	color: var(--danger);
+	transform: translateY(-50%);
+}
+
 .stats__words {
 	margin: 0 0 1rem;
 	font-size: 0.9375rem;

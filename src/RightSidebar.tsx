@@ -18,6 +18,7 @@ import type {
 	ProjectDocument,
 	RightSidebarTab,
 	SprintUnit,
+	Version,
 	VersionsScope,
 } from "./types";
 
@@ -78,6 +79,7 @@ type Props = {
 	enclosing: string | null;
 	/** Writes every open document to disk before a version is kept. */
 	onBeforeKeep: () => Promise<void>;
+	onCompare: (version: Version) => void;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 	/** Where a tag chip goes, which only the project view can work out. */
 	onOpenTag: (tag: string) => void;
@@ -113,6 +115,7 @@ export default function RightSidebar({
 	onVersionsScope,
 	enclosing,
 	onBeforeKeep,
+	onCompare,
 	onOpen,
 	onOpenTag,
 	onSubject,
@@ -171,6 +174,7 @@ export default function RightSidebar({
 						enclosing={enclosing}
 						onBeforeKeep={onBeforeKeep}
 						logged={logged}
+						onCompare={onCompare}
 					/>
 				) : tab === "stats" ? (
 					<Stats

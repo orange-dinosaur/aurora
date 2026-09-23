@@ -18,6 +18,7 @@ import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import BookView from "./Book";
+import Compare from "./Compare";
 import type {
 	DocumentText,
 	FolderNode,
@@ -300,6 +301,14 @@ export default function Project({
 	// Bumped every time a closed session reaches the history file and its
 	// version is kept, so the Stats and Versions tabs read them again.
 	const [logged, setLogged] = useState(0);
+
+	// The compare view, which takes the whole window while it is open. It holds
+	// the text as it was on screen, since nothing can be typed while it shows.
+	const [comparing, setComparing] = useState<{
+		document: ProjectDocument;
+		version: string;
+		now: string;
+	} | null>(null);
 
 	// Why a folder's target was refused, when one was.
 	const [aiming, setAiming] = useState<string | null>(null);
@@ -1238,7 +1247,21 @@ export default function Project({
 				onRefreshed={() => setListing((version) => version + 1)}
 			/>
 
-			<div className="project__body">
+			{comparing !== null && (
+				<Compare
+					root={root}
+					document={comparing.document}
+					version={comparing.version}
+					now={comparing.now}
+					fontSize={preferences.fontSize}
+					lineHeight={preferences.lineHeight}
+					onBack={() => setComparing(null)}
+				/>
+			)}
+
+			{/* Hidden rather than unmounted while comparing, so every editor
+			    comes back with its cursor and its undo history. */}
+			<div className="project__body" hidden={comparing !== null}>
 				<Sidebar
 					hidden={!preferences.sidebar}
 					width={preferences.sidebarWidth}
@@ -1526,6 +1549,18 @@ export default function Project({
 						}
 						enclosing={enclosingRepository}
 						onBeforeKeep={writeAll}
+						onCompare={(version) => {
+							if (
+								active?.kind === "document" &&
+								active.content.kind === "ready"
+							) {
+								setComparing({
+									document: active.document,
+									version: version.id,
+									now: active.content.text,
+								});
+							}
+						}}
 						onOpen={(document, seed) =>
 							void openDocument(document, seed)
 						}
