@@ -135,8 +135,8 @@ export default function Versions({
 					className="versions__keep"
 					onClick={() => setNaming({ kind: "keep" })}
 				>
-					<Icon name="save" />
-					Keep a version
+					<Icon name="plus" />
+					New version
 				</button>
 			)}
 
