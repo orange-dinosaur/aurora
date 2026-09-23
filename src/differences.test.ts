@@ -30,6 +30,26 @@ describe("the body", () => {
 		expect(differences(SCENE + "Calm.", SCENE + "Calm.")).toEqual([]);
 	});
 
+	test("changed words with only space between them are one difference", () => {
+		expect(shown("the cold wind blew", "the warm rain blew")).toEqual([
+			{ then: "cold wind", now: "warm rain" },
+		]);
+	});
+
+	test("an unchanged word keeps two edits apart", () => {
+		expect(shown("a cold and wet day", "a warm and dry day")).toEqual([
+			{ then: "cold", now: "warm" },
+			{ then: "wet", now: "dry" },
+		]);
+	});
+
+	test("a paragraph break keeps two edits apart", () => {
+		expect(shown("Cold\n\nWet", "Warm\n\nDry")).toEqual([
+			{ then: "Cold", now: "Warm" },
+			{ then: "Wet", now: "Dry" },
+		]);
+	});
+
 	test("a changed word is one difference", () => {
 		expect(shown("The cat sat.", "The dog sat.")).toEqual([
 			{ then: "cat", now: "dog" },

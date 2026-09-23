@@ -2433,9 +2433,9 @@ body.dragging * {
 	color: var(--text-faint);
 }
 
+/* Square, so the pieces of one difference join into one wash. */
 .compare__wash {
 	color: inherit;
-	border-radius: 2px;
 }
 
 .compare__column--then .compare__wash {
@@ -2513,9 +2513,9 @@ body.dragging * {
 	pointer-events: none;
 }
 
+/* An underline rather than an outline, which would box each piece apart. */
 .compare__wash--current {
-	outline: 2px solid var(--accent);
-	outline-offset: 1px;
+	box-shadow: inset 0 -2px var(--accent);
 }
 
 .compare__foot {

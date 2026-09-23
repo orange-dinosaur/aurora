@@ -236,11 +236,29 @@ function widened(
 		runs.push([a, b]);
 	}
 
+	// Nothing but space inside one paragraph between two runs, so they read as
+	// one edit. Cells between runs are always unchanged, the same on both sides.
+	const blank = (from: number, to: number) =>
+		cells
+			.slice(from, to)
+			.every((cell) =>
+				then
+					.slice(cell.then[0], cell.then[1])
+					.every(
+						(token) =>
+							WHITESPACE.test(token.text) &&
+							!PARAGRAPH_BREAK.test(token.text),
+					),
+			);
+
 	runs.sort((one, other) => one[0] - other[0]);
 	const merged: [number, number][] = [];
 	for (const run of runs) {
 		const last = merged[merged.length - 1];
-		if (last !== undefined && run[0] <= last[1]) {
+		if (
+			last !== undefined &&
+			(run[0] <= last[1] || blank(last[1] + 1, run[0]))
+		) {
 			last[1] = Math.max(last[1], run[1]);
 		} else {
 			merged.push(run);
