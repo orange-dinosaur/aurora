@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
 	changed,
+	closingVersion,
 	ended,
 	IDLE,
 	IDLE_GAP,
 	recorded,
+	sessionVersion,
 	start,
 	stop,
 	tick,
@@ -274,6 +276,44 @@ describe("leaving", () => {
 		// after it. The deliberate one was held open until now.
 		expect(closed[0]).toMatchObject({ layer: "automatic", end: at(5) });
 		expect(closed[1]).toMatchObject({ layer: "deliberate", end: at(9) });
+	});
+});
+
+describe("what a version keeps", () => {
+	test("a session keeps its length in whole minutes and its counts", () => {
+		const { closed } = run([
+			change(0, 10),
+			change(12.6, 5, 2),
+			change(60, 1),
+		]);
+
+		expect(sessionVersion(closed[0])).toEqual({
+			kind: "session",
+			minutes: 13,
+			written: 15,
+			removed: 2,
+		});
+	});
+
+	test("leaving counts the automatic session, not the sprint over it", () => {
+		const typed = wrote(IDLE, change(0, 40), 900).sessions;
+		const opened = start(typed, at(1), 940).sessions;
+		const running = run([change(5, 60, 3)], opened, 940).sessions;
+		const { closed } = ended(running, at(9), 997);
+
+		expect(closingVersion(closed)).toEqual({
+			kind: "closing",
+			written: 100,
+			removed: 3,
+		});
+	});
+
+	test("leaving with nothing written still keeps a closing version", () => {
+		expect(closingVersion([])).toEqual({
+			kind: "closing",
+			written: 0,
+			removed: 0,
+		});
 	});
 });
 

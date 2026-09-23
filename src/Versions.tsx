@@ -20,6 +20,8 @@ type Props = {
 	enclosing: string | null;
 	/** Writes every open document to disk, so a version holds what is on screen. */
 	onBeforeKeep: () => Promise<void>;
+	/** Bumped when a session has kept a version of its own. */
+	logged: number;
 };
 
 // Which name field is open: the one for a new version, or one over a row.
@@ -32,6 +34,7 @@ export default function Versions({
 	onScope,
 	enclosing,
 	onBeforeKeep,
+	logged,
 }: Props) {
 	const [versions, setVersions] = useState<Version[] | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -61,7 +64,7 @@ export default function Versions({
 		return () => {
 			current = false;
 		};
-	}, [root, document, asked]);
+	}, [root, document, asked, logged]);
 
 	// Shown once: from the next opening on, Rust stops reporting it.
 	useEffect(() => {

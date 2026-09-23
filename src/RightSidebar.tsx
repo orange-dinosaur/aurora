@@ -68,7 +68,7 @@ type Props = {
 	/** Opens a deliberate session with something to reach, and closes one. */
 	onStartSprint: (limit: Limit) => void;
 	onStopSession: () => void;
-	/** Bumped when a session has reached the history file. */
+	/** Bumped when a session has reached the history file and kept a version. */
 	logged: number;
 	tab: RightSidebarTab;
 	onTab: (tab: RightSidebarTab) => void;
@@ -170,6 +170,7 @@ export default function RightSidebar({
 						onScope={onVersionsScope}
 						enclosing={enclosing}
 						onBeforeKeep={onBeforeKeep}
+						logged={logged}
 					/>
 				) : tab === "stats" ? (
 					<Stats

@@ -14,7 +14,7 @@
  * the moment it is acting at, so a test can hand it any clock it likes.
  */
 
-import type { SessionRecord, SprintUnit } from "./types";
+import type { Keep, SessionRecord, SprintUnit } from "./types";
 
 /** How long a silence has to run before it closes an automatic session, unless
  * the writer has said otherwise. */
@@ -306,6 +306,29 @@ export function recorded(session: Closed): SessionRecord {
 		removed: session.removed,
 		net: session.net,
 		documents: Object.fromEntries(session.documents),
+	};
+}
+
+/** A closed session as the version it keeps, in whole minutes. */
+export function sessionVersion(session: Closed): Keep {
+	return {
+		kind: "session",
+		minutes: Math.round((session.end - session.start) / 60_000),
+		written: session.written,
+		removed: session.removed,
+	};
+}
+
+/**
+ * The version kept on the way out. It counts the automatic session, because
+ * that one runs under any deliberate session and so saw every change.
+ */
+export function closingVersion(closed: Closed[]): Keep {
+	const automatic = closed.find((session) => session.layer === "automatic");
+	return {
+		kind: "closing",
+		written: automatic?.written ?? 0,
+		removed: automatic?.removed ?? 0,
 	};
 }
 

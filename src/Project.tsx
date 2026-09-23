@@ -35,9 +35,11 @@ import type { OutlineHandle } from "./lib/outline";
 // `changed` under another name: this file already has one of its own.
 import {
 	changed as asChange,
+	closingVersion,
 	ended,
 	gapOf,
 	recorded,
+	sessionVersion,
 	start,
 	stop,
 	tick,
@@ -295,8 +297,8 @@ export default function Project({
 	// above stays the one the model is handed.
 	const [deliberate, setDeliberate] = useState<Running | null>(null);
 
-	// Bumped every time a session reaches the history file, which is the only
-	// thing that changes what the Stats tab reads back.
+	// Bumped every time a closed session reaches the history file and its
+	// version is kept, so the Stats and Versions tabs read them again.
 	const [logged, setLogged] = useState(0);
 
 	// Why a folder's target was refused, when one was.
@@ -315,9 +317,11 @@ export default function Project({
 	}, []);
 
 	// The layers the model left behind are what runs from here, and whatever it
-	// closed goes to the history file. Nothing reports a failure: history is
-	// written behind the writer's back and there is nowhere to say so.
-	function keep(step: Step) {
+	// closed goes to the history file and keeps a version. Leaving keeps one
+	// closing version instead, even with nothing closed. Nothing reports a
+	// failure: both are written behind the writer's back and there is nowhere
+	// to say so.
+	async function keep(step: Step, leaving = false) {
 		sessions.current = step.sessions;
 		setDeliberate(step.sessions.deliberate);
 		const written = Promise.allSettled(
@@ -325,12 +329,23 @@ export default function Project({
 				invoke("append_session", { root, session: recorded(session) }),
 			),
 		);
-		if (step.closed.length > 0) {
-			// The panel that reads the file has to be told it moved.
-			void written.then(() => setLogged((times) => times + 1));
+		const versions = leaving
+			? [closingVersion(step.closed)]
+			: step.closed.map(sessionVersion);
+		if (versions.length === 0) {
+			await written;
+			return;
 		}
 
-		return written;
+		await writeOpen();
+		// One at a time, since each version stages the whole project.
+		for (const version of versions) {
+			await invoke("keep_version", { root, keep: version }).catch(
+				() => {},
+			);
+		}
+		await written;
+		setLogged((times) => times + 1);
 	}
 
 	// The silence that ends an automatic session, as the writer set it. Every
@@ -385,11 +400,13 @@ export default function Project({
 		return () => window.clearInterval(beat);
 	}, [root, gap]);
 
-	// The tabs as they stand now. The handlers below are registered once and
+	// The tabs and the idle gap as they stand now. The handlers below are registered once and
 	// would otherwise go on seeing the tabs they were born with.
 	const latest = useRef(tabs);
+	const idle = useRef(gap);
 	useEffect(() => {
 		latest.current = tabs;
+		idle.current = gap;
 	});
 
 	function documentTab(id: string): DocumentTab | undefined {
@@ -413,6 +430,17 @@ export default function Project({
 		return done.then(() => filed(root, tab.document.id, text));
 	}
 
+	// Every tab whose text is not on disk yet, with that text.
+	function unwritten(): [DocumentTab, string][] {
+		return latest.current.flatMap((tab): [DocumentTab, string][] =>
+			tab.kind === "document" &&
+			tab.save.kind !== "clean" &&
+			tab.content.kind === "ready"
+				? [[tab, tab.content.text]]
+				: [],
+		);
+	}
+
 	// Writes every tab that is not on disk yet, cancelling the timers that were
 	// going to do it. Nothing reports a failure here: by the time this runs
 	// there is no longer anywhere to report it.
@@ -421,22 +449,30 @@ export default function Project({
 		timers.current.clear();
 
 		await Promise.allSettled(
-			latest.current.flatMap((tab) =>
-				tab.kind === "document" &&
-				tab.save.kind !== "clean" &&
-				tab.content.kind === "ready"
-					? [put(tab, tab.content.text)]
-					: [],
-			),
+			unwritten().map(([tab, text]) => put(tab, text)),
+		);
+	}
+
+	// Writes the same tabs without cancelling their timers, which can hold a
+	// keystroke newer than these tabs and will write it after. A missing file
+	// is left to its timer, so it is put back only once.
+	async function writeOpen() {
+		await Promise.allSettled(
+			unwritten()
+				.filter(([tab]) => tab.save.kind !== "missing")
+				.map(([tab, text]) => put(tab, text)),
 		);
 	}
 
 	async function flush() {
 		await writeAll();
 
-		// The session the writer is in the middle of is worth as much as the
-		// text they were typing into it, and closing the window ends it.
-		await keep(ended(sessions.current, Date.now(), words.current));
+		// A session that had already gone quiet closed as usual. The one the
+		// writer is in the middle of is worth as much as the text they were
+		// typing into it, and leaving ends it with a closing version.
+		const now = Date.now();
+		await keep(tick(sessions.current, now, words.current, idle.current));
+		await keep(ended(sessions.current, now, words.current), true);
 	}
 
 	// Quitting must not lose what the debounce has not written yet. Tauri waits
