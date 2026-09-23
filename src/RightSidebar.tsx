@@ -6,6 +6,7 @@ import { RIGHT_SIDEBAR } from "./panels";
 import Mentions, { type About } from "./Mentions";
 import Stats from "./Stats";
 import Synopsis from "./Synopsis";
+import Versions from "./Versions";
 import type { FieldsHandle } from "./fields";
 import type { Limit, Sessions } from "./sessions";
 import type { FolderRef } from "./tree";
@@ -13,7 +14,12 @@ import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
 import { MANUSCRIPT } from "./kinds";
 import { isSubject } from "./subjects";
-import type { ProjectDocument, RightSidebarTab, SprintUnit } from "./types";
+import type {
+	ProjectDocument,
+	RightSidebarTab,
+	SprintUnit,
+	VersionsScope,
+} from "./types";
 
 // The panel on the far side of the writing from the sidebar, about whatever is
 // open. It serves a document and a folder overview alike, which is why it takes
@@ -25,6 +31,7 @@ const TABS: { name: RightSidebarTab; label: string }[] = [
 	{ name: "info", label: "Info" },
 	{ name: "mentions", label: "Mentions" },
 	{ name: "stats", label: "Stats" },
+	{ name: "versions", label: "Versions" },
 ];
 
 type Props = {
@@ -65,6 +72,12 @@ type Props = {
 	logged: number;
 	tab: RightSidebarTab;
 	onTab: (tab: RightSidebarTab) => void;
+	versionsScope: VersionsScope;
+	onVersionsScope: (scope: VersionsScope) => void;
+	/** A repository the project sits inside, while the writer has not been told. */
+	enclosing: string | null;
+	/** Writes every open document to disk before a version is kept. */
+	onBeforeKeep: () => Promise<void>;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 	/** Where a tag chip goes, which only the project view can work out. */
 	onOpenTag: (tag: string) => void;
@@ -96,6 +109,10 @@ export default function RightSidebar({
 	logged,
 	tab,
 	onTab,
+	versionsScope,
+	onVersionsScope,
+	enclosing,
+	onBeforeKeep,
 	onOpen,
 	onOpenTag,
 	onSubject,
@@ -145,7 +162,16 @@ export default function RightSidebar({
 			</p>
 
 			<div className="right-sidebar__body">
-				{tab === "stats" ? (
+				{tab === "versions" ? (
+					<Versions
+						root={root}
+						page={page}
+						scope={versionsScope}
+						onScope={onVersionsScope}
+						enclosing={enclosing}
+						onBeforeKeep={onBeforeKeep}
+					/>
+				) : tab === "stats" ? (
 					<Stats
 						page={page}
 						text={text}

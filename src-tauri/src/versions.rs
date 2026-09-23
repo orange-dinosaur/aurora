@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::document::TRASH_DIR;
+use crate::document::{TRASH_DIR, body};
 use crate::history::HISTORY_FILE;
 use crate::project::{Error, MANIFEST_FILE, Manifest, Result, read_manifest};
 
@@ -73,6 +73,8 @@ pub struct Version {
 	pub written: Option<u32>,
 	pub removed: Option<u32>,
 	pub author: String,
+	/// The document's words in this version, when the list is of one document.
+	pub words: Option<u32>,
 }
 
 /// A version the frontend asks to keep. Every count is in words.
@@ -319,6 +321,7 @@ fn describe(repo: &Repository, commit: &Commit) -> Result<Version> {
 		written: count(WRITTEN_TRAILER),
 		removed: count(REMOVED_TRAILER),
 		author: commit.author().name().unwrap_or_default().to_owned(),
+		words: None,
 	})
 }
 
@@ -370,18 +373,30 @@ pub fn list(root: &Path, document: Option<Uuid>) -> Result<Vec<Version>> {
 	let mut paths = HashMap::new();
 	for id in walk {
 		let commit = repo.find_commit(id?)?;
+		let mut version = describe(&repo, &commit)?;
 		if let Some(document) = document {
 			let before = match commit.parent(0) {
 				Ok(parent) => text_in(&repo, &parent, document, &mut paths)?,
 				Err(_) => None,
 			};
-			if text_in(&repo, &commit, document, &mut paths)? == before {
+			let now = text_in(&repo, &commit, document, &mut paths)?;
+			if now == before {
 				continue;
 			}
+			version.words = match now {
+				Some(blob) => Some(words_in(repo.find_blob(blob)?.content())),
+				None => Some(0),
+			};
 		}
-		versions.push(describe(&repo, &commit)?);
+		versions.push(version);
 	}
 	Ok(versions)
+}
+
+/// Counted the way the rest of Aurora counts a document: its body only.
+fn words_in(bytes: &[u8]) -> u32 {
+	let text = String::from_utf8_lossy(bytes);
+	body(&text).split_whitespace().count() as u32
 }
 
 /// Writes a name onto a version, replacing any it had. An empty name is
@@ -415,6 +430,18 @@ pub fn list_versions(root: PathBuf, document: Option<Uuid>) -> Result<Vec<Versio
 		return Err(Error::RelativePath);
 	}
 	list(&root, document)
+}
+
+/// Records that the writer has seen the note about an enclosing repository.
+#[tauri::command]
+pub fn nested_notice_shown(root: PathBuf) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	Repository::open(&root)?
+		.config()?
+		.set_bool(NESTED_NOTICE_SHOWN, true)?;
+	Ok(())
 }
 
 #[tauri::command]
@@ -842,6 +869,12 @@ mod tests {
 		};
 		expected.reverse();
 		assert_eq!(ids(document), expected);
+		let words: Vec<_> = list(&root, Some(document))
+			.unwrap()
+			.iter()
+			.map(|v| v.words)
+			.collect();
+		assert_eq!(words, [Some(3), Some(2), Some(1), Some(0)]);
 		assert_eq!(ids(other), [other_added]);
 	}
 

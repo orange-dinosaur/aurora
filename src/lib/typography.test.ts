@@ -24,6 +24,7 @@ const DEFAULTS: Preferences = {
 	sidebar: true,
 	rightSidebar: false,
 	rightSidebarTab: "synopsis",
+	versionsScope: "document",
 	sidebarWidth: 248,
 	rightSidebarWidth: 300,
 	theme: "system",

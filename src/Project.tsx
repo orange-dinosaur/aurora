@@ -54,6 +54,8 @@ import { pressed, SEARCH, SESSION } from "./formatting";
 type Props = {
 	name: string;
 	root: string;
+	/** A repository the project sits inside, while the writer has not been told. */
+	enclosingRepository: string | null;
 	preferences: Preferences;
 	onClose: () => void;
 	onSettings: () => void;
@@ -225,6 +227,7 @@ async function read(root: string, id: string): Promise<Content> {
 export default function Project({
 	name,
 	root,
+	enclosingRepository,
 	preferences,
 	onClose,
 	onSettings,
@@ -413,7 +416,7 @@ export default function Project({
 	// Writes every tab that is not on disk yet, cancelling the timers that were
 	// going to do it. Nothing reports a failure here: by the time this runs
 	// there is no longer anywhere to report it.
-	async function flush() {
+	async function writeAll() {
 		timers.current.forEach(window.clearTimeout);
 		timers.current.clear();
 
@@ -426,6 +429,10 @@ export default function Project({
 					: [],
 			),
 		);
+	}
+
+	async function flush() {
+		await writeAll();
 
 		// The session the writer is in the middle of is worth as much as the
 		// text they were typing into it, and closing the window ends it.
@@ -1477,6 +1484,12 @@ export default function Project({
 								rightSidebarTab: tab,
 							})
 						}
+						versionsScope={preferences.versionsScope}
+						onVersionsScope={(versionsScope) =>
+							onPreferences({ ...preferences, versionsScope })
+						}
+						enclosing={enclosingRepository}
+						onBeforeKeep={writeAll}
 						onOpen={(document, seed) =>
 							void openDocument(document, seed)
 						}

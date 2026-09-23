@@ -3,6 +3,7 @@ import type { ManuscriptFont } from "./ManuscriptFont";
 import type { RightSidebarTab } from "./RightSidebarTab";
 import type { SprintUnit } from "./SprintUnit";
 import type { Theme } from "./Theme";
+import type { VersionsScope } from "./VersionsScope";
 
 /**
  * How the writer likes to write, which follows them into every project rather
@@ -37,7 +38,7 @@ rightSidebar: boolean,
 /**
  * Which of that panel's tabs is showing.
  */
-rightSidebarTab: RightSidebarTab, 
+rightSidebarTab: RightSidebarTab, versionsScope: VersionsScope, 
 /**
  * How wide the list of documents is, in pixels. Needs a default of its
  * own: a store written before this field existed would otherwise come

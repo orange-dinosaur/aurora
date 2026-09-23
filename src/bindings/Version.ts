@@ -8,4 +8,8 @@ export type Version = { id: string, at: string,
 /**
  * None for a commit Aurora did not make.
  */
-kind: Kind | null, name: string | null, minutes: number | null, written: number | null, removed: number | null, author: string, };
+kind: Kind | null, name: string | null, minutes: number | null, written: number | null, removed: number | null, author: string, 
+/**
+ * The document's words in this version, when the list is of one document.
+ */
+words: number | null, };

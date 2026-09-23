@@ -177,6 +177,7 @@ pub fn run() {
 			history::append_session,
 			versions::keep_version,
 			versions::list_versions,
+			versions::nested_notice_shown,
 			versions::rename_version,
 			versions::unname_version,
 			store::read_preferences,

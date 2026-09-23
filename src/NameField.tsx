@@ -6,6 +6,8 @@ type Props = {
 	// What the field starts with, which is the current title when renaming.
 	initial?: string;
 	busy: boolean;
+	// What the field says while the name is with Rust.
+	working?: string;
 	// Whatever Rust said about the last name that was tried.
 	error: string | null;
 	onSubmit: (name: string) => void;
@@ -17,6 +19,7 @@ export default function NameField({
 	placeholder,
 	initial = "",
 	busy,
+	working = "Creating…",
 	error,
 	onSubmit,
 	onCancel,
@@ -73,7 +76,7 @@ export default function NameField({
 				}}
 			/>
 			<p className="namefield__message" role="status">
-				{busy ? "Creating…" : (error ?? "")}
+				{busy ? working : (error ?? "")}
 			</p>
 		</form>
 	);

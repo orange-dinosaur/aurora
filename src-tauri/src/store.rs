@@ -43,6 +43,8 @@ pub struct Preferences {
 	/// Which of that panel's tabs is showing.
 	#[serde(default)]
 	pub right_sidebar_tab: RightSidebarTab,
+	#[serde(default)]
+	pub versions_scope: VersionsScope,
 	/// How wide the list of documents is, in pixels. Needs a default of its
 	/// own: a store written before this field existed would otherwise come
 	/// back with a sidebar no pixels wide.
@@ -156,6 +158,15 @@ pub enum RightSidebarTab {
 	Versions,
 }
 
+/// Whether the Versions tab lists the open document's versions or all of them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub enum VersionsScope {
+	#[default]
+	Document,
+	Project,
+}
+
 impl Default for Preferences {
 	fn default() -> Self {
 		Self {
@@ -165,6 +176,7 @@ impl Default for Preferences {
 			sidebar: shown(),
 			right_sidebar: false,
 			right_sidebar_tab: RightSidebarTab::Synopsis,
+			versions_scope: VersionsScope::Document,
 			sidebar_width: sidebar_width(),
 			right_sidebar_width: right_sidebar_width(),
 			theme: Theme::System,
@@ -706,6 +718,7 @@ mod tests {
 			sidebar: false,
 			right_sidebar: true,
 			right_sidebar_tab: RightSidebarTab::Mentions,
+			versions_scope: VersionsScope::Project,
 			sidebar_width: 300,
 			right_sidebar_width: 360,
 			theme: Theme::Dark,

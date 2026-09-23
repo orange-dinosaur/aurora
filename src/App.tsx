@@ -22,6 +22,7 @@ const DEFAULTS: Preferences = {
 	sidebar: true,
 	rightSidebar: false,
 	rightSidebarTab: "synopsis",
+	versionsScope: "document",
 	sidebarWidth: 248,
 	rightSidebarWidth: 300,
 	theme: "system",
@@ -145,6 +146,7 @@ function App() {
 				<Project
 					name={boot.project.name}
 					root={boot.project.root}
+					enclosingRepository={boot.project.enclosingRepository}
 					preferences={preferences}
 					onPreferences={save}
 					onSettings={() => setSettings(true)}

@@ -17,6 +17,7 @@ export type { FolderKind } from "./bindings/FolderKind";
 export type { FolderProgress } from "./bindings/FolderProgress";
 export type { Format } from "./bindings/Format";
 export type { FormatLayout } from "./bindings/FormatLayout";
+export type { Keep } from "./bindings/Keep";
 export type { LastProject } from "./bindings/LastProject";
 export type { ManuscriptFont } from "./bindings/ManuscriptFont";
 export type { OpenedProject as OpenProject } from "./bindings/OpenedProject";
@@ -29,6 +30,8 @@ export type { Role } from "./bindings/Role";
 export type { SprintUnit } from "./bindings/SprintUnit";
 export type { Theme } from "./bindings/Theme";
 export type { TrashEntry } from "./bindings/TrashEntry";
+export type { Version } from "./bindings/Version";
+export type { VersionsScope } from "./bindings/VersionsScope";
 export type { TreeNode };
 export type { Session as PastSession };
 
