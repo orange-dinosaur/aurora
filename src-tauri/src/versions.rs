@@ -417,6 +417,19 @@ pub struct Change {
 	pub moved: bool,
 	/// A document whose text differs. Never set on a folder.
 	pub edited: bool,
+	/// In a folder, the children in both versions that changed places. Empty on
+	/// a document.
+	pub reordered: Vec<Reorder>,
+}
+
+/// A child that moved within its folder, by name as the folder now holds it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Reorder {
+	pub name: String,
+	/// The child it now comes after, or none when it is first.
+	pub after: Option<String>,
 }
 
 /// Everything that differs between two versions.
@@ -437,14 +450,24 @@ struct Placed {
 	name: String,
 	parent: Option<Uuid>,
 	path: String,
+	children: Vec<Uuid>,
+}
+
+fn id_of(node: &Node) -> Uuid {
+	match node {
+		Node::Folder { id, .. } | Node::Document { id, .. } => *id,
+	}
 }
 
 fn place(nodes: &[Node], parent: Option<Uuid>, prefix: &str, placed: &mut Vec<(Uuid, Placed)>) {
 	for node in nodes {
-		let (id, name, folder) = match node {
-			Node::Folder { id, name, .. } => (*id, name, true),
-			Node::Document { id, name, .. } => (*id, name, false),
+		let (name, folder, children) = match node {
+			Node::Folder { name, children, .. } => {
+				(name, true, children.iter().map(id_of).collect())
+			}
+			Node::Document { name, .. } => (name, false, Vec::new()),
 		};
+		let id = id_of(node);
 		let path = format!("{prefix}{name}");
 		placed.push((
 			id,
@@ -453,6 +476,7 @@ fn place(nodes: &[Node], parent: Option<Uuid>, prefix: &str, placed: &mut Vec<(U
 				name: name.clone(),
 				parent,
 				path: path.clone(),
+				children,
 			},
 		));
 		if let Node::Folder { children, .. } = node {
@@ -473,6 +497,48 @@ fn side<'r>(repo: &'r Repository, version: Option<&str>) -> Result<(Tree<'r>, Ma
 	Ok((tree, manifest))
 }
 
+/// Which children changed places, each with the child it now follows. The
+/// longest run still in its old order stays put and everything else moved, so
+/// dragging one child names only that child. What was added, deleted or moved
+/// to another folder is reported on its own.
+fn reordered(then: &[Uuid], now: &[Uuid]) -> Vec<(Uuid, Option<Uuid>)> {
+	let was: Vec<Uuid> = then.iter().filter(|id| now.contains(id)).copied().collect();
+	let is: Vec<(usize, Uuid)> = now
+		.iter()
+		.enumerate()
+		.filter(|(_, id)| was.contains(id))
+		.map(|(at, id)| (at, *id))
+		.collect();
+	let old: Vec<usize> = is
+		.iter()
+		.map(|(_, id)| was.iter().position(|other| other == id).unwrap_or(0))
+		.collect();
+
+	// ponytail: quadratic longest increasing run, fine for a folder's children.
+	let mut length = vec![1; old.len()];
+	let mut from = vec![None; old.len()];
+	for i in 0..old.len() {
+		for j in 0..i {
+			if old[j] < old[i] && length[j] + 1 > length[i] {
+				length[i] = length[j] + 1;
+				from[i] = Some(j);
+			}
+		}
+	}
+	let mut stays = vec![false; old.len()];
+	let mut at = (0..old.len()).max_by_key(|&i| length[i]);
+	while let Some(i) = at {
+		stays[i] = true;
+		at = from[i];
+	}
+
+	is.iter()
+		.zip(stays)
+		.filter(|(_, stays)| !stays)
+		.map(|((at, id), _)| (*id, at.checked_sub(1).map(|before| now[before])))
+		.collect()
+}
+
 fn blob_at(tree: &Tree, path: &str) -> Option<Oid> {
 	tree.get_path(Path::new(path)).ok().map(|entry| entry.id())
 }
@@ -491,6 +557,7 @@ pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes>
 	let (was, is) = (placed(&old), placed(&new));
 	let before: HashMap<Uuid, &Placed> = was.iter().map(|(id, node)| (*id, node)).collect();
 	let after: HashSet<Uuid> = is.iter().map(|(id, _)| *id).collect();
+	let names: HashMap<Uuid, &String> = is.iter().map(|(id, node)| (*id, &node.name)).collect();
 
 	let mut nodes = Vec::new();
 	for (id, now) in &is {
@@ -506,8 +573,22 @@ pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes>
 				&& then.is_some_and(|then| {
 					blob_at(&old_tree, &then.path) != blob_at(&new_tree, &now.path)
 				}),
+			reordered: then.map_or_else(Vec::new, |then| {
+				reordered(&then.children, &now.children)
+					.into_iter()
+					.map(|(id, after)| Reorder {
+						name: names[&id].clone(),
+						after: after.map(|after| names[&after].clone()),
+					})
+					.collect()
+			}),
 		};
-		if then.is_none() || change.renamed || change.moved || change.edited {
+		if then.is_none()
+			|| change.renamed
+			|| change.moved
+			|| change.edited
+			|| !change.reordered.is_empty()
+		{
 			nodes.push(change);
 		}
 	}
@@ -520,6 +601,7 @@ pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes>
 			renamed: false,
 			moved: false,
 			edited: false,
+			reordered: Vec::new(),
 		});
 	}
 
@@ -1191,6 +1273,49 @@ mod tests {
 		assert!(change_of(&changes, moving).unwrap().moved);
 		assert!(change_of(&changes, doomed).unwrap().after.is_none());
 		assert!(change_of(&changes, fresh).unwrap().before.is_none());
+	}
+
+	#[test]
+	fn a_folder_reordered_is_one_change_and_an_addition_is_not_a_reorder() {
+		let (_parent, root, _, here, there) = novel();
+		let add = |parent: Uuid, name: &str| {
+			create_document(root.clone(), parent, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (_, _, last) = (add(here, "One"), add(here, "Two"), add(here, "Three"));
+		let start = kept(&root);
+
+		move_node(root.clone(), last, here, 0).unwrap();
+		add(there, "New");
+		let end = kept(&root);
+
+		let changes = changes(&root, Some(&start), Some(&end)).unwrap();
+		let folder = change_of(&changes, here).unwrap();
+		assert!(!folder.renamed && !folder.moved);
+		assert_eq!(folder.reordered.len(), 1);
+		assert!(folder.reordered[0].name.starts_with("Three"));
+		assert_eq!(folder.reordered[0].after, None);
+		assert!(change_of(&changes, last).is_none());
+		assert!(change_of(&changes, there).is_none());
+
+		// To the end, now after the last of the others.
+		let held = read_manifest(&root)
+			.unwrap()
+			.nodes
+			.iter()
+			.find_map(|node| match node {
+				Node::Folder { id, children, .. } if *id == here => Some(children.len()),
+				_ => None,
+			})
+			.unwrap();
+		move_node(root.clone(), last, here, held - 1).unwrap();
+		let later = kept(&root);
+		let changes = super::changes(&root, Some(&end), Some(&later)).unwrap();
+		let moved = &change_of(&changes, here).unwrap().reordered;
+		assert_eq!(moved.len(), 1);
+		assert!(moved[0].name.starts_with("Three"));
+		assert!(moved[0].after.as_deref().unwrap().starts_with("Two"));
 	}
 
 	#[test]

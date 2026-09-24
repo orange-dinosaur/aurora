@@ -2,7 +2,7 @@
 // first, so grouping only has to notice where one day gives way to the next.
 
 import { timeOfDay, when } from "../dates";
-import type { Version } from "../types";
+import type { Change, Version } from "../types";
 
 /** A day of versions, with the heading it is listed under. */
 export type VersionDay = {
@@ -83,4 +83,46 @@ export function detail(version: Version): string {
 			break;
 	}
 	return parts.filter((part) => part !== "").join(" · ");
+}
+
+function nameIn(path: string): string {
+	return path.split("/").slice(-1)[0].replace(/\.md$/, "");
+}
+
+/**
+ * A changed document or folder as a row: its name, and what happened to it,
+ * such as "Renamed from “Old”, moved to Chapter 3, edited".
+ */
+export function summary(change: Change): { name: string; what: string } {
+	const kind = change.folder ? "folder" : "document";
+	if (change.after === null) {
+		return { name: nameIn(change.before ?? ""), what: `Deleted ${kind}` };
+	}
+	const name = nameIn(change.after);
+	if (change.before === null) {
+		return { name, what: `New ${kind}` };
+	}
+
+	const parts: string[] = [];
+	if (change.renamed) {
+		parts.push(`renamed from “${nameIn(change.before)}”`);
+	}
+	if (change.moved) {
+		const parent = change.after.split("/").slice(-2, -1)[0];
+		parts.push(
+			parent === undefined ? "moved to the top" : `moved to ${parent}`,
+		);
+	}
+	if (change.reordered.length > 0) {
+		const moves = change.reordered.map(
+			({ name, after }) =>
+				`“${nameIn(name)}” moved ${after === null ? "to the top" : `after “${nameIn(after)}”`}`,
+		);
+		parts.push(`order changed: ${moves.join(", ")}`);
+	}
+	if (change.edited) {
+		parts.push("edited");
+	}
+	const what = parts.join(", ");
+	return { name, what: what.charAt(0).toUpperCase() + what.slice(1) };
 }

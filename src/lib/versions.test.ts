@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { timeOfDay, when } from "../dates";
-import type { Version } from "../types";
-import { byDay, counts, detail, duration } from "./versions";
+import type { Change, Version } from "../types";
+import { byDay, counts, detail, duration, summary } from "./versions";
 
 function version(at: Date, rest: Partial<Version> = {}): Version {
 	return {
@@ -97,5 +97,72 @@ describe("detail", () => {
 	it("credits a commit made outside Aurora to its author", () => {
 		const foreign = version(at, { kind: null, author: "Ines" });
 		expect(detail(foreign)).toBe(`${time} · Ines`);
+	});
+});
+
+describe("summary", () => {
+	function change(rest: Partial<Change>): Change {
+		return {
+			id: "id",
+			folder: false,
+			before: "Manuscript/Chapter 1/Scene.md",
+			after: "Manuscript/Chapter 1/Scene.md",
+			renamed: false,
+			moved: false,
+			edited: false,
+			reordered: [],
+			...rest,
+		};
+	}
+
+	it("names a new or deleted document or folder by where it is", () => {
+		expect(summary(change({ before: null }))).toEqual({
+			name: "Scene",
+			what: "New document",
+		});
+		expect(
+			summary(
+				change({
+					folder: true,
+					after: null,
+					before: "Manuscript/Part",
+				}),
+			),
+		).toEqual({ name: "Part", what: "Deleted folder" });
+	});
+
+	it("lists every change to one document in one line", () => {
+		expect(
+			summary(
+				change({
+					before: "Manuscript/Chapter 1/Old.md",
+					after: "Manuscript/Chapter 3/Scene.md",
+					renamed: true,
+					moved: true,
+					edited: true,
+				}),
+			),
+		).toEqual({
+			name: "Scene",
+			what: "Renamed from “Old”, moved to Chapter 3, edited",
+		});
+	});
+
+	it("says where each document moved within a folder", () => {
+		expect(
+			summary(
+				change({
+					folder: true,
+					before: "Manuscript/Chapter 1",
+					after: "Manuscript/Chapter 1",
+					reordered: [
+						{ name: "Three.md", after: null },
+						{ name: "One.md", after: "Two.md" },
+					],
+				}),
+			).what,
+		).toBe(
+			"Order changed: “Three” moved to the top, “One” moved after “Two”",
+		);
 	});
 });

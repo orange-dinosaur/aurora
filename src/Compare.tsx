@@ -1,5 +1,6 @@
-// The compare view: one document's history down the left, and the chosen
-// version beside the text as it is now, with what differs washed in.
+// The compare view: the history down the left, and the chosen version beside
+// the text as it is now, with what differs washed in. For the whole project,
+// what changed is listed above, and an edited document is picked from it.
 
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -25,26 +26,27 @@ import {
 	type Run,
 	tally,
 } from "./lib/compare";
-import { byDay, counts, detail } from "./lib/versions";
+import { byDay, counts, detail, summary } from "./lib/versions";
 import { timeOfDay } from "./dates";
-import type { ProjectDocument, Version } from "./types";
+import type { Changes, ProjectDocument, Version, VersionsScope } from "./types";
 import { prose, words } from "./words";
 
 type Props = {
 	root: string;
-	document: ProjectDocument;
+	/** The open document, which This document compares. */
+	document: ProjectDocument | null;
+	scope: VersionsScope;
 	/** The version the writer asked to compare, which starts as A. */
 	version: string;
-	/** The document's text on screen, which is B. */
-	now: string;
 	fontSize: number;
 	lineHeight: number;
+	onScope: (scope: VersionsScope) => void;
 	onBack: () => void;
 };
 
-// A version's text once read. Null text is a version from before the
-// document existed.
-type Then = { text: string | null };
+// A document's text at A and on disk, which is B. Null `then` is a version
+// from before the document existed.
+type Texts = { then: string | null; now: string };
 
 type Field = { index: number; text: string };
 
@@ -56,15 +58,21 @@ type Pair = [number, number];
 export default function Compare({
 	root,
 	document,
+	scope,
 	version,
-	now,
 	fontSize,
 	lineHeight,
+	onScope,
 	onBack,
 }: Props) {
+	const open = scope === "document" ? document : null;
 	const [versions, setVersions] = useState<Version[]>([]);
 	const [chosen, setChosen] = useState(version);
-	const [then, setThen] = useState<Then | null>(null);
+	const [changes, setChanges] = useState<Changes | null>(null);
+	// The edited document shown in the columns for the whole project.
+	const [picked, setPicked] = useState<string | null>(null);
+	const shown = open === null ? picked : open.id;
+	const [texts, setTexts] = useState<Texts | null>(null);
 	const [current, setCurrent] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [ticks, setTicks] = useState<Tick[]>([]);
@@ -78,7 +86,10 @@ export default function Compare({
 
 	useEffect(() => {
 		let live = true;
-		invoke<Version[]>("list_versions", { root, document: document.id })
+		invoke<Version[]>("list_versions", {
+			root,
+			document: open?.id ?? null,
+		})
 			.then((listed) => {
 				if (live) {
 					setVersions(listed);
@@ -92,18 +103,55 @@ export default function Compare({
 		return () => {
 			live = false;
 		};
-	}, [root, document.id]);
+	}, [root, open?.id]);
+
+	const whole = open === null;
+	useEffect(() => {
+		if (!whole) {
+			return;
+		}
+		let live = true;
+		invoke<Changes>("version_changes", { root, a: chosen, b: null })
+			.then((found) => {
+				if (live) {
+					setChanges(found);
+					const edited = found.nodes
+						.filter((change) => change.edited)
+						.map((change) => change.id);
+					setPicked((was) =>
+						was !== null && edited.includes(was)
+							? was
+							: (edited[0] ?? null),
+					);
+				}
+			})
+			.catch((reason: unknown) => {
+				if (live) {
+					setError(failure(reason).message);
+				}
+			});
+		return () => {
+			live = false;
+		};
+	}, [root, whole, chosen]);
 
 	useEffect(() => {
+		if (shown === null) {
+			setTexts(null);
+			return;
+		}
 		let live = true;
-		invoke<string | null>("version_text", {
-			root,
-			version: chosen,
-			id: document.id,
-		})
-			.then((text) => {
+		Promise.all([
+			invoke<string | null>("version_text", {
+				root,
+				version: chosen,
+				id: shown,
+			}),
+			invoke<string>("read_document", { root, id: shown }),
+		])
+			.then(([then, now]) => {
 				if (live) {
-					setThen({ text });
+					setTexts({ then, now });
 					setCurrent(null);
 					setError(null);
 				}
@@ -116,9 +164,10 @@ export default function Compare({
 		return () => {
 			live = false;
 		};
-	}, [root, document.id, chosen]);
+	}, [root, shown, chosen]);
 
-	const before = then?.text ?? "";
+	const before = texts?.then ?? "";
+	const now = texts?.now ?? "";
 	const found = useMemo(() => differences(before, now), [before, now]);
 	const sides = useMemo(
 		() => ({
@@ -278,11 +327,38 @@ export default function Compare({
 			<div className="compare__body">
 				<nav className="compare__history" aria-label="Versions">
 					<h2 className="compare__title">
-						Versions of {document.title}
+						{open === null
+							? "Versions of the whole project"
+							: `Versions of ${open.title}`}
 					</h2>
-					<p className="compare__trail">
-						{document.trail.join(" · ")}
-					</p>
+					{open !== null && (
+						<p className="compare__trail">
+							{open.trail.join(" · ")}
+						</p>
+					)}
+					<div
+						className="versions__scope compare__scope"
+						role="group"
+						aria-label="Versions of"
+					>
+						<button
+							type="button"
+							className="versions__scope-button"
+							aria-pressed={open !== null}
+							disabled={document === null}
+							onClick={() => onScope("document")}
+						>
+							This document
+						</button>
+						<button
+							type="button"
+							className="versions__scope-button"
+							aria-pressed={open === null}
+							onClick={() => onScope("project")}
+						>
+							Whole project
+						</button>
+					</div>
 
 					{days.map((day, index) => (
 						<section key={day.heading} className="versions__day">
@@ -318,6 +394,34 @@ export default function Compare({
 				</nav>
 
 				<div className="compare__main">
+					{whole && changes !== null && (
+						<ul
+							className="compare__changes"
+							aria-label="What changed"
+						>
+							{changes.book && (
+								<Change what="Book details changed" />
+							)}
+							{changes.cover && <Change what="Cover changed" />}
+							{changes.nodes.map((change) => (
+								<Change
+									key={change.id}
+									{...summary(change)}
+									picked={
+										change.edited
+											? change.id === picked
+											: null
+									}
+									onPick={() => setPicked(change.id)}
+								/>
+							))}
+							{changes.nodes.length === 0 &&
+								!changes.book &&
+								!changes.cover && (
+									<Change what="Nothing has changed since this version" />
+								)}
+						</ul>
+					)}
 					<div
 						className="compare__columns"
 						style={
@@ -339,7 +443,7 @@ export default function Compare({
 							fields={fieldsOf(before, "then")}
 							body={sides.a}
 							current={current}
-							missing={then !== null && then.text === null}
+							missing={texts !== null && texts.then === null}
 							scroller={left}
 							onScroll={(event) =>
 								scrolled(
@@ -492,6 +596,45 @@ function Row({
 				</span>
 				{chosen && <span className="compare__letter">A</span>}
 			</button>
+		</li>
+	);
+}
+
+// A row of what changed. Only an edited document has words to compare, so
+// only it can be picked; `picked` is null for the rest.
+function Change({
+	name,
+	what,
+	picked = null,
+	onPick,
+}: {
+	name?: string;
+	what: string;
+	picked?: boolean | null;
+	onPick?: () => void;
+}) {
+	const body = (
+		<>
+			{name !== undefined && (
+				<span className="compare__change-name">{name}</span>
+			)}
+			<span className="compare__what">{what}</span>
+		</>
+	);
+	return (
+		<li className="compare__change">
+			{picked === null ? (
+				<div className="compare__pick">{body}</div>
+			) : (
+				<button
+					type="button"
+					className="compare__pick"
+					aria-pressed={picked}
+					onClick={onPick}
+				>
+					{body}
+				</button>
+			)}
 		</li>
 	);
 }

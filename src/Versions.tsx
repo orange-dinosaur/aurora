@@ -219,6 +219,7 @@ export default function Versions({
 									}
 									onUnname={() => unname(version)}
 									onCompare={
+										scope === "document" &&
 										document === null
 											? null
 											: () => onCompare(version)

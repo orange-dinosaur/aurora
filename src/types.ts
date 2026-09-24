@@ -30,6 +30,8 @@ export type { Role } from "./bindings/Role";
 export type { SprintUnit } from "./bindings/SprintUnit";
 export type { Theme } from "./bindings/Theme";
 export type { TrashEntry } from "./bindings/TrashEntry";
+export type { Change } from "./bindings/Change";
+export type { Changes } from "./bindings/Changes";
 export type { Version } from "./bindings/Version";
 export type { VersionsScope } from "./bindings/VersionsScope";
 export type { TreeNode };

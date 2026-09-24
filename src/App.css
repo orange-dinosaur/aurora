@@ -2329,6 +2329,60 @@ body.dragging * {
 	cursor: default;
 }
 
+.compare__scope {
+	margin: 0.75rem 0;
+}
+
+/* Capped so the columns keep most of the height; the rest scrolls. */
+.compare__changes {
+	flex: none;
+	max-height: 30%;
+	margin: 0;
+	padding: 0.5rem;
+	overflow-y: auto;
+	list-style: none;
+	border-bottom: 1px solid var(--border);
+}
+
+.compare__pick {
+	display: flex;
+	gap: 0.75rem;
+	align-items: baseline;
+	width: 100%;
+	padding: 0.3rem 0.75rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	text-align: left;
+	color: var(--text-faint);
+	background: none;
+	border: none;
+	border-radius: 4px;
+}
+
+button.compare__pick {
+	cursor: pointer;
+}
+
+button.compare__pick:hover {
+	background: var(--bg-hover);
+}
+
+button.compare__pick[aria-pressed="true"] {
+	background: var(--bg-card);
+	box-shadow: inset 0 0 0 1px var(--border);
+}
+
+button.compare__pick:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+.compare__change-name {
+	flex: none;
+	font-weight: 600;
+	color: var(--text);
+}
+
 .compare__letter {
 	flex: none;
 	margin-left: auto;

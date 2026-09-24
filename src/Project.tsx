@@ -302,13 +302,9 @@ export default function Project({
 	// version is kept, so the Stats and Versions tabs read them again.
 	const [logged, setLogged] = useState(0);
 
-	// The compare view, which takes the whole window while it is open. It holds
-	// the text as it was on screen, since nothing can be typed while it shows.
-	const [comparing, setComparing] = useState<{
-		document: ProjectDocument;
-		version: string;
-		now: string;
-	} | null>(null);
+	// The version the compare view opened on. It takes the whole window and
+	// reads now from disk, so every editor is written before it opens.
+	const [comparing, setComparing] = useState<string | null>(null);
 
 	// Why a folder's target was refused, when one was.
 	const [aiming, setAiming] = useState<string | null>(null);
@@ -1250,11 +1246,16 @@ export default function Project({
 			{comparing !== null && (
 				<Compare
 					root={root}
-					document={comparing.document}
-					version={comparing.version}
-					now={comparing.now}
+					document={
+						active?.kind === "document" ? active.document : null
+					}
+					scope={preferences.versionsScope}
+					version={comparing}
 					fontSize={preferences.fontSize}
 					lineHeight={preferences.lineHeight}
+					onScope={(versionsScope) =>
+						onPreferences({ ...preferences, versionsScope })
+					}
 					onBack={() => setComparing(null)}
 				/>
 			)}
@@ -1549,18 +1550,9 @@ export default function Project({
 						}
 						enclosing={enclosingRepository}
 						onBeforeKeep={writeAll}
-						onCompare={(version) => {
-							if (
-								active?.kind === "document" &&
-								active.content.kind === "ready"
-							) {
-								setComparing({
-									document: active.document,
-									version: version.id,
-									now: active.content.text,
-								});
-							}
-						}}
+						onCompare={(version) =>
+							void writeAll().then(() => setComparing(version.id))
+						}
 						onOpen={(document, seed) =>
 							void openDocument(document, seed)
 						}
