@@ -70,10 +70,11 @@ export function index(moving: Spot, target: Spot, landing: Landing): number {
  * rules and refuses anything else; this is so a drop that would be turned down
  * never draws a cursor.
  *
- * Inside a folder is the only way a node changes hands, and `mayHold` says
- * which folders will have it. Beside a row is a reorder, so it means something
- * only among the nodes the dragged one already sits with: to send it elsewhere,
- * aim at the folder itself.
+ * Inside a folder, `mayHold` says which folders will have the node. Beside a
+ * row, a document lands in whatever folder holds that row. A folder lands
+ * beside only what it already sits with, since whether the new parent would
+ * hold it turns on that parent's kind, which a row does not carry: to send a
+ * folder elsewhere, aim at the folder itself.
  */
 export function accepts(moving: Spot, target: Spot, landing: Landing): boolean {
 	if (moving.id === target.id || target.within) {
@@ -93,10 +94,10 @@ export function accepts(moving: Spot, target: Spot, landing: Landing): boolean {
 		);
 	}
 
-	return (
-		moving.group === target.group &&
-		index(moving, target, landing) !== moving.at
-	);
+	if (moving.group !== target.group) {
+		return !moving.folder;
+	}
+	return index(moving, target, landing) !== moving.at;
 }
 
 /** How far along the row the cursor is, as a fraction of its length. */

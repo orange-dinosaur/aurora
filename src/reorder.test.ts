@@ -75,9 +75,22 @@ describe("what a row will take", () => {
 		expect(accepts(scene, chapter, "into")).toBe(false);
 	});
 
-	test("a row lands beside only what it sits with", () => {
+	test("a document lands beside a row in another folder", () => {
 		const scene = spot({ id: "scene", at: 0, group: "chapter" });
-		expect(accepts(scene, part, "before")).toBe(false);
+		const there = spot({ id: "there", at: 1, group: "other" });
+		expect(accepts(scene, there, "before")).toBe(true);
+		expect(accepts(scene, there, "after")).toBe(true);
+	});
+
+	test("a folder lands beside only what it sits with", () => {
+		const elsewhere = spot({
+			id: "elsewhere",
+			at: 0,
+			group: "part",
+			kind: "chapter",
+			folder: true,
+		});
+		expect(accepts(chapter, elsewhere, "after")).toBe(false);
 	});
 
 	test("a drop where it already is is not a move", () => {
