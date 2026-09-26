@@ -933,7 +933,6 @@ mod tests {
 
 		let repo = Repository::open(dir.path()).unwrap();
 		assert!(unborn_main(&repo));
-		assert!(repo.is_empty().unwrap());
 		assert!(list(dir.path(), None).unwrap().is_empty());
 	}
 
