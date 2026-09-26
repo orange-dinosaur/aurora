@@ -36,11 +36,9 @@ import type { OutlineHandle } from "./lib/outline";
 // `changed` under another name: this file already has one of its own.
 import {
 	changed as asChange,
-	closingVersion,
 	ended,
 	gapOf,
 	recorded,
-	sessionVersion,
 	start,
 	stop,
 	tick,
@@ -298,8 +296,8 @@ export default function Project({
 	// above stays the one the model is handed.
 	const [deliberate, setDeliberate] = useState<Running | null>(null);
 
-	// Bumped every time a closed session reaches the history file and its
-	// version is kept, so the Stats and Versions tabs read them again.
+	// Bumped every time a closed session reaches the history file, so the
+	// Stats tab reads it again.
 	const [logged, setLogged] = useState(0);
 
 	// The version the compare view opened on. It takes the whole window and
@@ -322,34 +320,20 @@ export default function Project({
 	}, []);
 
 	// The layers the model left behind are what runs from here, and whatever it
-	// closed goes to the history file and keeps a version. Leaving keeps one
-	// closing version instead, even with nothing closed. Nothing reports a
-	// failure: both are written behind the writer's back and there is nowhere
-	// to say so.
-	async function keep(step: Step, leaving = false) {
+	// closed goes to the history file. Nothing reports a failure: it is written
+	// behind the writer's back and there is nowhere to say so.
+	async function keep(step: Step) {
 		sessions.current = step.sessions;
 		setDeliberate(step.sessions.deliberate);
-		const written = Promise.allSettled(
+		if (step.closed.length === 0) {
+			return;
+		}
+
+		await Promise.allSettled(
 			step.closed.map((session) =>
 				invoke("append_session", { root, session: recorded(session) }),
 			),
 		);
-		const versions = leaving
-			? [closingVersion(step.closed)]
-			: step.closed.map(sessionVersion);
-		if (versions.length === 0) {
-			await written;
-			return;
-		}
-
-		await writeOpen();
-		// One at a time, since each version stages the whole project.
-		for (const version of versions) {
-			await invoke("keep_version", { root, keep: version }).catch(
-				() => {},
-			);
-		}
-		await written;
 		setLogged((times) => times + 1);
 	}
 
@@ -458,26 +442,15 @@ export default function Project({
 		);
 	}
 
-	// Writes the same tabs without cancelling their timers, which can hold a
-	// keystroke newer than these tabs and will write it after. A missing file
-	// is left to its timer, so it is put back only once.
-	async function writeOpen() {
-		await Promise.allSettled(
-			unwritten()
-				.filter(([tab]) => tab.save.kind !== "missing")
-				.map(([tab, text]) => put(tab, text)),
-		);
-	}
-
 	async function flush() {
 		await writeAll();
 
 		// A session that had already gone quiet closed as usual. The one the
 		// writer is in the middle of is worth as much as the text they were
-		// typing into it, and leaving ends it with a closing version.
+		// typing into it, and leaving ends it.
 		const now = Date.now();
 		await keep(tick(sessions.current, now, words.current, idle.current));
-		await keep(ended(sessions.current, now, words.current), true);
+		await keep(ended(sessions.current, now, words.current));
 	}
 
 	// Quitting must not lose what the debounce has not written yet. Tauri waits
