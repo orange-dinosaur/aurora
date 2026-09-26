@@ -1516,6 +1516,35 @@ pub fn move_node(root: PathBuf, id: Uuid, parent_id: Uuid, index: usize) -> Resu
 	write_manifest(&root, &mut manifest)
 }
 
+/// Writes a document the manifest no longer has back into a folder, under the
+/// id and name it had, so anything that still holds the id finds it again.
+pub(crate) fn recreate_document(
+	root: &Path,
+	parent_id: Uuid,
+	index: usize,
+	node: Node,
+	text: &[u8],
+) -> Result<()> {
+	let mut manifest = read_manifest(root)?;
+	let into = tree::path(&manifest.nodes, parent_id).ok_or(Error::UnknownFolder)?;
+	let to = document_path(&manifest, root, &format!("{into}/{}", node.name()))?;
+	if to.exists() {
+		return Err(Error::DocumentExists);
+	}
+	let folder = to.parent().ok_or(Error::BadDocumentPath)?;
+	fs::create_dir_all(folder)?;
+	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+
+	write_atomic(&to, text)?;
+	let Some(Node::Folder { children, .. }) = tree::find_mut(&mut manifest.nodes, parent_id) else {
+		return Err(Error::UnknownFolder);
+	};
+	children.insert(index.min(children.len()), node);
+	write_manifest(root, &mut manifest)
+}
+
 /// Reads a trash file's name back: the moment it was deleted, and the name it
 /// had before that. Anything that is not a stamp Aurora wrote is not one.
 fn unstamp(name: &str) -> Option<(OffsetDateTime, &str)> {
@@ -1598,7 +1627,7 @@ fn gather_trash(dir: &Path, at: &str, section: &str, found: &mut Vec<TrashEntry>
 		// A symlink is neither a document nor a folder, here as anywhere else.
 		let kind = entry.file_type()?;
 		let directory = kind.is_dir();
-		if !directory && !(kind.is_file() && is_markdown(name)) {
+		if !(directory || (kind.is_file() && is_markdown(name))) {
 			continue;
 		}
 

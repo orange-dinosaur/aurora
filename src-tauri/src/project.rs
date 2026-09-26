@@ -1056,7 +1056,7 @@ pub fn write_book(root: PathBuf, book: Book) -> Result<()> {
 
 /// What a cover copy can be called. The extension is the one the writer's file
 /// had, so the copy is what it claims to be.
-const COVER_NAMES: [&str; 2] = ["cover.png", "cover.jpg"];
+pub(crate) const COVER_NAMES: [&str; 2] = ["cover.png", "cover.jpg"];
 
 /// Takes the image the writer chose into the project and records it on the
 /// book. The project keeps its own copy beside the manifest, so the cover
@@ -1167,7 +1167,7 @@ fn same_file(one: &Path, other: &Path) -> bool {
 
 /// Deletes a file if it is there. A file that was already gone is the state
 /// the caller wanted, not a failure.
-fn remove_if_there(path: &Path) -> Result<()> {
+pub(crate) fn remove_if_there(path: &Path) -> Result<()> {
 	match fs::remove_file(path) {
 		Err(e) if e.kind() != io::ErrorKind::NotFound => Err(Error::Io(e)),
 		_ => Ok(()),

@@ -4,17 +4,23 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
+use git2::build::CheckoutBuilder;
 use git2::{Commit, ErrorCode, IndexAddOption, Oid, Repository, Signature, Sort, Tree};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::document::{TRASH_DIR, body};
+use crate::document::{
+	TRASH_DIR, body, delete_document, move_node, recreate_document, rename_document, write_document,
+};
 use crate::history::HISTORY_FILE;
-use crate::project::{Book, Error, MANIFEST_FILE, Manifest, Result, read_manifest};
-use crate::tree::Node;
+use crate::project::{
+	Book, COVER_NAMES, Error, MANIFEST_FILE, Manifest, Result, read_manifest, remove_if_there,
+	write_atomic, write_book,
+};
+use crate::tree::{self, Node};
 
 const FIRST_VERSION: &str = "Versions begin";
 const AUTHOR_EMAIL: &str = "aurora@localhost";
@@ -700,6 +706,133 @@ pub fn version_text(root: PathBuf, version: String, id: Uuid) -> Result<Option<S
 	text(&root, &version, id)
 }
 
+/// Keeps the project as it stands, so whatever is put back can be undone.
+/// `label` is the name or time of the version being put back.
+fn keep_before(root: &Path, label: String) -> Result<Repository> {
+	let author = author(root)?;
+	keep(root, &Keep::BeforePuttingBack { label }, &author)?;
+	Ok(Repository::open(root)?)
+}
+
+/// Where a version had a document: the nearest of its old folders the project
+/// still has, and its place there, after the document it used to follow if
+/// that is in the same folder now.
+fn destination(then: &Manifest, now: &Manifest, id: Uuid) -> Result<(Uuid, usize)> {
+	let trail = tree::trail(&then.nodes, id).ok_or(Error::UnknownDocument)?;
+	let parent = trail
+		.iter()
+		.rev()
+		.skip(1)
+		.map(|node| node.id())
+		.find(|folder| tree::children(&now.nodes, *folder).is_some())
+		.ok_or(Error::UnknownFolder)?;
+	let siblings = tree::parent(&then.nodes, id)
+		.and_then(|above| tree::children(&then.nodes, above.id()))
+		.unwrap_or_default();
+	let children = tree::children(&now.nodes, parent).unwrap_or_default();
+	let at = siblings
+		.iter()
+		.position(|node| node.id() == id)
+		.unwrap_or(0);
+	let index = siblings[..at]
+		.iter()
+		.rev()
+		.find_map(|sibling| children.iter().position(|c| c.id() == sibling.id()))
+		.map_or(0, |before| before + 1);
+	Ok((parent, index))
+}
+
+/// Puts one document back as a version had it: its text, its name and its
+/// folder. One the version did not have goes to the Trash, and one it had
+/// that has since been deleted comes back under its old id.
+#[tauri::command]
+pub fn put_back_document(root: PathBuf, version: String, id: Uuid, label: String) -> Result<()> {
+	let repo = keep_before(&root, label)?;
+	let (files, then) = side(&repo, Some(&version))?;
+	let now = read_manifest(&root)?;
+	let Some(node) = tree::find(&then.nodes, id).filter(|n| matches!(n, Node::Document { .. }))
+	else {
+		return match tree::find(&now.nodes, id) {
+			Some(Node::Document { .. }) => delete_document(root, id),
+			_ => Err(Error::UnknownDocument),
+		};
+	};
+
+	let path = tree::path(&then.nodes, id).ok_or(Error::UnknownDocument)?;
+	let blob = blob_at(&files, &path).ok_or(Error::DocumentMissing)?;
+	let text = repo.find_blob(blob)?.content().to_vec();
+	let (parent, index) = destination(&then, &now, id)?;
+	match tree::find(&now.nodes, id) {
+		None => recreate_document(&root, parent, index, node.clone(), &text),
+		Some(Node::Folder { .. }) => Err(Error::UnknownDocument),
+		Some(Node::Document { name, .. }) => {
+			if name != node.name() {
+				rename_document(root.clone(), id, node.name().to_owned())?;
+			}
+			if tree::parent(&now.nodes, id).map(Node::id) != Some(parent) {
+				move_node(root.clone(), id, parent, index)?;
+			}
+			let text = String::from_utf8(text).map_err(|_| Error::NotText)?;
+			write_document(root, id, text)
+		}
+	}
+}
+
+/// Puts back the book's details and its cover as a version had them.
+#[tauri::command]
+pub fn put_back_book(root: PathBuf, version: String, label: String) -> Result<()> {
+	let repo = keep_before(&root, label)?;
+	let (files, then) = side(&repo, Some(&version))?;
+	for name in COVER_NAMES {
+		match blob_at(&files, name).filter(|_| then.book.cover == name) {
+			Some(blob) => write_atomic(&root.join(name), repo.find_blob(blob)?.content())?,
+			None => remove_if_there(&root.join(name))?,
+		}
+	}
+	write_book(root, then.book)
+}
+
+/// Puts the whole project back as a version had it. Stats and the Trash are
+/// never part of a version, so they stay as they are.
+#[tauri::command]
+pub fn put_back_everything(root: PathBuf, version: String, label: String) -> Result<()> {
+	let repo = keep_before(&root, label)?;
+	let (files, then) = side(&repo, Some(&version))?;
+	let folders = |manifest: &Manifest| {
+		let mut placed = Vec::new();
+		place(&manifest.nodes, None, "", &mut placed);
+		placed
+			.into_iter()
+			.filter(|(_, node)| node.folder)
+			.map(|(_, node)| node.path)
+			// The manifest is a file the writer can edit.
+			.filter(|path| {
+				Path::new(path)
+					.components()
+					.all(|c| matches!(c, Component::Normal(_)))
+			})
+			.collect::<Vec<_>>()
+	};
+	let was = folders(&read_manifest(&root)?);
+
+	// The version just kept holds every file, so a forced checkout removes
+	// what the older version did not have and leaves ignored files alone.
+	repo.checkout_tree(files.as_object(), Some(CheckoutBuilder::new().force()))?;
+
+	// Git keeps files, not folders, so empty ones are made and taken away here.
+	let is = folders(&then);
+	let mut gone: Vec<&String> = was.iter().filter(|path| !is.contains(path)).collect();
+	gone.sort_by_key(|path| std::cmp::Reverse(path.len()));
+	for path in gone {
+		// Only an empty folder goes, so a failure leaves nothing lost.
+		let _ = fs::remove_dir(root.join(path));
+	}
+	for path in &is {
+		fs::create_dir_all(root.join(path))?;
+	}
+	Ok(())
+}
+
 fn enclosing(root: &Path, repo: &Repository) -> Result<Option<PathBuf>> {
 	if repo
 		.config()?
@@ -721,8 +854,8 @@ fn enclosing(root: &Path, repo: &Repository) -> Result<Option<PathBuf>> {
 mod tests {
 	use super::*;
 	use crate::document::{
-		create_document, create_folder, delete_document, delete_folder, move_node, rename_document,
-		rename_folder, write_document,
+		create_document, create_folder, delete_document, delete_folder, list_trash, move_node,
+		read_document, rename_document, rename_folder, write_document,
 	};
 	use crate::project::{Format, create, set_cover, write_book};
 	use crate::tree::Node;
@@ -1376,5 +1509,119 @@ mod tests {
 		assert_eq!(body_of(&first).as_deref(), Some("First"));
 		assert_eq!(body_of(&second).as_deref(), Some("Second"));
 		assert_eq!(text(&root, &first, Uuid::new_v4()).unwrap(), None);
+	}
+
+	fn body_now(root: &Path, id: Uuid) -> String {
+		body(&read_document(root.to_path_buf(), id).unwrap()).to_owned()
+	}
+
+	#[test]
+	fn a_document_comes_back_with_its_text_name_and_folder() {
+		let (_parent, root, seeded, _, there) = novel();
+		write_document(root.clone(), seeded, "First".to_owned()).unwrap();
+		let first = kept(&root);
+		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
+		move_node(root.clone(), seeded, there, 0).unwrap();
+		write_document(root.clone(), seeded, "Second".to_owned()).unwrap();
+
+		put_back_document(root.clone(), first.clone(), seeded, "First".to_owned()).unwrap();
+
+		assert!(changes(&root, Some(&first), None).unwrap().nodes.is_empty());
+		assert_eq!(body_now(&root, seeded), "First");
+		let before = list(&root, None).unwrap().remove(0);
+		assert_eq!(before.kind, Some(Kind::BeforePuttingBack));
+		assert_eq!(before.name.as_deref(), Some("Before putting back “First”"));
+		let then = text(&root, &before.id, seeded).unwrap().unwrap();
+		assert_eq!(body(&then), "Second");
+	}
+
+	#[test]
+	fn a_deleted_document_returns_under_its_id_and_a_newer_one_is_trashed() {
+		let (_parent, root, _, here, _) = novel();
+		let add = |name: &str| {
+			create_document(root.clone(), here, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (_, doomed, _) = (add("One"), add("Doomed"), add("Three"));
+		write_document(root.clone(), doomed, "Kept".to_owned()).unwrap();
+		let start = kept(&root);
+		delete_document(root.clone(), doomed).unwrap();
+		let newer = add("Newer");
+
+		put_back_document(root.clone(), start.clone(), doomed, "start".to_owned()).unwrap();
+		put_back_document(root.clone(), start.clone(), newer, "start".to_owned()).unwrap();
+
+		// Nothing differs, so the id and the place among the others are back.
+		assert!(changes(&root, Some(&start), None).unwrap().nodes.is_empty());
+		assert_eq!(body_now(&root, doomed), "Kept");
+		assert_eq!(list_trash(root.clone()).unwrap().len(), 2);
+	}
+
+	#[test]
+	fn the_book_and_its_cover_come_back() {
+		let (_parent, root, ..) = novel();
+		let png = root.parent().unwrap().join("cover.png");
+		fs::write(&png, b"\x89PNG\r\n\x1a\none").unwrap();
+		set_cover(root.clone(), png).unwrap();
+		let start = kept(&root);
+		let mut book = read_manifest(&root).unwrap().book;
+		book.title = "Odyssey".to_owned();
+		write_book(root.clone(), book).unwrap();
+		let jpeg = root.parent().unwrap().join("cover.jpg");
+		fs::write(&jpeg, b"\xff\xd8\xff").unwrap();
+		set_cover(root.clone(), jpeg).unwrap();
+
+		put_back_book(root.clone(), start.clone(), "start".to_owned()).unwrap();
+
+		let changes = changes(&root, Some(&start), None).unwrap();
+		assert!(!changes.book && !changes.cover);
+		assert!(root.join("cover.png").is_file());
+		assert!(!root.join("cover.jpg").exists());
+		assert_eq!(
+			list(&root, None).unwrap()[0].kind,
+			Some(Kind::BeforePuttingBack)
+		);
+	}
+
+	#[test]
+	fn everything_comes_back_but_stats_and_the_trash() {
+		let (_parent, root, seeded, here, there) = novel();
+		let folder = |parent: Uuid, name: &str| {
+			create_folder(root.clone(), parent, name.to_owned(), None)
+				.unwrap()
+				.id()
+		};
+		let path_of = |id: Uuid| tree::path(&read_manifest(&root).unwrap().nodes, id).unwrap();
+		let empty = folder(here, "Empty");
+		let empty_path = path_of(empty);
+		write_document(root.clone(), seeded, "First".to_owned()).unwrap();
+		let start = kept(&root);
+
+		write_document(root.clone(), seeded, "Second".to_owned()).unwrap();
+		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
+		delete_folder(root.clone(), empty).unwrap();
+		let later = folder(there, "Later");
+		create_document(root.clone(), later, "Inside".to_owned()).unwrap();
+		let later_path = path_of(later);
+		fs::write(root.join(HISTORY_FILE), "[]").unwrap();
+
+		put_back_everything(root.clone(), start.clone(), "start".to_owned()).unwrap();
+
+		assert!(changes(&root, Some(&start), None).unwrap().nodes.is_empty());
+		assert_eq!(body_now(&root, seeded), "First");
+		assert!(root.join(&empty_path).is_dir());
+		assert!(!root.join(&later_path).exists());
+		assert_eq!(fs::read_to_string(root.join(HISTORY_FILE)).unwrap(), "[]");
+		assert_eq!(list_trash(root.clone()).unwrap().len(), 1);
+		let before = list(&root, None).unwrap().remove(0);
+		assert_eq!(before.kind, Some(Kind::BeforePuttingBack));
+		assert!(
+			changes(&root, Some(&before.id), None)
+				.unwrap()
+				.nodes
+				.iter()
+				.any(|change| change.id == later && change.after.is_none())
+		);
 	}
 }
