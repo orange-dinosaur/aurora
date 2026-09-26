@@ -888,7 +888,7 @@ fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Resu
 	// opens under the name the writer gave it.
 	let manifest = refresh(root)?;
 	// Every way into a project comes through here, a new one included.
-	let enclosing_repository = versions::ensure_repository(root, &manifest.book.author)?;
+	let enclosing_repository = versions::ensure_repository(root)?;
 	let mut store = store::load(store_path)?;
 	store.remember(manifest.name.clone(), root.to_path_buf(), at);
 	store::save(store_path, &store)?;

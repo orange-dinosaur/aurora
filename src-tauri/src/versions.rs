@@ -7,7 +7,10 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 
 use git2::build::CheckoutBuilder;
-use git2::{Commit, ErrorCode, IndexAddOption, Oid, Repository, Signature, Sort, Tree};
+use git2::{
+	Commit, ErrorCode, Index, IndexAddOption, Oid, Repository, RepositoryInitOptions, Signature,
+	Sort, Tree,
+};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -17,12 +20,11 @@ use crate::document::{
 };
 use crate::history::HISTORY_FILE;
 use crate::project::{
-	Book, COVER_NAMES, Error, MANIFEST_FILE, Manifest, Result, read_manifest, remove_if_there,
-	write_atomic, write_book,
+	Book, COVER_NAMES, Error, Format, MANIFEST_FILE, Manifest, Result, read_manifest,
+	remove_if_there, write_atomic, write_book,
 };
 use crate::tree::{self, Node};
 
-const FIRST_VERSION: &str = "Versions begin";
 const AUTHOR_EMAIL: &str = "aurora@localhost";
 
 /// Marks a commit as one Aurora kept, so it is never named by its subject.
@@ -163,22 +165,31 @@ fn excluded() -> [String; 2] {
 	[format!("/{HISTORY_FILE}"), format!("/{TRASH_DIR}/")]
 }
 
-/// Opens the repository at `root`, making one when there is none. Returns the
-/// folder of a repository the project sits inside, while the writer has not
-/// yet been told about it.
-pub fn ensure_repository(root: &Path, author: &str) -> Result<Option<PathBuf>> {
+/// Opens the repository at `root`, making one on Main with nothing kept yet
+/// when there is none. Returns the folder of a repository the project sits
+/// inside, while the writer has not yet been told about it.
+pub fn ensure_repository(root: &Path) -> Result<Option<PathBuf>> {
 	// `open` looks only at `root`: a repository further up belongs to
 	// something else, and the project still gets its own.
 	let repo = match Repository::open(root) {
 		Ok(repo) => repo,
-		Err(e) if e.code() == ErrorCode::NotFound => Repository::init(root)?,
+		Err(e) if e.code() == ErrorCode::NotFound => {
+			// Named here so the machine's `init.defaultBranch` has no say.
+			Repository::init_opts(root, RepositoryInitOptions::new().initial_head("main"))?
+		}
 		Err(e) => return Err(e.into()),
 	};
 	exclude(&repo)?;
-	if repo.is_empty()? {
-		keep_first(&repo, author)?;
-	}
 	enclosing(root, &repo)
+}
+
+/// The commit `HEAD` points at, or none on a branch with nothing kept yet.
+fn head_commit(repo: &Repository) -> Result<Option<Commit<'_>>> {
+	match repo.head() {
+		Ok(head) => Ok(Some(head.peel_to_commit()?)),
+		Err(e) if e.code() == ErrorCode::UnbornBranch => Ok(None),
+		Err(e) => Err(e.into()),
+	}
 }
 
 fn exclude(repo: &Repository) -> Result<()> {
@@ -208,15 +219,6 @@ fn exclude(repo: &Repository) -> Result<()> {
 	Ok(())
 }
 
-fn keep_first(repo: &Repository, author: &str) -> Result<()> {
-	let tree = repo.find_tree(stage(repo)?)?;
-	let first = Keep::Named {
-		name: FIRST_VERSION.to_owned(),
-	};
-	commit(repo, &signature(author)?, &first, &tree, &[])?;
-	Ok(())
-}
-
 fn signature(author: &str) -> Result<Signature<'static>> {
 	let name = if author.trim().is_empty() {
 		"Aurora"
@@ -227,11 +229,18 @@ fn signature(author: &str) -> Result<Signature<'static>> {
 	Ok(Signature::now(name, AUTHOR_EMAIL)?)
 }
 
-/// Stages the whole project, deletions included, and returns its tree.
-fn stage(repo: &Repository) -> Result<Oid> {
+/// The whole project as it stands on disk, deletions included, in memory
+/// only: `.git/index` keeps whatever the writer staged.
+fn working(repo: &Repository) -> Result<Index> {
 	let mut index = repo.index()?;
 	index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
 	index.update_all(["*"], None)?;
+	Ok(index)
+}
+
+/// Stages the whole project and returns its tree.
+fn stage(repo: &Repository) -> Result<Oid> {
+	let mut index = working(repo)?;
 	index.write()?;
 	Ok(index.write_tree()?)
 }
@@ -263,9 +272,11 @@ fn commit(
 /// name when the latest already has one, so no name is lost.
 pub fn keep(root: &Path, keep: &Keep, author: &str) -> Result<Oid> {
 	let repo = Repository::open(root)?;
-	let head = repo.head()?.peel_to_commit()?;
 	let tree = repo.find_tree(stage(&repo)?)?;
 	let signature = signature(author)?;
+	let Some(head) = head_commit(&repo)? else {
+		return commit(&repo, &signature, keep, &tree, &[]);
+	};
 
 	if tree.id() == head.tree_id() {
 		match keep {
@@ -371,6 +382,9 @@ fn text_in(
 /// the versions in which its text changed.
 pub fn list(root: &Path, document: Option<Uuid>) -> Result<Vec<Version>> {
 	let repo = Repository::open(root)?;
+	if head_commit(&repo)?.is_none() {
+		return Ok(Vec::new());
+	}
 	let mut walk = repo.revwalk()?;
 	walk.set_sorting(Sort::TOPOLOGICAL)?;
 	walk.simplify_first_parent()?;
@@ -491,12 +505,24 @@ fn place(nodes: &[Node], parent: Option<Uuid>, prefix: &str, placed: &mut Vec<(U
 	}
 }
 
-/// A version's tree and manifest. With no version, the project as it stands
-/// on disk, staged but not kept.
+/// A version's tree and manifest. `HEAD` is the latest checkpoint, and with no
+/// version, the project as it stands on disk, neither kept nor staged.
 fn side<'r>(repo: &'r Repository, version: Option<&str>) -> Result<(Tree<'r>, Manifest)> {
 	let tree = match version {
+		Some("HEAD") => match head_commit(repo)? {
+			Some(head) => head.tree()?,
+			// Nothing kept yet, so everything on the other side reads as added.
+			None => {
+				let empty = repo.find_tree(repo.treebuilder(None)?.write()?)?;
+				let nothing = Manifest {
+					nodes: Vec::new(),
+					..Manifest::new("", Format::Novel, OffsetDateTime::UNIX_EPOCH)
+				};
+				return Ok((empty, nothing));
+			}
+		},
 		Some(id) => repo.find_commit(Oid::from_str(id)?)?.tree()?,
-		None => repo.find_tree(stage(repo)?)?,
+		None => repo.find_tree(working(repo)?.write_tree()?)?,
 	};
 	let manifest = repo.find_blob(tree.get_path(Path::new(MANIFEST_FILE))?.id())?;
 	let manifest = serde_json::from_slice(manifest.content())?;
@@ -550,7 +576,7 @@ fn blob_at(tree: &Tree, path: &str) -> Option<Oid> {
 }
 
 /// What changed from version `a` to version `b`, where none is the project as
-/// it stands on disk.
+/// it stands on disk and `HEAD` is the latest checkpoint.
 pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes> {
 	let repo = Repository::open(root)?;
 	let (old_tree, old) = side(&repo, a)?;
@@ -882,44 +908,58 @@ mod tests {
 		walk.count()
 	}
 
-	#[test]
-	fn a_fresh_folder_begins_with_one_version() {
-		let dir = project();
-		assert_eq!(ensure_repository(dir.path(), "").unwrap(), None);
+	const FIRST: &str = "First";
 
-		let repo = Repository::open(dir.path()).unwrap();
-		assert_eq!(versions(&repo), 1);
-		let head = repo.head().unwrap().peel_to_commit().unwrap();
-		assert_eq!(head.summary().unwrap(), Some(FIRST_VERSION));
-		assert_eq!(head.author().name().unwrap(), "Aurora");
-		assert_eq!(head.author().email().unwrap(), AUTHOR_EMAIL);
-		let tree = head.tree().unwrap();
-		assert!(tree.get_path(Path::new("Manuscript/one.md")).is_ok());
-		assert!(tree.get_path(Path::new("aurora.json")).is_ok());
-		assert_eq!(
-			repo.find_note(None, head.id()).unwrap().message().unwrap(),
-			FIRST_VERSION
-		);
+	/// Opens the project and keeps it once, named `FIRST`, so it has a version
+	/// to go back to.
+	fn begun(root: &Path) {
+		ensure_repository(root).unwrap();
+		let first = Keep::Named {
+			name: FIRST.to_owned(),
+		};
+		keep(root, &first, "").unwrap();
+	}
+
+	fn unborn_main(repo: &Repository) -> bool {
+		let head = repo.find_reference("HEAD").unwrap();
+		head.symbolic_target().unwrap() == Some("refs/heads/main")
+			&& repo.head().err().map(|e| e.code()) == Some(ErrorCode::UnbornBranch)
 	}
 
 	#[test]
-	fn the_first_version_is_by_the_books_author() {
+	fn a_fresh_folder_begins_on_main_with_nothing_kept() {
 		let dir = project();
-		ensure_repository(dir.path(), "Herman Melville").unwrap();
+		assert_eq!(ensure_repository(dir.path()).unwrap(), None);
 
 		let repo = Repository::open(dir.path()).unwrap();
-		let head = repo.head().unwrap().peel_to_commit().unwrap();
-		assert_eq!(head.author().name().unwrap(), "Herman Melville");
+		assert!(unborn_main(&repo));
+		assert!(repo.is_empty().unwrap());
+		assert!(list(dir.path(), None).unwrap().is_empty());
+	}
+
+	#[test]
+	fn the_first_keep_on_main_has_no_parent() {
+		let dir = project();
+		ensure_repository(dir.path()).unwrap();
+		let closing = Keep::Closing {
+			written: 1,
+			removed: 0,
+		};
+		let id = keep(dir.path(), &closing, "").unwrap();
+
+		let repo = Repository::open(dir.path()).unwrap();
+		assert_eq!(repo.find_commit(id).unwrap().parent_count(), 0);
+		assert_eq!(repo.head().unwrap().shorthand().unwrap(), "main");
 	}
 
 	#[test]
 	fn opening_again_keeps_no_new_version() {
 		let dir = project();
-		ensure_repository(dir.path(), "").unwrap();
-		ensure_repository(dir.path(), "").unwrap();
+		ensure_repository(dir.path()).unwrap();
+		ensure_repository(dir.path()).unwrap();
 
 		let repo = Repository::open(dir.path()).unwrap();
-		assert_eq!(versions(&repo), 1);
+		assert!(unborn_main(&repo));
 		let exclude = fs::read_to_string(repo.path().join("info/exclude")).unwrap();
 		assert_eq!(exclude.matches("/history.json").count(), 1);
 	}
@@ -936,7 +976,7 @@ mod tests {
 			.commit(Some("HEAD"), &signature, &signature, "Mine", &tree, &[])
 			.unwrap();
 
-		ensure_repository(dir.path(), "").unwrap();
+		ensure_repository(dir.path()).unwrap();
 
 		assert_eq!(repo.head().unwrap().target(), Some(theirs));
 		assert_eq!(versions(&repo), 1);
@@ -949,7 +989,7 @@ mod tests {
 		fs::create_dir(dir.path().join(TRASH_DIR)).unwrap();
 		fs::write(dir.path().join(TRASH_DIR).join("gone.md"), "gone").unwrap();
 
-		ensure_repository(dir.path(), "").unwrap();
+		begun(dir.path());
 
 		let repo = Repository::open(dir.path()).unwrap();
 		let tree = repo.head().unwrap().peel_to_tree().unwrap();
@@ -966,7 +1006,7 @@ mod tests {
 		fs::create_dir(&root).unwrap();
 		fs::write(root.join("aurora.json"), "{}").unwrap();
 
-		let found = ensure_repository(&root, "").unwrap().unwrap();
+		let found = ensure_repository(&root).unwrap().unwrap();
 		// Compared by name: the platforms disagree about how to spell the path.
 		assert_eq!(found.file_name(), outer.path().file_name());
 		assert!(root.join(".git").is_dir());
@@ -977,13 +1017,13 @@ mod tests {
 			.unwrap()
 			.set_bool(NESTED_NOTICE_SHOWN, true)
 			.unwrap();
-		assert_eq!(ensure_repository(&root, "").unwrap(), None);
+		assert_eq!(ensure_repository(&root).unwrap(), None);
 	}
 
 	/// A project with its first version, and a change waiting to be kept.
 	fn changed() -> (tempfile::TempDir, Repository) {
 		let dir = project();
-		ensure_repository(dir.path(), "").unwrap();
+		begun(dir.path());
 		fs::write(
 			dir.path().join("Manuscript/one.md"),
 			"Call me Ishmael. Some",
@@ -1092,7 +1132,7 @@ mod tests {
 	#[test]
 	fn nothing_changed_keeps_nothing() {
 		let dir = project();
-		ensure_repository(dir.path(), "").unwrap();
+		begun(dir.path());
 		let repo = Repository::open(dir.path()).unwrap();
 		let head = repo.head().unwrap().target().unwrap();
 
@@ -1130,7 +1170,7 @@ mod tests {
 	#[test]
 	fn naming_an_already_named_latest_keeps_an_empty_version() {
 		let dir = project();
-		ensure_repository(dir.path(), "").unwrap();
+		begun(dir.path());
 		let repo = Repository::open(dir.path()).unwrap();
 		let first = repo.head().unwrap().peel_to_commit().unwrap();
 
@@ -1146,16 +1186,13 @@ mod tests {
 			name_of(&repo, &commit).unwrap().as_deref(),
 			Some("Draft one")
 		);
-		assert_eq!(
-			name_of(&repo, &first).unwrap().as_deref(),
-			Some(FIRST_VERSION)
-		);
+		assert_eq!(name_of(&repo, &first).unwrap().as_deref(), Some(FIRST));
 	}
 
 	#[test]
 	fn a_version_can_be_renamed_and_unnamed() {
 		let dir = project();
-		ensure_repository(dir.path(), "").unwrap();
+		begun(dir.path());
 		let repo = Repository::open(dir.path()).unwrap();
 		let head = repo.head().unwrap().peel_to_commit().unwrap();
 		let id = head.id().to_string();
@@ -1194,7 +1231,7 @@ mod tests {
 			[
 				(Some(Kind::Named), Some("Draft one"), None, None),
 				(Some(Kind::Session), None, Some(25), Some(3)),
-				(Some(Kind::Named), Some(FIRST_VERSION), None, None),
+				(Some(Kind::Named), Some(FIRST), None, None),
 			]
 		);
 		assert_eq!(listed[0].author, "Herman Melville");
@@ -1211,7 +1248,7 @@ mod tests {
 			OffsetDateTime::UNIX_EPOCH,
 		)
 		.unwrap();
-		ensure_repository(&root, "").unwrap();
+		begun(&root);
 		let manifest = read_manifest(&root).unwrap();
 		let seeded = &manifest.documents()[0];
 		let document = seeded.id;
@@ -1316,7 +1353,7 @@ mod tests {
 			OffsetDateTime::UNIX_EPOCH,
 		)
 		.unwrap();
-		ensure_repository(&root, "").unwrap();
+		begun(&root);
 		let manifest = read_manifest(&root).unwrap();
 		let seeded = manifest.documents()[0].clone();
 		let others: Vec<Uuid> = manifest
@@ -1497,6 +1534,41 @@ mod tests {
 		let changes = changes(&root, Some(&head.to_string()), None).unwrap();
 		assert!(change_of(&changes, seeded).unwrap().edited);
 		assert_eq!(repo_head(&root), head);
+	}
+
+	#[test]
+	fn before_anything_is_kept_every_document_reads_as_added() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			OffsetDateTime::UNIX_EPOCH,
+		)
+		.unwrap();
+		ensure_repository(&root).unwrap();
+
+		let changes = changes(&root, Some("HEAD"), None).unwrap();
+		let documents = read_manifest(&root).unwrap().documents();
+		assert!(!documents.is_empty());
+		for document in documents {
+			let change = change_of(&changes, document.id).unwrap();
+			assert_eq!(change.before, None);
+			assert!(change.after.is_some());
+		}
+		assert!(!root.join(".git/index").exists());
+	}
+
+	#[test]
+	fn comparing_against_now_leaves_what_is_staged_alone() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "Unkept".to_owned()).unwrap();
+		let index = root.join(".git/index");
+		let staged = fs::read(&index).unwrap();
+
+		let changes = changes(&root, Some("HEAD"), None).unwrap();
+		assert!(change_of(&changes, seeded).unwrap().edited);
+		assert_eq!(fs::read(&index).unwrap(), staged);
 	}
 
 	#[test]
