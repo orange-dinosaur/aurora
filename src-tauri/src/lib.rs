@@ -176,6 +176,8 @@ pub fn run() {
 			history::read_history,
 			history::append_session,
 			versions::keep_version,
+			versions::add_checkpoint,
+			versions::list_checkpoints,
 			versions::list_versions,
 			versions::nested_notice_shown,
 			versions::rename_version,

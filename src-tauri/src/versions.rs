@@ -8,8 +8,8 @@ use std::path::{Component, Path, PathBuf};
 
 use git2::build::CheckoutBuilder;
 use git2::{
-	Commit, ErrorCode, Index, IndexAddOption, Oid, Repository, RepositoryInitOptions, Signature,
-	Sort, Tree,
+	BranchType, Commit, ErrorCode, Index, IndexAddOption, Oid, Repository, RepositoryInitOptions,
+	Signature, Sort, Tree,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -83,6 +83,21 @@ pub struct Version {
 	pub removed: Option<u32>,
 	pub author: String,
 	/// The document's words in this version, when the list is of one document.
+	pub words: Option<u32>,
+}
+
+/// One row of a history of checkpoints.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Checkpoint {
+	pub id: String,
+	#[serde(with = "time::serde::rfc3339")]
+	#[ts(type = "string")]
+	pub at: OffsetDateTime,
+	pub message: String,
+	pub author: String,
+	/// The document's words at this checkpoint, when the list is of one document.
 	pub words: Option<u32>,
 }
 
@@ -382,36 +397,123 @@ fn text_in(
 /// the versions in which its text changed.
 pub fn list(root: &Path, document: Option<Uuid>) -> Result<Vec<Version>> {
 	let repo = Repository::open(root)?;
-	if head_commit(&repo)?.is_none() {
+	let Some(head) = head_commit(&repo)? else {
 		return Ok(Vec::new());
-	}
-	let mut walk = repo.revwalk()?;
-	walk.set_sorting(Sort::TOPOLOGICAL)?;
-	walk.simplify_first_parent()?;
-	walk.push_head()?;
+	};
 
 	let mut versions = Vec::new();
 	let mut paths = HashMap::new();
-	for id in walk {
+	for id in first_parents(&repo, head.id())? {
 		let commit = repo.find_commit(id?)?;
 		let mut version = describe(&repo, &commit)?;
 		if let Some(document) = document {
-			let before = match commit.parent(0) {
-				Ok(parent) => text_in(&repo, &parent, document, &mut paths)?,
-				Err(_) => None,
-			};
-			let now = text_in(&repo, &commit, document, &mut paths)?;
-			if now == before {
+			let Some(words) = changed_words(&repo, &commit, document, &mut paths)? else {
 				continue;
-			}
-			version.words = match now {
-				Some(blob) => Some(words_in(repo.find_blob(blob)?.content())),
-				None => Some(0),
 			};
+			version.words = Some(words);
 		}
 		versions.push(version);
 	}
 	Ok(versions)
+}
+
+/// `start` and the commits before it along first parents, newest first.
+fn first_parents(repo: &Repository, start: Oid) -> Result<git2::Revwalk<'_>> {
+	let mut walk = repo.revwalk()?;
+	walk.set_sorting(Sort::TOPOLOGICAL)?;
+	walk.simplify_first_parent()?;
+	walk.push(start)?;
+	Ok(walk)
+}
+
+/// The document's words in `commit` when its text differs from the first
+/// parent's, 0 when it was removed, and none when its text is unchanged.
+fn changed_words(
+	repo: &Repository,
+	commit: &Commit,
+	document: Uuid,
+	paths: &mut HashMap<Oid, Option<String>>,
+) -> Result<Option<u32>> {
+	let before = match commit.parent(0) {
+		Ok(parent) => text_in(repo, &parent, document, paths)?,
+		Err(_) => None,
+	};
+	let now = text_in(repo, commit, document, paths)?;
+	if now == before {
+		return Ok(None);
+	}
+	Ok(Some(match now {
+		Some(blob) => words_in(repo.find_blob(blob)?.content()),
+		None => 0,
+	}))
+}
+
+/// Commits the whole project with the writer's message, as it is, and returns
+/// the new checkpoint.
+fn checkpoint(root: &Path, message: &str, author: &str) -> Result<Oid> {
+	if message.trim().is_empty() {
+		return Err(Error::EmptyMessage);
+	}
+	let repo = Repository::open(root)?;
+	let tree = repo.find_tree(stage(&repo)?)?;
+	let signature = signature(author)?;
+	let head = head_commit(&repo)?;
+	let parents: Vec<&Commit> = head.iter().collect();
+	Ok(repo.commit(
+		Some("HEAD"),
+		&signature,
+		&signature,
+		message,
+		&tree,
+		&parents,
+	)?)
+}
+
+/// The checkpoints of a version, newest first along first parents, or of the
+/// one the writer is in when `version` is none. A version with nothing in it
+/// yet has no rows. With a document, only the checkpoints that changed its
+/// text.
+fn checkpoints(
+	root: &Path,
+	version: Option<&str>,
+	document: Option<Uuid>,
+) -> Result<Vec<Checkpoint>> {
+	let repo = Repository::open(root)?;
+	let start = match version {
+		None => head_commit(&repo)?,
+		Some(name) => match repo.find_branch(name, BranchType::Local) {
+			Ok(branch) => Some(branch.get().peel_to_commit()?),
+			Err(e) if e.code() == ErrorCode::NotFound => None,
+			Err(e) => return Err(e.into()),
+		},
+	};
+	let Some(start) = start else {
+		return Ok(Vec::new());
+	};
+
+	let mut rows = Vec::new();
+	let mut paths = HashMap::new();
+	for id in first_parents(&repo, start.id())? {
+		let commit = repo.find_commit(id?)?;
+		let words = match document {
+			Some(document) => match changed_words(&repo, &commit, document, &mut paths)? {
+				Some(words) => Some(words),
+				None => continue,
+			},
+			None => None,
+		};
+		rows.push(Checkpoint {
+			id: commit.id().to_string(),
+			at: OffsetDateTime::from_unix_timestamp(commit.time().seconds())
+				.unwrap_or(OffsetDateTime::UNIX_EPOCH),
+			message: String::from_utf8_lossy(commit.message_bytes())
+				.trim_end()
+				.to_owned(),
+			author: commit.author().name().unwrap_or_default().to_owned(),
+			words,
+		});
+	}
+	Ok(rows)
 }
 
 /// Counted the way the rest of Aurora counts a document: its body only.
@@ -691,6 +793,24 @@ pub fn list_versions(root: PathBuf, document: Option<Uuid>) -> Result<Vec<Versio
 		return Err(Error::RelativePath);
 	}
 	list(&root, document)
+}
+
+#[tauri::command]
+pub fn add_checkpoint(root: PathBuf, message: String) -> Result<String> {
+	let author = author(&root)?;
+	Ok(checkpoint(&root, &message, &author)?.to_string())
+}
+
+#[tauri::command]
+pub fn list_checkpoints(
+	root: PathBuf,
+	version: Option<String>,
+	document: Option<Uuid>,
+) -> Result<Vec<Checkpoint>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	checkpoints(&root, version.as_deref(), document)
 }
 
 /// Records that the writer has seen the note about an enclosing repository.
@@ -1339,6 +1459,95 @@ mod tests {
 		);
 		set_name(dir.path(), &id.to_string(), "", "").unwrap();
 		assert_eq!(name_of(&repo, &commit).unwrap(), None);
+	}
+
+	#[test]
+	fn a_checkpoint_needs_a_message() {
+		let dir = project();
+		ensure_repository(dir.path()).unwrap();
+
+		let refused = checkpoint(dir.path(), " \n\t", "");
+		assert!(matches!(refused, Err(Error::EmptyMessage)));
+		assert!(unborn_main(&Repository::open(dir.path()).unwrap()));
+	}
+
+	#[test]
+	fn the_first_checkpoint_on_main_has_no_parent() {
+		let dir = project();
+		ensure_repository(dir.path()).unwrap();
+		let message = "Opening pages\n\nStill rough.";
+		let id = checkpoint(dir.path(), message, "Herman Melville").unwrap();
+
+		let repo = Repository::open(dir.path()).unwrap();
+		let commit = repo.find_commit(id).unwrap();
+		assert_eq!(commit.parent_count(), 0);
+		assert_eq!(commit.message().unwrap(), message);
+		assert_eq!(repo.head().unwrap().shorthand().unwrap(), "main");
+		assert!(
+			commit
+				.tree()
+				.unwrap()
+				.get_path(Path::new("Manuscript/one.md"))
+				.is_ok()
+		);
+
+		let rows = checkpoints(dir.path(), None, None).unwrap();
+		assert_eq!(rows.len(), 1);
+		assert_eq!(rows[0].id, id.to_string());
+		assert_eq!(rows[0].message, message);
+		assert_eq!(rows[0].author, "Herman Melville");
+		assert_eq!(rows[0].words, None);
+	}
+
+	#[test]
+	fn a_document_lists_only_the_checkpoints_that_changed_its_text() {
+		let (_parent, root, document, elsewhere, _) = novel();
+		let first = repo_head(&root);
+
+		write_document(root.clone(), document, "One".to_owned()).unwrap();
+		let one = checkpoint(&root, "One word", "").unwrap();
+		create_document(root.clone(), elsewhere, "Other".to_owned()).unwrap();
+		checkpoint(&root, "Another document", "").unwrap();
+		write_document(root.clone(), document, "One two".to_owned()).unwrap();
+		let two = checkpoint(&root, "Two words", "").unwrap();
+
+		let rows = checkpoints(&root, None, Some(document)).unwrap();
+		let ids: Vec<Oid> = rows.iter().map(|r| Oid::from_str(&r.id).unwrap()).collect();
+		assert_eq!(ids, [two, one, first]);
+		assert_eq!(rows[0].words, Some(2));
+		assert_eq!(rows[1].words, Some(1));
+		assert_eq!(
+			checkpoints(&root, Some("main"), Some(document)).unwrap(),
+			rows
+		);
+		assert!(
+			checkpoints(&root, Some("elsewhere"), None)
+				.unwrap()
+				.is_empty()
+		);
+	}
+
+	#[test]
+	fn a_foreign_commit_lists_with_its_own_message() {
+		let dir = project();
+		let repo = Repository::init(dir.path()).unwrap();
+		let mut index = repo.index().unwrap();
+		index.add_all(["*"], IndexAddOption::DEFAULT, None).unwrap();
+		let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+		let signature = Signature::now("Writer", "writer@example.com").unwrap();
+		repo.commit(
+			Some("HEAD"),
+			&signature,
+			&signature,
+			"Chapter one done\n\nLong notes.\n",
+			&tree,
+			&[],
+		)
+		.unwrap();
+
+		let rows = checkpoints(dir.path(), None, None).unwrap();
+		assert_eq!(rows[0].message, "Chapter one done\n\nLong notes.");
+		assert_eq!(rows[0].author, "Writer");
 	}
 
 	/// A novel with versions, its first document, and two top-level folders

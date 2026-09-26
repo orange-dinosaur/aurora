@@ -398,6 +398,7 @@ pub enum Error {
 	NotAnImage,
 	CoverMissing,
 	AlreadyExists,
+	EmptyMessage,
 	UnsupportedFormat(Format),
 	Trash(trash::Error),
 	Git(git2::Error),
@@ -452,6 +453,7 @@ impl fmt::Display for Error {
 			Error::NotAnImage => write!(f, "a cover has to be a PNG or a JPEG image"),
 			Error::CoverMissing => write!(f, "the cover image is no longer in the project"),
 			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
+			Error::EmptyMessage => write!(f, "a checkpoint needs a few words on what changed"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
@@ -487,6 +489,7 @@ impl Error {
 			Error::NotAnImage => "notAnImage",
 			Error::CoverMissing => "coverMissing",
 			Error::AlreadyExists => "alreadyExists",
+			Error::EmptyMessage => "emptyMessage",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",
@@ -529,6 +532,7 @@ impl std::error::Error for Error {
 			| Error::NotAnImage
 			| Error::CoverMissing
 			| Error::AlreadyExists
+			| Error::EmptyMessage
 			| Error::UnsupportedFormat(_) => None,
 			Error::Trash(e) => Some(e),
 			Error::Git(e) => Some(e),
@@ -2352,6 +2356,7 @@ mod tests {
 			Error::OutsideProject,
 			Error::NotText,
 			Error::AlreadyExists,
+			Error::EmptyMessage,
 			Error::UnsupportedFormat(Format::Screenplay),
 			Error::Io(io::Error::from(io::ErrorKind::PermissionDenied)),
 			Error::Json(serde_json::from_str::<Manifest>("{").unwrap_err()),
@@ -2386,6 +2391,7 @@ mod tests {
 			Error::OutsideProject,
 			Error::NotText,
 			Error::AlreadyExists,
+			Error::EmptyMessage,
 			Error::UnsupportedFormat(Format::Screenplay),
 		] {
 			let message = error.to_string();
