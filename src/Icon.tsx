@@ -24,7 +24,12 @@ export type IconName =
 	| "x"
 	| "sun"
 	| "moon"
-	| "more-vertical";
+	| "more-vertical"
+	| "file-text"
+	| "info"
+	| "at-sign"
+	| "chart-column"
+	| "history";
 
 // Lucide's geometry, on its 24-unit grid. Anything added here should be traced
 // from the same set rather than drawn by eye, or the family stops reading as
@@ -154,6 +159,39 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<circle cx="12" cy="5" r="1" />
 			<circle cx="12" cy="12" r="1" />
 			<circle cx="12" cy="19" r="1" />
+		</>
+	),
+	// The right panel's tabs, when their names do not fit across it.
+	"file-text": (
+		<>
+			<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+			<path d="M14 2v4a2 2 0 0 0 2 2h4" />
+			<path d="M16 13H8M16 17H8M10 9H8" />
+		</>
+	),
+	info: (
+		<>
+			<circle cx="12" cy="12" r="10" />
+			<path d="M12 16v-4M12 8h.01" />
+		</>
+	),
+	"at-sign": (
+		<>
+			<circle cx="12" cy="12" r="4" />
+			<path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+		</>
+	),
+	"chart-column": (
+		<>
+			<path d="M3 3v16a2 2 0 0 0 2 2h16" />
+			<path d="M18 17V9M13 17V5M8 17v-3" />
+		</>
+	),
+	history: (
+		<>
+			<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+			<path d="M3 3v5h5" />
+			<path d="M12 7v5l4 2" />
 		</>
 	),
 };

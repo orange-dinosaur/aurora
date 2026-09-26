@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import Grip from "./Grip";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
 import Info from "./Info";
 import { RIGHT_SIDEBAR } from "./panels";
 import Mentions, { type About } from "./Mentions";
@@ -27,12 +27,12 @@ import type {
 // what it shows rather than reading it: `Project` knows which of the two is in
 // front of the writer, and this only lays it out.
 
-const TABS: { name: RightSidebarTab; label: string }[] = [
-	{ name: "synopsis", label: "Synopsis" },
-	{ name: "info", label: "Info" },
-	{ name: "mentions", label: "Mentions" },
-	{ name: "stats", label: "Stats" },
-	{ name: "versions", label: "Versions" },
+const TABS: { name: RightSidebarTab; label: string; icon: IconName }[] = [
+	{ name: "synopsis", label: "Synopsis", icon: "file-text" },
+	{ name: "info", label: "Info", icon: "info" },
+	{ name: "mentions", label: "Mentions", icon: "at-sign" },
+	{ name: "stats", label: "Stats", icon: "chart-column" },
+	{ name: "versions", label: "Versions", icon: "history" },
 ];
 
 type Props = {
@@ -128,6 +128,31 @@ export default function RightSidebar({
 	// one this component drew.
 	const panel = useRef<HTMLElement>(null);
 
+	// The tabs stay on one line: names while they fit, icons when they do not.
+	// `needed` is how wide the names were when they stopped fitting, so the
+	// panel knows when widening brings them back.
+	const strip = useRef<HTMLDivElement>(null);
+	const needed = useRef(0);
+	const [icons, setIcons] = useState(false);
+	useLayoutEffect(() => {
+		const row = strip.current;
+		if (row === null) {
+			return;
+		}
+		const fit = () => {
+			if (row.scrollWidth > row.clientWidth) {
+				needed.current = row.scrollWidth;
+				setIcons(true);
+			} else if (row.clientWidth >= needed.current) {
+				setIcons(false);
+			}
+		};
+		fit();
+		const observer = new ResizeObserver(fit);
+		observer.observe(row);
+		return () => observer.disconnect();
+	}, [icons]);
+
 	return (
 		<aside
 			ref={panel}
@@ -135,8 +160,15 @@ export default function RightSidebar({
 			aria-label="About what is open"
 			style={{ width }}
 		>
-			<div className="right-sidebar__tabs">
-				{TABS.map(({ name, label }) => (
+			<div
+				ref={strip}
+				className={
+					icons
+						? "right-sidebar__tabs right-sidebar__tabs--icons"
+						: "right-sidebar__tabs"
+				}
+			>
+				{TABS.map(({ name, label, icon }) => (
 					<button
 						key={name}
 						type="button"
@@ -146,9 +178,11 @@ export default function RightSidebar({
 								: "right-sidebar__tab"
 						}
 						aria-pressed={name === tab}
+						aria-label={icons ? label : undefined}
+						title={icons ? label : undefined}
 						onClick={() => onTab(name)}
 					>
-						{label}
+						{icons ? <Icon name={icon} /> : label}
 					</button>
 				))}
 				<button

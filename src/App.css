@@ -1950,12 +1950,12 @@ body.dragging * {
 	overflow-wrap: anywhere;
 }
 
-/* The tabs wrap rather than being cut off: four of them do not fit across 240
-   pixels, and a panel the writer cannot reach is worse than a second line. */
+/* One line always. When the names do not fit, the tabs turn to icons rather
+   than wrap, and the overflow is only ever the moment before they do. */
 .right-sidebar__tabs {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
+	overflow: hidden;
 	gap: 0.125rem;
 	flex: none;
 	padding: 0.5rem;
@@ -1979,6 +1979,11 @@ body.dragging * {
 	transition:
 		color 120ms ease-out,
 		background-color 120ms ease-out;
+}
+
+.right-sidebar__tabs--icons .right-sidebar__tab {
+	display: inline-flex;
+	padding: 0.25rem 0.4375rem;
 }
 
 .right-sidebar__tab:hover {
