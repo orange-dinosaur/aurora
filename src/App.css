@@ -2377,6 +2377,22 @@ button.compare__pick:focus-visible {
 	outline-offset: -2px;
 }
 
+.compare__change {
+	display: flex;
+	align-items: baseline;
+}
+
+.compare__change > .compare__pick {
+	flex: 1;
+	min-width: 0;
+}
+
+.compare__change-back {
+	flex: none;
+	margin: 0 0.75rem;
+	font-size: 0.75rem;
+}
+
 .compare__change-name {
 	flex: none;
 	font-weight: 600;
@@ -2575,6 +2591,7 @@ button.compare__pick:focus-visible {
 .compare__foot {
 	position: relative;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 0.4rem;
 	padding: 0.5rem 1.5rem;
@@ -2602,13 +2619,41 @@ button.compare__pick:focus-visible {
 	cursor: default;
 }
 
-.compare__trouble {
-	position: absolute;
-	top: 50%;
-	right: 1.5rem;
+.compare__put {
+	margin-left: auto;
+	padding: 0.25rem 0.75rem;
+	font: inherit;
+	color: var(--accent);
+	background: none;
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.compare__put:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.compare__put:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.compare__put:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.compare__note {
+	flex-basis: 100%;
 	margin: 0;
+	font-size: 0.6875rem;
+	text-align: right;
+	color: var(--text-faint);
+}
+
+.compare__note--trouble {
 	color: var(--danger);
-	transform: translateY(-50%);
 }
 
 .stats__words {

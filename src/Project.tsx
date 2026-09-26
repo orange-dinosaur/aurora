@@ -857,6 +857,112 @@ export default function Project({
 		}
 	}
 
+	// Putting back rewrites files behind every tab, so everything open is written
+	// down first and brought up to the disk after. A document gone from the
+	// project closes, one whose text changed is mounted again from its file,
+	// and the rest are re-pointed the way a move re-points them. A failure is
+	// thrown back to the surface that asked, after the tabs have caught up with
+	// whatever part of it did happen.
+	async function putBack(task: () => Promise<unknown>) {
+		await writeAll();
+		try {
+			await task();
+		} finally {
+			await caughtUp();
+		}
+	}
+
+	async function caughtUp() {
+		setListing((version) => version + 1);
+		let tree: TreeNode[];
+		try {
+			tree = await invoke<TreeNode[]>("document_tree", { root });
+		} catch {
+			// The listing reads the same manifest and says what went wrong.
+			return;
+		}
+		const now = new Map(documentsOf(tree).map((doc) => [doc.id, doc]));
+		const contents = new Map(
+			await Promise.all(
+				latest.current.flatMap((tab) =>
+					tab.kind === "document" && now.has(tab.document.id)
+						? [
+								read(root, tab.document.id).then(
+									(content) =>
+										[tab.document.id, content] as const,
+								),
+							]
+						: [],
+				),
+			),
+		);
+
+		// Old keys to new, for the tabs mounted again.
+		const renamed = new Map<string, string>();
+		const again = (tab: Tab) => {
+			const key = freshKey();
+			renamed.set(tab.key, key);
+			return key;
+		};
+		const next = latest.current.flatMap((tab): Tab[] => {
+			switch (tab.kind) {
+				case "book":
+					return [{ ...tab, key: again(tab) }];
+				case "folder": {
+					const folder = folderOf(tree, tab.folder.id);
+					return folder === null
+						? []
+						: [
+								{
+									...tab,
+									folder: {
+										...tab.folder,
+										name: folder.name,
+									},
+								},
+							];
+				}
+				case "document": {
+					const document = now.get(tab.document.id);
+					const content = contents.get(tab.document.id);
+					if (document === undefined) {
+						return [];
+					}
+					if (content?.kind !== "ready") {
+						return [{ ...tab, document }];
+					}
+					if (
+						tab.content.kind === "ready" &&
+						tab.content.text === content.text
+					) {
+						return [{ ...tab, document, save: { kind: "clean" } }];
+					}
+					return [
+						{
+							...tab,
+							key: again(tab),
+							document,
+							content,
+							save: { kind: "clean" },
+						},
+					];
+				}
+				default:
+					return [tab];
+			}
+		});
+		setTabs(next);
+		setActiveKey((active) => {
+			if (active === null) {
+				return null;
+			}
+			const kept = renamed.get(active) ?? active;
+			return next.some((tab) => tab.key === kept)
+				? kept
+				: (next[0]?.key ?? null);
+		});
+	}
+
 	// A renamed folder keeps its id, so an overview of it is re-pointed where
 	// it stands. Nothing under it moved, so the tabs holding its documents are
 	// left alone: what a document is called is its own name, not its folder's.
@@ -1257,6 +1363,7 @@ export default function Project({
 						onPreferences({ ...preferences, versionsScope })
 					}
 					onBack={() => setComparing(null)}
+					onPutBack={putBack}
 				/>
 			)}
 
@@ -1553,6 +1660,7 @@ export default function Project({
 						onCompare={(version) =>
 							void writeAll().then(() => setComparing(version.id))
 						}
+						onPutBack={putBack}
 						onOpen={(document, seed) =>
 							void openDocument(document, seed)
 						}

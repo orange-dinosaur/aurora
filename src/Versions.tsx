@@ -7,7 +7,7 @@ import { failure } from "./errors";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import NameField from "./NameField";
-import { byDay, detail } from "./lib/versions";
+import { byDay, detail, label } from "./lib/versions";
 import type { Keep, ProjectDocument, Version, VersionsScope } from "./types";
 
 type Props = {
@@ -23,6 +23,8 @@ type Props = {
 	/** Bumped when a session has kept a version of its own. */
 	logged: number;
 	onCompare: (version: Version) => void;
+	/** Writes everything down, runs the put back, and reloads what it changed. */
+	onPutBack: (task: () => Promise<unknown>) => Promise<void>;
 };
 
 // Which name field is open: the one for a new version, or one over a row.
@@ -37,6 +39,7 @@ export default function Versions({
 	onBeforeKeep,
 	logged,
 	onCompare,
+	onPutBack,
 }: Props) {
 	const [versions, setVersions] = useState<Version[] | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -107,7 +110,21 @@ export default function Versions({
 		void run(() => invoke("unname_version", { root, id: version.id }));
 	}
 
+	// This document puts back the open document; Whole project, everything.
+	function putBack(version: Version) {
+		const asked = { root, version: version.id, label: label(version) };
+		void run(() =>
+			onPutBack(() =>
+				document === null
+					? invoke("put_back_everything", asked)
+					: invoke("put_back_document", { ...asked, id: document }),
+			),
+		);
+	}
+
 	const days = versions === null ? [] : byDay(versions, new Date());
+	// This document with a folder overview showing has no document to act on.
+	const noDocument = scope === "document" && document === null;
 
 	return (
 		<div className="versions">
@@ -219,10 +236,14 @@ export default function Versions({
 									}
 									onUnname={() => unname(version)}
 									onCompare={
-										scope === "document" &&
-										document === null
+										noDocument
 											? null
 											: () => onCompare(version)
+									}
+									onPutBack={
+										noDocument || busy
+											? null
+											: () => putBack(version)
 									}
 								/>
 							),
@@ -241,14 +262,16 @@ function Row({
 	onRename,
 	onUnname,
 	onCompare,
+	onPutBack,
 }: {
 	version: Version;
 	selected: boolean;
 	onSelect: () => void;
 	onRename: () => void;
 	onUnname: () => void;
-	/** Null while the whole project is listed. */
+	/** Null while there is no document to act on. */
 	onCompare: (() => void) | null;
+	onPutBack: (() => void) | null;
 }) {
 	const named = version.name !== null;
 	const className = [
@@ -331,7 +354,12 @@ function Row({
 					>
 						Compare
 					</button>
-					<button type="button" className="versions__action" disabled>
+					<button
+						type="button"
+						className="versions__action"
+						disabled={onPutBack === null}
+						onClick={onPutBack ?? undefined}
+					>
 						Put back
 					</button>
 				</span>

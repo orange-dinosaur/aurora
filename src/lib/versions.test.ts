@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { timeOfDay, when } from "../dates";
 import type { Change, Version } from "../types";
-import { byDay, counts, detail, duration, summary } from "./versions";
+import { byDay, counts, detail, duration, label, summary } from "./versions";
 
 function version(at: Date, rest: Partial<Version> = {}): Version {
 	return {
@@ -163,6 +163,16 @@ describe("summary", () => {
 			).what,
 		).toBe(
 			"Order changed: “Three” moved to the top, “One” moved after “Two”",
+		);
+	});
+});
+
+describe("label", () => {
+	it("is a version's name, or its date and time", () => {
+		const at = new Date(2026, 8, 12, 9, 5);
+		expect(label(version(at, { name: "Draft one" }))).toBe("Draft one");
+		expect(label(version(at))).toBe(
+			`${when(at.toISOString())}, ${timeOfDay(at.toISOString())}`,
 		);
 	});
 });

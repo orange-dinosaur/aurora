@@ -15,7 +15,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { differences } from "./differences";
+import { differences, putBack } from "./differences";
 import { failure } from "./errors";
 import Icon from "./Icon";
 import {
@@ -26,9 +26,15 @@ import {
 	type Run,
 	tally,
 } from "./lib/compare";
-import { byDay, counts, detail, summary } from "./lib/versions";
+import { byDay, counts, detail, label, summary } from "./lib/versions";
 import { timeOfDay } from "./dates";
-import type { Changes, ProjectDocument, Version, VersionsScope } from "./types";
+import type {
+	Changes,
+	Keep,
+	ProjectDocument,
+	Version,
+	VersionsScope,
+} from "./types";
 import { prose, words } from "./words";
 
 type Props = {
@@ -42,6 +48,8 @@ type Props = {
 	lineHeight: number;
 	onScope: (scope: VersionsScope) => void;
 	onBack: () => void;
+	/** Writes everything down, runs the put back, and reloads what it changed. */
+	onPutBack: (task: () => Promise<unknown>) => Promise<void>;
 };
 
 // A document's text at A and on disk, which is B. Null `then` is a version
@@ -64,6 +72,7 @@ export default function Compare({
 	lineHeight,
 	onScope,
 	onBack,
+	onPutBack,
 }: Props) {
 	const open = scope === "document" ? document : null;
 	const [versions, setVersions] = useState<Version[]>([]);
@@ -76,6 +85,11 @@ export default function Compare({
 	const [current, setCurrent] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [ticks, setTicks] = useState<Tick[]>([]);
+	const [busy, setBusy] = useState(false);
+	// Kept apart from `error`, which reading the texts again clears.
+	const [refused, setRefused] = useState<string | null>(null);
+	// Bumped after a put back, to read the versions, changes and texts again.
+	const [again, setAgain] = useState(0);
 	const left = useRef<HTMLDivElement>(null);
 	const right = useRef<HTMLDivElement>(null);
 	const view = useRef<HTMLDivElement>(null);
@@ -103,7 +117,7 @@ export default function Compare({
 		return () => {
 			live = false;
 		};
-	}, [root, open?.id]);
+	}, [root, open?.id, again]);
 
 	const whole = open === null;
 	useEffect(() => {
@@ -133,7 +147,7 @@ export default function Compare({
 		return () => {
 			live = false;
 		};
-	}, [root, whole, chosen]);
+	}, [root, whole, chosen, again]);
 
 	useEffect(() => {
 		if (shown === null) {
@@ -164,7 +178,7 @@ export default function Compare({
 		return () => {
 			live = false;
 		};
-	}, [root, shown, chosen]);
+	}, [root, shown, chosen, again]);
 
 	const before = texts?.then ?? "";
 	const now = texts?.now ?? "";
@@ -311,6 +325,57 @@ export default function Compare({
 	}
 	const a = versions.find((listed) => listed.id === chosen);
 
+	// Every put back goes through the project, which writes the editors down
+	// first and reloads them after. The view then reads what is left.
+	async function back(task: () => Promise<unknown>) {
+		setBusy(true);
+		setRefused(null);
+		try {
+			await onPutBack(task);
+		} catch (reason) {
+			setRefused(failure(reason).message);
+		} finally {
+			setBusy(false);
+			setAgain((times) => times + 1);
+		}
+	}
+	const asked =
+		a === undefined || busy
+			? null
+			: { root, version: a.id, label: label(a) };
+
+	// One difference is the text written back with that run as it was, after
+	// the version every put back keeps first.
+	function backOne(index: number) {
+		const difference = found[index];
+		if (asked === null || shown === null || difference === undefined) {
+			return;
+		}
+		const text = putBack(now, before, difference);
+		const keep: Keep = { kind: "beforePuttingBack", label: asked.label };
+		void back(async () => {
+			await invoke("keep_version", { root, keep });
+			await invoke("write_document", { root, id: shown, text });
+		});
+	}
+
+	function backDocument(id: string) {
+		if (asked !== null) {
+			void back(() => invoke("put_back_document", { ...asked, id }));
+		}
+	}
+
+	function backEverything() {
+		if (asked !== null) {
+			void back(() => invoke("put_back_everything", asked));
+		}
+	}
+
+	const bookBack =
+		asked === null
+			? null
+			: () => void back(() => invoke("put_back_book", asked));
+
 	return (
 		<div className="compare">
 			<div className="compare__bar">
@@ -399,10 +464,19 @@ export default function Compare({
 							className="compare__changes"
 							aria-label="What changed"
 						>
+							{/* One command puts back both, as they share the manifest. */}
 							{changes.book && (
-								<Change what="Book details changed" />
+								<Change
+									what="Book details changed"
+									onPutBack={bookBack}
+								/>
 							)}
-							{changes.cover && <Change what="Cover changed" />}
+							{changes.cover && (
+								<Change
+									what="Cover changed"
+									onPutBack={bookBack}
+								/>
+							)}
 							{changes.nodes.map((change) => (
 								<Change
 									key={change.id}
@@ -413,6 +487,14 @@ export default function Compare({
 											: null
 									}
 									onPick={() => setPicked(change.id)}
+									// A folder comes back only with everything.
+									onPutBack={
+										change.folder
+											? undefined
+											: asked === null
+												? null
+												: () => backDocument(change.id)
+									}
 								/>
 							))}
 							{changes.nodes.length === 0 &&
@@ -550,9 +632,45 @@ export default function Compare({
 						>
 							next
 						</button>
-						{/* Laid over the foot, so a message does not move anything. */}
-						<p className="compare__trouble" role="alert">
-							{error ?? ""}
+						<span aria-hidden="true">·</span>
+						<button
+							type="button"
+							className="compare__step"
+							disabled={asked === null || current === null}
+							onClick={() => {
+								if (current !== null) {
+									backOne(current);
+								}
+							}}
+						>
+							put this one back
+						</button>
+						<button
+							type="button"
+							className="compare__put"
+							disabled={asked === null}
+							onClick={
+								open === null
+									? backEverything
+									: () => backDocument(open.id)
+							}
+						>
+							{open === null
+								? "Put back everything"
+								: "Put back this document"}
+						</button>
+						{/* A message takes the note's line, so it moves nothing. */}
+						<p
+							className={
+								(refused ?? error) === null
+									? "compare__note"
+									: "compare__note compare__note--trouble"
+							}
+							role="alert"
+						>
+							{refused ??
+								error ??
+								"Putting back first keeps Now as a version, so nothing is lost and it can be undone."}
 						</p>
 					</div>
 				</div>
@@ -601,17 +719,20 @@ function Row({
 }
 
 // A row of what changed. Only an edited document has words to compare, so
-// only it can be picked; `picked` is null for the rest.
+// only it can be picked; `picked` is null for the rest. `onPutBack` is null
+// while putting back cannot run, and left out where there is nothing to run.
 function Change({
 	name,
 	what,
 	picked = null,
 	onPick,
+	onPutBack,
 }: {
 	name?: string;
 	what: string;
 	picked?: boolean | null;
 	onPick?: () => void;
+	onPutBack?: (() => void) | null;
 }) {
 	const body = (
 		<>
@@ -633,6 +754,16 @@ function Change({
 					onClick={onPick}
 				>
 					{body}
+				</button>
+			)}
+			{onPutBack !== undefined && (
+				<button
+					type="button"
+					className="compare__step compare__change-back"
+					disabled={onPutBack === null}
+					onClick={onPutBack ?? undefined}
+				>
+					Put back
 				</button>
 			)}
 		</li>

@@ -85,6 +85,14 @@ export function detail(version: Version): string {
 	return parts.filter((part) => part !== "").join(" · ");
 }
 
+/**
+ * What a version is called in the one kept before putting it back: its name,
+ * or its date and time, which stay true after today is yesterday.
+ */
+export function label(version: Version): string {
+	return version.name ?? `${when(version.at)}, ${timeOfDay(version.at)}`;
+}
+
 function nameIn(path: string): string {
 	return path.split("/").slice(-1)[0].replace(/\.md$/, "");
 }

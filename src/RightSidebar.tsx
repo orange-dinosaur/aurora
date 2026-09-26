@@ -80,6 +80,8 @@ type Props = {
 	/** Writes every open document to disk before a version is kept. */
 	onBeforeKeep: () => Promise<void>;
 	onCompare: (version: Version) => void;
+	/** Writes everything down, runs the put back, and reloads what it changed. */
+	onPutBack: (task: () => Promise<unknown>) => Promise<void>;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 	/** Where a tag chip goes, which only the project view can work out. */
 	onOpenTag: (tag: string) => void;
@@ -116,6 +118,7 @@ export default function RightSidebar({
 	enclosing,
 	onBeforeKeep,
 	onCompare,
+	onPutBack,
 	onOpen,
 	onOpenTag,
 	onSubject,
@@ -175,6 +178,7 @@ export default function RightSidebar({
 						onBeforeKeep={onBeforeKeep}
 						logged={logged}
 						onCompare={onCompare}
+						onPutBack={onPutBack}
 					/>
 				) : tab === "stats" ? (
 					<Stats
