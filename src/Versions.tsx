@@ -7,7 +7,7 @@ import { failure } from "./errors";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import NameField from "./NameField";
-import { byDay, detail, label } from "./lib/versions";
+import { byDay, detail, label, ownName } from "./lib/versions";
 import type { Keep, ProjectDocument, Version, VersionsScope } from "./types";
 
 type Props = {
@@ -212,7 +212,7 @@ export default function Versions({
 									<NameField
 										label="Name of the version"
 										placeholder="Name this version"
-										initial={version.name ?? ""}
+										initial={ownName(version) ?? ""}
 										busy={busy}
 										working="Renaming…"
 										error={error}
@@ -273,7 +273,8 @@ function Row({
 	onCompare: (() => void) | null;
 	onPutBack: (() => void) | null;
 }) {
-	const named = version.name !== null;
+	const name = ownName(version);
+	const named = name !== null;
 	const className = [
 		"versions__item",
 		named ? "versions__item--named" : "",
@@ -300,7 +301,7 @@ function Row({
 				    what is known about it opens with it. */}
 				{named && !selected ? (
 					<>
-						<span className="versions__name">{version.name}</span>
+						<span className="versions__name">{name}</span>
 						{version.words !== null && (
 							<span className="versions__words">
 								{version.words.toLocaleString()}
@@ -310,9 +311,7 @@ function Row({
 				) : (
 					<span className="versions__text">
 						{named && (
-							<span className="versions__name">
-								{version.name}
-							</span>
+							<span className="versions__name">{name}</span>
 						)}
 						<span className="versions__detail">
 							{detail(version)}

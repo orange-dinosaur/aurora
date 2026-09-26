@@ -707,10 +707,13 @@ pub fn version_text(root: PathBuf, version: String, id: Uuid) -> Result<Option<S
 }
 
 /// Keeps the project as it stands, so whatever is put back can be undone.
-/// `label` is the name or time of the version being put back.
-fn keep_before(root: &Path, label: String) -> Result<Repository> {
+/// `label` is the name or time of the version being put back, or none when
+/// the same visit to the compare view has already kept one.
+fn keep_before(root: &Path, label: Option<String>) -> Result<Repository> {
 	let author = author(root)?;
-	keep(root, &Keep::BeforePuttingBack { label }, &author)?;
+	if let Some(label) = label {
+		keep(root, &Keep::BeforePuttingBack { label }, &author)?;
+	}
 	Ok(Repository::open(root)?)
 }
 
@@ -746,7 +749,12 @@ fn destination(then: &Manifest, now: &Manifest, id: Uuid) -> Result<(Uuid, usize
 /// folder. One the version did not have goes to the Trash, and one it had
 /// that has since been deleted comes back under its old id.
 #[tauri::command]
-pub fn put_back_document(root: PathBuf, version: String, id: Uuid, label: String) -> Result<()> {
+pub fn put_back_document(
+	root: PathBuf,
+	version: String,
+	id: Uuid,
+	label: Option<String>,
+) -> Result<()> {
 	let repo = keep_before(&root, label)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	let now = read_manifest(&root)?;
@@ -780,7 +788,7 @@ pub fn put_back_document(root: PathBuf, version: String, id: Uuid, label: String
 
 /// Puts back the book's details and its cover as a version had them.
 #[tauri::command]
-pub fn put_back_book(root: PathBuf, version: String, label: String) -> Result<()> {
+pub fn put_back_book(root: PathBuf, version: String, label: Option<String>) -> Result<()> {
 	let repo = keep_before(&root, label)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	for name in COVER_NAMES {
@@ -795,7 +803,7 @@ pub fn put_back_book(root: PathBuf, version: String, label: String) -> Result<()
 /// Puts the whole project back as a version had it. Stats and the Trash are
 /// never part of a version, so they stay as they are.
 #[tauri::command]
-pub fn put_back_everything(root: PathBuf, version: String, label: String) -> Result<()> {
+pub fn put_back_everything(root: PathBuf, version: String, label: Option<String>) -> Result<()> {
 	let repo = keep_before(&root, label)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	let folders = |manifest: &Manifest| {
@@ -1524,7 +1532,13 @@ mod tests {
 		move_node(root.clone(), seeded, there, 0).unwrap();
 		write_document(root.clone(), seeded, "Second".to_owned()).unwrap();
 
-		put_back_document(root.clone(), first.clone(), seeded, "First".to_owned()).unwrap();
+		put_back_document(
+			root.clone(),
+			first.clone(),
+			seeded,
+			Some("First".to_owned()),
+		)
+		.unwrap();
 
 		assert!(changes(&root, Some(&first), None).unwrap().nodes.is_empty());
 		assert_eq!(body_now(&root, seeded), "First");
@@ -1549,13 +1563,22 @@ mod tests {
 		delete_document(root.clone(), doomed).unwrap();
 		let newer = add("Newer");
 
-		put_back_document(root.clone(), start.clone(), doomed, "start".to_owned()).unwrap();
-		put_back_document(root.clone(), start.clone(), newer, "start".to_owned()).unwrap();
+		put_back_document(
+			root.clone(),
+			start.clone(),
+			doomed,
+			Some("start".to_owned()),
+		)
+		.unwrap();
+		let shared = list(&root, None).unwrap().len();
+		// The same visit, which has kept its version already.
+		put_back_document(root.clone(), start.clone(), newer, None).unwrap();
 
 		// Nothing differs, so the id and the place among the others are back.
 		assert!(changes(&root, Some(&start), None).unwrap().nodes.is_empty());
 		assert_eq!(body_now(&root, doomed), "Kept");
 		assert_eq!(list_trash(root.clone()).unwrap().len(), 2);
+		assert_eq!(list(&root, None).unwrap().len(), shared);
 	}
 
 	#[test]
@@ -1572,7 +1595,7 @@ mod tests {
 		fs::write(&jpeg, b"\xff\xd8\xff").unwrap();
 		set_cover(root.clone(), jpeg).unwrap();
 
-		put_back_book(root.clone(), start.clone(), "start".to_owned()).unwrap();
+		put_back_book(root.clone(), start.clone(), Some("start".to_owned())).unwrap();
 
 		let changes = changes(&root, Some(&start), None).unwrap();
 		assert!(!changes.book && !changes.cover);
@@ -1606,7 +1629,7 @@ mod tests {
 		let later_path = path_of(later);
 		fs::write(root.join(HISTORY_FILE), "[]").unwrap();
 
-		put_back_everything(root.clone(), start.clone(), "start".to_owned()).unwrap();
+		put_back_everything(root.clone(), start.clone(), Some("start".to_owned())).unwrap();
 
 		assert!(changes(&root, Some(&start), None).unwrap().nodes.is_empty());
 		assert_eq!(body_now(&root, seeded), "First");

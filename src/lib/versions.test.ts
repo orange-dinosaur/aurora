@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { timeOfDay, when } from "../dates";
 import type { Change, Version } from "../types";
-import { byDay, counts, detail, duration, label, summary } from "./versions";
+import {
+	byDay,
+	counts,
+	detail,
+	duration,
+	label,
+	ownName,
+	summary,
+} from "./versions";
 
 function version(at: Date, rest: Partial<Version> = {}): Version {
 	return {
@@ -173,6 +181,30 @@ describe("label", () => {
 		expect(label(version(at, { name: "Draft one" }))).toBe("Draft one");
 		expect(label(version(at))).toBe(
 			`${when(at.toISOString())}, ${timeOfDay(at.toISOString())}`,
+		);
+	});
+});
+
+describe("a version kept before putting back", () => {
+	const at = new Date(2026, 8, 12, 9, 5);
+	const time = timeOfDay(at.toISOString());
+	const kept = version(at, {
+		kind: "beforePuttingBack",
+		name: "Before putting back “Draft one”",
+		words: 1148,
+	});
+
+	it("is quiet under Aurora's name", () => {
+		expect(ownName(kept)).toBeNull();
+		expect(detail(kept)).toBe(`${time} · before putting back “Draft one”`);
+		expect(label(kept)).toBe(`${when(at.toISOString())}, ${time}`);
+	});
+
+	it("is the writer's once they rename it", () => {
+		const renamed = { ...kept, name: "Mill scene, old" };
+		expect(ownName(renamed)).toBe("Mill scene, old");
+		expect(detail(renamed)).toBe(
+			`${time} · ${(1148).toLocaleString()} words · you`,
 		);
 	});
 });

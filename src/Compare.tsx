@@ -26,7 +26,7 @@ import {
 	type Run,
 	tally,
 } from "./lib/compare";
-import { byDay, counts, detail, label, summary } from "./lib/versions";
+import { byDay, counts, detail, label, ownName, summary } from "./lib/versions";
 import { timeOfDay } from "./dates";
 import type {
 	Changes,
@@ -88,6 +88,8 @@ export default function Compare({
 	const [busy, setBusy] = useState(false);
 	// Kept apart from `error`, which reading the texts again clears.
 	const [refused, setRefused] = useState<string | null>(null);
+	// The A this visit has already kept a version before putting back from.
+	const kept = useRef<string | null>(null);
 	// Bumped after a put back, to read the versions, changes and texts again.
 	const [again, setAgain] = useState(0);
 	const left = useRef<HTMLDivElement>(null);
@@ -332,6 +334,7 @@ export default function Compare({
 		setRefused(null);
 		try {
 			await onPutBack(task);
+			kept.current = chosen;
 		} catch (reason) {
 			setRefused(failure(reason).message);
 		} finally {
@@ -339,22 +342,30 @@ export default function Compare({
 			setAgain((times) => times + 1);
 		}
 	}
+	// No label once this visit has kept a version before putting back from A,
+	// so every put back until the writer leaves or picks another A shares it.
 	const asked =
 		a === undefined || busy
 			? null
-			: { root, version: a.id, label: label(a) };
+			: {
+					root,
+					version: a.id,
+					label: kept.current === a.id ? null : label(a),
+				};
 
-	// One difference is the text written back with that run as it was, after
-	// the version every put back keeps first.
+	// One difference is the text written back with that run as it was.
 	function backOne(index: number) {
 		const difference = found[index];
 		if (asked === null || shown === null || difference === undefined) {
 			return;
 		}
 		const text = putBack(now, before, difference);
-		const keep: Keep = { kind: "beforePuttingBack", label: asked.label };
+		const { label } = asked;
 		void back(async () => {
-			await invoke("keep_version", { root, keep });
+			if (label !== null) {
+				const keep: Keep = { kind: "beforePuttingBack", label };
+				await invoke("keep_version", { root, keep });
+			}
 			await invoke("write_document", { root, id: shown, text });
 		});
 	}
@@ -515,7 +526,9 @@ export default function Compare({
 					>
 						<Column
 							letter="A"
-							title={a === undefined ? "" : (a.name ?? detail(a))}
+							title={
+								a === undefined ? "" : (ownName(a) ?? detail(a))
+							}
 							detail={
 								a === undefined
 									? ""
@@ -688,12 +701,12 @@ function Row({
 	chosen: boolean;
 	onChoose: () => void;
 }) {
-	const named = version.name !== null;
+	const name = ownName(version);
 	return (
 		<li
 			className={[
 				"versions__item",
-				named ? "versions__item--named" : "",
+				name !== null ? "versions__item--named" : "",
 				chosen ? "versions__item--selected" : "",
 			]
 				.filter((part) => part !== "")
@@ -707,8 +720,8 @@ function Row({
 			>
 				<span className="versions__mark" aria-hidden="true" />
 				<span className="versions__text">
-					{named && (
-						<span className="versions__name">{version.name}</span>
+					{name !== null && (
+						<span className="versions__name">{name}</span>
 					)}
 					<span className="versions__detail">{detail(version)}</span>
 				</span>

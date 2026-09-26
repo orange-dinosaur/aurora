@@ -62,6 +62,10 @@ export function counts(written: number, removed: number): string {
 export function detail(version: Version): string {
 	const parts = [timeOfDay(version.at)];
 	const moved = counts(version.written ?? 0, version.removed ?? 0);
+	const yours = [
+		version.words === null ? "" : `${version.words.toLocaleString()} words`,
+		"you",
+	];
 
 	switch (version.kind) {
 		case "session":
@@ -71,11 +75,17 @@ export function detail(version: Version): string {
 			parts.push("on leaving", moved);
 			break;
 		case "named":
+			parts.push(...yours);
+			break;
 		case "beforePuttingBack":
-			if (version.words !== null) {
-				parts.push(`${version.words.toLocaleString()} words`);
-			}
-			parts.push("you");
+			// Aurora's own name is the whole of the line, as quiet as a session.
+			parts.push(
+				...(ownName(version) === null
+					? [
+							`before putting back${(version.name ?? BEFORE).slice(BEFORE.length)}`,
+						]
+					: yours),
+			);
 			break;
 		case null:
 			// A commit made outside Aurora, by whoever made it.
@@ -90,7 +100,22 @@ export function detail(version: Version): string {
  * or its date and time, which stay true after today is yesterday.
  */
 export function label(version: Version): string {
-	return version.name ?? `${when(version.at)}, ${timeOfDay(version.at)}`;
+	return ownName(version) ?? `${when(version.at)}, ${timeOfDay(version.at)}`;
+}
+
+// How Rust begins the name of a version it keeps before putting back.
+const BEFORE = "Before putting back";
+
+/**
+ * A name the writer gave, which the lists show prominently. The one Aurora
+ * writes on a version kept before putting back is not theirs, until they
+ * rename it.
+ */
+export function ownName(version: Version): string | null {
+	return version.kind === "beforePuttingBack" &&
+		(version.name === null || version.name.startsWith(BEFORE))
+		? null
+		: version.name;
 }
 
 function nameIn(path: string): string {
