@@ -1320,6 +1320,8 @@ export default function Project({
 				onProfile={onProfile}
 				onCloseProject={onClose}
 				onRefreshed={() => setListing((version) => version + 1)}
+				onBeforeSwitch={writeAll}
+				onSwitch={putBack}
 			/>
 
 			{comparing !== null && (

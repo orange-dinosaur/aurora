@@ -139,12 +139,15 @@ export default function Menu({
 export function MenuItem({
 	danger,
 	disabled,
+	checked,
 	depth,
 	onSelect,
 	children,
 }: {
 	danger?: boolean;
 	disabled?: boolean;
+	/** Given only in a menu that picks one of several. */
+	checked?: boolean;
 	/** How far in to set it, for a menu that lists a tree. */
 	depth?: number;
 	onSelect: () => void;
@@ -153,7 +156,8 @@ export function MenuItem({
 	return (
 		<button
 			type="button"
-			role="menuitem"
+			role={checked === undefined ? "menuitem" : "menuitemradio"}
+			aria-checked={checked}
 			className={
 				danger === true ? "menu__item menu__item--danger" : "menu__item"
 			}

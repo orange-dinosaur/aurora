@@ -975,6 +975,53 @@ body,
 	color: var(--text-dim);
 }
 
+/* Quieter than the project's name, and it keeps its width: the path beside
+   it gives way first, and only a very long name is cut short. */
+.titlebar__version {
+	margin-left: 0;
+	font-weight: 400;
+	color: var(--text-dim);
+}
+
+.titlebar__version-name {
+	max-width: 14rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.titlebar__menu--version .menu__items {
+	left: -0.4rem;
+	right: auto;
+	min-width: 12rem;
+}
+
+/* A fixed slot, so the names line up whichever one is ticked. */
+.titlebar__tick {
+	display: inline-flex;
+	width: 1rem;
+	margin-right: 0.4rem;
+	vertical-align: -3px;
+}
+
+.titlebar__ask {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	width: 17rem;
+}
+
+.titlebar__ask-text {
+	margin: 0;
+	white-space: normal;
+}
+
+.titlebar__ask-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.4rem;
+}
+
 /* Takes what is left and gives it back first, so a deep folder never pushes
    the buttons off the row. */
 .titlebar__path {

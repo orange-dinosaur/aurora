@@ -29,7 +29,8 @@ export type IconName =
 	| "info"
 	| "at-sign"
 	| "chart-column"
-	| "history";
+	| "history"
+	| "check";
 
 // Lucide's geometry, on its 24-unit grid. Anything added here should be traced
 // from the same set rather than drawn by eye, or the family stops reading as
@@ -194,6 +195,7 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="M12 7v5l4 2" />
 		</>
 	),
+	check: <path d="M20 6 9 17l-5-5" />,
 };
 
 /** Decorative by definition: every button carrying one keeps the label that

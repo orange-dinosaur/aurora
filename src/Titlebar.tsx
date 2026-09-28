@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { AccountChip } from "./Account";
@@ -9,7 +9,7 @@ import { failure } from "./errors";
 import { SEARCH, SESSION, shortcutLabel } from "./formatting";
 import type { Running } from "./sessions";
 import ThemeToggle from "./ThemeToggle";
-import type { Theme } from "./types";
+import type { Branch, Theme } from "./types";
 
 type Props = {
 	name: string;
@@ -41,6 +41,10 @@ type Props = {
 	// The manifest has been read again, so whatever is showing it should look
 	// at it afresh.
 	onRefreshed: () => void;
+	/** Writes every open tab, so asking what is not in a checkpoint sees it. */
+	onBeforeSwitch: () => Promise<void>;
+	/** Runs a switch the way put back runs, catching the tabs up after it. */
+	onSwitch: (task: () => Promise<unknown>) => Promise<void>;
 };
 
 export default function Titlebar({
@@ -63,9 +67,59 @@ export default function Titlebar({
 	onProfile,
 	onCloseProject,
 	onRefreshed,
+	onBeforeSwitch,
+	onSwitch,
 }: Props) {
 	const [busy, setBusy] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
+	const [versions, setVersions] = useState<Branch[]>([]);
+	const current = versions.find((version) => version.current);
+
+	async function listVersions() {
+		try {
+			setVersions(await invoke<Branch[]>("list_branches", { root }));
+		} catch (error) {
+			setMessage(failure(error).message);
+		}
+	}
+
+	useEffect(() => {
+		void listVersions();
+	}, [root]);
+
+	// Whether there are changes the writer has to decide about first. With
+	// none, the switch is already under way.
+	async function choose(slug: string): Promise<boolean> {
+		await onBeforeSwitch();
+		try {
+			if (await invoke<boolean>("changes_pending", { root })) {
+				return true;
+			}
+		} catch (error) {
+			setMessage(failure(error).message);
+			return false;
+		}
+		void switchTo(slug, null);
+		return false;
+	}
+
+	async function switchTo(slug: string, checkpoint: string | null) {
+		try {
+			await onSwitch(async () => {
+				if (checkpoint !== null) {
+					await invoke("add_checkpoint", {
+						root,
+						message: checkpoint,
+					});
+				}
+				await invoke("switch_branch", { root, slug });
+			});
+			setMessage(null);
+		} catch (error) {
+			setMessage(failure(error).message);
+		}
+		await listVersions();
+	}
 
 	// Hands the project folder to the desktop's file manager. Nothing about
 	// the project changes, so a refusal is worth saying once and no more.
@@ -128,6 +182,34 @@ export default function Titlebar({
 					</>
 				)}
 			</Menu>
+
+			{current !== undefined && (
+				<Menu
+					label={`Version: ${current.name}`}
+					trigger={
+						<>
+							<span className="titlebar__version-name">
+								⎇ {current.name}
+							</span>
+							<Icon name="chevron-down" />
+						</>
+					}
+					wrapper="titlebar__menu titlebar__menu--version"
+					className="titlebar__name titlebar__version"
+				>
+					{(close) => (
+						<VersionMenu
+							versions={versions}
+							current={current}
+							close={close}
+							onChoose={choose}
+							onCheckpoint={(slug, words) =>
+								void switchTo(slug, words)
+							}
+						/>
+					)}
+				</Menu>
+			)}
 
 			<span className="titlebar__path" title={root}>
 				{root}
@@ -217,4 +299,87 @@ export default function Titlebar({
 			</p>
 		</header>
 	);
+}
+
+// Its own component so the question goes with the menu: the menu unmounts
+// what it holds when it closes, however it was closed.
+function VersionMenu({
+	versions,
+	current,
+	close,
+	onChoose,
+	onCheckpoint,
+}: {
+	versions: Branch[];
+	current: Branch;
+	close: () => void;
+	onChoose: (slug: string) => Promise<boolean>;
+	onCheckpoint: (slug: string, message: string) => void;
+}) {
+	const [asking, setAsking] = useState<string | null>(null);
+	const [words, setWords] = useState("");
+
+	if (asking !== null) {
+		return (
+			<form
+				className="titlebar__ask"
+				onSubmit={(event) => {
+					event.preventDefault();
+					if (words.trim() !== "") {
+						close();
+						onCheckpoint(asking, words);
+					}
+				}}
+			>
+				<p className="titlebar__ask-text">
+					{current.name} has changes that aren't in a checkpoint.
+				</p>
+				<input
+					className="namefield__input"
+					autoFocus
+					value={words}
+					aria-label="Checkpoint message"
+					placeholder="What changed"
+					onChange={(event) => setWords(event.target.value)}
+				/>
+				<span className="titlebar__ask-buttons">
+					<button
+						type="button"
+						className="sprint__stop"
+						onClick={close}
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						className="sprint__go"
+						disabled={words.trim() === ""}
+					>
+						Add checkpoint and switch
+					</button>
+				</span>
+			</form>
+		);
+	}
+
+	return versions.map((version) => (
+		<MenuItem
+			key={version.slug}
+			checked={version.current}
+			onSelect={() => {
+				if (version.current) {
+					close();
+					return;
+				}
+				void onChoose(version.slug).then((ask) =>
+					ask ? setAsking(version.slug) : close(),
+				);
+			}}
+		>
+			<span className="titlebar__tick">
+				{version.current && <Icon name="check" />}
+			</span>
+			{version.name}
+		</MenuItem>
+	));
 }
