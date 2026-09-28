@@ -399,6 +399,11 @@ pub enum Error {
 	CoverMissing,
 	AlreadyExists,
 	EmptyMessage,
+	VersionName,
+	VersionExists,
+	NothingKept,
+	MainFixed,
+	CurrentVersion,
 	UnsupportedFormat(Format),
 	Trash(trash::Error),
 	Git(git2::Error),
@@ -454,6 +459,13 @@ impl fmt::Display for Error {
 			Error::CoverMissing => write!(f, "the cover image is no longer in the project"),
 			Error::AlreadyExists => write!(f, "a folder of that name is already there"),
 			Error::EmptyMessage => write!(f, "a checkpoint needs a few words on what changed"),
+			Error::VersionName => write!(f, "a version's name needs a letter or a digit"),
+			Error::VersionExists => write!(f, "a version of that name is already there"),
+			Error::NothingKept => {
+				write!(f, "add a first checkpoint before starting another version")
+			}
+			Error::MainFixed => write!(f, "Main cannot be renamed or deleted"),
+			Error::CurrentVersion => write!(f, "the version you are in cannot be deleted"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
@@ -490,6 +502,11 @@ impl Error {
 			Error::CoverMissing => "coverMissing",
 			Error::AlreadyExists => "alreadyExists",
 			Error::EmptyMessage => "emptyMessage",
+			Error::VersionName => "versionName",
+			Error::VersionExists => "versionExists",
+			Error::NothingKept => "nothingKept",
+			Error::MainFixed => "mainFixed",
+			Error::CurrentVersion => "currentVersion",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",
@@ -533,6 +550,11 @@ impl std::error::Error for Error {
 			| Error::CoverMissing
 			| Error::AlreadyExists
 			| Error::EmptyMessage
+			| Error::VersionName
+			| Error::VersionExists
+			| Error::NothingKept
+			| Error::MainFixed
+			| Error::CurrentVersion
 			| Error::UnsupportedFormat(_) => None,
 			Error::Trash(e) => Some(e),
 			Error::Git(e) => Some(e),
