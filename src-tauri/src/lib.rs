@@ -182,6 +182,8 @@ pub fn run() {
 			versions::create_branch,
 			versions::rename_branch,
 			versions::delete_branch,
+			versions::changes_pending,
+			versions::switch_branch,
 			versions::list_versions,
 			versions::nested_notice_shown,
 			versions::rename_version,

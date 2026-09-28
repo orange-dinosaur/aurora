@@ -404,6 +404,7 @@ pub enum Error {
 	NothingKept,
 	MainFixed,
 	CurrentVersion,
+	ChangesPending,
 	UnsupportedFormat(Format),
 	Trash(trash::Error),
 	Git(git2::Error),
@@ -466,6 +467,12 @@ impl fmt::Display for Error {
 			}
 			Error::MainFixed => write!(f, "Main cannot be renamed or deleted"),
 			Error::CurrentVersion => write!(f, "the version you are in cannot be deleted"),
+			Error::ChangesPending => {
+				write!(
+					f,
+					"the changes since the last checkpoint would be left behind"
+				)
+			}
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
@@ -507,6 +514,7 @@ impl Error {
 			Error::NothingKept => "nothingKept",
 			Error::MainFixed => "mainFixed",
 			Error::CurrentVersion => "currentVersion",
+			Error::ChangesPending => "changesPending",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",
@@ -555,6 +563,7 @@ impl std::error::Error for Error {
 			| Error::NothingKept
 			| Error::MainFixed
 			| Error::CurrentVersion
+			| Error::ChangesPending
 			| Error::UnsupportedFormat(_) => None,
 			Error::Trash(e) => Some(e),
 			Error::Git(e) => Some(e),

@@ -9,7 +9,7 @@ use std::path::{Component, Path, PathBuf};
 use git2::build::CheckoutBuilder;
 use git2::{
 	BranchType, Commit, ErrorCode, Index, IndexAddOption, Oid, Repository, RepositoryInitOptions,
-	Signature, Sort, Tree,
+	Signature, Sort, StatusOptions, Tree,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -1001,6 +1001,24 @@ pub fn delete_branch(root: PathBuf, slug: String) -> Result<()> {
 	dropped_branch(&root, &slug)
 }
 
+/// Asked before switching, so the writer can decide what happens to changes
+/// not yet in a checkpoint.
+#[tauri::command]
+pub fn changes_pending(root: PathBuf) -> Result<bool> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	pending(&root)
+}
+
+#[tauri::command]
+pub fn switch_branch(root: PathBuf, slug: String) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	switch(&root, &slug)
+}
+
 /// Records that the writer has seen the note about an enclosing repository.
 #[tauri::command]
 pub fn nested_notice_shown(root: PathBuf) -> Result<()> {
@@ -1140,6 +1158,17 @@ pub fn put_back_book(root: PathBuf, version: String, label: Option<String>) -> R
 pub fn put_back_everything(root: PathBuf, version: String, label: Option<String>) -> Result<()> {
 	let repo = keep_before(&root, label)?;
 	let (files, then) = side(&repo, Some(&version))?;
+	let was = read_manifest(&root)?;
+
+	// The version just kept holds every file, so a forced checkout removes
+	// what the older version did not have and leaves ignored files alone.
+	repo.checkout_tree(files.as_object(), Some(CheckoutBuilder::new().force()))?;
+	settle_folders(&root, &was, &then)
+}
+
+/// Git keeps files, not folders, so after a checkout the folders `was` had
+/// and `is` does not are taken away, and empty ones `is` has are made.
+fn settle_folders(root: &Path, was: &Manifest, is: &Manifest) -> Result<()> {
 	let folders = |manifest: &Manifest| {
 		let mut placed = Vec::new();
 		place(&manifest.nodes, None, "", &mut placed);
@@ -1155,14 +1184,8 @@ pub fn put_back_everything(root: PathBuf, version: String, label: Option<String>
 			})
 			.collect::<Vec<_>>()
 	};
-	let was = folders(&read_manifest(&root)?);
-
-	// The version just kept holds every file, so a forced checkout removes
-	// what the older version did not have and leaves ignored files alone.
-	repo.checkout_tree(files.as_object(), Some(CheckoutBuilder::new().force()))?;
-
-	// Git keeps files, not folders, so empty ones are made and taken away here.
-	let is = folders(&then);
+	let was = folders(was);
+	let is = folders(is);
 	let mut gone: Vec<&String> = was.iter().filter(|path| !is.contains(path)).collect();
 	gone.sort_by_key(|path| std::cmp::Reverse(path.len()));
 	for path in gone {
@@ -1172,6 +1195,38 @@ pub fn put_back_everything(root: PathBuf, version: String, label: Option<String>
 	for path in &is {
 		fs::create_dir_all(root.join(path))?;
 	}
+	Ok(())
+}
+
+/// Whether the project differs from its last checkpoint, on disk or in what
+/// the next checkpoint holds. Stats and the Trash never count.
+fn pending(root: &Path) -> Result<bool> {
+	let repo = Repository::open(root)?;
+	let mut options = StatusOptions::new();
+	options.include_untracked(true);
+	Ok(!repo.statuses(Some(&mut options))?.is_empty())
+}
+
+/// Moves the writer into another version, refusing while there are changes
+/// a checkout would overwrite.
+fn switch(root: &Path, slug: &str) -> Result<()> {
+	if pending(root)? {
+		return Err(Error::ChangesPending);
+	}
+	let repo = Repository::open(root)?;
+	let target = repo
+		.find_branch(slug, BranchType::Local)?
+		.get()
+		.peel_to_commit()?;
+	let (_, was) = side(&repo, Some("HEAD"))?;
+	let (files, is) = side(&repo, Some(&target.id().to_string()))?;
+
+	// Nothing differs from `HEAD`, so a forced checkout loses no writing. It
+	// removes what the target does not hold, updates the index to match, and
+	// leaves ignored files alone.
+	repo.checkout_tree(files.as_object(), Some(CheckoutBuilder::new().force()))?;
+	settle_folders(root, &was, &is)?;
+	repo.set_head(&format!("refs/heads/{slug}"))?;
 	Ok(())
 }
 
@@ -1903,6 +1958,60 @@ mod tests {
 			unmerged(&root),
 			[("main".to_owned(), 1), ("draft".to_owned(), 0)]
 		);
+	}
+
+	#[test]
+	fn switching_waits_while_changes_are_not_in_a_checkpoint() {
+		let (_parent, root, document, _, _) = novel();
+		new_branch(&root, "Draft").unwrap();
+		fs::write(root.join(HISTORY_FILE), "[]").unwrap();
+		assert!(!pending(&root).unwrap());
+
+		write_document(root.clone(), document, "Not yet kept".to_owned()).unwrap();
+		assert!(pending(&root).unwrap());
+		let refused = switch(&root, "main");
+		assert!(matches!(refused, Err(Error::ChangesPending)));
+		assert_eq!(head_target(&root), "refs/heads/draft");
+		assert_eq!(body_now(&root, document), "Not yet kept");
+	}
+
+	#[test]
+	fn switching_brings_the_whole_project_to_the_other_version() {
+		let (_parent, root, edited, here, there) = novel();
+		let moved = create_document(root.clone(), here, "Moved".to_owned())
+			.unwrap()
+			.id;
+		let deleted = create_document(root.clone(), here, "Deleted".to_owned())
+			.unwrap()
+			.id;
+		write_document(root.clone(), edited, "Main's text".to_owned()).unwrap();
+		let main = checkpoint(&root, "On Main", "").unwrap().to_string();
+
+		new_branch(&root, "Draft").unwrap();
+		write_document(root.clone(), edited, "Draft's text".to_owned()).unwrap();
+		create_document(root.clone(), there, "Added".to_owned()).unwrap();
+		move_node(root.clone(), moved, there, 0).unwrap();
+		delete_document(root.clone(), deleted).unwrap();
+		let empty = create_folder(root.clone(), here, "Empty".to_owned(), None)
+			.unwrap()
+			.id();
+		let empty_path = tree::path(&read_manifest(&root).unwrap().nodes, empty).unwrap();
+		let draft = checkpoint(&root, "On Draft", "").unwrap().to_string();
+		fs::write(root.join(HISTORY_FILE), "[]").unwrap();
+
+		switch(&root, "main").unwrap();
+		assert_eq!(head_target(&root), "refs/heads/main");
+		assert!(changes(&root, Some(&main), None).unwrap().nodes.is_empty());
+		assert!(!pending(&root).unwrap());
+		assert_eq!(body_now(&root, edited), "Main's text");
+		assert!(!root.join(&empty_path).exists());
+		assert_eq!(fs::read_to_string(root.join(HISTORY_FILE)).unwrap(), "[]");
+		assert_eq!(list_trash(root.clone()).unwrap().len(), 1);
+
+		switch(&root, "draft").unwrap();
+		assert!(changes(&root, Some(&draft), None).unwrap().nodes.is_empty());
+		assert!(!pending(&root).unwrap());
+		assert!(root.join(&empty_path).is_dir());
 	}
 
 	/// A novel with versions, its first document, and two top-level folders
