@@ -8,8 +8,8 @@ use std::path::{Component, Path, PathBuf};
 
 use git2::build::CheckoutBuilder;
 use git2::{
-	BranchType, Commit, ErrorCode, Index, IndexAddOption, Oid, Repository, RepositoryInitOptions,
-	Signature, Sort, StatusOptions, Tree,
+	BranchType, Commit, ErrorCode, Index, IndexAddOption, IndexEntry, IndexTime, Oid, Repository,
+	RepositoryInitOptions, Signature, Sort, StatusOptions, Tree,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -21,7 +21,7 @@ use crate::document::{
 use crate::history::HISTORY_FILE;
 use crate::project::{
 	Book, COVER_NAMES, Error, Format, MANIFEST_FILE, Manifest, Result, read_manifest,
-	remove_if_there, write_atomic, write_book,
+	remove_if_there, to_json, write_atomic, write_book,
 };
 use crate::tree::{self, Node};
 
@@ -463,14 +463,20 @@ fn changed_words(
 	}))
 }
 
-/// Commits the whole project with the writer's message, as it is, and returns
-/// the new checkpoint.
+/// Commits what the next checkpoint holds with the writer's message, or the
+/// whole project as it is when nothing is staged, and returns the new
+/// checkpoint.
 fn checkpoint(root: &Path, message: &str, author: &str) -> Result<Oid> {
 	if message.trim().is_empty() {
 		return Err(Error::EmptyMessage);
 	}
 	let repo = Repository::open(root)?;
-	let tree = repo.find_tree(stage(&repo)?)?;
+	let staged = compare(&side(&repo, Some("HEAD"))?, &staged_side(&repo)?);
+	let tree = match staged.nodes.is_empty() && !staged.book && !staged.cover {
+		true => stage(&repo)?,
+		false => repo.index()?.write_tree()?,
+	};
+	let tree = repo.find_tree(tree)?;
 	let signature = signature(author)?;
 	let head = head_commit(&repo)?;
 	let parents: Vec<&Commit> = head.iter().collect();
@@ -768,7 +774,14 @@ fn side<'r>(repo: &'r Repository, version: Option<&str>) -> Result<(Tree<'r>, Ma
 	let tree = match version {
 		Some("HEAD") => head_commit(repo)?.map(|head| head.tree()).transpose()?,
 		Some(id) => Some(repo.find_commit(Oid::from_str(id)?)?.tree()?),
-		None => Some(repo.find_tree(working(repo)?.write_tree()?)?),
+		None => {
+			let mut index = working(repo)?;
+			let tree = index.write_tree()?;
+			// The repository hands out one index, so what it staged in memory
+			// would otherwise be seen by the next caller.
+			index.read(true)?;
+			Some(repo.find_tree(tree)?)
+		}
 	};
 	with_manifest(repo, tree)
 }
@@ -944,6 +957,191 @@ fn compare((old_tree, old): &(Tree, Manifest), (new_tree, new): &(Tree, Manifest
 	}
 }
 
+/// One row of the Changes list, to move in or out of the next checkpoint. A
+/// node row covers a document's text, name and place, or a folder's name,
+/// place and order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, ts_rs::TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum Row {
+	Node { id: Uuid },
+	Book,
+	Cover,
+}
+
+/// Writes one row into what the next checkpoint holds, as the project on
+/// disk has it when staging, or as the last checkpoint has it when not.
+fn carry(root: &Path, row: Row, staging: bool) -> Result<()> {
+	let repo = Repository::open(root)?;
+	let (from_tree, from) = side(&repo, if staging { None } else { Some("HEAD") })?;
+	let (was_tree, was) = staged_side(&repo)?;
+	let mut is = Manifest {
+		nodes: was.nodes.clone(),
+		book: was.book.clone(),
+		..read_manifest(root)?
+	};
+	let held = blobs_of(&was_tree, &was);
+	let held_cover = blob_at(&was_tree, &was.book.cover);
+	let (mut blobs, mut cover) = (held.clone(), held_cover);
+
+	match row {
+		Row::Book => {
+			is.book = Book {
+				cover: is.book.cover,
+				..from.book
+			}
+		}
+		Row::Cover => {
+			cover = blob_at(&from_tree, &from.book.cover);
+			is.book.cover = from.book.cover;
+		}
+		Row::Node { id } => match tree::path(&from.nodes, id) {
+			// ponytail: a folder goes with all it holds, even a document moved
+			// out of it first whose move is not in the next checkpoint.
+			None => {
+				tree::remove(&mut is.nodes, id);
+			}
+			Some(path) => {
+				take(&from.nodes, &mut is.nodes, id);
+				if let Some(blob) = blob_at(&from_tree, &path) {
+					blobs.insert(id, blob);
+				}
+			}
+		},
+	}
+
+	let files = |manifest: &Manifest, blobs: &HashMap<Uuid, Oid>, cover: Option<Oid>| {
+		let mut files: HashMap<String, Oid> = manifest
+			.documents()
+			.into_iter()
+			.filter_map(|document| Some((document.path, *blobs.get(&document.id)?)))
+			.collect();
+		if let Some(cover) = cover {
+			files.insert(manifest.book.cover.clone(), cover);
+		}
+		files
+	};
+	let mut old = files(&was, &held, held_cover);
+	if let Some(manifest) = blob_at(&was_tree, MANIFEST_FILE) {
+		old.insert(MANIFEST_FILE.to_owned(), manifest);
+	}
+	let mut new = files(&is, &blobs, cover);
+	new.insert(MANIFEST_FILE.to_owned(), repo.blob(&to_json(&is)?)?);
+
+	let mut index = repo.index()?;
+	for path in old.keys().filter(|path| !new.contains_key(*path)) {
+		index.remove_path(Path::new(path))?;
+	}
+	for (path, id) in new.iter().filter(|(path, id)| old.get(*path) != Some(id)) {
+		index.add(&entry(path, *id, repo.find_blob(*id)?.size()))?;
+	}
+	index.write()?;
+	Ok(())
+}
+
+/// Each document's file in a tree, by id.
+fn blobs_of(tree: &Tree, manifest: &Manifest) -> HashMap<Uuid, Oid> {
+	manifest
+		.documents()
+		.iter()
+		.filter_map(|document| Some((document.id, blob_at(tree, &document.path)?)))
+		.collect()
+}
+
+/// An index entry with no file stats, so the next look at the folder reads
+/// the file itself to tell whether it matches.
+fn entry(path: &str, id: Oid, size: usize) -> IndexEntry {
+	IndexEntry {
+		ctime: IndexTime::new(0, 0),
+		mtime: IndexTime::new(0, 0),
+		dev: 0,
+		ino: 0,
+		mode: 0o100644,
+		uid: 0,
+		gid: 0,
+		file_size: size as u32,
+		id,
+		flags: path.len().min(0xfff) as u16,
+		flags_extended: 0,
+		path: path.as_bytes().to_vec(),
+	}
+}
+
+/// Puts the node with `id` where `from` has it, under its own name and
+/// fields. Any folder above it that `into` lacks comes along, holding nothing
+/// else. A folder keeps the children `into` gives it, in `from`'s order.
+fn take(from: &[Node], into: &mut Vec<Node>, id: Uuid) {
+	let Some(trail) = tree::trail(from, id) else {
+		return;
+	};
+	let bare = |node: &Node| match node {
+		Node::Folder { .. } => {
+			let mut node = node.clone();
+			if let Node::Folder { children, .. } = &mut node {
+				children.clear();
+			}
+			node
+		}
+		Node::Document { .. } => node.clone(),
+	};
+	let (node, above) = trail.split_last().expect("a trail ends at its node");
+	for folder in above {
+		if tree::find(into, folder.id()).is_none() {
+			insert(from, into, bare(folder));
+		}
+	}
+
+	let mut placed = bare(node);
+	if let (Some(Node::Folder { children: held, .. }), Node::Folder { children, .. }) =
+		(tree::remove(into, id), &mut placed)
+	{
+		*children = held;
+		follow(children, tree::children(from, id).unwrap_or_default());
+	}
+	insert(from, into, placed);
+}
+
+/// Inserts a node into the folder `from` has it in, after the node it follows
+/// there if `into` has that one too, or first.
+fn insert(from: &[Node], into: &mut Vec<Node>, node: Node) {
+	let parent = tree::parent(from, node.id()).map(Node::id);
+	let siblings = match parent {
+		Some(parent) => tree::children(from, parent).unwrap_or_default(),
+		None => from,
+	};
+	let at = siblings
+		.iter()
+		.position(|sibling| sibling.id() == node.id())
+		.unwrap_or(0);
+	let children = match parent {
+		Some(parent) => match tree::find_mut(into, parent) {
+			Some(Node::Folder { children, .. }) => children,
+			_ => return,
+		},
+		None => into,
+	};
+	let index = siblings[..at]
+		.iter()
+		.rev()
+		.find_map(|sibling| children.iter().position(|c| c.id() == sibling.id()))
+		.map_or(0, |before| before + 1);
+	children.insert(index, node);
+}
+
+/// Puts the children `order` also has into its order, in the places they
+/// already take, so the others stay where they are.
+fn follow(children: &mut [Node], order: &[Node]) {
+	let rank = |node: &Node| order.iter().position(|other| other.id() == node.id());
+	let slots: Vec<usize> = (0..children.len())
+		.filter(|&at| rank(&children[at]).is_some())
+		.collect();
+	let mut moving: Vec<Node> = slots.iter().map(|&at| children[at].clone()).collect();
+	moving.sort_by_key(rank);
+	for (at, node) in slots.into_iter().zip(moving) {
+		children[at] = node;
+	}
+}
+
 /// A document's full text at a version, or none when it is not there.
 pub fn text(root: &Path, version: &str, document: Uuid) -> Result<Option<String>> {
 	let repo = Repository::open(root)?;
@@ -1094,6 +1292,46 @@ pub fn version_status(root: PathBuf) -> Result<Status> {
 		return Err(Error::RelativePath);
 	}
 	status(&root)
+}
+
+#[tauri::command]
+pub fn stage_row(root: PathBuf, row: Row) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	carry(&root, row, true)
+}
+
+#[tauri::command]
+pub fn unstage_row(root: PathBuf, row: Row) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	carry(&root, row, false)
+}
+
+#[tauri::command]
+pub fn stage_all(root: PathBuf) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	stage(&Repository::open(&root)?)?;
+	Ok(())
+}
+
+#[tauri::command]
+pub fn unstage_all(root: PathBuf) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	let repo = Repository::open(&root)?;
+	let mut index = repo.index()?;
+	match head_commit(&repo)? {
+		Some(head) => index.read_tree(&head.tree()?)?,
+		None => index.clear()?,
+	}
+	index.write()?;
+	Ok(())
 }
 
 #[tauri::command]
@@ -2392,6 +2630,264 @@ mod tests {
 		let status = super::status(&root).unwrap();
 		assert!(change_of(&status.staged, seeded).unwrap().edited);
 		assert!(change_of(&status.unstaged, seeded).unwrap().edited);
+	}
+
+	fn rows(changes: &Changes) -> Vec<Row> {
+		let mut rows: Vec<Row> = changes
+			.nodes
+			.iter()
+			.map(|change| Row::Node { id: change.id })
+			.collect();
+		if changes.book {
+			rows.push(Row::Book);
+		}
+		if changes.cover {
+			rows.push(Row::Cover);
+		}
+		rows
+	}
+
+	fn nothing_in(changes: &Changes) -> bool {
+		changes.nodes.is_empty() && !changes.book && !changes.cover
+	}
+
+	fn checkpoint_manifest(root: &Path, id: Oid) -> Manifest {
+		let repo = Repository::open(root).unwrap();
+		side(&repo, Some(&id.to_string())).unwrap().1
+	}
+
+	#[test]
+	fn staging_one_of_two_moved_documents_checkpoints_only_that_one() {
+		let (_parent, root, _, here, there) = novel();
+		let add = |name: &str| {
+			create_document(root.clone(), here, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (staged, left) = (add("Staged"), add("Left"));
+		checkpoint(&root, "Set up", "").unwrap();
+		move_node(root.clone(), staged, there, 0).unwrap();
+		move_node(root.clone(), left, there, 0).unwrap();
+
+		carry(&root, Row::Node { id: staged }, true).unwrap();
+		let status = status(&root).unwrap();
+		assert!(change_of(&status.staged, staged).unwrap().moved);
+		assert!(change_of(&status.staged, left).is_none());
+		assert!(change_of(&status.unstaged, left).unwrap().moved);
+		assert!(change_of(&status.unstaged, staged).is_none());
+
+		let id = checkpoint(&root, "Moved one", "").unwrap();
+		let kept = checkpoint_manifest(&root, id);
+		let parent = |id: Uuid| tree::parent(&kept.nodes, id).map(Node::id);
+		assert_eq!(parent(staged), Some(there));
+		assert_eq!(parent(left), Some(here));
+
+		// The checkpoint, written out on its own, reads back with every id.
+		let out = tempfile::tempdir().unwrap();
+		let repo = Repository::open(&root).unwrap();
+		let tree = repo.find_commit(id).unwrap().tree().unwrap();
+		repo.checkout_tree(
+			tree.as_object(),
+			Some(CheckoutBuilder::new().target_dir(out.path()).force()),
+		)
+		.unwrap();
+		let mut read = crate::document::refresh(out.path()).unwrap().documents();
+		let mut held = kept.documents();
+		read.sort_by_key(|document| document.id);
+		held.sort_by_key(|document| document.id);
+		assert_eq!(read, held);
+		assert!(
+			change_of(&super::status(&root).unwrap().unstaged, left)
+				.unwrap()
+				.moved
+		);
+	}
+
+	#[test]
+	fn a_document_brings_its_new_folder_and_the_folder_takes_it_back() {
+		let (_parent, root, _, here, _) = novel();
+		checkpoint(&root, "Set up", "").unwrap();
+		let act = create_folder(root.clone(), here, "Act".to_owned(), None)
+			.unwrap()
+			.id();
+		let add = |name: &str| {
+			create_document(root.clone(), act, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (scene, other) = (add("Scene"), add("Other"));
+
+		carry(&root, Row::Node { id: scene }, true).unwrap();
+		let status = status(&root).unwrap();
+		assert_eq!(change_of(&status.staged, act).unwrap().before, None);
+		assert_eq!(change_of(&status.staged, scene).unwrap().before, None);
+		assert!(change_of(&status.staged, other).is_none());
+		assert!(change_of(&status.unstaged, other).is_some());
+
+		carry(&root, Row::Node { id: act }, false).unwrap();
+		assert!(nothing_in(&super::status(&root).unwrap().staged));
+	}
+
+	#[test]
+	fn unstaging_writes_back_what_the_last_checkpoint_had() {
+		let (_parent, root, seeded, _, there) = novel();
+		checkpoint(&root, "Set up", "").unwrap();
+		write_document(root.clone(), seeded, "Edited".to_owned()).unwrap();
+		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
+		move_node(root.clone(), seeded, there, 0).unwrap();
+
+		carry(&root, Row::Node { id: seeded }, true).unwrap();
+		let staged = status(&root).unwrap().staged;
+		let change = change_of(&staged, seeded).unwrap();
+		assert!(change.edited && change.renamed && change.moved);
+
+		carry(&root, Row::Node { id: seeded }, false).unwrap();
+		let status = super::status(&root).unwrap();
+		assert!(nothing_in(&status.staged));
+		let change = change_of(&status.unstaged, seeded).unwrap();
+		assert!(change.edited && change.renamed && change.moved);
+	}
+
+	#[test]
+	fn the_book_the_cover_and_a_folders_order_stage_on_their_own() {
+		let (_parent, root, _, here, _) = novel();
+		let add = |name: &str| {
+			create_document(root.clone(), here, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (_, last) = (add("One"), add("Two"));
+		checkpoint(&root, "Set up", "").unwrap();
+		move_node(root.clone(), last, here, 0).unwrap();
+		let mut book = read_manifest(&root).unwrap().book;
+		book.title = "Odyssey".to_owned();
+		write_book(root.clone(), book).unwrap();
+		let image = root.parent().unwrap().join("cover.png");
+		fs::write(&image, b"\x89PNG\r\n\x1a\none").unwrap();
+		set_cover(root.clone(), image).unwrap();
+
+		carry(&root, Row::Book, true).unwrap();
+		let status = status(&root).unwrap();
+		assert!(status.staged.book && !status.staged.cover && status.staged.nodes.is_empty());
+		assert!(status.unstaged.cover && !status.unstaged.book);
+
+		carry(&root, Row::Cover, true).unwrap();
+		carry(&root, Row::Node { id: here }, true).unwrap();
+		let status = super::status(&root).unwrap();
+		assert!(status.staged.cover);
+		assert_eq!(change_of(&status.staged, here).unwrap().reordered.len(), 1);
+		assert!(nothing_in(&status.unstaged));
+	}
+
+	/// Every kind of change, so staging them one at a time has to arrive at
+	/// the project as it is.
+	fn everything_changed(root: &Path, seeded: Uuid, here: Uuid, there: Uuid) {
+		let add = |parent: Uuid, name: &str| {
+			create_document(root.to_path_buf(), parent, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (moving, doomed, renaming) = (
+			add(here, "Moving"),
+			add(here, "Doomed"),
+			add(here, "Renaming"),
+		);
+		let two = add(here, "Two");
+		let part = create_folder(root.to_path_buf(), there, "Part".to_owned(), None)
+			.unwrap()
+			.id();
+		checkpoint(root, "Set up", "").unwrap();
+
+		write_document(root.to_path_buf(), seeded, "Edited".to_owned()).unwrap();
+		rename_document(root.to_path_buf(), renaming, "Renamed".to_owned()).unwrap();
+		move_node(root.to_path_buf(), moving, part, 0).unwrap();
+		delete_document(root.to_path_buf(), doomed).unwrap();
+		move_node(root.to_path_buf(), two, here, 0).unwrap();
+		rename_folder(root.to_path_buf(), part, "Act".to_owned()).unwrap();
+		let act = create_folder(root.to_path_buf(), there, "New".to_owned(), None)
+			.unwrap()
+			.id();
+		add(act, "Inside");
+		add(here, "Added");
+		let mut book = read_manifest(root).unwrap().book;
+		book.title = "Odyssey".to_owned();
+		write_book(root.to_path_buf(), book).unwrap();
+		let image = root.parent().unwrap().join("cover.png");
+		fs::write(&image, b"\x89PNG\r\n\x1a\none").unwrap();
+		set_cover(root.to_path_buf(), image).unwrap();
+	}
+
+	#[test]
+	fn staging_every_row_one_at_a_time_arrives_at_the_project_as_it_is() {
+		let (_parent, root, seeded, here, there) = novel();
+		everything_changed(&root, seeded, here, there);
+
+		for row in rows(&status(&root).unwrap().unstaged) {
+			carry(&root, row, true).unwrap();
+		}
+		assert!(nothing_in(&status(&root).unwrap().unstaged));
+		let repo = Repository::open(&root).unwrap();
+		let index = repo.index().unwrap();
+		let manifest = index.get_path(Path::new(MANIFEST_FILE), 0).unwrap();
+		assert_eq!(
+			repo.find_blob(manifest.id).unwrap().content(),
+			fs::read(root.join(MANIFEST_FILE)).unwrap()
+		);
+
+		checkpoint(&root, "All of it", "").unwrap();
+		assert!(!pending(&root).unwrap());
+	}
+
+	#[test]
+	fn unstaging_every_row_one_at_a_time_leaves_nothing_staged() {
+		let (_parent, root, seeded, here, there) = novel();
+		everything_changed(&root, seeded, here, there);
+		stage_all(root.clone()).unwrap();
+
+		for row in rows(&status(&root).unwrap().staged) {
+			carry(&root, row, false).unwrap();
+		}
+		let status = super::status(&root).unwrap();
+		assert!(nothing_in(&status.staged));
+		assert_eq!(status.unstaged, changes(&root, Some("HEAD"), None).unwrap());
+	}
+
+	#[test]
+	fn unstaging_all_and_checkpointing_takes_everything() {
+		let (_parent, root, seeded, here, there) = novel();
+		everything_changed(&root, seeded, here, there);
+		carry(&root, Row::Book, true).unwrap();
+		unstage_all(root.clone()).unwrap();
+		assert!(nothing_in(&status(&root).unwrap().staged));
+
+		checkpoint(&root, "All of it", "").unwrap();
+		assert!(!pending(&root).unwrap());
+	}
+
+	#[test]
+	fn the_first_checkpoint_can_hold_one_document() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			OffsetDateTime::UNIX_EPOCH,
+		)
+		.unwrap();
+		ensure_repository(&root).unwrap();
+		let documents = read_manifest(&root).unwrap().documents();
+		let first = documents[0].id;
+
+		carry(&root, Row::Node { id: first }, true).unwrap();
+		let status = status(&root).unwrap();
+		assert_eq!(change_of(&status.staged, first).unwrap().before, None);
+		assert!(!status.staged.book);
+
+		let id = checkpoint(&root, "First", "").unwrap();
+		let kept = checkpoint_manifest(&root, id);
+		let ids: Vec<Uuid> = kept.documents().iter().map(|d| d.id).collect();
+		assert_eq!(ids, vec![first]);
+		assert!(super::status(&root).unwrap().unstaged.book);
 	}
 
 	#[test]
