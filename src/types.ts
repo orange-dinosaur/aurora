@@ -34,6 +34,7 @@ export type { Change } from "./bindings/Change";
 export type { Changes } from "./bindings/Changes";
 export type { Version } from "./bindings/Version";
 export type { Branch } from "./bindings/Branch";
+export type { Checkpoint } from "./bindings/Checkpoint";
 export type { VersionsScope } from "./bindings/VersionsScope";
 export type { TreeNode };
 export type { Session as PastSession };

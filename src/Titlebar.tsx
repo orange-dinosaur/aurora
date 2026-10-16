@@ -4,12 +4,17 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { AccountChip } from "./Account";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
+import NameField from "./NameField";
 import Session from "./Session";
+import { unmergedQuestion } from "./branches";
 import { failure } from "./errors";
 import { SEARCH, SESSION, shortcutLabel } from "./formatting";
 import type { Running } from "./sessions";
 import ThemeToggle from "./ThemeToggle";
-import type { Branch, Theme } from "./types";
+import type { Branch, Checkpoint, Theme } from "./types";
+
+/** Main's slug. Main can be neither renamed nor deleted. */
+const MAIN = "main";
 
 type Props = {
 	name: string;
@@ -199,6 +204,7 @@ export default function Titlebar({
 				>
 					{(close) => (
 						<VersionMenu
+							root={root}
 							versions={versions}
 							current={current}
 							close={close}
@@ -206,6 +212,8 @@ export default function Titlebar({
 							onCheckpoint={(slug, words) =>
 								void switchTo(slug, words)
 							}
+							onChanged={listVersions}
+							onFailure={setMessage}
 						/>
 					)}
 				</Menu>
@@ -301,25 +309,124 @@ export default function Titlebar({
 	);
 }
 
-// Its own component so the question goes with the menu: the menu unmounts
-// what it holds when it closes, however it was closed.
+type Doing =
+	| { kind: "list" }
+	| { kind: "switching"; slug: string }
+	| { kind: "naming" }
+	| { kind: "renaming"; slug: string }
+	| { kind: "deleting"; version: Branch };
+
+// Its own component so a question or a name field goes with the menu: the menu
+// unmounts what it holds when it closes, however it was closed.
 function VersionMenu({
+	root,
 	versions,
 	current,
 	close,
 	onChoose,
 	onCheckpoint,
+	onChanged,
+	onFailure,
 }: {
+	root: string;
 	versions: Branch[];
 	current: Branch;
 	close: () => void;
 	onChoose: (slug: string) => Promise<boolean>;
 	onCheckpoint: (slug: string, message: string) => void;
+	/** Lists the versions again after one was made, renamed or deleted. */
+	onChanged: () => Promise<void>;
+	onFailure: (message: string) => void;
 }) {
-	const [asking, setAsking] = useState<string | null>(null);
+	const [doing, setDoing] = useState<Doing>({ kind: "list" });
 	const [words, setWords] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	// Whether there is a checkpoint to start a new version from, or null
+	// until that is known.
+	const [kept, setKept] = useState<boolean | null>(null);
 
-	if (asking !== null) {
+	useEffect(() => {
+		let open = true;
+		invoke<Checkpoint[]>("list_checkpoints", { root })
+			.then((rows) => {
+				if (open) {
+					setKept(rows.length > 0);
+				}
+			})
+			.catch(() => {
+				// Trying will bring back whatever Rust has to say.
+				if (open) {
+					setKept(true);
+				}
+			});
+		return () => {
+			open = false;
+		};
+	}, [root]);
+
+	function back() {
+		setDoing({ kind: "list" });
+		setError(null);
+	}
+
+	// Runs a name past Rust, keeping the field open with its error on a refusal.
+	async function named(task: () => Promise<unknown>, then: () => void) {
+		setBusy(true);
+		try {
+			await task();
+			then();
+			setError(null);
+			await onChanged();
+		} catch (failed) {
+			setError(failure(failed).message);
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function remove(slug: string) {
+		try {
+			await invoke("delete_branch", { root, slug });
+		} catch (failed) {
+			onFailure(failure(failed).message);
+		}
+		setDoing({ kind: "list" });
+		await onChanged();
+	}
+
+	if (doing.kind === "deleting") {
+		return (
+			<div className="titlebar__ask">
+				<p className="titlebar__ask-text">
+					{unmergedQuestion(
+						doing.version.name,
+						doing.version.unmerged,
+					)}
+				</p>
+				<span className="titlebar__ask-buttons">
+					{/* Focused rather than Delete, so Enter cannot lose work. */}
+					<button
+						type="button"
+						className="sprint__stop"
+						autoFocus
+						onClick={back}
+					>
+						Cancel
+					</button>
+					<button
+						type="button"
+						className="sprint__stop titlebar__danger"
+						onClick={() => void remove(doing.version.slug)}
+					>
+						Delete
+					</button>
+				</span>
+			</div>
+		);
+	}
+
+	if (doing.kind === "switching") {
 		return (
 			<form
 				className="titlebar__ask"
@@ -327,7 +434,7 @@ function VersionMenu({
 					event.preventDefault();
 					if (words.trim() !== "") {
 						close();
-						onCheckpoint(asking, words);
+						onCheckpoint(doing.slug, words);
 					}
 				}}
 			>
@@ -362,24 +469,130 @@ function VersionMenu({
 		);
 	}
 
-	return versions.map((version) => (
-		<MenuItem
-			key={version.slug}
-			checked={version.current}
-			onSelect={() => {
-				if (version.current) {
-					close();
-					return;
-				}
-				void onChoose(version.slug).then((ask) =>
-					ask ? setAsking(version.slug) : close(),
-				);
-			}}
-		>
-			<span className="titlebar__tick">
-				{version.current && <Icon name="check" />}
-			</span>
-			{version.name}
-		</MenuItem>
-	));
+	return (
+		<>
+			{versions.map((version) =>
+				doing.kind === "renaming" && doing.slug === version.slug ? (
+					<div key={version.slug} className="titlebar__field">
+						<NameField
+							label={`New name for ${version.name}`}
+							placeholder="Name this version"
+							initial={version.name}
+							busy={busy}
+							working="Renaming…"
+							error={error}
+							onSubmit={(name) =>
+								void named(
+									() =>
+										invoke("rename_branch", {
+											root,
+											slug: version.slug,
+											name,
+										}),
+									back,
+								)
+							}
+							onCancel={back}
+						/>
+					</div>
+				) : (
+					<div key={version.slug} className="titlebar__row">
+						<MenuItem
+							checked={version.current}
+							onSelect={() => {
+								if (version.current) {
+									close();
+									return;
+								}
+								void onChoose(version.slug).then((ask) =>
+									ask
+										? setDoing({
+												kind: "switching",
+												slug: version.slug,
+											})
+										: close(),
+								);
+							}}
+						>
+							<span className="titlebar__tick">
+								{version.current && <Icon name="check" />}
+							</span>
+							{version.name}
+						</MenuItem>
+						{version.slug !== MAIN && (
+							<span className="titlebar__row-actions">
+								<button
+									type="button"
+									className="menu__trigger"
+									aria-label={`Rename ${version.name}`}
+									title="Rename"
+									onClick={() =>
+										setDoing({
+											kind: "renaming",
+											slug: version.slug,
+										})
+									}
+								>
+									<Icon name="pencil" />
+								</button>
+								{!version.current && (
+									<button
+										type="button"
+										className="menu__trigger"
+										aria-label={`Delete ${version.name}`}
+										title="Delete"
+										onClick={() =>
+											version.unmerged > 0
+												? setDoing({
+														kind: "deleting",
+														version,
+													})
+												: void remove(version.slug)
+										}
+									>
+										<Icon name="trash" />
+									</button>
+								)}
+							</span>
+						)}
+					</div>
+				),
+			)}
+
+			<span className="menu__rule" />
+
+			{doing.kind === "naming" ? (
+				<div className="titlebar__field">
+					<NameField
+						label="Name of the new version"
+						placeholder="Name the new version"
+						busy={busy}
+						working="Starting…"
+						error={error}
+						onSubmit={(name) =>
+							void named(
+								() => invoke("create_branch", { root, name }),
+								close,
+							)
+						}
+						onCancel={back}
+					/>
+				</div>
+			) : (
+				<>
+					<MenuItem
+						disabled={kept !== true}
+						onSelect={() => setDoing({ kind: "naming" })}
+					>
+						New version…
+					</MenuItem>
+					{kept === false && (
+						<p className="titlebar__note">
+							Add a first checkpoint to start another version.
+						</p>
+					)}
+				</>
+			)}
+		</>
+	);
 }

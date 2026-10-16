@@ -1022,6 +1022,65 @@ body,
 	gap: 0.4rem;
 }
 
+/* Two classes, to outrank the sprint's button it borrows its shape from. */
+.titlebar__ask .titlebar__danger {
+	color: var(--danger);
+}
+
+/* The rename and delete buttons sit over the end of a version's row and show
+   on hover, the way a document row's actions do. */
+.titlebar__row {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+}
+
+.titlebar__row .menu__item {
+	padding-right: 3.5rem;
+}
+
+.titlebar__row-actions {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0.2rem;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	opacity: 0;
+}
+
+.titlebar__row:hover .titlebar__row-actions,
+.titlebar__row:focus-within .titlebar__row-actions {
+	opacity: 1;
+}
+
+/* A menu row's size rather than the sidebar's, with room kept beneath for
+   what Rust says about the name, so a refusal does not cover the next row. */
+.titlebar__field {
+	position: relative;
+	padding-bottom: 1.1rem;
+}
+
+.titlebar__field .namefield__message {
+	left: 0.5rem;
+	right: 0.5rem;
+	bottom: 0.1rem;
+}
+
+.titlebar__menu--version .namefield__input {
+	height: 24px;
+	padding: 0 0.5rem;
+	font-size: inherit;
+}
+
+.titlebar__note {
+	max-width: 14rem;
+	margin: 0.2rem 0.5rem 0;
+	color: var(--text-dim);
+	white-space: normal;
+}
+
 /* Takes what is left and gives it back first, so a deep folder never pushes
    the buttons off the row. */
 .titlebar__path {
