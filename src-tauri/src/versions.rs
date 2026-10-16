@@ -766,20 +766,36 @@ fn place(nodes: &[Node], parent: Option<Uuid>, prefix: &str, placed: &mut Vec<(U
 /// version, the project as it stands on disk, neither kept nor staged.
 fn side<'r>(repo: &'r Repository, version: Option<&str>) -> Result<(Tree<'r>, Manifest)> {
 	let tree = match version {
-		Some("HEAD") => match head_commit(repo)? {
-			Some(head) => head.tree()?,
-			// Nothing kept yet, so everything on the other side reads as added.
-			None => {
-				let empty = repo.find_tree(repo.treebuilder(None)?.write()?)?;
-				let nothing = Manifest {
-					nodes: Vec::new(),
-					..Manifest::new("", Format::Novel, OffsetDateTime::UNIX_EPOCH)
-				};
-				return Ok((empty, nothing));
-			}
-		},
-		Some(id) => repo.find_commit(Oid::from_str(id)?)?.tree()?,
-		None => repo.find_tree(working(repo)?.write_tree()?)?,
+		Some("HEAD") => head_commit(repo)?.map(|head| head.tree()).transpose()?,
+		Some(id) => Some(repo.find_commit(Oid::from_str(id)?)?.tree()?),
+		None => Some(repo.find_tree(working(repo)?.write_tree()?)?),
+	};
+	with_manifest(repo, tree)
+}
+
+/// What the next checkpoint holds, without touching `.git/index`.
+fn staged_side(repo: &Repository) -> Result<(Tree<'_>, Manifest)> {
+	let mut index = repo.index()?;
+	// Before the first checkpoint nothing has been staged.
+	let tree = match index.is_empty() {
+		true => None,
+		false => Some(repo.find_tree(index.write_tree()?)?),
+	};
+	with_manifest(repo, tree)
+}
+
+/// A tree and the manifest it holds. With no tree, nothing at all, so
+/// everything on the other side reads as added.
+fn with_manifest<'r>(repo: &'r Repository, tree: Option<Tree<'r>>) -> Result<(Tree<'r>, Manifest)> {
+	let Some(tree) = tree else {
+		let empty = repo.find_tree(repo.treebuilder(None)?.write()?)?;
+		let mut nothing = Manifest {
+			nodes: Vec::new(),
+			..Manifest::new("", Format::Novel, OffsetDateTime::UNIX_EPOCH)
+		};
+		// Otherwise random, and nothing must equal nothing.
+		nothing.book.identifier = Uuid::nil();
+		return Ok((empty, nothing));
 	};
 	let manifest = repo.find_blob(tree.get_path(Path::new(MANIFEST_FILE))?.id())?;
 	let manifest = serde_json::from_slice(manifest.content())?;
@@ -836,14 +852,36 @@ fn blob_at(tree: &Tree, path: &str) -> Option<Oid> {
 /// it stands on disk and `HEAD` is the latest checkpoint.
 pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes> {
 	let repo = Repository::open(root)?;
-	let (old_tree, old) = side(&repo, a)?;
-	let (new_tree, new) = side(&repo, b)?;
+	Ok(compare(&side(&repo, a)?, &side(&repo, b)?))
+}
+
+/// What the Changes list shows: from the last checkpoint to what the next
+/// one holds, and from there to the project on disk. A row in both lists is
+/// partly in the next checkpoint.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Status {
+	pub staged: Changes,
+	pub unstaged: Changes,
+}
+
+pub fn status(root: &Path) -> Result<Status> {
+	let repo = Repository::open(root)?;
+	let staged = staged_side(&repo)?;
+	Ok(Status {
+		staged: compare(&side(&repo, Some("HEAD"))?, &staged),
+		unstaged: compare(&staged, &side(&repo, None)?),
+	})
+}
+
+fn compare((old_tree, old): &(Tree, Manifest), (new_tree, new): &(Tree, Manifest)) -> Changes {
 	let placed = |manifest: &Manifest| {
 		let mut placed = Vec::new();
 		place(&manifest.nodes, None, "", &mut placed);
 		placed
 	};
-	let (was, is) = (placed(&old), placed(&new));
+	let (was, is) = (placed(old), placed(new));
 	let before: HashMap<Uuid, &Placed> = was.iter().map(|(id, node)| (*id, node)).collect();
 	let after: HashSet<Uuid> = is.iter().map(|(id, _)| *id).collect();
 	let names: HashMap<Uuid, &String> = is.iter().map(|(id, node)| (*id, &node.name)).collect();
@@ -860,7 +898,7 @@ pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes>
 			moved: then.is_some_and(|then| then.parent != now.parent),
 			edited: !now.folder
 				&& then.is_some_and(|then| {
-					blob_at(&old_tree, &then.path) != blob_at(&new_tree, &now.path)
+					blob_at(old_tree, &then.path) != blob_at(new_tree, &now.path)
 				}),
 			reordered: then.map_or_else(Vec::new, |then| {
 				reordered(&then.children, &now.children)
@@ -898,12 +936,12 @@ pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes>
 		cover: String::new(),
 		..book.clone()
 	};
-	Ok(Changes {
+	Changes {
 		nodes,
 		book: details(&old.book) != details(&new.book),
 		cover: old.book.cover != new.book.cover
-			|| blob_at(&old_tree, &old.book.cover) != blob_at(&new_tree, &new.book.cover),
-	})
+			|| blob_at(old_tree, &old.book.cover) != blob_at(new_tree, &new.book.cover),
+	}
 }
 
 /// A document's full text at a version, or none when it is not there.
@@ -1048,6 +1086,14 @@ pub fn version_changes(root: PathBuf, a: Option<String>, b: Option<String>) -> R
 		return Err(Error::RelativePath);
 	}
 	changes(&root, a.as_deref(), b.as_deref())
+}
+
+#[tauri::command]
+pub fn version_status(root: PathBuf) -> Result<Status> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	status(&root)
 }
 
 #[tauri::command]
@@ -2241,6 +2287,111 @@ mod tests {
 		let changes = changes(&root, Some("HEAD"), None).unwrap();
 		assert!(change_of(&changes, seeded).unwrap().edited);
 		assert_eq!(fs::read(&index).unwrap(), staged);
+	}
+
+	#[test]
+	fn before_the_first_checkpoint_nothing_is_staged_and_everything_is_added() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			OffsetDateTime::UNIX_EPOCH,
+		)
+		.unwrap();
+		ensure_repository(&root).unwrap();
+
+		let status = status(&root).unwrap();
+		assert_eq!(status.staged.nodes, Vec::new());
+		assert!(!status.staged.book);
+		assert!(!status.staged.cover);
+		for document in read_manifest(&root).unwrap().documents() {
+			assert_eq!(
+				change_of(&status.unstaged, document.id).unwrap().before,
+				None
+			);
+		}
+		assert!(status.unstaged.book);
+		assert!(!root.join(".git/index").exists());
+	}
+
+	#[test]
+	fn after_a_checkpoint_every_kind_of_change_is_unstaged() {
+		let (_parent, root, seeded, here, there) = novel();
+		let add = |parent: Uuid, name: &str| {
+			create_document(root.clone(), parent, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (moving, doomed, renaming) = (
+			add(here, "Moving"),
+			add(here, "Doomed"),
+			add(here, "Renaming"),
+		);
+		let (_, two) = (add(here, "One"), add(here, "Two"));
+		let part = create_folder(root.clone(), there, "Part".to_owned(), None)
+			.unwrap()
+			.id();
+		checkpoint(&root, "Set up", "").unwrap();
+
+		write_document(root.clone(), seeded, "Edited".to_owned()).unwrap();
+		rename_document(root.clone(), renaming, "Renamed".to_owned()).unwrap();
+		move_node(root.clone(), moving, there, 0).unwrap();
+		delete_document(root.clone(), doomed).unwrap();
+		let added = add(here, "Added");
+		move_node(root.clone(), two, here, 0).unwrap();
+		rename_folder(root.clone(), part, "Act".to_owned()).unwrap();
+		let mut book = read_manifest(&root).unwrap().book;
+		book.title = "Odyssey".to_owned();
+		write_book(root.clone(), book).unwrap();
+		let image = root.parent().unwrap().join("cover.png");
+		fs::write(&image, b"\x89PNG\r\n\x1a\none").unwrap();
+		set_cover(root.clone(), image).unwrap();
+
+		let status = status(&root).unwrap();
+		assert!(status.staged.nodes.is_empty() && !status.staged.book && !status.staged.cover);
+		let unstaged = &status.unstaged;
+		assert_eq!(*unstaged, changes(&root, Some("HEAD"), None).unwrap());
+		assert!(change_of(unstaged, seeded).unwrap().edited);
+		assert!(change_of(unstaged, renaming).unwrap().renamed);
+		assert!(change_of(unstaged, moving).unwrap().moved);
+		assert_eq!(change_of(unstaged, doomed).unwrap().after, None);
+		assert_eq!(change_of(unstaged, added).unwrap().before, None);
+		assert!(change_of(unstaged, part).unwrap().renamed);
+		let reordered = &change_of(unstaged, here).unwrap().reordered;
+		assert_eq!(reordered.len(), 1);
+		assert!(reordered[0].name.starts_with("Two"));
+		assert!(unstaged.book && unstaged.cover);
+	}
+
+	#[test]
+	fn a_document_staged_by_hand_moves_to_the_next_checkpoint() {
+		let (_parent, root, seeded, here, _) = novel();
+		let other = create_document(root.clone(), here, "Other".to_owned())
+			.unwrap()
+			.id;
+		checkpoint(&root, "Set up", "").unwrap();
+		write_document(root.clone(), seeded, "Staged".to_owned()).unwrap();
+		write_document(root.clone(), other, "Not staged".to_owned()).unwrap();
+
+		let documents = read_manifest(&root).unwrap().documents();
+		let path = &documents.iter().find(|d| d.id == seeded).unwrap().path;
+		let repo = Repository::open(&root).unwrap();
+		let mut index = repo.index().unwrap();
+		index.add_path(Path::new(path)).unwrap();
+		index.write().unwrap();
+
+		let status = super::status(&root).unwrap();
+		assert!(change_of(&status.staged, seeded).unwrap().edited);
+		assert!(change_of(&status.unstaged, seeded).is_none());
+		assert!(change_of(&status.staged, other).is_none());
+		assert!(change_of(&status.unstaged, other).unwrap().edited);
+
+		// Written again after staging, so partly in the next checkpoint.
+		write_document(root.clone(), seeded, "Staged, then more".to_owned()).unwrap();
+		let status = super::status(&root).unwrap();
+		assert!(change_of(&status.staged, seeded).unwrap().edited);
+		assert!(change_of(&status.unstaged, seeded).unwrap().edited);
 	}
 
 	#[test]

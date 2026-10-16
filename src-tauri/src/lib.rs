@@ -189,6 +189,7 @@ pub fn run() {
 			versions::rename_version,
 			versions::unname_version,
 			versions::version_changes,
+			versions::version_status,
 			versions::version_text,
 			versions::put_back_document,
 			versions::put_back_book,

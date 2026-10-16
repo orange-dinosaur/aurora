@@ -158,10 +158,12 @@ pub enum RightSidebarTab {
 	Versions,
 }
 
-/// Whether the Versions tab lists the open document's versions or all of them.
+/// Whether the Versions tab lists what changed since the last checkpoint, the
+/// open document's versions, or all of them.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub enum VersionsScope {
+	Changes,
 	#[default]
 	Document,
 	Project,
