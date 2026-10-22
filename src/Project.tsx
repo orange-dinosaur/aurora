@@ -19,11 +19,14 @@ import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import BookView from "./Book";
 import Compare from "./Compare";
+import Overwrite from "./Overwrite";
+import { overwritten, type Overwrites } from "./lib/versions";
 import type {
 	DocumentText,
 	FolderNode,
 	Preferences,
 	ProjectDocument,
+	Status,
 	TreeNode,
 } from "./types";
 import { retag, tagged } from "./tags";
@@ -309,6 +312,11 @@ export default function Project({
 		checkpoint: string;
 		pick: string | null;
 		slug: string | null;
+	} | null>(null);
+	// The put back question while it waits for an answer.
+	const [asking, setAsking] = useState<{
+		names: string[];
+		answer: (go: boolean) => void;
 	} | null>(null);
 
 	// Why a folder's target was refused, when one was.
@@ -843,8 +851,25 @@ export default function Project({
 	// and the rest are re-pointed the way a move re-points them. A failure is
 	// thrown back to the surface that asked, after the tabs have caught up with
 	// whatever part of it did happen.
-	async function putBack(task: () => Promise<unknown>) {
+	// With a target, asks first when the put back would write over changes
+	// not in a checkpoint. A switch passes none.
+	async function putBack(task: () => Promise<unknown>, target?: Overwrites) {
 		await writeAll();
+		if (target !== undefined) {
+			const names = overwritten(
+				await invoke<Status>("version_status", { root }),
+				target,
+			);
+			if (names.length > 0) {
+				const go = await new Promise<boolean>((answer) =>
+					setAsking({ names, answer }),
+				);
+				setAsking(null);
+				if (!go) {
+					return;
+				}
+			}
+		}
 		try {
 			await task();
 		} finally {
@@ -1674,6 +1699,10 @@ export default function Project({
 					/>
 				)}
 			</div>
+
+			{asking !== null && (
+				<Overwrite names={asking.names} onAnswer={asking.answer} />
+			)}
 		</section>
 	);
 }

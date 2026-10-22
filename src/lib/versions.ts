@@ -3,7 +3,7 @@
 // next.
 
 import { timeOfDay, when } from "../dates";
-import type { Change, Changes, Checkpoint, StatusRow } from "../types";
+import type { Change, Changes, Checkpoint, Status, StatusRow } from "../types";
 
 /** A day of checkpoints, with the heading it is listed under. */
 export type CheckpointDay = {
@@ -151,4 +151,44 @@ export function lines(changes: Changes): Line[] {
 /** What tells one row from the others in its group. */
 export function lineKey(line: Line): string {
 	return line.row.kind === "node" ? line.row.id : line.row.kind;
+}
+
+/** What a put back writes over. The book puts back the cover with it. */
+export type Overwrites =
+	| { kind: "everything" }
+	| { kind: "document"; id: string }
+	| { kind: "book" };
+
+/**
+ * The names of what a put back would write over that has changes not in a
+ * checkpoint. A folder holds no writing of its own, so it is never named.
+ */
+export function overwritten(status: Status, target: Overwrites): string[] {
+	const names = new Map<string, string>();
+	for (const line of [...lines(status.staged), ...lines(status.unstaged)]) {
+		const change = line.change;
+		const hit =
+			target.kind === "everything"
+				? change?.folder !== true
+				: target.kind === "book"
+					? change === null
+					: change?.id === target.id;
+		if (hit) {
+			names.set(
+				lineKey(line),
+				line.name ??
+					(line.row.kind === "book" ? "The book" : "The cover"),
+			);
+		}
+	}
+	return [...names.values()];
+}
+
+/** The question before a put back that would write over those names. */
+export function overwriteQuestion(names: string[]): string {
+	const who =
+		names.length === 1
+			? `${names[0]} has`
+			: `${names.length.toLocaleString()} documents have`;
+	return `${who} changes that aren't in a checkpoint. Putting back overwrites them.`;
 }

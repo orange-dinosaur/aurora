@@ -8,6 +8,8 @@ import {
 	label,
 	lineKey,
 	lines,
+	overwriteQuestion,
+	overwritten,
 	summary,
 } from "./versions";
 
@@ -162,6 +164,66 @@ describe("lines", () => {
 			change: scene,
 		});
 		expect(lines({ nodes: [], book: false, cover: false })).toEqual([]);
+	});
+});
+
+describe("overwritten", () => {
+	function node(id: string, rest: Partial<Change> = {}): Change {
+		return {
+			id,
+			folder: false,
+			before: `Manuscript/${id}.md`,
+			after: `Manuscript/${id}.md`,
+			renamed: false,
+			moved: false,
+			edited: true,
+			reordered: [],
+			...rest,
+		};
+	}
+	// Mill is partly in the next checkpoint, so it is in both lists.
+	const status = {
+		staged: { nodes: [node("Mill")], book: false, cover: true },
+		unstaged: {
+			nodes: [
+				node("Mill"),
+				node("Letter"),
+				node("Part", { folder: true, before: "Part", after: "Part" }),
+			],
+			book: true,
+			cover: false,
+		},
+	};
+
+	it("names each document once, with the book and cover, never a folder", () => {
+		expect(overwritten(status, { kind: "everything" })).toEqual([
+			"The cover",
+			"Mill",
+			"The book",
+			"Letter",
+		]);
+	});
+
+	it("narrows to one document, or to the book and cover", () => {
+		expect(overwritten(status, { kind: "document", id: "Letter" })).toEqual(
+			["Letter"],
+		);
+		expect(overwritten(status, { kind: "document", id: "Night" })).toEqual(
+			[],
+		);
+		expect(overwritten(status, { kind: "book" })).toEqual([
+			"The cover",
+			"The book",
+		]);
+	});
+
+	it("asks by name for one and by count for more", () => {
+		expect(overwriteQuestion(["Mill"])).toBe(
+			"Mill has changes that aren't in a checkpoint. Putting back overwrites them.",
+		);
+		expect(overwriteQuestion(["Mill", "Letter"])).toBe(
+			"2 documents have changes that aren't in a checkpoint. Putting back overwrites them.",
+		);
 	});
 });
 

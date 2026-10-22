@@ -27,7 +27,14 @@ import {
 	type Run,
 	tally,
 } from "./lib/compare";
-import { byDay, counts, detail, label, summary } from "./lib/versions";
+import {
+	byDay,
+	counts,
+	detail,
+	label,
+	summary,
+	type Overwrites,
+} from "./lib/versions";
 import { timeOfDay } from "./dates";
 import type {
 	Branch,
@@ -55,7 +62,11 @@ type Props = {
 	onScope: (scope: VersionsScope) => void;
 	onBack: () => void;
 	/** Writes everything down, runs the put back, and reloads what it changed. */
-	onPutBack: (task: () => Promise<unknown>) => Promise<void>;
+	/** Asks first when the target has changes not in a checkpoint. */
+	onPutBack: (
+		task: () => Promise<unknown>,
+		target: Overwrites,
+	) => Promise<void>;
 };
 
 // A document's text at A and on disk, which is B. Null `then` is a version
@@ -101,8 +112,6 @@ export default function Compare({
 	const [busy, setBusy] = useState(false);
 	// Kept apart from `error`, which reading the texts again clears.
 	const [refused, setRefused] = useState<string | null>(null);
-	// The A this visit has already kept a version before putting back from.
-	const kept = useRef<string | null>(null);
 	// Bumped after a put back, to read the versions, changes and texts again.
 	const [again, setAgain] = useState(0);
 	const left = useRef<HTMLDivElement>(null);
@@ -371,12 +380,11 @@ export default function Compare({
 
 	// Every put back goes through the project, which writes the editors down
 	// first and reloads them after. The view then reads what is left.
-	async function back(task: () => Promise<unknown>) {
+	async function back(task: () => Promise<unknown>, target: Overwrites) {
 		setBusy(true);
 		setRefused(null);
 		try {
-			await onPutBack(task);
-			kept.current = chosen;
+			await onPutBack(task, target);
 		} catch (reason) {
 			setRefused(failure(reason).message);
 		} finally {
@@ -384,16 +392,10 @@ export default function Compare({
 			setAgain((times) => times + 1);
 		}
 	}
-	// No label once this visit has kept a version before putting back from A,
-	// so every put back until the writer leaves or picks another A shares it.
 	const asked =
 		a === undefined || busy
 			? null
-			: {
-					root,
-					version: a.id,
-					label: kept.current === a.id ? null : label(a),
-				};
+			: { root, version: a.id, label: label(a) };
 
 	// One difference is the text written back with that run as it was.
 	function backOne(index: number) {
@@ -402,32 +404,40 @@ export default function Compare({
 			return;
 		}
 		const text = putBack(now, before, difference);
-		const { label } = asked;
-		void back(async () => {
-			if (label !== null) {
-				const keep: Keep = { kind: "beforePuttingBack", label };
+		const keep: Keep = { kind: "beforePuttingBack", label: asked.label };
+		void back(
+			async () => {
 				await invoke("keep_version", { root, keep });
-			}
-			await invoke("write_document", { root, id: shown, text });
-		});
+				await invoke("write_document", { root, id: shown, text });
+			},
+			{ kind: "document", id: shown },
+		);
 	}
 
 	function backDocument(id: string) {
 		if (asked !== null) {
-			void back(() => invoke("put_back_document", { ...asked, id }));
+			void back(() => invoke("put_back_document", { ...asked, id }), {
+				kind: "document",
+				id,
+			});
 		}
 	}
 
 	function backEverything() {
 		if (asked !== null) {
-			void back(() => invoke("put_back_everything", asked));
+			void back(() => invoke("put_back_everything", asked), {
+				kind: "everything",
+			});
 		}
 	}
 
 	const bookBack =
 		asked === null
 			? null
-			: () => void back(() => invoke("put_back_book", asked));
+			: () =>
+					void back(() => invoke("put_back_book", asked), {
+						kind: "book",
+					});
 
 	return (
 		<div className="compare">

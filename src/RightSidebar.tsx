@@ -12,6 +12,7 @@ import type { Limit, Sessions } from "./sessions";
 import type { FolderRef } from "./tree";
 import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
+import type { Overwrites } from "./lib/versions";
 import { MANUSCRIPT } from "./kinds";
 import { isSubject } from "./subjects";
 import type {
@@ -81,7 +82,10 @@ type Props = {
 	onBeforeKeep: () => Promise<void>;
 	onCompare: (checkpoint: Checkpoint, document?: string) => void;
 	/** Writes everything down, runs the put back, and reloads what it changed. */
-	onPutBack: (task: () => Promise<unknown>) => Promise<void>;
+	onPutBack: (
+		task: () => Promise<unknown>,
+		target?: Overwrites,
+	) => Promise<void>;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 	/** Where a tag chip goes, which only the project view can work out. */
 	onOpenTag: (tag: string) => void;

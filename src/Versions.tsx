@@ -11,6 +11,7 @@ import {
 	lineKey,
 	lines,
 	type Line,
+	type Overwrites,
 } from "./lib/versions";
 import type {
 	Checkpoint,
@@ -35,7 +36,11 @@ type Props = {
 	/** Opens compare at the checkpoint, on the given document when there is one. */
 	onCompare: (checkpoint: Checkpoint, document?: string) => void;
 	/** Writes everything down, runs the put back, and reloads what it changed. */
-	onPutBack: (task: () => Promise<unknown>) => Promise<void>;
+	/** Asks first when the target has changes not in a checkpoint. */
+	onPutBack: (
+		task: () => Promise<unknown>,
+		target: Overwrites,
+	) => Promise<void>;
 };
 
 export default function Versions({
@@ -133,10 +138,17 @@ export default function Versions({
 			label: label(checkpoint),
 		};
 		void run(() =>
-			onPutBack(() =>
+			onPutBack(
+				() =>
+					document === null
+						? invoke("put_back_everything", asked)
+						: invoke("put_back_document", {
+								...asked,
+								id: document,
+							}),
 				document === null
-					? invoke("put_back_everything", asked)
-					: invoke("put_back_document", { ...asked, id: document }),
+					? { kind: "everything" }
+					: { kind: "document", id: document },
 			),
 		);
 	}
@@ -183,10 +195,14 @@ export default function Versions({
 		const id = line.change?.id;
 		return () =>
 			void run(() =>
-				onPutBack(() =>
+				onPutBack(
+					() =>
+						id === undefined
+							? invoke("put_back_book", asked)
+							: invoke("put_back_document", { ...asked, id }),
 					id === undefined
-						? invoke("put_back_book", asked)
-						: invoke("put_back_document", { ...asked, id }),
+						? { kind: "book" }
+						: { kind: "document", id },
 				),
 			);
 	}
