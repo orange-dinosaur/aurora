@@ -9,7 +9,7 @@ use std::path::{Component, Path, PathBuf};
 use git2::build::CheckoutBuilder;
 use git2::{
 	BranchType, Commit, ErrorCode, Index, IndexAddOption, IndexEntry, IndexTime, Oid, Repository,
-	RepositoryInitOptions, Signature, Sort, StatusOptions, Tree,
+	RepositoryInitOptions, ResetType, Signature, Sort, StatusOptions, Tree,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -471,6 +471,9 @@ fn checkpoint(root: &Path, message: &str, author: &str) -> Result<Oid> {
 		return Err(Error::EmptyMessage);
 	}
 	let repo = Repository::open(root)?;
+	if repo.index()?.has_conflicts() {
+		return Err(Error::ConflictsRemain);
+	}
 	let staged = compare(&side(&repo, Some("HEAD"))?, &staged_side(&repo)?);
 	let tree = match staged.nodes.is_empty() && !staged.book && !staged.cover {
 		true => stage(&repo)?,
@@ -479,15 +482,19 @@ fn checkpoint(root: &Path, message: &str, author: &str) -> Result<Oid> {
 	let tree = repo.find_tree(tree)?;
 	let signature = signature(author)?;
 	let head = head_commit(&repo)?;
-	let parents: Vec<&Commit> = head.iter().collect();
-	Ok(repo.commit(
+	let merged = merge_head(&repo)?;
+	let parents: Vec<&Commit> = head.iter().chain(merged.iter()).collect();
+	let id = repo.commit(
 		Some("HEAD"),
 		&signature,
 		&signature,
 		message,
 		&tree,
 		&parents,
-	)?)
+	)?;
+	// Ends the merge under way, if there is one.
+	repo.cleanup_state()?;
+	Ok(id)
 }
 
 /// The checkpoints of a version, newest first along first parents, or of the
@@ -617,16 +624,20 @@ fn branches(root: &Path) -> Result<Vec<Branch>> {
 	}
 
 	for row in &mut rows {
-		row.name = if row.slug == MAIN {
-			"Main".to_owned()
-		} else {
-			config
-				.get_string(&name_key(&row.slug))
-				.unwrap_or_else(|_| row.slug.clone())
-		};
+		row.name = version_name(&config, &row.slug);
 	}
 	rows.sort_by_key(|row| (row.slug != MAIN, row.name.to_lowercase()));
 	Ok(rows)
+}
+
+/// A version's name as the writer typed it.
+fn version_name(config: &git2::Config, slug: &str) -> String {
+	if slug == MAIN {
+		return "Main".to_owned();
+	}
+	config
+		.get_string(&name_key(slug))
+		.unwrap_or_else(|_| slug.to_owned())
 }
 
 /// Starts a version at the current checkpoint and moves the writer into it.
@@ -1255,6 +1266,31 @@ pub fn switch_branch(root: PathBuf, slug: String) -> Result<()> {
 	switch(&root, &slug)
 }
 
+/// Merges `slug` into the version the writer is in. None when it finished
+/// with its own checkpoint, otherwise the conflicts left to settle.
+#[tauri::command]
+pub fn merge_branch(root: PathBuf, slug: String) -> Result<Option<Merging>> {
+	let author = author(&root)?;
+	merge(&root, &slug, &author)
+}
+
+/// The merge under way, if there is one.
+#[tauri::command]
+pub fn merge_state(root: PathBuf) -> Result<Option<Merging>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	merging(&root)
+}
+
+#[tauri::command]
+pub fn abort_merge(root: PathBuf) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	abort(&root)
+}
+
 /// Records that the writer has seen the note about an enclosing repository.
 #[tauri::command]
 pub fn nested_notice_shown(root: PathBuf) -> Result<()> {
@@ -1515,6 +1551,168 @@ fn switch(root: &Path, slug: &str) -> Result<()> {
 	Ok(())
 }
 
+/// A merge waiting for its conflicts to be settled.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Merging {
+	/// The version being merged in, or none once no version ends at the
+	/// checkpoint being merged.
+	pub name: Option<String>,
+	/// What the checkpoint that finishes the merge says, until the writer
+	/// changes it.
+	pub message: String,
+	pub conflicts: Vec<Conflict>,
+}
+
+/// A document both versions changed in the same place.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Conflict {
+	/// None for a file neither version's manifest names.
+	pub id: Option<Uuid>,
+	pub path: String,
+}
+
+/// The checkpoint being merged in, while a merge is under way.
+fn merge_head(repo: &Repository) -> Result<Option<Commit<'_>>> {
+	match repo.find_reference("MERGE_HEAD") {
+		Ok(merged) => Ok(Some(merged.peel_to_commit()?)),
+		Err(e) if e.code() == ErrorCode::NotFound => Ok(None),
+		Err(e) => Err(e.into()),
+	}
+}
+
+/// Merges another version into the one the writer is in. A clean merge adds
+/// its own checkpoint, even when git could fast-forward. Otherwise each
+/// conflicted document keeps this version's text on disk, its three sides
+/// wait in `.git/index`, and the merge stays under way.
+fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
+	if pending(root)? {
+		return Err(Error::ChangesPending);
+	}
+	let repo = Repository::open(root)?;
+	let Some(head) = head_commit(&repo)? else {
+		return Err(Error::NothingKept);
+	};
+	let theirs = repo
+		.find_branch(slug, BranchType::Local)?
+		.get()
+		.peel_to_commit()?;
+	let annotated = repo.find_annotated_commit(theirs.id())?;
+	if repo.merge_analysis(&[&annotated])?.0.is_up_to_date() {
+		return Err(Error::AlreadyMerged);
+	}
+	// Using our side keeps conflict markers out of every document.
+	repo.merge(
+		&[&annotated],
+		None,
+		Some(
+			CheckoutBuilder::new()
+				.force()
+				.allow_conflicts(true)
+				.use_ours(true),
+		),
+	)?;
+	let message = format!("Merged {}", version_name(&repo.config()?, slug));
+	fs::write(repo.path().join("MERGE_MSG"), format!("{message}\n"))?;
+
+	// ponytail: the book and its order come whole from this version, so
+	// whatever the other version renamed, moved or added is not placed.
+	let ours = head.tree()?;
+	let mut index = repo.index()?;
+	for path in std::iter::once(MANIFEST_FILE).chain(COVER_NAMES) {
+		match ours.get_path(Path::new(path)) {
+			Ok(kept) => {
+				let blob = repo.find_blob(kept.id())?;
+				write_atomic(&root.join(path), blob.content())?;
+				index.add(&entry(path, blob.id(), blob.size()))?;
+			}
+			Err(e) if e.code() == ErrorCode::NotFound => {
+				remove_if_there(&root.join(path))?;
+				index.remove_path(Path::new(path))?;
+			}
+			Err(e) => return Err(e.into()),
+		}
+	}
+	index.write()?;
+	if index.has_conflicts() {
+		return merging(root);
+	}
+
+	let tree = repo.find_tree(index.write_tree()?)?;
+	let signature = signature(author)?;
+	repo.commit(
+		Some("HEAD"),
+		&signature,
+		&signature,
+		&message,
+		&tree,
+		&[&head, &theirs],
+	)?;
+	repo.cleanup_state()?;
+	Ok(None)
+}
+
+fn merging(root: &Path) -> Result<Option<Merging>> {
+	let repo = Repository::open(root)?;
+	let Some(merged) = merge_head(&repo)? else {
+		return Ok(None);
+	};
+
+	let mut name = None;
+	for branch in repo.branches(Some(BranchType::Local))? {
+		let (branch, _) = branch?;
+		if branch.get().target() == Some(merged.id())
+			&& let Some(slug) = branch.name()?
+		{
+			name = Some(version_name(&repo.config()?, slug));
+		}
+	}
+
+	// A path this version has wins over the same path in the other.
+	let mut ids = HashMap::new();
+	for version in ["HEAD".to_owned(), merged.id().to_string()] {
+		for document in side(&repo, Some(&version))?.1.documents() {
+			ids.entry(document.path).or_insert(document.id);
+		}
+	}
+	let mut conflicts = Vec::new();
+	for conflict in repo.index()?.conflicts()? {
+		let conflict = conflict?;
+		let Some(side) = conflict.our.or(conflict.their).or(conflict.ancestor) else {
+			continue;
+		};
+		let path = String::from_utf8_lossy(&side.path).into_owned();
+		conflicts.push(Conflict {
+			id: ids.get(&path).copied(),
+			path,
+		});
+	}
+
+	Ok(Some(Merging {
+		name,
+		message: fs::read_to_string(repo.path().join("MERGE_MSG"))?
+			.trim_end()
+			.to_owned(),
+		conflicts,
+	}))
+}
+
+/// Puts the project back as it was before the merge began. Without a merge
+/// under way, nothing happens, so no writing is lost.
+fn abort(root: &Path) -> Result<()> {
+	let repo = Repository::open(root)?;
+	if merge_head(&repo)?.is_none() {
+		return Ok(());
+	}
+	let head = head_commit(&repo)?.ok_or(Error::NothingKept)?;
+	repo.reset(head.as_object(), ResetType::Hard, None)?;
+	repo.cleanup_state()?;
+	Ok(())
+}
+
 fn enclosing(root: &Path, repo: &Repository) -> Result<Option<PathBuf>> {
 	if repo
 		.config()?
@@ -1541,6 +1739,7 @@ mod tests {
 	};
 	use crate::project::{Format, create, set_cover, write_book};
 	use crate::tree::Node;
+	use git2::RepositoryState;
 
 	fn project() -> tempfile::TempDir {
 		let dir = tempfile::tempdir().unwrap();
@@ -2297,6 +2496,181 @@ mod tests {
 		assert!(changes(&root, Some(&draft), None).unwrap().nodes.is_empty());
 		assert!(!pending(&root).unwrap());
 		assert!(root.join(&empty_path).is_dir());
+	}
+
+	const BASE: &str = "One.\n\nTwo.\n\nThree.\n";
+
+	/// A novel whose first document has `BASE`, then a version "Act two"
+	/// where it reads `draft`, and Main where it reads `main`. Act two also
+	/// edits a second document. Returns the two documents and both checkpoints.
+	fn forked(main: &str, draft: &str) -> (tempfile::TempDir, PathBuf, Uuid, Uuid, Oid, Oid) {
+		let (parent, root, seeded, here, _) = novel();
+		let other = create_document(root.clone(), here, "Other".to_owned())
+			.unwrap()
+			.id;
+		write_document(root.clone(), seeded, BASE.to_owned()).unwrap();
+		checkpoint(&root, "Base", "").unwrap();
+
+		new_branch(&root, "Act two").unwrap();
+		write_document(root.clone(), seeded, draft.to_owned()).unwrap();
+		write_document(root.clone(), other, "Only in Act two".to_owned()).unwrap();
+		let draft = checkpoint(&root, "In Act two", "").unwrap();
+
+		switch(&root, "main").unwrap();
+		let main = match main == BASE {
+			true => repo_head(&root),
+			false => {
+				write_document(root.clone(), seeded, main.to_owned()).unwrap();
+				checkpoint(&root, "On Main", "").unwrap()
+			}
+		};
+		(parent, root, seeded, other, main, draft)
+	}
+
+	fn parents(root: &Path) -> Vec<Oid> {
+		let repo = Repository::open(root).unwrap();
+		let head = repo.head().unwrap().peel_to_commit().unwrap();
+		head.parent_ids().collect()
+	}
+
+	fn merge_state_of(root: &Path) -> RepositoryState {
+		Repository::open(root).unwrap().state()
+	}
+
+	#[test]
+	fn a_clean_merge_adds_its_own_checkpoint() {
+		let (_parent, root, seeded, other, main, draft) = forked(
+			"One, on Main.\n\nTwo.\n\nThree.\n",
+			"One.\n\nTwo.\n\nThree, in Act two.\n",
+		);
+
+		assert_eq!(merge(&root, "act-two", "").unwrap(), None);
+
+		let repo = Repository::open(&root).unwrap();
+		let head = repo.head().unwrap().peel_to_commit().unwrap();
+		assert_eq!(head.message().unwrap(), "Merged Act two");
+		assert_eq!(parents(&root), [main, draft]);
+		assert_eq!(
+			read_document(root.clone(), seeded).unwrap(),
+			"One, on Main.\n\nTwo.\n\nThree, in Act two.\n"
+		);
+		assert_eq!(
+			read_document(root.clone(), other).unwrap(),
+			"Only in Act two"
+		);
+		assert!(!pending(&root).unwrap());
+		assert_eq!(merging(&root).unwrap(), None);
+		assert_eq!(merge_state_of(&root), RepositoryState::Clean);
+
+		let again = merge(&root, "act-two", "");
+		assert!(matches!(again, Err(Error::AlreadyMerged)));
+	}
+
+	#[test]
+	fn a_merge_git_could_fast_forward_still_adds_a_checkpoint() {
+		let (_parent, root, seeded, _, main, draft) = forked(BASE, "One, in Act two.\n");
+
+		assert_eq!(merge(&root, "act-two", "").unwrap(), None);
+
+		assert_eq!(parents(&root), [main, draft]);
+		assert_eq!(
+			read_document(root.clone(), seeded).unwrap(),
+			"One, in Act two.\n"
+		);
+	}
+
+	#[test]
+	fn merging_waits_while_changes_are_not_in_a_checkpoint() {
+		let (_parent, root, seeded, _, main, _) = forked(BASE, "One, in Act two.\n");
+		write_document(root.clone(), seeded, "Not yet kept".to_owned()).unwrap();
+
+		let refused = merge(&root, "act-two", "");
+
+		assert!(matches!(refused, Err(Error::ChangesPending)));
+		assert_eq!(repo_head(&root), main);
+		assert_eq!(merge_state_of(&root), RepositoryState::Clean);
+	}
+
+	const MAINS: &str = "One, on Main.\n\nTwo.\n\nThree.\n";
+
+	/// Main and Act two both rewrote the first paragraph.
+	fn conflicted() -> (tempfile::TempDir, PathBuf, Uuid, Uuid, Oid, Oid) {
+		let forked = forked(MAINS, "One, in Act two.\n\nTwo.\n\nThree.\n");
+		let merging = merge(&forked.1, "act-two", "").unwrap().unwrap();
+		let path = tree::path(&read_manifest(&forked.1).unwrap().nodes, forked.2).unwrap();
+		assert_eq!(
+			merging,
+			Merging {
+				name: Some("Act two".to_owned()),
+				message: "Merged Act two".to_owned(),
+				conflicts: vec![Conflict {
+					id: Some(forked.2),
+					path,
+				}],
+			}
+		);
+		forked
+	}
+
+	#[test]
+	fn a_conflicting_paragraph_leaves_this_versions_text_and_waits() {
+		let (_parent, root, seeded, other, main, _) = conflicted();
+
+		assert_eq!(repo_head(&root), main);
+		assert_eq!(merge_state_of(&root), RepositoryState::Merge);
+		assert_eq!(read_document(root.clone(), seeded).unwrap(), MAINS);
+		assert_eq!(
+			read_document(root.clone(), other).unwrap(),
+			"Only in Act two"
+		);
+		assert_eq!(merging(&root).unwrap().unwrap().conflicts.len(), 1);
+
+		let repo = Repository::open(&root).unwrap();
+		let index = repo.index().unwrap();
+		let conflict = index.conflicts().unwrap().next().unwrap().unwrap();
+		assert!(conflict.ancestor.is_some() && conflict.our.is_some() && conflict.their.is_some());
+		assert!(index.get_path(Path::new(MANIFEST_FILE), 0).is_some());
+	}
+
+	#[test]
+	fn aborting_returns_to_the_last_checkpoint() {
+		let (_parent, root, seeded, other, main, _) = conflicted();
+
+		abort(&root).unwrap();
+
+		assert_eq!(repo_head(&root), main);
+		assert_eq!(merge_state_of(&root), RepositoryState::Clean);
+		assert_eq!(merging(&root).unwrap(), None);
+		assert!(!pending(&root).unwrap());
+		assert_eq!(read_document(root.clone(), seeded).unwrap(), MAINS);
+		assert_eq!(read_document(root.clone(), other).unwrap(), "");
+	}
+
+	#[test]
+	fn aborting_with_no_merge_keeps_changes() {
+		let (_parent, root, seeded, ..) = forked(BASE, "One, in Act two.\n");
+		write_document(root.clone(), seeded, "Not yet kept".to_owned()).unwrap();
+
+		abort(&root).unwrap();
+
+		assert_eq!(body_now(&root, seeded), "Not yet kept");
+	}
+
+	#[test]
+	fn a_checkpoint_finishes_the_merge_once_conflicts_are_settled() {
+		let (_parent, root, seeded, _, main, draft) = conflicted();
+
+		let refused = checkpoint(&root, "Merged Act two", "");
+		assert!(matches!(refused, Err(Error::ConflictsRemain)));
+
+		write_document(root.clone(), seeded, "One, settled.\n".to_owned()).unwrap();
+		stage_all(root.clone()).unwrap();
+		checkpoint(&root, "Merged Act two", "").unwrap();
+
+		assert_eq!(parents(&root), [main, draft]);
+		assert_eq!(merge_state_of(&root), RepositoryState::Clean);
+		assert_eq!(merging(&root).unwrap(), None);
+		assert!(!pending(&root).unwrap());
 	}
 
 	/// A novel with versions, its first document, and two top-level folders

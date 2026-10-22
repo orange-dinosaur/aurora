@@ -405,6 +405,8 @@ pub enum Error {
 	MainFixed,
 	CurrentVersion,
 	ChangesPending,
+	AlreadyMerged,
+	ConflictsRemain,
 	UnsupportedFormat(Format),
 	Trash(trash::Error),
 	Git(git2::Error),
@@ -473,6 +475,12 @@ impl fmt::Display for Error {
 					"the changes since the last checkpoint would be left behind"
 				)
 			}
+			Error::AlreadyMerged => {
+				write!(f, "everything in that version is already in this one")
+			}
+			Error::ConflictsRemain => {
+				write!(f, "settle every conflict before adding the checkpoint")
+			}
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
@@ -515,6 +523,8 @@ impl Error {
 			Error::MainFixed => "mainFixed",
 			Error::CurrentVersion => "currentVersion",
 			Error::ChangesPending => "changesPending",
+			Error::AlreadyMerged => "alreadyMerged",
+			Error::ConflictsRemain => "conflictsRemain",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",
@@ -563,6 +573,8 @@ impl std::error::Error for Error {
 			| Error::NothingKept
 			| Error::MainFixed
 			| Error::CurrentVersion
+			| Error::AlreadyMerged
+			| Error::ConflictsRemain
 			| Error::ChangesPending
 			| Error::UnsupportedFormat(_) => None,
 			Error::Trash(e) => Some(e),
