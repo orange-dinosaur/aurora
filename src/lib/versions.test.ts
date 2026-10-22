@@ -1,28 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { timeOfDay, when } from "../dates";
-import type { Change, Version } from "../types";
+import type { Change, Checkpoint } from "../types";
 import {
 	byDay,
 	counts,
 	detail,
-	duration,
 	label,
 	lineKey,
 	lines,
-	ownName,
 	summary,
 } from "./versions";
 
-function version(at: Date, rest: Partial<Version> = {}): Version {
+function checkpoint(at: Date, rest: Partial<Checkpoint> = {}): Checkpoint {
 	return {
 		id: at.toISOString(),
 		at: at.toISOString(),
-		kind: "session",
-		name: null,
-		minutes: null,
-		written: null,
-		removed: null,
-		author: "Aurora",
+		message: "Draft one",
+		author: "Ines",
 		words: null,
 		...rest,
 	};
@@ -34,10 +28,10 @@ describe("byDay", () => {
 	it("heads today and yesterday by name and older days by date", () => {
 		const older = new Date(2026, 8, 12, 9, 0);
 		const list = [
-			version(new Date(2026, 8, 23, 15, 40)),
-			version(new Date(2026, 8, 23, 9, 15)),
-			version(new Date(2026, 8, 22, 20, 0)),
-			version(older),
+			checkpoint(new Date(2026, 8, 23, 15, 40)),
+			checkpoint(new Date(2026, 8, 23, 9, 15)),
+			checkpoint(new Date(2026, 8, 22, 20, 0)),
+			checkpoint(older),
 		];
 
 		const days = byDay(list, now);
@@ -47,21 +41,11 @@ describe("byDay", () => {
 			"Yesterday",
 			when(older.toISOString()),
 		]);
-		expect(days.map((day) => day.versions.length)).toEqual([2, 1, 1]);
+		expect(days.map((day) => day.checkpoints.length)).toEqual([2, 1, 1]);
 	});
 
 	it("gives an empty list no days", () => {
 		expect(byDay([], now)).toEqual([]);
-	});
-});
-
-describe("duration", () => {
-	it("counts minutes under an hour", () => {
-		expect(duration(42)).toBe("42 min");
-	});
-
-	it("gives hours and padded minutes from an hour", () => {
-		expect(duration(64)).toBe("1 h 04");
 	});
 });
 
@@ -78,35 +62,11 @@ describe("detail", () => {
 	const at = new Date(2026, 8, 23, 15, 40);
 	const time = timeOfDay(at.toISOString());
 
-	it("describes a session by its length and its words", () => {
-		const session = version(at, { minutes: 42, written: 610, removed: 0 });
-		expect(detail(session)).toBe(`${time} · session, 42 min · +610`);
-	});
-
-	it("describes leaving the project", () => {
-		const closing = version(at, {
-			kind: "closing",
-			written: 0,
-			removed: 0,
-		});
-		expect(detail(closing)).toBe(`${time} · on leaving`);
-	});
-
-	it("gives a named version its words when it has them", () => {
-		const named = version(at, {
-			kind: "named",
-			name: "Before the mill argument",
-			words: 1148,
-		});
-		expect(detail(named)).toBe(
-			`${time} · ${(1148).toLocaleString()} words · you`,
+	it("gives the time and the author, and the words when it has them", () => {
+		expect(detail(checkpoint(at))).toBe(`${time} · Ines`);
+		expect(detail(checkpoint(at, { words: 1148 }))).toBe(
+			`${time} · Ines · ${(1148).toLocaleString()} words`,
 		);
-		expect(detail({ ...named, words: null })).toBe(`${time} · you`);
-	});
-
-	it("credits a commit made outside Aurora to its author", () => {
-		const foreign = version(at, { kind: null, author: "Ines" });
-		expect(detail(foreign)).toBe(`${time} · Ines`);
 	});
 });
 
@@ -206,35 +166,11 @@ describe("lines", () => {
 });
 
 describe("label", () => {
-	it("is a version's name, or its date and time", () => {
+	it("is the first line of the message", () => {
 		const at = new Date(2026, 8, 12, 9, 5);
-		expect(label(version(at, { name: "Draft one" }))).toBe("Draft one");
-		expect(label(version(at))).toBe(
-			`${when(at.toISOString())}, ${timeOfDay(at.toISOString())}`,
-		);
-	});
-});
-
-describe("a version kept before putting back", () => {
-	const at = new Date(2026, 8, 12, 9, 5);
-	const time = timeOfDay(at.toISOString());
-	const kept = version(at, {
-		kind: "beforePuttingBack",
-		name: "Before putting back “Draft one”",
-		words: 1148,
-	});
-
-	it("is quiet under Aurora's name", () => {
-		expect(ownName(kept)).toBeNull();
-		expect(detail(kept)).toBe(`${time} · before putting back “Draft one”`);
-		expect(label(kept)).toBe(`${when(at.toISOString())}, ${time}`);
-	});
-
-	it("is the writer's once they rename it", () => {
-		const renamed = { ...kept, name: "Mill scene, old" };
-		expect(ownName(renamed)).toBe("Mill scene, old");
-		expect(detail(renamed)).toBe(
-			`${time} · ${(1148).toLocaleString()} words · you`,
-		);
+		expect(label(checkpoint(at))).toBe("Draft one");
+		expect(
+			label(checkpoint(at, { message: "Mill scene \nand the rest" })),
+		).toBe("Mill scene");
 	});
 });

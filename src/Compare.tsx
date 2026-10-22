@@ -26,13 +26,13 @@ import {
 	type Run,
 	tally,
 } from "./lib/compare";
-import { byDay, counts, detail, label, ownName, summary } from "./lib/versions";
+import { byDay, counts, detail, label, summary } from "./lib/versions";
 import { timeOfDay } from "./dates";
 import type {
 	Changes,
+	Checkpoint,
 	Keep,
 	ProjectDocument,
-	Version,
 	VersionsScope,
 } from "./types";
 import { prose, words } from "./words";
@@ -78,7 +78,7 @@ export default function Compare({
 	onPutBack,
 }: Props) {
 	const open = scope === "document" ? document : null;
-	const [versions, setVersions] = useState<Version[]>([]);
+	const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
 	const [chosen, setChosen] = useState(version);
 	const [changes, setChanges] = useState<Changes | null>(null);
 	// The edited document shown in the columns for the whole project.
@@ -105,13 +105,14 @@ export default function Compare({
 
 	useEffect(() => {
 		let live = true;
-		invoke<Version[]>("list_versions", {
+		invoke<Checkpoint[]>("list_checkpoints", {
 			root,
+			version: null,
 			document: open?.id ?? null,
 		})
 			.then((listed) => {
 				if (live) {
-					setVersions(listed);
+					setCheckpoints(listed);
 				}
 			})
 			.catch((reason: unknown) => {
@@ -324,11 +325,11 @@ export default function Compare({
 	}
 
 	const today = new Date();
-	const days = byDay(versions, today);
+	const days = byDay(checkpoints, today);
 	if (days[0]?.heading !== "Today") {
-		days.unshift({ heading: "Today", versions: [] });
+		days.unshift({ heading: "Today", checkpoints: [] });
 	}
-	const a = versions.find((listed) => listed.id === chosen);
+	const a = checkpoints.find((listed) => listed.id === chosen);
 
 	// Every put back goes through the project, which writes the editors down
 	// first and reloads them after. The view then reads what is left.
@@ -404,11 +405,11 @@ export default function Compare({
 			</div>
 
 			<div className="compare__body">
-				<nav className="compare__history" aria-label="Versions">
+				<nav className="compare__history" aria-label="Checkpoints">
 					<h2 className="compare__title">
 						{open === null
-							? "Versions of the whole project"
-							: `Versions of ${open.title}`}
+							? "Checkpoints of the whole project"
+							: `Checkpoints of ${open.title}`}
 					</h2>
 					{open !== null && (
 						<p className="compare__trail">
@@ -459,10 +460,10 @@ export default function Compare({
 										</div>
 									</li>
 								)}
-								{day.versions.map((listed) => (
+								{day.checkpoints.map((listed) => (
 									<Row
 										key={listed.id}
-										version={listed}
+										checkpoint={listed}
 										chosen={listed.id === chosen}
 										onChoose={() => setChosen(listed.id)}
 									/>
@@ -514,7 +515,7 @@ export default function Compare({
 							{changes.nodes.length === 0 &&
 								!changes.book &&
 								!changes.cover && (
-									<Change what="Nothing has changed since this version" />
+									<Change what="Nothing has changed since this checkpoint" />
 								)}
 						</ul>
 					)}
@@ -529,9 +530,7 @@ export default function Compare({
 					>
 						<Column
 							letter="A"
-							title={
-								a === undefined ? "" : (ownName(a) ?? detail(a))
-							}
+							title={a === undefined ? "" : a.message}
 							detail={
 								a === undefined
 									? ""
@@ -696,24 +695,21 @@ export default function Compare({
 }
 
 function Row({
-	version,
+	checkpoint,
 	chosen,
 	onChoose,
 }: {
-	version: Version;
+	checkpoint: Checkpoint;
 	chosen: boolean;
 	onChoose: () => void;
 }) {
-	const name = ownName(version);
 	return (
 		<li
-			className={[
-				"versions__item",
-				name !== null ? "versions__item--named" : "",
-				chosen ? "versions__item--selected" : "",
-			]
-				.filter((part) => part !== "")
-				.join(" ")}
+			className={
+				chosen
+					? "versions__item versions__item--selected"
+					: "versions__item"
+			}
 		>
 			<button
 				type="button"
@@ -723,10 +719,10 @@ function Row({
 			>
 				<span className="versions__mark" aria-hidden="true" />
 				<span className="versions__text">
-					{name !== null && (
-						<span className="versions__name">{name}</span>
-					)}
-					<span className="versions__detail">{detail(version)}</span>
+					<span className="versions__name">{checkpoint.message}</span>
+					<span className="versions__detail">
+						{detail(checkpoint)}
+					</span>
 				</span>
 				{chosen && <span className="compare__letter">A</span>}
 			</button>
@@ -829,7 +825,7 @@ function Column({
 				>
 					{missing && (
 						<p className="compare__missing">
-							This document did not exist yet in this version.
+							This document did not exist yet at this checkpoint.
 						</p>
 					)}
 					{fields.map((field) => (

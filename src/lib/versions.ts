@@ -1,28 +1,29 @@
-// How the Versions tab words a row and groups the list. Versions arrive newest
-// first, so grouping only has to notice where one day gives way to the next.
+// How the Versions tab words a row and groups the list. Checkpoints arrive
+// newest first, so grouping only has to notice where one day gives way to the
+// next.
 
 import { timeOfDay, when } from "../dates";
-import type { Change, Changes, StatusRow, Version } from "../types";
+import type { Change, Changes, Checkpoint, StatusRow } from "../types";
 
-/** A day of versions, with the heading it is listed under. */
-export type VersionDay = {
+/** A day of checkpoints, with the heading it is listed under. */
+export type CheckpointDay = {
 	heading: string;
-	versions: Version[];
+	checkpoints: Checkpoint[];
 };
 
 /** The list broken into the writer's own days, keeping its order. */
-export function byDay(versions: Version[], now: Date): VersionDay[] {
+export function byDay(checkpoints: Checkpoint[], now: Date): CheckpointDay[] {
 	const today = now.toDateString();
 	const before = new Date(now);
 	before.setDate(before.getDate() - 1);
 	const yesterday = before.toDateString();
 
-	const days: (VersionDay & { key: string })[] = [];
-	for (const version of versions) {
-		const key = new Date(version.at).toDateString();
+	const days: (CheckpointDay & { key: string })[] = [];
+	for (const checkpoint of checkpoints) {
+		const key = new Date(checkpoint.at).toDateString();
 		const open = days[days.length - 1];
 		if (open !== undefined && open.key === key) {
-			open.versions.push(version);
+			open.checkpoints.push(checkpoint);
 			continue;
 		}
 		const heading =
@@ -30,19 +31,10 @@ export function byDay(versions: Version[], now: Date): VersionDay[] {
 				? "Today"
 				: key === yesterday
 					? "Yesterday"
-					: when(version.at);
-		days.push({ key, heading, versions: [version] });
+					: when(checkpoint.at);
+		days.push({ key, heading, checkpoints: [checkpoint] });
 	}
-	return days.map(({ heading, versions }) => ({ heading, versions }));
-}
-
-/** A session's length: "42 min" under an hour, "1 h 04" from there. */
-export function duration(minutes: number): string {
-	if (minutes < 60) {
-		return `${minutes} min`;
-	}
-	const hours = Math.floor(minutes / 60);
-	return `${hours} h ${String(minutes % 60).padStart(2, "0")}`;
+	return days.map(({ heading, checkpoints }) => ({ heading, checkpoints }));
 }
 
 /** Words written and removed, leaving out whichever is nought. */
@@ -56,66 +48,27 @@ export function counts(written: number, removed: number): string {
 }
 
 /**
- * The quiet line under a named version, or the whole of an automatic one:
- * "15:40 · session, 42 min · +610".
+ * The quiet line under a checkpoint's message: "15:40 · Ines", with the
+ * document's words when the list is of one document.
  */
-export function detail(version: Version): string {
-	const parts = [timeOfDay(version.at)];
-	const moved = counts(version.written ?? 0, version.removed ?? 0);
-	const yours = [
-		version.words === null ? "" : `${version.words.toLocaleString()} words`,
-		"you",
-	];
-
-	switch (version.kind) {
-		case "session":
-			parts.push(`session, ${duration(version.minutes ?? 0)}`, moved);
-			break;
-		case "closing":
-			parts.push("on leaving", moved);
-			break;
-		case "named":
-			parts.push(...yours);
-			break;
-		case "beforePuttingBack":
-			// Aurora's own name is the whole of the line, as quiet as a session.
-			parts.push(
-				...(ownName(version) === null
-					? [
-							`before putting back${(version.name ?? BEFORE).slice(BEFORE.length)}`,
-						]
-					: yours),
-			);
-			break;
-		case null:
-			// A commit made outside Aurora, by whoever made it.
-			parts.push(version.author);
-			break;
-	}
-	return parts.filter((part) => part !== "").join(" · ");
+export function detail(checkpoint: Checkpoint): string {
+	return [
+		timeOfDay(checkpoint.at),
+		checkpoint.author,
+		checkpoint.words === null
+			? ""
+			: `${checkpoint.words.toLocaleString()} words`,
+	]
+		.filter((part) => part !== "")
+		.join(" · ");
 }
 
 /**
- * What a version is called in the one kept before putting it back: its name,
- * or its date and time, which stay true after today is yesterday.
+ * What a checkpoint is called in the one kept before putting it back: the
+ * first line of its message.
  */
-export function label(version: Version): string {
-	return ownName(version) ?? `${when(version.at)}, ${timeOfDay(version.at)}`;
-}
-
-// How Rust begins the name of a version it keeps before putting back.
-const BEFORE = "Before putting back";
-
-/**
- * A name the writer gave, which the lists show prominently. The one Aurora
- * writes on a version kept before putting back is not theirs, until they
- * rename it.
- */
-export function ownName(version: Version): string | null {
-	return version.kind === "beforePuttingBack" &&
-		(version.name === null || version.name.startsWith(BEFORE))
-		? null
-		: version.name;
+export function label(checkpoint: Checkpoint): string {
+	return checkpoint.message.split("\n")[0].trim();
 }
 
 function nameIn(path: string): string {

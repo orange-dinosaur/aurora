@@ -2179,19 +2179,6 @@ body.dragging * {
 	outline-offset: 2px;
 }
 
-/* Room under the field for what Rust says about a name, held whether or not
-   there is anything to say. */
-.versions__field {
-	position: relative;
-	padding-bottom: 1.1rem;
-}
-
-.versions__field .namefield__message {
-	left: 0;
-	right: 0;
-	bottom: 0;
-}
-
 .versions__scope {
 	display: flex;
 	gap: 2px;
@@ -2265,8 +2252,7 @@ body.dragging * {
 	align-items: flex-start;
 	gap: 0.6rem;
 	width: 100%;
-	/* The right side is the menu's. */
-	padding: 0.4rem 1.9rem 0.4rem 0.5rem;
+	padding: 0.4rem 0.5rem;
 	font: inherit;
 	font-size: 0.75rem;
 	text-align: left;
@@ -2286,8 +2272,6 @@ body.dragging * {
 	outline-offset: -2px;
 }
 
-/* Every row has one, named or not, so the text of every row starts at the
-   same place. */
 .versions__mark {
 	flex: none;
 	width: 7px;
@@ -2295,11 +2279,6 @@ body.dragging * {
 	margin-top: 6px;
 	border: 1px solid var(--border-strong);
 	border-radius: 50%;
-}
-
-.versions__item--named .versions__mark {
-	background: var(--accent);
-	border-color: var(--accent);
 }
 
 .versions__text {
@@ -2315,27 +2294,8 @@ body.dragging * {
 	overflow-wrap: anywhere;
 }
 
-.versions__detail,
-.versions__words {
+.versions__detail {
 	font-variant-numeric: tabular-nums;
-}
-
-.versions__words {
-	margin-left: auto;
-	padding-top: 1px;
-}
-
-.versions__item .menu {
-	top: 0.3rem;
-	right: 0.3rem;
-	/* Faded rather than removed, like the ⋮ on a document's row. */
-	opacity: 0;
-}
-
-.versions__item:hover .menu,
-.versions__item:focus-within .menu,
-.versions__item--selected .menu {
-	opacity: 1;
 }
 
 .versions__actions {
@@ -2362,10 +2322,6 @@ body.dragging * {
 
 .versions > .versions__scope {
 	margin-top: 0;
-}
-
-.versions__new {
-	margin-top: 0.5rem;
 }
 
 .versions__keep:disabled {
