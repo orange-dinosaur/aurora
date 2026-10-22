@@ -79,7 +79,7 @@ type Props = {
 	enclosing: string | null;
 	/** Writes every open document to disk before a version is kept. */
 	onBeforeKeep: () => Promise<void>;
-	onCompare: (version: Version) => void;
+	onCompare: (version: Version, document?: string) => void;
 	/** Writes everything down, runs the put back, and reloads what it changed. */
 	onPutBack: (task: () => Promise<unknown>) => Promise<void>;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;

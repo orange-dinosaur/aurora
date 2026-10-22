@@ -2,7 +2,7 @@
 // first, so grouping only has to notice where one day gives way to the next.
 
 import { timeOfDay, when } from "../dates";
-import type { Change, Version } from "../types";
+import type { Change, Changes, StatusRow, Version } from "../types";
 
 /** A day of versions, with the heading it is listed under. */
 export type VersionDay = {
@@ -158,4 +158,44 @@ export function summary(change: Change): { name: string; what: string } {
 	}
 	const what = parts.join(", ");
 	return { name, what: what.charAt(0).toUpperCase() + what.slice(1) };
+}
+
+/** A row of the Changes list. The change is null on the book and the cover. */
+export type Line = {
+	row: StatusRow;
+	name?: string;
+	what: string;
+	change: Change | null;
+};
+
+/** One group of the Changes list as rows: the book and cover, then the rest. */
+export function lines(changes: Changes): Line[] {
+	const book: Line[] = [];
+	if (changes.book) {
+		book.push({
+			row: { kind: "book" },
+			what: "Book details changed",
+			change: null,
+		});
+	}
+	if (changes.cover) {
+		book.push({
+			row: { kind: "cover" },
+			what: "Cover changed",
+			change: null,
+		});
+	}
+	return [
+		...book,
+		...changes.nodes.map((change): Line => ({
+			row: { kind: "node", id: change.id },
+			...summary(change),
+			change,
+		})),
+	];
+}
+
+/** What tells one row from the others in its group. */
+export function lineKey(line: Line): string {
+	return line.row.kind === "node" ? line.row.id : line.row.kind;
 }

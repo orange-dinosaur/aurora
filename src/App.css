@@ -2360,6 +2360,113 @@ body.dragging * {
 	cursor: default;
 }
 
+.versions > .versions__scope {
+	margin-top: 0;
+}
+
+.versions__new {
+	margin-top: 0.5rem;
+}
+
+.versions__keep:disabled {
+	color: var(--text-faint);
+	background: var(--bg-hover);
+	cursor: default;
+}
+
+.changes__add {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin-top: 0.5rem;
+}
+
+.changes__message {
+	padding: 0.4rem 0.5rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	resize: vertical;
+}
+
+.changes__message:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+.changes__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+}
+
+.changes__row {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.4rem;
+}
+
+.versions__pick.changes__pick {
+	flex: 1;
+	min-width: 0;
+	padding-right: 0.25rem;
+}
+
+div.changes__pick {
+	cursor: default;
+}
+
+.versions__item:not(.versions__item--selected) div.changes__pick:hover {
+	background: none;
+}
+
+.changes__back {
+	margin-top: 0.4rem;
+	/* Faded rather than removed, so the row does not reflow on hover. */
+	opacity: 0;
+}
+
+.changes__row:hover .changes__back,
+.changes__row:focus-within .changes__back {
+	opacity: 1;
+}
+
+.changes__move {
+	flex: none;
+	width: 22px;
+	height: 22px;
+	margin: 0.3rem 0.3rem 0 0;
+	padding: 0;
+	font: inherit;
+	font-size: 0.9375rem;
+	line-height: 1;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.changes__move:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.changes__move:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.changes__back:focus-visible,
+.changes__move:focus-visible,
+.changes__head .versions__action:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
 /* The display the body sets would otherwise beat the attribute. */
 .project__body[hidden] {
 	display: none;

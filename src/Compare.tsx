@@ -44,6 +44,8 @@ type Props = {
 	scope: VersionsScope;
 	/** The version the writer asked to compare, which starts as A. */
 	version: string;
+	/** The edited document to show first across the whole project. */
+	pick: string | null;
 	fontSize: number;
 	lineHeight: number;
 	onScope: (scope: VersionsScope) => void;
@@ -68,6 +70,7 @@ export default function Compare({
 	document,
 	scope,
 	version,
+	pick,
 	fontSize,
 	lineHeight,
 	onScope,
@@ -79,7 +82,7 @@ export default function Compare({
 	const [chosen, setChosen] = useState(version);
 	const [changes, setChanges] = useState<Changes | null>(null);
 	// The edited document shown in the columns for the whole project.
-	const [picked, setPicked] = useState<string | null>(null);
+	const [picked, setPicked] = useState(pick);
 	const shown = open === null ? picked : open.id;
 	const [texts, setTexts] = useState<Texts | null>(null);
 	const [current, setCurrent] = useState<number | null>(null);

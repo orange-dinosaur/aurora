@@ -7,6 +7,8 @@ import {
 	detail,
 	duration,
 	label,
+	lineKey,
+	lines,
 	ownName,
 	summary,
 } from "./versions";
@@ -172,6 +174,34 @@ describe("summary", () => {
 		).toBe(
 			"Order changed: “Three” moved to the top, “One” moved after “Two”",
 		);
+	});
+});
+
+describe("lines", () => {
+	it("lists the book and cover first, then each node as its own row", () => {
+		const scene: Change = {
+			id: "scene",
+			folder: false,
+			before: null,
+			after: "Manuscript/Scene.md",
+			renamed: false,
+			moved: false,
+			edited: false,
+			reordered: [],
+		};
+		const listed = lines({ nodes: [scene], book: true, cover: true });
+		expect(listed.map(lineKey)).toEqual(["book", "cover", "scene"]);
+		expect(listed.map((line) => line.row)).toEqual([
+			{ kind: "book" },
+			{ kind: "cover" },
+			{ kind: "node", id: "scene" },
+		]);
+		expect(listed[2]).toMatchObject({
+			name: "Scene",
+			what: "New document",
+			change: scene,
+		});
+		expect(lines({ nodes: [], book: false, cover: false })).toEqual([]);
 	});
 });
 

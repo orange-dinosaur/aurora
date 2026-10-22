@@ -303,6 +303,8 @@ export default function Project({
 	// The version the compare view opened on. It takes the whole window and
 	// reads now from disk, so every editor is written before it opens.
 	const [comparing, setComparing] = useState<string | null>(null);
+	// The document compare opens on across the whole project, if any.
+	const [pick, setPick] = useState<string | null>(null);
 
 	// Why a folder's target was refused, when one was.
 	const [aiming, setAiming] = useState<string | null>(null);
@@ -1332,6 +1334,7 @@ export default function Project({
 					}
 					scope={preferences.versionsScope}
 					version={comparing}
+					pick={pick}
 					fontSize={preferences.fontSize}
 					lineHeight={preferences.lineHeight}
 					onScope={(versionsScope) =>
@@ -1632,8 +1635,11 @@ export default function Project({
 						}
 						enclosing={enclosingRepository}
 						onBeforeKeep={writeAll}
-						onCompare={(version) =>
-							void writeAll().then(() => setComparing(version.id))
+						onCompare={(version, document) =>
+							void writeAll().then(() => {
+								setPick(document ?? null);
+								setComparing(version.id);
+							})
 						}
 						onPutBack={putBack}
 						onOpen={(document, seed) =>

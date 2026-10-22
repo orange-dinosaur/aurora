@@ -32,6 +32,8 @@ export type { Theme } from "./bindings/Theme";
 export type { TrashEntry } from "./bindings/TrashEntry";
 export type { Change } from "./bindings/Change";
 export type { Changes } from "./bindings/Changes";
+export type { Row as StatusRow } from "./bindings/Row";
+export type { Status } from "./bindings/Status";
 export type { Version } from "./bindings/Version";
 export type { Branch } from "./bindings/Branch";
 export type { Checkpoint } from "./bindings/Checkpoint";
