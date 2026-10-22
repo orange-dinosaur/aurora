@@ -8,8 +8,9 @@ use std::path::{Component, Path, PathBuf};
 
 use git2::build::CheckoutBuilder;
 use git2::{
-	BranchType, Commit, ErrorCode, Index, IndexAddOption, IndexEntry, IndexTime, Oid, Repository,
-	RepositoryInitOptions, ResetType, Signature, Sort, StatusOptions, Tree,
+	BranchType, Commit, ErrorCode, Index, IndexAddOption, IndexEntry, IndexTime, MergeFileInput,
+	MergeFileOptions, Oid, Repository, RepositoryInitOptions, ResetType, Signature, Sort,
+	StatusOptions, Tree,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -1314,6 +1315,23 @@ pub fn abort_merge(root: PathBuf) -> Result<()> {
 	abort(&root)
 }
 
+/// A conflicted document as clean text and spots, or none once it is settled.
+#[tauri::command]
+pub fn merge_spots(root: PathBuf, id: Uuid) -> Result<Option<Vec<Piece>>> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	spots(&root, id)
+}
+
+#[tauri::command]
+pub fn settle_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	settle(&root, id, &text)
+}
+
 /// Records that the writer has seen the note about an enclosing repository.
 #[tauri::command]
 pub fn nested_notice_shown(root: PathBuf) -> Result<()> {
@@ -1842,6 +1860,123 @@ fn merging(root: &Path) -> Result<Option<Merging>> {
 			.to_owned(),
 		conflicts,
 	}))
+}
+
+/// One stretch of a conflicted document: text both versions agree on, or a
+/// spot where each has its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum Piece {
+	Clean { text: String },
+	Spot { ours: String, theirs: String },
+}
+
+/// Long enough that no line a writer types is taken for a marker.
+const MARKER_SIZE: usize = 64;
+
+/// A conflicted document in order, or none when it has no conflict. Git's
+/// file merge marks each spot, and the label on its markers is made for this
+/// call, so markers a writer typed stay text.
+fn spots(root: &Path, id: Uuid) -> Result<Option<Vec<Piece>>> {
+	let repo = Repository::open(root)?;
+	let path = tree::path(&read_manifest(root)?.nodes, id).ok_or(Error::UnknownDocument)?;
+	let mut found = None;
+	for conflict in repo.index()?.conflicts()? {
+		let conflict = conflict?;
+		if conflict
+			.our
+			.as_ref()
+			.is_some_and(|our| our.path == path.as_bytes())
+		{
+			found = Some(conflict);
+		}
+	}
+	let Some(conflict) = found else {
+		return Ok(None);
+	};
+
+	let content = |side: &Option<IndexEntry>| -> Result<Vec<u8>> {
+		Ok(match side {
+			Some(side) => repo.find_blob(side.id)?.content().to_vec(),
+			None => Vec::new(),
+		})
+	};
+	let sides = [
+		content(&conflict.ancestor)?,
+		content(&conflict.our)?,
+		content(&conflict.their)?,
+	];
+	let [base, ours, theirs] = sides.each_ref().map(|side| {
+		let mut input = MergeFileInput::new();
+		input.content(side);
+		input
+	});
+	let label = Uuid::new_v4().to_string();
+	let mut options = MergeFileOptions::new();
+	options
+		.our_label(&*label)
+		.their_label(&*label)
+		.marker_size(MARKER_SIZE as u16);
+	let merged = git2::merge_file(&base, &ours, &theirs, Some(&mut options))?;
+	Ok(Some(pieces(
+		&String::from_utf8_lossy(merged.content()),
+		&label,
+	)))
+}
+
+fn pieces(merged: &str, label: &str) -> Vec<Piece> {
+	let open = format!("{} {label}", "<".repeat(MARKER_SIZE));
+	// ponytail: the middle marker carries no label, so a line of exactly 64
+	// "=" inside a spot splits it early; diff the sides here if that bites.
+	let middle = "=".repeat(MARKER_SIZE);
+	let close = format!("{} {label}", ">".repeat(MARKER_SIZE));
+
+	let mut pieces = Vec::new();
+	let (mut clean, mut ours, mut theirs) = (String::new(), String::new(), String::new());
+	// Outside a spot, in this version's side, or in the other's.
+	let mut side = None;
+	for line in merged.split_inclusive('\n') {
+		let bare = line.trim_end_matches(['\n', '\r']);
+		match side {
+			None if bare == open => {
+				if !clean.is_empty() {
+					pieces.push(Piece::Clean {
+						text: std::mem::take(&mut clean),
+					});
+				}
+				side = Some(false);
+			}
+			Some(false) if bare == middle => side = Some(true),
+			Some(true) if bare == close => {
+				pieces.push(Piece::Spot {
+					ours: std::mem::take(&mut ours),
+					theirs: std::mem::take(&mut theirs),
+				});
+				side = None;
+			}
+			None => clean.push_str(line),
+			Some(false) => ours.push_str(line),
+			Some(true) => theirs.push_str(line),
+		}
+	}
+	if !clean.is_empty() {
+		pieces.push(Piece::Clean { text: clean });
+	}
+	pieces
+}
+
+/// Writes a conflicted document as the writer settled it and puts it in the
+/// next checkpoint, which takes it off the conflicts.
+fn settle(root: &Path, id: Uuid, text: &str) -> Result<()> {
+	write_document(root.to_path_buf(), id, text.to_owned())?;
+	let repo = Repository::open(root)?;
+	let path = tree::path(&read_manifest(root)?.nodes, id).ok_or(Error::UnknownDocument)?;
+	let mut index = repo.index()?;
+	index.conflict_remove(Path::new(&path))?;
+	index.add(&staged_entry(&repo, &path, repo.blob(text.as_bytes())?, 0)?)?;
+	index.write()?;
+	Ok(())
 }
 
 /// Puts the project back as it was before the merge began. Without a merge
@@ -2815,6 +2950,50 @@ mod tests {
 		assert_eq!(parents(&root), [main, draft]);
 		assert_eq!(merge_state_of(&root), RepositoryState::Clean);
 		assert_eq!(merging(&root).unwrap(), None);
+		assert!(!pending(&root).unwrap());
+	}
+
+	#[test]
+	fn a_conflicted_document_comes_apart_into_clean_text_and_spots() {
+		let (_parent, root, seeded, other, ..) = forked(
+			"One, on Main.\n\nTwo.\n\n<<<<<<< typed\n\nThree, on Main.\n",
+			"One, in Act two.\n\nTwo.\n\n<<<<<<< typed\n\nThree, in Act two.\n",
+		);
+		merge(&root, "act-two", "").unwrap().unwrap();
+
+		assert_eq!(
+			spots(&root, seeded).unwrap(),
+			Some(vec![
+				Piece::Spot {
+					ours: "One, on Main.\n".to_owned(),
+					theirs: "One, in Act two.\n".to_owned(),
+				},
+				Piece::Clean {
+					text: "\nTwo.\n\n<<<<<<< typed\n\n".to_owned(),
+				},
+				Piece::Spot {
+					ours: "Three, on Main.\n".to_owned(),
+					theirs: "Three, in Act two.\n".to_owned(),
+				},
+			])
+		);
+		assert_eq!(spots(&root, other).unwrap(), None);
+	}
+
+	#[test]
+	fn settling_a_document_takes_it_off_the_conflicts() {
+		let (_parent, root, seeded, _, main, draft) = conflicted();
+
+		settle(&root, seeded, "One, settled.\n\nTwo.\n\nThree.\n").unwrap();
+
+		assert_eq!(spots(&root, seeded).unwrap(), None);
+		assert_eq!(merging(&root).unwrap().unwrap().conflicts, []);
+		assert_eq!(
+			read_document(root.clone(), seeded).unwrap(),
+			"One, settled.\n\nTwo.\n\nThree.\n"
+		);
+		checkpoint(&root, "Merged Act two", "").unwrap();
+		assert_eq!(parents(&root), [main, draft]);
 		assert!(!pending(&root).unwrap());
 	}
 
