@@ -18,6 +18,7 @@ import {
 import { differences, putBack } from "./differences";
 import { failure } from "./errors";
 import Icon from "./Icon";
+import Menu, { MenuItem } from "./Menu";
 import {
 	type Block,
 	blocks,
@@ -29,6 +30,7 @@ import {
 import { byDay, counts, detail, label, summary } from "./lib/versions";
 import { timeOfDay } from "./dates";
 import type {
+	Branch,
 	Changes,
 	Checkpoint,
 	Keep,
@@ -46,6 +48,8 @@ type Props = {
 	version: string;
 	/** The edited document to show first across the whole project. */
 	pick: string | null;
+	/** The version whose checkpoints are listed first, or null for this one. */
+	slug: string | null;
 	fontSize: number;
 	lineHeight: number;
 	onScope: (scope: VersionsScope) => void;
@@ -71,6 +75,7 @@ export default function Compare({
 	scope,
 	version,
 	pick,
+	slug,
 	fontSize,
 	lineHeight,
 	onScope,
@@ -79,6 +84,11 @@ export default function Compare({
 }: Props) {
 	const open = scope === "document" ? document : null;
 	const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
+	const [versions, setVersions] = useState<Branch[]>([]);
+	const [listing, setListing] = useState(slug);
+	// Every checkpoint listed this visit, so A keeps its row after the list
+	// moves to another version.
+	const seen = useRef(new Map<string, Checkpoint>());
 	const [chosen, setChosen] = useState(version);
 	const [changes, setChanges] = useState<Changes | null>(null);
 	// The edited document shown in the columns for the whole project.
@@ -107,11 +117,14 @@ export default function Compare({
 		let live = true;
 		invoke<Checkpoint[]>("list_checkpoints", {
 			root,
-			version: null,
+			version: listing,
 			document: open?.id ?? null,
 		})
 			.then((listed) => {
 				if (live) {
+					for (const checkpoint of listed) {
+						seen.current.set(checkpoint.id, checkpoint);
+					}
 					setCheckpoints(listed);
 				}
 			})
@@ -123,7 +136,25 @@ export default function Compare({
 		return () => {
 			live = false;
 		};
-	}, [root, open?.id, again]);
+	}, [root, open?.id, listing, again]);
+
+	useEffect(() => {
+		let live = true;
+		invoke<Branch[]>("list_branches", { root })
+			.then((listed) => {
+				if (live) {
+					setVersions(listed);
+				}
+			})
+			.catch((reason: unknown) => {
+				if (live) {
+					setError(failure(reason).message);
+				}
+			});
+		return () => {
+			live = false;
+		};
+	}, [root]);
 
 	const whole = open === null;
 	useEffect(() => {
@@ -325,11 +356,18 @@ export default function Compare({
 	}
 
 	const today = new Date();
+	const shownVersion = versions.find((listed) =>
+		listing === null ? listed.current : listed.slug === listing,
+	);
+	// Now is B, and it belongs in the list of the version the writer is in.
+	const here = listing === null || shownVersion?.current === true;
 	const days = byDay(checkpoints, today);
-	if (days[0]?.heading !== "Today") {
+	if (here && days[0]?.heading !== "Today") {
 		days.unshift({ heading: "Today", checkpoints: [] });
 	}
-	const a = checkpoints.find((listed) => listed.id === chosen);
+	const a =
+		checkpoints.find((listed) => listed.id === chosen) ??
+		seen.current.get(chosen);
 
 	// Every put back goes through the project, which writes the editors down
 	// first and reloads them after. The view then reads what is left.
@@ -440,11 +478,51 @@ export default function Compare({
 						</button>
 					</div>
 
+					{shownVersion !== undefined && (
+						<Menu
+							label="Checkpoints in"
+							trigger={
+								<>
+									<span className="compare__in-name">
+										Checkpoints in: {shownVersion.name}
+									</span>
+									<Icon name="chevron-down" />
+								</>
+							}
+							wrapper="compare__in"
+							className="compare__in-trigger"
+						>
+							{(close) =>
+								versions.map((listed) => (
+									<MenuItem
+										key={listed.slug}
+										checked={listed === shownVersion}
+										onSelect={() => {
+											close();
+											setListing(
+												listed.current
+													? null
+													: listed.slug,
+											);
+										}}
+									>
+										<span className="menu__tick">
+											{listed === shownVersion && (
+												<Icon name="check" />
+											)}
+										</span>
+										{listed.name}
+									</MenuItem>
+								))
+							}
+						</Menu>
+					)}
+
 					{days.map((day, index) => (
 						<section key={day.heading} className="versions__day">
 							<h3 className="versions__date">{day.heading}</h3>
 							<ul className="versions__list">
-								{index === 0 && (
+								{here && index === 0 && (
 									<li className="versions__item">
 										<div className="versions__pick compare__now">
 											<span

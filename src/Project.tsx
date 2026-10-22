@@ -302,9 +302,14 @@ export default function Project({
 
 	// The version the compare view opened on. It takes the whole window and
 	// reads now from disk, so every editor is written before it opens.
-	const [comparing, setComparing] = useState<string | null>(null);
-	// The document compare opens on across the whole project, if any.
-	const [pick, setPick] = useState<string | null>(null);
+	// The checkpoint compare opens at, the document it opens on across the
+	// whole project, and the version whose checkpoints it lists (null for the
+	// one the writer is in).
+	const [comparing, setComparing] = useState<{
+		checkpoint: string;
+		pick: string | null;
+		slug: string | null;
+	} | null>(null);
 
 	// Why a folder's target was refused, when one was.
 	const [aiming, setAiming] = useState<string | null>(null);
@@ -1322,6 +1327,11 @@ export default function Project({
 				onProfile={onProfile}
 				onCloseProject={onClose}
 				onRefreshed={() => setListing((version) => version + 1)}
+				onCompare={(checkpoint, slug) =>
+					void writeAll().then(() =>
+						setComparing({ checkpoint, pick: null, slug }),
+					)
+				}
 				onBeforeSwitch={writeAll}
 				onSwitch={putBack}
 			/>
@@ -1333,8 +1343,9 @@ export default function Project({
 						active?.kind === "document" ? active.document : null
 					}
 					scope={preferences.versionsScope}
-					version={comparing}
-					pick={pick}
+					version={comparing.checkpoint}
+					pick={comparing.pick}
+					slug={comparing.slug}
 					fontSize={preferences.fontSize}
 					lineHeight={preferences.lineHeight}
 					onScope={(versionsScope) =>
@@ -1635,10 +1646,13 @@ export default function Project({
 						}
 						enclosing={enclosingRepository}
 						onBeforeKeep={writeAll}
-						onCompare={(version, document) =>
+						onCompare={(checkpoint, document) =>
 							void writeAll().then(() => {
-								setPick(document ?? null);
-								setComparing(version.id);
+								setComparing({
+									checkpoint: checkpoint.id,
+									pick: document ?? null,
+									slug: null,
+								});
 							})
 						}
 						onPutBack={putBack}

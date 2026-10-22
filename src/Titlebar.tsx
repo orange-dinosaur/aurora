@@ -46,6 +46,8 @@ type Props = {
 	// The manifest has been read again, so whatever is showing it should look
 	// at it afresh.
 	onRefreshed: () => void;
+	/** Opens compare at a checkpoint, listing the given version's history. */
+	onCompare: (checkpoint: string, slug: string) => void;
 	/** Writes every open tab, so asking what is not in a checkpoint sees it. */
 	onBeforeSwitch: () => Promise<void>;
 	/** Runs a switch the way put back runs, catching the tabs up after it. */
@@ -72,6 +74,7 @@ export default function Titlebar({
 	onProfile,
 	onCloseProject,
 	onRefreshed,
+	onCompare,
 	onBeforeSwitch,
 	onSwitch,
 }: Props) {
@@ -212,6 +215,7 @@ export default function Titlebar({
 							onCheckpoint={(slug, words) =>
 								void switchTo(slug, words)
 							}
+							onCompare={onCompare}
 							onChanged={listVersions}
 							onFailure={setMessage}
 						/>
@@ -325,6 +329,7 @@ function VersionMenu({
 	close,
 	onChoose,
 	onCheckpoint,
+	onCompare,
 	onChanged,
 	onFailure,
 }: {
@@ -334,6 +339,7 @@ function VersionMenu({
 	close: () => void;
 	onChoose: (slug: string) => Promise<boolean>;
 	onCheckpoint: (slug: string, message: string) => void;
+	onCompare: (checkpoint: string, slug: string) => void;
 	/** Lists the versions again after one was made, renamed or deleted. */
 	onChanged: () => Promise<void>;
 	onFailure: (message: string) => void;
@@ -382,6 +388,24 @@ function VersionMenu({
 			setError(failure(failed).message);
 		} finally {
 			setBusy(false);
+		}
+	}
+
+	// Opens compare at the version's latest checkpoint, against now.
+	async function compare(version: Branch) {
+		try {
+			const [latest] = await invoke<Checkpoint[]>("list_checkpoints", {
+				root,
+				version: version.slug,
+			});
+			if (latest === undefined) {
+				onFailure(`${version.name} has no checkpoints yet.`);
+				return;
+			}
+			close();
+			onCompare(latest.id, version.slug);
+		} catch (failed) {
+			onFailure(failure(failed).message);
 		}
 	}
 
@@ -514,28 +538,41 @@ function VersionMenu({
 								);
 							}}
 						>
-							<span className="titlebar__tick">
+							<span className="menu__tick">
 								{version.current && <Icon name="check" />}
 							</span>
 							{version.name}
 						</MenuItem>
-						{version.slug !== MAIN && (
+						{(version.slug !== MAIN || !version.current) && (
 							<span className="titlebar__row-actions">
-								<button
-									type="button"
-									className="menu__trigger"
-									aria-label={`Rename ${version.name}`}
-									title="Rename"
-									onClick={() =>
-										setDoing({
-											kind: "renaming",
-											slug: version.slug,
-										})
-									}
-								>
-									<Icon name="pencil" />
-								</button>
 								{!version.current && (
+									<button
+										type="button"
+										className="menu__trigger"
+										aria-label={`Compare with ${version.name}`}
+										title="Compare with…"
+										onClick={() => void compare(version)}
+									>
+										<Icon name="arrow-left-right" />
+									</button>
+								)}
+								{version.slug !== MAIN && (
+									<button
+										type="button"
+										className="menu__trigger"
+										aria-label={`Rename ${version.name}`}
+										title="Rename"
+										onClick={() =>
+											setDoing({
+												kind: "renaming",
+												slug: version.slug,
+											})
+										}
+									>
+										<Icon name="pencil" />
+									</button>
+								)}
+								{!version.current && version.slug !== MAIN && (
 									<button
 										type="button"
 										className="menu__trigger"

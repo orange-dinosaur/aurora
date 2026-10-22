@@ -997,7 +997,7 @@ body,
 }
 
 /* A fixed slot, so the names line up whichever one is ticked. */
-.titlebar__tick {
+.menu__tick {
 	display: inline-flex;
 	width: 1rem;
 	margin-right: 0.4rem;
@@ -2505,6 +2505,48 @@ div.changes__pick {
 
 .compare__scope {
 	margin: 0.75rem 0;
+}
+
+.menu.compare__in {
+	position: relative;
+	margin-bottom: 0.25rem;
+}
+
+.compare__in .menu__items {
+	left: 0;
+	right: auto;
+	min-width: 12rem;
+}
+
+.compare__in-trigger {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	max-width: 100%;
+	padding: 0.2rem 0.3rem;
+	font: inherit;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.compare__in-trigger:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.compare__in-trigger:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.compare__in-name {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Capped so the columns keep most of the height; the rest scrolls. */
