@@ -63,14 +63,6 @@ export function detail(checkpoint: Checkpoint): string {
 		.join(" · ");
 }
 
-/**
- * What a checkpoint is called in the one kept before putting it back: the
- * first line of its message.
- */
-export function label(checkpoint: Checkpoint): string {
-	return checkpoint.message.split("\n")[0].trim();
-}
-
 function nameIn(path: string): string {
 	return path.split("/").slice(-1)[0].replace(/\.md$/, "");
 }

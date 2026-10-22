@@ -31,7 +31,6 @@ import {
 	byDay,
 	counts,
 	detail,
-	label,
 	summary,
 	type Overwrites,
 } from "./lib/versions";
@@ -40,7 +39,6 @@ import type {
 	Branch,
 	Changes,
 	Checkpoint,
-	Keep,
 	ProjectDocument,
 	VersionsScope,
 } from "./types";
@@ -392,10 +390,7 @@ export default function Compare({
 			setAgain((times) => times + 1);
 		}
 	}
-	const asked =
-		a === undefined || busy
-			? null
-			: { root, version: a.id, label: label(a) };
+	const asked = a === undefined || busy ? null : { root, version: a.id };
 
 	// One difference is the text written back with that run as it was.
 	function backOne(index: number) {
@@ -404,14 +399,10 @@ export default function Compare({
 			return;
 		}
 		const text = putBack(now, before, difference);
-		const keep: Keep = { kind: "beforePuttingBack", label: asked.label };
-		void back(
-			async () => {
-				await invoke("keep_version", { root, keep });
-				await invoke("write_document", { root, id: shown, text });
-			},
-			{ kind: "document", id: shown },
-		);
+		void back(() => invoke("write_document", { root, id: shown, text }), {
+			kind: "document",
+			id: shown,
+		});
 	}
 
 	function backDocument(id: string) {

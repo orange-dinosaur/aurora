@@ -5,7 +5,6 @@ import {
 	byDay,
 	counts,
 	detail,
-	label,
 	lineKey,
 	lines,
 	overwriteQuestion,
@@ -224,15 +223,5 @@ describe("overwritten", () => {
 		expect(overwriteQuestion(["Mill", "Letter"])).toBe(
 			"2 documents have changes that aren't in a checkpoint. Putting back overwrites them.",
 		);
-	});
-});
-
-describe("label", () => {
-	it("is the first line of the message", () => {
-		const at = new Date(2026, 8, 12, 9, 5);
-		expect(label(checkpoint(at))).toBe("Draft one");
-		expect(
-			label(checkpoint(at, { message: "Mill scene \nand the rest" })),
-		).toBe("Mill scene");
 	});
 });

@@ -1342,13 +1342,11 @@ pub fn version_text(root: PathBuf, version: String, id: Uuid) -> Result<Option<S
 	text(&root, &version, id)
 }
 
-/// Keeps the project as it stands, so whatever is put back can be undone.
-/// `label` is the name or time of the version being put back, or none when
-/// the same visit to the compare view has already kept one.
-fn keep_before(root: &Path, label: Option<String>) -> Result<Repository> {
-	let author = author(root)?;
-	if let Some(label) = label {
-		keep(root, &Keep::BeforePuttingBack { label }, &author)?;
+/// Putting back writes files only, so what it changed shows as changes not
+/// yet in the next checkpoint.
+fn open_for_putting_back(root: &Path) -> Result<Repository> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
 	}
 	Ok(Repository::open(root)?)
 }
@@ -1385,13 +1383,8 @@ fn destination(then: &Manifest, now: &Manifest, id: Uuid) -> Result<(Uuid, usize
 /// folder. One the version did not have goes to the Trash, and one it had
 /// that has since been deleted comes back under its old id.
 #[tauri::command]
-pub fn put_back_document(
-	root: PathBuf,
-	version: String,
-	id: Uuid,
-	label: Option<String>,
-) -> Result<()> {
-	let repo = keep_before(&root, label)?;
+pub fn put_back_document(root: PathBuf, version: String, id: Uuid) -> Result<()> {
+	let repo = open_for_putting_back(&root)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	let now = read_manifest(&root)?;
 	let Some(node) = tree::find(&then.nodes, id).filter(|n| matches!(n, Node::Document { .. }))
@@ -1424,8 +1417,8 @@ pub fn put_back_document(
 
 /// Puts back the book's details and its cover as a version had them.
 #[tauri::command]
-pub fn put_back_book(root: PathBuf, version: String, label: Option<String>) -> Result<()> {
-	let repo = keep_before(&root, label)?;
+pub fn put_back_book(root: PathBuf, version: String) -> Result<()> {
+	let repo = open_for_putting_back(&root)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	for name in COVER_NAMES {
 		match blob_at(&files, name).filter(|_| then.book.cover == name) {
@@ -1439,14 +1432,22 @@ pub fn put_back_book(root: PathBuf, version: String, label: Option<String>) -> R
 /// Puts the whole project back as a version had it. Stats and the Trash are
 /// never part of a version, so they stay as they are.
 #[tauri::command]
-pub fn put_back_everything(root: PathBuf, version: String, label: Option<String>) -> Result<()> {
-	let repo = keep_before(&root, label)?;
+pub fn put_back_everything(root: PathBuf, version: String) -> Result<()> {
+	let repo = open_for_putting_back(&root)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	let was = read_manifest(&root)?;
 
-	// The version just kept holds every file, so a forced checkout removes
-	// what the older version did not have and leaves ignored files alone.
-	repo.checkout_tree(files.as_object(), Some(CheckoutBuilder::new().force()))?;
+	// Removing untracked files takes documents added since the last
+	// checkpoint too. Stats and the Trash are excluded, so they stay.
+	repo.checkout_tree(
+		files.as_object(),
+		Some(
+			CheckoutBuilder::new()
+				.force()
+				.remove_untracked(true)
+				.update_index(false),
+		),
+	)?;
 	settle_folders(&root, &was, &then)
 }
 
@@ -2914,6 +2915,13 @@ mod tests {
 		body(&read_document(root.to_path_buf(), id).unwrap()).to_owned()
 	}
 
+	/// The last checkpoint and what the next one holds.
+	fn checkpoint_and_index(root: &Path) -> (Oid, Oid) {
+		let repo = Repository::open(root).unwrap();
+		let index = repo.index().unwrap().write_tree().unwrap();
+		(repo_head(root), index)
+	}
+
 	#[test]
 	fn a_document_comes_back_with_its_text_name_and_folder() {
 		let (_parent, root, seeded, _, there) = novel();
@@ -2922,22 +2930,14 @@ mod tests {
 		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
 		move_node(root.clone(), seeded, there, 0).unwrap();
 		write_document(root.clone(), seeded, "Second".to_owned()).unwrap();
+		stage_all(root.clone()).unwrap();
+		let before = checkpoint_and_index(&root);
 
-		put_back_document(
-			root.clone(),
-			first.clone(),
-			seeded,
-			Some("First".to_owned()),
-		)
-		.unwrap();
+		put_back_document(root.clone(), first.clone(), seeded).unwrap();
 
 		assert!(changes(&root, Some(&first), None).unwrap().nodes.is_empty());
 		assert_eq!(body_now(&root, seeded), "First");
-		let before = list(&root, None).unwrap().remove(0);
-		assert_eq!(before.kind, Some(Kind::BeforePuttingBack));
-		assert_eq!(before.name.as_deref(), Some("Before putting back “First”"));
-		let then = text(&root, &before.id, seeded).unwrap().unwrap();
-		assert_eq!(body(&then), "Second");
+		assert_eq!(checkpoint_and_index(&root), before);
 	}
 
 	#[test]
@@ -2954,22 +2954,16 @@ mod tests {
 		delete_document(root.clone(), doomed).unwrap();
 		let newer = add("Newer");
 
-		put_back_document(
-			root.clone(),
-			start.clone(),
-			doomed,
-			Some("start".to_owned()),
-		)
-		.unwrap();
-		let shared = list(&root, None).unwrap().len();
-		// The same visit, which has kept its version already.
-		put_back_document(root.clone(), start.clone(), newer, None).unwrap();
+		let before = checkpoint_and_index(&root);
+
+		put_back_document(root.clone(), start.clone(), doomed).unwrap();
+		put_back_document(root.clone(), start.clone(), newer).unwrap();
 
 		// Nothing differs, so the id and the place among the others are back.
 		assert!(changes(&root, Some(&start), None).unwrap().nodes.is_empty());
 		assert_eq!(body_now(&root, doomed), "Kept");
 		assert_eq!(list_trash(root.clone()).unwrap().len(), 2);
-		assert_eq!(list(&root, None).unwrap().len(), shared);
+		assert_eq!(checkpoint_and_index(&root), before);
 	}
 
 	#[test]
@@ -2986,16 +2980,16 @@ mod tests {
 		fs::write(&jpeg, b"\xff\xd8\xff").unwrap();
 		set_cover(root.clone(), jpeg).unwrap();
 
-		put_back_book(root.clone(), start.clone(), Some("start".to_owned())).unwrap();
+		stage_all(root.clone()).unwrap();
+		let before = checkpoint_and_index(&root);
+
+		put_back_book(root.clone(), start.clone()).unwrap();
 
 		let changes = changes(&root, Some(&start), None).unwrap();
 		assert!(!changes.book && !changes.cover);
 		assert!(root.join("cover.png").is_file());
 		assert!(!root.join("cover.jpg").exists());
-		assert_eq!(
-			list(&root, None).unwrap()[0].kind,
-			Some(Kind::BeforePuttingBack)
-		);
+		assert_eq!(checkpoint_and_index(&root), before);
 	}
 
 	#[test]
@@ -3015,27 +3009,26 @@ mod tests {
 		write_document(root.clone(), seeded, "Second".to_owned()).unwrap();
 		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
 		delete_folder(root.clone(), empty).unwrap();
+		let staged = folder(there, "Staged");
+		create_document(root.clone(), staged, "Inside".to_owned()).unwrap();
+		let staged_path = path_of(staged);
+		stage_all(root.clone()).unwrap();
+		// Added after staging, so git has never seen it.
 		let later = folder(there, "Later");
 		create_document(root.clone(), later, "Inside".to_owned()).unwrap();
 		let later_path = path_of(later);
 		fs::write(root.join(HISTORY_FILE), "[]").unwrap();
+		let before = checkpoint_and_index(&root);
 
-		put_back_everything(root.clone(), start.clone(), Some("start".to_owned())).unwrap();
+		put_back_everything(root.clone(), start.clone()).unwrap();
 
 		assert!(changes(&root, Some(&start), None).unwrap().nodes.is_empty());
 		assert_eq!(body_now(&root, seeded), "First");
 		assert!(root.join(&empty_path).is_dir());
+		assert!(!root.join(&staged_path).exists());
 		assert!(!root.join(&later_path).exists());
 		assert_eq!(fs::read_to_string(root.join(HISTORY_FILE)).unwrap(), "[]");
 		assert_eq!(list_trash(root.clone()).unwrap().len(), 1);
-		let before = list(&root, None).unwrap().remove(0);
-		assert_eq!(before.kind, Some(Kind::BeforePuttingBack));
-		assert!(
-			changes(&root, Some(&before.id), None)
-				.unwrap()
-				.nodes
-				.iter()
-				.any(|change| change.id == later && change.after.is_none())
-		);
+		assert_eq!(checkpoint_and_index(&root), before);
 	}
 }

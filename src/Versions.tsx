@@ -7,7 +7,6 @@ import { failure } from "./errors";
 import {
 	byDay,
 	detail,
-	label,
 	lineKey,
 	lines,
 	type Line,
@@ -132,11 +131,7 @@ export default function Versions({
 
 	// This document puts back the open document; Whole project, everything.
 	function putBack(checkpoint: Checkpoint) {
-		const asked = {
-			root,
-			version: checkpoint.id,
-			label: label(checkpoint),
-		};
+		const asked = { root, version: checkpoint.id };
 		void run(() =>
 			onPutBack(
 				() =>
@@ -191,7 +186,7 @@ export default function Versions({
 		if (head === null || line.change?.folder === true) {
 			return null;
 		}
-		const asked = { root, version: head.id, label: label(head) };
+		const asked = { root, version: head.id };
 		const id = line.change?.id;
 		return () =>
 			void run(() =>
