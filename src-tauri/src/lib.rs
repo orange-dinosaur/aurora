@@ -4,6 +4,7 @@ pub mod document;
 pub mod docx;
 pub mod epub;
 pub mod history;
+pub mod merge;
 pub mod project;
 pub mod store;
 pub mod text;

@@ -19,6 +19,7 @@ use crate::document::{
 	TRASH_DIR, body, delete_document, move_node, recreate_document, rename_document, write_document,
 };
 use crate::history::HISTORY_FILE;
+use crate::merge;
 use crate::project::{
 	Book, COVER_NAMES, Error, Format, MANIFEST_FILE, Manifest, Result, read_manifest,
 	remove_if_there, to_json, write_atomic, write_book,
@@ -797,15 +798,37 @@ fn side<'r>(repo: &'r Repository, version: Option<&str>) -> Result<(Tree<'r>, Ma
 	with_manifest(repo, tree)
 }
 
-/// What the next checkpoint holds, without touching `.git/index`.
+/// What the next checkpoint holds, without touching `.git/index`. While a
+/// merge waits, a conflicted path holds this version's side.
 fn staged_side(repo: &Repository) -> Result<(Tree<'_>, Manifest)> {
 	let mut index = repo.index()?;
 	// Before the first checkpoint nothing has been staged.
-	let tree = match index.is_empty() {
-		true => None,
-		false => Some(repo.find_tree(index.write_tree()?)?),
-	};
-	with_manifest(repo, tree)
+	if index.is_empty() {
+		return with_manifest(repo, None);
+	}
+	let conflicts = index
+		.conflicts()?
+		.collect::<std::result::Result<Vec<_>, _>>()?;
+	let merging = !conflicts.is_empty();
+	for conflict in conflicts {
+		let sides = [&conflict.our, &conflict.their, &conflict.ancestor];
+		let Some(side) = sides.into_iter().flatten().next() else {
+			continue;
+		};
+		let path = String::from_utf8_lossy(&side.path).into_owned();
+		index.conflict_remove(Path::new(&path))?;
+		if let Some(mut ours) = conflict.our {
+			ours.flags &= !STAGE_MASK;
+			index.add(&ours)?;
+		}
+	}
+	let tree = index.write_tree()?;
+	if merging {
+		// The repository hands out one index, so the next caller would
+		// otherwise see the conflicts settled.
+		index.read(true)?;
+	}
+	with_manifest(repo, Some(repo.find_tree(tree)?))
 }
 
 /// A tree and the manifest it holds. With no tree, nothing at all, so
@@ -1562,17 +1585,7 @@ pub struct Merging {
 	/// What the checkpoint that finishes the merge says, until the writer
 	/// changes it.
 	pub message: String,
-	pub conflicts: Vec<Conflict>,
-}
-
-/// A document both versions changed in the same place.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub struct Conflict {
-	/// None for a file neither version's manifest names.
-	pub id: Option<Uuid>,
-	pub path: String,
+	pub conflicts: Vec<merge::Conflict>,
 }
 
 /// The checkpoint being merged in, while a merge is under way.
@@ -1584,10 +1597,52 @@ fn merge_head(repo: &Repository) -> Result<Option<Commit<'_>>> {
 	}
 }
 
+/// The checkpoint both versions grew from, or none for histories that never
+/// met.
+fn merge_base<'r>(
+	repo: &'r Repository,
+	ours: &Commit,
+	theirs: &Commit,
+) -> Result<Option<Commit<'r>>> {
+	match repo.merge_base(ours.id(), theirs.id()) {
+		Ok(id) => Ok(Some(repo.find_commit(id)?)),
+		Err(e) if e.code() == ErrorCode::NotFound => Ok(None),
+		Err(e) => Err(e.into()),
+	}
+}
+
+fn merge_side<'r>(
+	repo: &'r Repository,
+	commit: Option<&Commit<'r>>,
+) -> Result<(Tree<'r>, merge::Side)> {
+	let (tree, manifest) = with_manifest(repo, commit.map(Commit::tree).transpose()?)?;
+	let blobs = blobs_of(&tree, &manifest);
+	let cover = blob_at(&tree, &manifest.book.cover);
+	Ok((
+		tree,
+		merge::Side {
+			manifest,
+			blobs,
+			cover,
+		},
+	))
+}
+
+/// Where conflict entries keep their stage in an index entry's flags.
+const STAGE_SHIFT: u16 = 12;
+const STAGE_MASK: u16 = 0x3000;
+
+fn staged_entry(repo: &Repository, path: &str, id: Oid, stage: u16) -> Result<IndexEntry> {
+	let mut entry = entry(path, id, repo.find_blob(id)?.size());
+	entry.flags |= stage << STAGE_SHIFT;
+	Ok(entry)
+}
+
 /// Merges another version into the one the writer is in. A clean merge adds
-/// its own checkpoint, even when git could fast-forward. Otherwise each
-/// conflicted document keeps this version's text on disk, its three sides
-/// wait in `.git/index`, and the merge stays under way.
+/// its own checkpoint, even when git could fast-forward. Otherwise the merge
+/// stays under way: a document both changed in the same place keeps this
+/// version's text on disk with its three sides in `.git/index`, and any other
+/// conflict leaves `aurora.json` conflicted the same way.
 fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 	if pending(root)? {
 		return Err(Error::ChangesPending);
@@ -1600,44 +1655,116 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 		.find_branch(slug, BranchType::Local)?
 		.get()
 		.peel_to_commit()?;
-	let annotated = repo.find_annotated_commit(theirs.id())?;
-	if repo.merge_analysis(&[&annotated])?.0.is_up_to_date() {
+	let base = merge_base(&repo, &head, &theirs)?;
+	if base.as_ref().map(Commit::id) == Some(theirs.id()) {
 		return Err(Error::AlreadyMerged);
 	}
-	// Using our side keeps conflict markers out of every document.
-	repo.merge(
-		&[&annotated],
-		None,
+	let (base_tree, base) = merge_side(&repo, base.as_ref())?;
+	let (our_tree, ours) = merge_side(&repo, Some(&head))?;
+	let (their_tree, theirs_side) = merge_side(&repo, Some(&theirs))?;
+	let merged = merge::manifests(&base, &ours, &theirs_side);
+
+	// Git merges by path only the files no manifest names. Documents merge
+	// by id, so a moved or renamed one keeps its text.
+	let owned: HashSet<String> = [&base, &ours, &theirs_side]
+		.iter()
+		.flat_map(|side| side.manifest.documents())
+		.map(|document| document.path)
+		.chain(
+			std::iter::once(MANIFEST_FILE)
+				.chain(COVER_NAMES)
+				.map(str::to_owned),
+		)
+		.collect();
+	let others = repo.merge_trees(&base_tree, &our_tree, &their_tree, None)?;
+	let mut index = repo.index()?;
+	index.clear()?;
+	for other in others.iter() {
+		if !owned.contains(&*String::from_utf8_lossy(&other.path)) {
+			index.add(&other)?;
+		}
+	}
+
+	for document in merged.manifest.documents() {
+		let path = &document.path;
+		let id = document.id;
+		let (b, o, t) = (
+			base.blobs.get(&id),
+			ours.blobs.get(&id),
+			theirs_side.blobs.get(&id),
+		);
+		let (o, t) = match (o, t) {
+			(Some(&o), Some(&t)) => (o, t),
+			(Some(&only), None) | (None, Some(&only)) => {
+				index.add(&staged_entry(&repo, path, only, 0)?)?;
+				continue;
+			}
+			(None, None) => continue,
+		};
+		if let Some(Some(text)) = merge::three_way(&b.copied(), &Some(o), &Some(t)) {
+			index.add(&staged_entry(&repo, path, text, 0)?)?;
+			continue;
+		}
+		let ancestor = b.map(|&b| staged_entry(&repo, path, b, 1)).transpose()?;
+		let (here, there) = (
+			staged_entry(&repo, path, o, 2)?,
+			staged_entry(&repo, path, t, 3)?,
+		);
+		let text = match &ancestor {
+			Some(ancestor) => Some(repo.merge_file_from_index(ancestor, &here, &there, None)?)
+				.filter(|text| text.is_automergeable()),
+			None => None,
+		};
+		match text {
+			Some(text) => {
+				index.add(&staged_entry(&repo, path, repo.blob(text.content())?, 0)?)?;
+			}
+			None => {
+				for side in ancestor.iter().chain([&here, &there]) {
+					index.add(side)?;
+				}
+			}
+		}
+	}
+
+	if let Some(cover) = merged.cover {
+		index.add(&staged_entry(&repo, &merged.manifest.book.cover, cover, 0)?)?;
+	}
+	// With a conflict, ours here is the merge with this version's side of
+	// each, so it is what the writer sees until they choose.
+	let manifest = repo.blob(&to_json(&merged.manifest)?)?;
+	match merged.conflicts.is_empty() {
+		true => index.add(&staged_entry(&repo, MANIFEST_FILE, manifest, 0)?)?,
+		false => {
+			if let Some(base) = blob_at(&base_tree, MANIFEST_FILE) {
+				index.add(&staged_entry(&repo, MANIFEST_FILE, base, 1)?)?;
+			}
+			index.add(&staged_entry(&repo, MANIFEST_FILE, manifest, 2)?)?;
+			if let Some(theirs) = blob_at(&their_tree, MANIFEST_FILE) {
+				index.add(&staged_entry(&repo, MANIFEST_FILE, theirs, 3)?)?;
+			}
+		}
+	}
+
+	// Nothing was pending, so removing untracked files only takes what the
+	// merge moved away. Stats and the Trash are excluded and stay.
+	repo.checkout_index(
+		Some(&mut index),
 		Some(
 			CheckoutBuilder::new()
 				.force()
 				.allow_conflicts(true)
-				.use_ours(true),
+				.use_ours(true)
+				.remove_untracked(true),
 		),
 	)?;
-	let message = format!("Merged {}", version_name(&repo.config()?, slug));
-	fs::write(repo.path().join("MERGE_MSG"), format!("{message}\n"))?;
-
-	// ponytail: the book and its order come whole from this version, so
-	// whatever the other version renamed, moved or added is not placed.
-	let ours = head.tree()?;
-	let mut index = repo.index()?;
-	for path in std::iter::once(MANIFEST_FILE).chain(COVER_NAMES) {
-		match ours.get_path(Path::new(path)) {
-			Ok(kept) => {
-				let blob = repo.find_blob(kept.id())?;
-				write_atomic(&root.join(path), blob.content())?;
-				index.add(&entry(path, blob.id(), blob.size()))?;
-			}
-			Err(e) if e.code() == ErrorCode::NotFound => {
-				remove_if_there(&root.join(path))?;
-				index.remove_path(Path::new(path))?;
-			}
-			Err(e) => return Err(e.into()),
-		}
-	}
 	index.write()?;
+	settle_folders(root, &ours.manifest, &merged.manifest)?;
+
+	let message = format!("Merged {}", version_name(&repo.config()?, slug));
 	if index.has_conflicts() {
+		fs::write(repo.path().join("MERGE_HEAD"), format!("{}\n", theirs.id()))?;
+		fs::write(repo.path().join("MERGE_MSG"), format!("{message}\n"))?;
 		return merging(root);
 	}
 
@@ -1651,7 +1778,6 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 		&tree,
 		&[&head, &theirs],
 	)?;
-	repo.cleanup_state()?;
 	Ok(None)
 }
 
@@ -1671,24 +1797,42 @@ fn merging(root: &Path) -> Result<Option<Merging>> {
 		}
 	}
 
-	// A path this version has wins over the same path in the other.
+	// The merged manifest on disk places each document first, then this
+	// version and the other.
 	let mut ids = HashMap::new();
-	for version in ["HEAD".to_owned(), merged.id().to_string()] {
-		for document in side(&repo, Some(&version))?.1.documents() {
-			ids.entry(document.path).or_insert(document.id);
-		}
+	let manifests = [
+		read_manifest(root)?,
+		side(&repo, Some("HEAD"))?.1,
+		side(&repo, Some(&merged.id().to_string()))?.1,
+	];
+	for document in manifests.iter().flat_map(Manifest::documents) {
+		ids.entry(document.path).or_insert(document.id);
 	}
 	let mut conflicts = Vec::new();
+	let mut manifest = false;
 	for conflict in repo.index()?.conflicts()? {
 		let conflict = conflict?;
 		let Some(side) = conflict.our.or(conflict.their).or(conflict.ancestor) else {
 			continue;
 		};
 		let path = String::from_utf8_lossy(&side.path).into_owned();
-		conflicts.push(Conflict {
+		if path == MANIFEST_FILE {
+			manifest = true;
+			continue;
+		}
+		conflicts.push(merge::Conflict::Text {
 			id: ids.get(&path).copied(),
 			path,
 		});
+	}
+	// The rest are worked out again from the three versions, which do not
+	// change while the merge is under way.
+	if manifest && let Some(head) = head_commit(&repo)? {
+		let base = merge_base(&repo, &head, &merged)?;
+		let (_, base) = merge_side(&repo, base.as_ref())?;
+		let (_, ours) = merge_side(&repo, Some(&head))?;
+		let (_, theirs) = merge_side(&repo, Some(&merged))?;
+		conflicts.extend(merge::manifests(&base, &ours, &theirs).conflicts);
 	}
 
 	Ok(Some(Merging {
@@ -1708,9 +1852,10 @@ fn abort(root: &Path) -> Result<()> {
 		return Ok(());
 	}
 	let head = head_commit(&repo)?.ok_or(Error::NothingKept)?;
+	let was = read_manifest(root)?;
 	repo.reset(head.as_object(), ResetType::Hard, None)?;
 	repo.cleanup_state()?;
-	Ok(())
+	settle_folders(root, &was, &side(&repo, Some("HEAD"))?.1)
 }
 
 fn enclosing(root: &Path, repo: &Repository) -> Result<Option<PathBuf>> {
@@ -1737,7 +1882,7 @@ mod tests {
 		create_document, create_folder, delete_document, delete_folder, list_trash, move_node,
 		read_document, rename_document, rename_folder, write_document,
 	};
-	use crate::project::{Format, create, set_cover, write_book};
+	use crate::project::{Format, create, set_cover, write_book, write_manifest};
 	use crate::tree::Node;
 	use git2::RepositoryState;
 
@@ -2603,7 +2748,7 @@ mod tests {
 			Merging {
 				name: Some("Act two".to_owned()),
 				message: "Merged Act two".to_owned(),
-				conflicts: vec![Conflict {
+				conflicts: vec![merge::Conflict::Text {
 					id: Some(forked.2),
 					path,
 				}],
@@ -3404,5 +3549,326 @@ mod tests {
 		assert_eq!(fs::read_to_string(root.join(HISTORY_FILE)).unwrap(), "[]");
 		assert_eq!(list_trash(root.clone()).unwrap().len(), 1);
 		assert_eq!(checkpoint_and_index(&root), before);
+	}
+
+	/// Keeps the project, does `there` in a new version "Act two" and `here`
+	/// on Main, each kept, then merges Act two into Main.
+	fn diverged(root: &Path, there: impl FnOnce(), here: impl FnOnce()) -> Vec<merge::Conflict> {
+		checkpoint(root, "Base", "").unwrap();
+		new_branch(root, "Act two").unwrap();
+		there();
+		checkpoint(root, "In Act two", "").unwrap();
+		switch(root, "main").unwrap();
+		here();
+		checkpoint(root, "On Main", "").unwrap();
+		let conflicts = merge(root, "act-two", "")
+			.unwrap()
+			.map_or_else(Vec::new, |merging| merging.conflicts);
+		assert_eq!(
+			merging(root)
+				.unwrap()
+				.map_or_else(Vec::new, |m| m.conflicts),
+			conflicts
+		);
+		conflicts
+	}
+
+	/// The folder and name the project on disk gives a node.
+	fn placed(root: &Path, id: Uuid) -> (Option<Uuid>, String) {
+		let nodes = read_manifest(root).unwrap().nodes;
+		let name = tree::find(&nodes, id).unwrap().name().to_owned();
+		(tree::parent(&nodes, id).map(Node::id), name)
+	}
+
+	fn children_of(root: &Path, folder: Uuid) -> Vec<Uuid> {
+		let nodes = read_manifest(root).unwrap().nodes;
+		tree::children(&nodes, folder)
+			.unwrap()
+			.iter()
+			.map(Node::id)
+			.collect()
+	}
+
+	/// Settling is the merge screen's business, so until then a checkpoint
+	/// is refused and the Changes list still reads.
+	fn waits(root: &Path) {
+		assert_eq!(merge_state_of(root), RepositoryState::Merge);
+		assert!(status(root).is_ok());
+		let refused = checkpoint(root, "Merged Act two", "");
+		assert!(matches!(refused, Err(Error::ConflictsRemain)));
+	}
+
+	#[test]
+	fn a_scene_one_side_moved_keeps_the_others_edit() {
+		let (_parent, root, seeded, _, there) = novel();
+		let conflicts = diverged(
+			&root,
+			|| move_node(root.clone(), seeded, there, 0).unwrap(),
+			|| write_document(root.clone(), seeded, "Edited on Main".to_owned()).unwrap(),
+		);
+
+		assert_eq!(conflicts, []);
+		assert_eq!(placed(&root, seeded).0, Some(there));
+		assert_eq!(body_now(&root, seeded), "Edited on Main");
+		assert_eq!(parents(&root).len(), 2);
+		assert!(!pending(&root).unwrap());
+	}
+
+	#[test]
+	fn empty_scenes_moved_and_renamed_keep_their_text() {
+		let (_parent, root, _, here, there) = novel();
+		let add = |name: &str| {
+			create_document(root.clone(), here, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (a, b) = (add("A"), add("B"));
+		let conflicts = diverged(
+			&root,
+			|| {
+				move_node(root.clone(), b, there, 0).unwrap();
+				move_node(root.clone(), a, there, 0).unwrap();
+				rename_document(root.clone(), a, "Z".to_owned()).unwrap();
+			},
+			|| write_document(root.clone(), a, "Hello".to_owned()).unwrap(),
+		);
+
+		assert_eq!(conflicts, []);
+		assert_eq!(placed(&root, a), (Some(there), "Z.md".to_owned()));
+		assert_eq!(read_document(root.clone(), a).unwrap(), "Hello");
+		assert_eq!(read_document(root.clone(), b).unwrap(), "");
+		assert!(!pending(&root).unwrap());
+	}
+
+	#[test]
+	fn two_new_documents_with_one_name_are_both_kept() {
+		let (_parent, root, _, here, _) = novel();
+		let add = || {
+			create_document(root.clone(), here, "New".to_owned()).unwrap();
+		};
+		assert_eq!(diverged(&root, add, add), []);
+
+		let names: Vec<String> = children_of(&root, here)
+			.into_iter()
+			.map(|id| placed(&root, id).1)
+			.collect();
+		assert!(names.contains(&"New.md".to_owned()));
+		assert!(names.contains(&"New 2.md".to_owned()));
+		assert!(!pending(&root).unwrap());
+	}
+
+	#[test]
+	fn renamed_on_both_keeps_this_versions_name() {
+		let (_parent, root, seeded, ..) = novel();
+		let conflicts = diverged(
+			&root,
+			|| {
+				rename_document(root.clone(), seeded, "There".to_owned()).unwrap();
+			},
+			|| {
+				rename_document(root.clone(), seeded, "Here".to_owned()).unwrap();
+			},
+		);
+
+		assert_eq!(
+			conflicts,
+			[merge::Conflict::Renamed {
+				id: seeded,
+				ours: "Here.md".to_owned(),
+				theirs: "There.md".to_owned(),
+			}]
+		);
+		assert_eq!(placed(&root, seeded).1, "Here.md");
+		waits(&root);
+	}
+
+	#[test]
+	fn moved_on_both_keeps_this_versions_folder() {
+		let (_parent, root, seeded, here, there) = novel();
+		let conflicts = diverged(
+			&root,
+			|| move_node(root.clone(), seeded, there, 0).unwrap(),
+			|| move_node(root.clone(), seeded, here, 0).unwrap(),
+		);
+
+		assert_eq!(
+			conflicts,
+			[merge::Conflict::Moved {
+				id: seeded,
+				ours: Some(here),
+				theirs: Some(there),
+			}]
+		);
+		assert_eq!(placed(&root, seeded).0, Some(here));
+		waits(&root);
+	}
+
+	#[test]
+	fn deleted_on_one_side_and_edited_on_the_other() {
+		let (_parent, root, seeded, here, _) = novel();
+		let other = create_document(root.clone(), here, "Other".to_owned())
+			.unwrap()
+			.id;
+		let conflicts = diverged(
+			&root,
+			|| {
+				delete_document(root.clone(), seeded).unwrap();
+				write_document(root.clone(), other, "Theirs".to_owned()).unwrap();
+			},
+			|| {
+				write_document(root.clone(), seeded, "Ours".to_owned()).unwrap();
+				delete_document(root.clone(), other).unwrap();
+			},
+		);
+
+		assert_eq!(
+			conflicts,
+			[
+				merge::Conflict::Deleted {
+					id: seeded,
+					here: false
+				},
+				merge::Conflict::Deleted {
+					id: other,
+					here: true
+				},
+			]
+		);
+		assert_eq!(body_now(&root, seeded), "Ours");
+		assert!(tree::find(&read_manifest(&root).unwrap().nodes, other).is_none());
+		waits(&root);
+	}
+
+	/// A folder holding three new documents, in order.
+	fn three_in(root: &Path, under: Uuid) -> (Uuid, [Uuid; 3]) {
+		let folder = create_folder(root.to_path_buf(), under, "Scenes".to_owned(), None)
+			.unwrap()
+			.id();
+		let add = |name: &str| {
+			create_document(root.to_path_buf(), folder, name.to_owned())
+				.unwrap()
+				.id
+		};
+		(folder, [add("A"), add("B"), add("C")])
+	}
+
+	#[test]
+	fn reordered_on_both_keeps_this_versions_order() {
+		let (_parent, root, _, here, _) = novel();
+		let (folder, [a, b, c]) = three_in(&root, here);
+		let conflicts = diverged(
+			&root,
+			|| move_node(root.clone(), c, folder, 0).unwrap(),
+			|| move_node(root.clone(), a, folder, 2).unwrap(),
+		);
+
+		assert_eq!(
+			conflicts,
+			[merge::Conflict::Reordered {
+				id: Some(folder),
+				ours: vec![b, c, a],
+				theirs: vec![c, a, b],
+			}]
+		);
+		assert_eq!(children_of(&root, folder), [b, c, a]);
+		waits(&root);
+	}
+
+	#[test]
+	fn one_sides_order_takes_the_others_new_document() {
+		let (_parent, root, _, here, _) = novel();
+		let (folder, [a, b, c]) = three_in(&root, here);
+		let added = std::cell::Cell::new(None);
+		let conflicts = diverged(
+			&root,
+			|| move_node(root.clone(), c, folder, 0).unwrap(),
+			|| {
+				let id = create_document(root.clone(), folder, "D".to_owned())
+					.unwrap()
+					.id;
+				added.set(Some(id));
+			},
+		);
+
+		// A new document follows the one it was added after.
+		assert_eq!(conflicts, []);
+		assert_eq!(children_of(&root, folder), [c, added.get().unwrap(), a, b]);
+	}
+
+	#[test]
+	fn the_book_and_its_cover_changed_on_both() {
+		let (_parent, root, ..) = novel();
+		let change = |title: &str, image: &[u8]| {
+			let png = root.parent().unwrap().join("cover.png");
+			fs::write(&png, image).unwrap();
+			set_cover(root.clone(), png).unwrap();
+			let mut book = read_manifest(&root).unwrap().book;
+			book.title = title.to_owned();
+			write_book(root.clone(), book).unwrap();
+		};
+		let conflicts = diverged(
+			&root,
+			|| change("Theirs", b"\x89PNG\r\n\x1a\ntheirs"),
+			|| change("Ours", b"\x89PNG\r\n\x1a\nours"),
+		);
+
+		assert_eq!(
+			conflicts,
+			[
+				merge::Conflict::Field {
+					id: None,
+					field: "title".to_owned(),
+					ours: "Ours".into(),
+					theirs: "Theirs".into(),
+				},
+				merge::Conflict::Cover,
+			]
+		);
+		assert_eq!(read_manifest(&root).unwrap().book.title, "Ours");
+		assert!(fs::read(root.join("cover.png")).unwrap().ends_with(b"ours"));
+		waits(&root);
+	}
+
+	#[test]
+	fn a_documents_target_changed_on_both() {
+		let (_parent, root, seeded, ..) = novel();
+		let target = |words: u32| {
+			let mut manifest = read_manifest(&root).unwrap();
+			if let Some(Node::Document { target, .. }) = tree::find_mut(&mut manifest.nodes, seeded)
+			{
+				*target = Some(words);
+			}
+			write_manifest(&root, &mut manifest).unwrap();
+		};
+		let conflicts = diverged(&root, || target(100), || target(200));
+
+		assert_eq!(
+			conflicts,
+			[merge::Conflict::Field {
+				id: Some(seeded),
+				field: "target".to_owned(),
+				ours: 200.into(),
+				theirs: 100.into(),
+			}]
+		);
+		waits(&root);
+	}
+
+	#[test]
+	fn the_changes_list_reads_while_a_paragraph_conflicts() {
+		let (_parent, root, seeded, other, ..) = conflicted();
+
+		let status = status(&root).unwrap();
+
+		assert!(status.unstaged.nodes.is_empty());
+		let edited: Vec<Uuid> = status
+			.staged
+			.nodes
+			.iter()
+			.filter(|change| change.edited)
+			.map(|change| change.id)
+			.collect();
+		assert_eq!(edited, [other]);
+		assert!(!edited.contains(&seeded));
 	}
 }
