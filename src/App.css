@@ -2495,6 +2495,239 @@ div.changes__pick {
 	outline-offset: 2px;
 }
 
+/* The merge screen, in compare's frame. */
+.merge__trail {
+	margin-bottom: 0.75rem;
+}
+
+.merge__pick {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	width: 100%;
+	padding: 0.35rem 0.5rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	text-align: left;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.merge__pick:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.merge__pick[aria-current="true"] {
+	background: var(--accent-wash);
+}
+
+.merge__pick:disabled {
+	cursor: default;
+}
+
+.merge__pick:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+.merge__pick-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.merge__pick-name {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.merge__pick-where {
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
+.merge__pick-left {
+	flex: none;
+	margin-left: auto;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.merge__pick-left--done {
+	font-weight: 600;
+	color: var(--added);
+}
+
+.merge__rule {
+	height: 1px;
+	margin: 0.5rem 0;
+	background: var(--border);
+}
+
+.merge__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.4rem 1rem;
+	padding: 0.6rem 1.5rem;
+	font-size: 0.8125rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.merge__name {
+	font-weight: 600;
+	color: var(--text);
+}
+
+.merge__detail {
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
+.merge__all {
+	display: flex;
+	gap: 1rem;
+	margin-left: auto;
+	font-size: 0.75rem;
+}
+
+.merge__scroll {
+	flex: 1;
+	min-height: 0;
+	padding: 1.5rem;
+	overflow-y: auto;
+}
+
+.merge__prose {
+	max-width: 52rem;
+	margin: 0 auto;
+}
+
+.merge__prose > p,
+.merge__settled > p:not(.merge__settled-note) {
+	margin: 0 0 1rem;
+	font-family: var(--serif);
+	font-size: 1.0625rem;
+	line-height: 1.6;
+	color: var(--text);
+	white-space: pre-wrap;
+}
+
+/* A settled spot reads as text again, with a note to reopen it. */
+.merge__settled {
+	margin: 0 -0.75rem 1rem;
+	padding: 0 0.75rem;
+	border-left: 3px solid var(--added);
+}
+
+.merge__settled > p:nth-last-child(2) {
+	margin-bottom: 0;
+}
+
+.merge__settled-note {
+	margin: 0.2rem 0 0;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
+.merge-spot {
+	margin: 0 -0.75rem 1.25rem;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+.merge-spot--current {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 1px var(--accent);
+}
+
+.merge-spot__sides {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+}
+
+.merge-spot__side {
+	min-width: 0;
+	padding: 0.75rem 0.9rem;
+}
+
+.merge-spot__side + .merge-spot__side {
+	border-left: 1px solid var(--border);
+}
+
+.merge-spot__label {
+	margin: 0 0 0.35rem;
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.merge-spot__text {
+	margin: 0;
+	font-family: var(--serif);
+	font-size: 1rem;
+	line-height: 1.55;
+	color: var(--text);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.merge-spot__side--mine .merge-spot__wash {
+	background: var(--removed-wash);
+}
+
+.merge-spot__side--theirs .merge-spot__wash {
+	background: var(--added-wash);
+}
+
+.merge-spot__empty {
+	font-size: 0.875rem;
+	font-style: italic;
+	color: var(--text-faint);
+}
+
+.merge-spot__choose {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.5rem 0.9rem;
+	font-size: 0.8125rem;
+	border-top: 1px solid var(--border);
+}
+
+.merge-spot__choice {
+	padding: 0.2rem 0.7rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.merge-spot__choice:hover {
+	background: var(--bg-hover);
+}
+
+.merge-spot__choice:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.merge-spot__n {
+	margin-left: auto;
+	font-size: 0.75rem;
+	color: var(--text-faint);
+}
+
 /* Over everything, compare included, at the foot of the window. */
 .overwrite {
 	position: fixed;

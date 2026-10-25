@@ -82,6 +82,8 @@ type Props = {
 	merge: MergeUnderway | null;
 	/** Reads the merge again after something here settled or ended it. */
 	onMergeChanged: () => Promise<void>;
+	/** Opens the merge screen on a conflicted document. */
+	onSettle: (id: string) => void;
 	/** Writes every open document to disk before a version is kept. */
 	onBeforeKeep: () => Promise<void>;
 	onCompare: (checkpoint: Checkpoint, document?: string) => void;
@@ -126,6 +128,7 @@ export default function RightSidebar({
 	enclosing,
 	merge,
 	onMergeChanged,
+	onSettle,
 	onBeforeKeep,
 	onCompare,
 	onPutBack,
@@ -221,6 +224,7 @@ export default function RightSidebar({
 						enclosing={enclosing}
 						merge={merge}
 						onMergeChanged={onMergeChanged}
+						onSettle={onSettle}
 						onBeforeKeep={onBeforeKeep}
 						logged={logged}
 						onCompare={onCompare}

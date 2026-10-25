@@ -204,6 +204,8 @@ export type SettleLine = {
 	kind: "document" | "binder";
 	/** The document's id, null for the binder and for a file no manifest names. */
 	id: string | null;
+	/** Where the document sits, null for the binder. */
+	path: string | null;
 };
 
 /**
@@ -230,6 +232,7 @@ export function settleLines(
 						: `${count.toLocaleString()} ${count === 1 ? "spot" : "spots"}`,
 				kind: "document",
 				id: conflict.id,
+				path: conflict.path,
 			},
 		];
 	});
@@ -245,6 +248,7 @@ export function settleLines(
 			what: `${rest.toLocaleString()} to settle`,
 			kind: "binder",
 			id: null,
+			path: null,
 		},
 	];
 }

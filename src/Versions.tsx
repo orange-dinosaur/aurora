@@ -38,6 +38,8 @@ type Props = {
 	merge: MergeUnderway | null;
 	/** Reads the merge again after a checkpoint or Abort merge ended it. */
 	onMergeChanged: () => Promise<void>;
+	/** Opens the merge screen on a conflicted document. */
+	onSettle: (id: string) => void;
 	/** Writes every open document to disk, so a version holds what is on screen. */
 	onBeforeKeep: () => Promise<void>;
 	/** Bumped when a session has been recorded. */
@@ -60,6 +62,7 @@ export default function Versions({
 	enclosing,
 	merge,
 	onMergeChanged,
+	onSettle,
 	onBeforeKeep,
 	logged,
 	onCompare,
@@ -409,6 +412,7 @@ export default function Versions({
 						all="Take all out"
 						lines={staged}
 						settle={[]}
+						onSettle={onSettle}
 						into={false}
 						busy={busy || merging !== null}
 						onMove={move}
@@ -420,6 +424,7 @@ export default function Versions({
 						all="Add all"
 						lines={unstaged}
 						settle={settle}
+						onSettle={onSettle}
 						into={true}
 						busy={busy || merging !== null}
 						onMove={move}
@@ -483,6 +488,7 @@ function Group({
 	all,
 	lines,
 	settle,
+	onSettle,
 	into,
 	busy,
 	onMove,
@@ -494,6 +500,7 @@ function Group({
 	lines: Line[];
 	/** What a merge left to settle, listed after the rows. */
 	settle: SettleLine[];
+	onSettle: (id: string) => void;
 	into: boolean;
 	busy: boolean;
 	onMove: (row: StatusRow | null, into: boolean) => void;
@@ -576,21 +583,39 @@ function Group({
 						</li>
 					);
 				})}
-				{settle.map((line) => (
-					<li key={line.key} className="versions__item changes__row">
-						<div className="versions__pick changes__pick">
-							<span className="versions__text">
-								<span className="versions__name">
-									{line.name}
-								</span>
-								<span className="versions__detail">
-									{line.what}
-								</span>
+				{settle.map((line) => {
+					const body = (
+						<span className="versions__text">
+							<span className="versions__name">{line.name}</span>
+							<span className="versions__detail">
+								{line.what}
 							</span>
-						</div>
-						<span className="changes__settle">To settle</span>
-					</li>
-				))}
+						</span>
+					);
+					// The binder and details get a screen of their own later.
+					const id = line.kind === "document" ? line.id : null;
+					return (
+						<li
+							key={line.key}
+							className="versions__item changes__row"
+						>
+							{id === null ? (
+								<div className="versions__pick changes__pick">
+									{body}
+								</div>
+							) : (
+								<button
+									type="button"
+									className="versions__pick changes__pick"
+									onClick={() => onSettle(id)}
+								>
+									{body}
+								</button>
+							)}
+							<span className="changes__settle">To settle</span>
+						</li>
+					);
+				})}
 			</ul>
 		</section>
 	);

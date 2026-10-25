@@ -20,6 +20,8 @@ import Trash from "./Trash";
 import BookView from "./Book";
 import Compare from "./Compare";
 import Overwrite from "./Overwrite";
+import Merge from "./Merge";
+import type { Choices } from "./lib/merge";
 import {
 	overwritten,
 	type MergeUnderway,
@@ -327,6 +329,10 @@ export default function Project({
 	// The merge waiting to be settled, which the titlebar and the Versions
 	// tab both show.
 	const [merge, setMerge] = useState<MergeUnderway | null>(null);
+	// The document open on the merge screen, and what the writer has chosen
+	// for each document's spots. Choices last until the merge ends.
+	const [settling, setSettling] = useState<string | null>(null);
+	const [choices, setChoices] = useState<Record<string, Choices>>({});
 
 	async function readMerge() {
 		try {
@@ -335,6 +341,8 @@ export default function Project({
 			});
 			if (merging === null) {
 				setMerge(null);
+				setSettling(null);
+				setChoices({});
 				return;
 			}
 			const versions = await invoke<Branch[]>("list_branches", { root });
@@ -1413,9 +1421,30 @@ export default function Project({
 				/>
 			)}
 
-			{/* Hidden rather than unmounted while comparing, so every editor
-			    comes back with its cursor and its undo history. */}
-			<div className="project__body" hidden={comparing !== null}>
+			{comparing === null && merge !== null && settling !== null && (
+				<Merge
+					root={root}
+					merge={merge}
+					open={settling}
+					onOpen={setSettling}
+					choices={choices}
+					onChoices={(id, chosen) =>
+						setChoices((all) => ({ ...all, [id]: chosen }))
+					}
+					onBack={() => setSettling(null)}
+					onSettle={putBack}
+					onMergeChanged={readMerge}
+				/>
+			)}
+
+			{/* Hidden rather than unmounted while comparing or merging, so
+			    every editor comes back with its cursor and its undo history. */}
+			<div
+				className="project__body"
+				hidden={
+					comparing !== null || (merge !== null && settling !== null)
+				}
+			>
 				<Sidebar
 					hidden={!preferences.sidebar}
 					width={preferences.sidebarWidth}
@@ -1704,6 +1733,7 @@ export default function Project({
 						enclosing={enclosingRepository}
 						merge={merge}
 						onMergeChanged={readMerge}
+						onSettle={setSettling}
 						onBeforeKeep={writeAll}
 						onCompare={(checkpoint, document) =>
 							void writeAll().then(() => {
