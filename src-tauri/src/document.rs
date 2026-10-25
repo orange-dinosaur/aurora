@@ -790,7 +790,7 @@ pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
 /// depth. `base` is the project root, or the trash inside it, which is laid out
 /// the same way. The path may come from the frontend or be walked out of the
 /// manifest, and neither is trusted.
-fn document_path(manifest: &Manifest, base: &Path, path: &str) -> Result<PathBuf> {
+pub(crate) fn document_path(manifest: &Manifest, base: &Path, path: &str) -> Result<PathBuf> {
 	project_path(manifest, base, path, true)
 }
 

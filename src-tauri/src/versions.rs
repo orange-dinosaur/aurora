@@ -17,7 +17,8 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::document::{
-	TRASH_DIR, body, delete_document, move_node, recreate_document, rename_document, write_document,
+	TRASH_DIR, body, delete_document, document_path, move_node, recreate_document, rename_document,
+	write_document,
 };
 use crate::history::HISTORY_FILE;
 use crate::merge;
@@ -1332,6 +1333,26 @@ pub fn settle_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
 	settle(&root, id, &text)
 }
 
+/// Settles every conflict but the text: `theirs` are the ones the writer took
+/// the other version's side of, and the rest keep this version's.
+#[tauri::command]
+pub fn settle_binder(root: PathBuf, theirs: Vec<merge::Conflict>) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	settle_rest(&root, &theirs)
+}
+
+/// One side's cover while a merge is under way, as raw bytes like
+/// `read_cover`.
+#[tauri::command]
+pub fn merge_cover(root: PathBuf, theirs: bool) -> Result<tauri::ipc::Response> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	Ok(tauri::ipc::Response::new(side_cover(&root, theirs)?))
+}
+
 /// Records that the writer has seen the note about an enclosing repository.
 #[tauri::command]
 pub fn nested_notice_shown(root: PathBuf) -> Result<()> {
@@ -1680,7 +1701,7 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 	let (base_tree, base) = merge_side(&repo, base.as_ref())?;
 	let (our_tree, ours) = merge_side(&repo, Some(&head))?;
 	let (their_tree, theirs_side) = merge_side(&repo, Some(&theirs))?;
-	let merged = merge::manifests(&base, &ours, &theirs_side);
+	let merged = merge::manifests(&base, &ours, &theirs_side, &[]);
 
 	// Git merges by path only the files no manifest names. Documents merge
 	// by id, so a moved or renamed one keeps its text.
@@ -1850,7 +1871,7 @@ fn merging(root: &Path) -> Result<Option<Merging>> {
 		let (_, base) = merge_side(&repo, base.as_ref())?;
 		let (_, ours) = merge_side(&repo, Some(&head))?;
 		let (_, theirs) = merge_side(&repo, Some(&merged))?;
-		conflicts.extend(merge::manifests(&base, &ours, &theirs).conflicts);
+		conflicts.extend(merge::manifests(&base, &ours, &theirs, &[]).conflicts);
 	}
 
 	Ok(Some(Merging {
@@ -1977,6 +1998,120 @@ fn settle(root: &Path, id: Uuid, text: &str) -> Result<()> {
 	index.add(&staged_entry(&repo, &path, repo.blob(text.as_bytes())?, 0)?)?;
 	index.write()?;
 	Ok(())
+}
+
+/// Merges the binder and the book again with the writer's sides, puts them in
+/// the next checkpoint, and moves the files to match. A document still
+/// conflicted keeps its three sides wherever it goes.
+fn settle_rest(root: &Path, theirs: &[merge::Conflict]) -> Result<()> {
+	let repo = Repository::open(root)?;
+	let (Some(head), Some(merged)) = (head_commit(&repo)?, merge_head(&repo)?) else {
+		return Ok(());
+	};
+	let base = merge_base(&repo, &head, &merged)?;
+	let (_, base) = merge_side(&repo, base.as_ref())?;
+	let (_, ours) = merge_side(&repo, Some(&head))?;
+	let (_, other) = merge_side(&repo, Some(&merged))?;
+	let settled = merge::manifests(&base, &ours, &other, theirs);
+	// ponytail: the binder is merged afresh, so a rename or move made while
+	// the merge was under way is lost; carry `was` over if writers do that.
+	let was = read_manifest(root)?;
+
+	let paths = |manifest: &Manifest| -> HashMap<Uuid, String> {
+		manifest
+			.documents()
+			.into_iter()
+			.map(|document| (document.id, document.path))
+			.collect()
+	};
+	let (from, to) = (paths(&was), paths(&settled.manifest));
+	let mut index = repo.index()?;
+	// Every file that moves is read before any is written, so one taking
+	// another's old name loses nothing. The text on disk goes, so writing
+	// done during the merge comes along.
+	let mut moving = Vec::new();
+	for (id, old) in &from {
+		let new = to.get(id);
+		if new == Some(old) {
+			continue;
+		}
+		let file = document_path(&was, root, old)?;
+		let entries: Vec<IndexEntry> = index
+			.iter()
+			.filter(|entry| entry.path == old.as_bytes())
+			.collect();
+		for entry in &entries {
+			index.remove(Path::new(old), i32::from(stage_of(entry)))?;
+		}
+		if let Some(new) = new {
+			moving.push((new, fs::read(&file)?, entries));
+		}
+		remove_if_there(&file)?;
+	}
+	for (id, new) in &to {
+		if from.contains_key(id) {
+			continue;
+		}
+		let Some(&blob) = other.blobs.get(id).or(ours.blobs.get(id)) else {
+			continue;
+		};
+		let entries = vec![staged_entry(&repo, new, blob, 0)?];
+		moving.push((new, repo.find_blob(blob)?.content().to_vec(), entries));
+	}
+	for (path, text, entries) in moving {
+		let file = document_path(&settled.manifest, root, path)?;
+		if let Some(folder) = file.parent() {
+			fs::create_dir_all(folder)?;
+		}
+		write_atomic(&file, &text)?;
+		for entry in entries {
+			index.add(&staged_entry(&repo, path, entry.id, stage_of(&entry))?)?;
+		}
+	}
+
+	let cover = settled
+		.conflicts
+		.iter()
+		.any(|conflict| matches!(conflict, merge::Conflict::Cover { .. }));
+	for name in COVER_NAMES.iter().filter(|_| cover) {
+		match settled
+			.cover
+			.filter(|_| settled.manifest.book.cover == *name)
+		{
+			Some(blob) => {
+				write_atomic(&root.join(name), repo.find_blob(blob)?.content())?;
+				index.add(&staged_entry(&repo, name, blob, 0)?)?;
+			}
+			None => {
+				remove_if_there(&root.join(name))?;
+				index.remove_path(Path::new(name))?;
+			}
+		}
+	}
+
+	let manifest = to_json(&settled.manifest)?;
+	write_atomic(&root.join(MANIFEST_FILE), &manifest)?;
+	index.remove_path(Path::new(MANIFEST_FILE))?;
+	let manifest = repo.blob(&manifest)?;
+	index.add(&staged_entry(&repo, MANIFEST_FILE, manifest, 0)?)?;
+	index.write()?;
+	settle_folders(root, &was, &settled.manifest)
+}
+
+fn stage_of(entry: &IndexEntry) -> u16 {
+	(entry.flags & STAGE_MASK) >> STAGE_SHIFT
+}
+
+/// The cover the version the writer is in has, or the one being merged in.
+fn side_cover(root: &Path, theirs: bool) -> Result<Vec<u8>> {
+	let repo = Repository::open(root)?;
+	let commit = match theirs {
+		true => merge_head(&repo)?,
+		false => head_commit(&repo)?,
+	};
+	let (_, side) = merge_side(&repo, Some(&commit.ok_or(Error::CoverMissing)?))?;
+	let cover = side.cover.ok_or(Error::CoverMissing)?;
+	Ok(repo.find_blob(cover)?.content().to_vec())
 }
 
 /// Puts the project back as it was before the merge began. Without a merge
@@ -3905,11 +4040,15 @@ mod tests {
 			[
 				merge::Conflict::Deleted {
 					id: seeded,
-					here: false
+					here: false,
+					name: placed(&root, seeded).1,
+					documents: 1,
 				},
 				merge::Conflict::Deleted {
 					id: other,
-					here: true
+					here: true,
+					name: "Other.md".to_owned(),
+					documents: 1,
 				},
 			]
 		);
@@ -4000,7 +4139,10 @@ mod tests {
 					ours: "Ours".into(),
 					theirs: "Theirs".into(),
 				},
-				merge::Conflict::Cover,
+				merge::Conflict::Cover {
+					ours: Some("cover.png".to_owned()),
+					theirs: Some("cover.png".to_owned()),
+				},
 			]
 		);
 		assert_eq!(read_manifest(&root).unwrap().book.title, "Ours");
@@ -4049,5 +4191,269 @@ mod tests {
 			.collect();
 		assert_eq!(edited, [other]);
 		assert!(!edited.contains(&seeded));
+	}
+
+	/// Settles the binder with every conflict the other version's way or
+	/// none of them, then checks the merge finishes with the files matching.
+	fn settled_as(root: &Path, conflicts: Vec<merge::Conflict>, theirs: bool) {
+		let chosen = if theirs { conflicts } else { Vec::new() };
+		settle_rest(root, &chosen).unwrap();
+		assert_eq!(merging(root).unwrap().unwrap().conflicts, []);
+		checkpoint(root, "Merged Act two", "").unwrap();
+		assert_eq!(parents(root).len(), 2);
+		assert!(!pending(root).unwrap());
+	}
+
+	#[test]
+	fn a_rename_on_both_settles_either_way() {
+		for theirs in [false, true] {
+			let (_parent, root, seeded, ..) = novel();
+			write_document(root.clone(), seeded, "Kept".to_owned()).unwrap();
+			let conflicts = diverged(
+				&root,
+				|| {
+					rename_document(root.clone(), seeded, "There".to_owned()).unwrap();
+				},
+				|| {
+					rename_document(root.clone(), seeded, "Here".to_owned()).unwrap();
+				},
+			);
+
+			settled_as(&root, conflicts, theirs);
+			let name = if theirs { "There.md" } else { "Here.md" };
+			assert_eq!(placed(&root, seeded).1, name);
+			assert_eq!(body_now(&root, seeded), "Kept");
+		}
+	}
+
+	#[test]
+	fn a_move_on_both_settles_either_way() {
+		for theirs in [false, true] {
+			let (_parent, root, seeded, here, there) = novel();
+			let conflicts = diverged(
+				&root,
+				|| move_node(root.clone(), seeded, there, 0).unwrap(),
+				|| move_node(root.clone(), seeded, here, 0).unwrap(),
+			);
+
+			settled_as(&root, conflicts, theirs);
+			let folder = if theirs { there } else { here };
+			assert_eq!(placed(&root, seeded).0, Some(folder));
+		}
+	}
+
+	#[test]
+	fn a_move_that_closes_a_cycle_settles_either_way() {
+		for theirs in [false, true] {
+			let (_parent, root, _, here, _) = novel();
+			let folder = |name: &str| {
+				create_folder(root.clone(), here, name.to_owned(), None)
+					.unwrap()
+					.id()
+			};
+			let (f, g) = (folder("F"), folder("G"));
+			let inside = create_document(root.clone(), f, "Inside".to_owned())
+				.unwrap()
+				.id;
+			let conflicts = diverged(
+				&root,
+				|| move_node(root.clone(), g, f, 0).unwrap(),
+				|| move_node(root.clone(), f, g, 0).unwrap(),
+			);
+			assert_eq!(
+				conflicts,
+				[merge::Conflict::Moved {
+					id: g,
+					ours: Some(here),
+					theirs: Some(f),
+				}]
+			);
+
+			settled_as(&root, conflicts, theirs);
+			let (outer, inner) = if theirs { (f, g) } else { (g, f) };
+			assert_eq!(placed(&root, outer).0, Some(here));
+			assert_eq!(placed(&root, inner).0, Some(outer));
+			assert_eq!(placed(&root, inside).0, Some(f));
+		}
+	}
+
+	#[test]
+	fn a_deletion_against_an_edit_settles_either_way() {
+		for theirs in [false, true] {
+			let (_parent, root, seeded, here, _) = novel();
+			let other = create_document(root.clone(), here, "Other".to_owned())
+				.unwrap()
+				.id;
+			let conflicts = diverged(
+				&root,
+				|| {
+					delete_document(root.clone(), seeded).unwrap();
+					write_document(root.clone(), other, "Theirs".to_owned()).unwrap();
+				},
+				|| {
+					write_document(root.clone(), seeded, "Ours".to_owned()).unwrap();
+					delete_document(root.clone(), other).unwrap();
+				},
+			);
+
+			settled_as(&root, conflicts, theirs);
+			let nodes = read_manifest(&root).unwrap().nodes;
+			assert_eq!(tree::find(&nodes, seeded).is_some(), !theirs);
+			assert_eq!(tree::find(&nodes, other).is_some(), theirs);
+			match theirs {
+				true => assert_eq!(body_now(&root, other), "Theirs"),
+				false => assert_eq!(body_now(&root, seeded), "Ours"),
+			}
+		}
+	}
+
+	#[test]
+	fn a_deleted_folder_goes_or_comes_back_whole() {
+		for here_deleted in [false, true] {
+			for theirs in [false, true] {
+				let (_parent, root, _, here, _) = novel();
+				let (folder, [a, b, c]) = three_in(&root, here);
+				let delete = || delete_folder(root.clone(), folder).unwrap();
+				let edit = || write_document(root.clone(), a, "Edited".to_owned()).unwrap();
+				let conflicts = match here_deleted {
+					true => diverged(&root, edit, delete),
+					false => diverged(&root, delete, edit),
+				};
+				assert_eq!(
+					conflicts,
+					[merge::Conflict::Deleted {
+						id: folder,
+						here: here_deleted,
+						name: "Scenes".to_owned(),
+						documents: 3,
+					}]
+				);
+
+				settled_as(&root, conflicts, theirs);
+				// Taking the other side undoes this version's deletion, or
+				// takes the other's.
+				let kept = here_deleted == theirs;
+				let nodes = read_manifest(&root).unwrap().nodes;
+				for id in [folder, a, b, c] {
+					assert_eq!(tree::find(&nodes, id).is_some(), kept);
+				}
+				if kept {
+					assert_eq!(body_now(&root, a), "Edited");
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn a_reorder_on_both_settles_either_way() {
+		for theirs in [false, true] {
+			let (_parent, root, _, here, _) = novel();
+			let (folder, [a, b, c]) = three_in(&root, here);
+			let conflicts = diverged(
+				&root,
+				|| move_node(root.clone(), c, folder, 0).unwrap(),
+				|| move_node(root.clone(), a, folder, 2).unwrap(),
+			);
+
+			settled_as(&root, conflicts, theirs);
+			let order = if theirs { [c, a, b] } else { [b, c, a] };
+			assert_eq!(children_of(&root, folder), order);
+		}
+	}
+
+	#[test]
+	fn a_field_on_both_settles_either_way_whatever_the_number_looks_like() {
+		for theirs in [false, true] {
+			let (_parent, root, seeded, ..) = novel();
+			let target = |words: u32| {
+				let mut manifest = read_manifest(&root).unwrap();
+				if let Some(Node::Document { target, .. }) =
+					tree::find_mut(&mut manifest.nodes, seeded)
+				{
+					*target = Some(words);
+				}
+				write_manifest(&root, &mut manifest).unwrap();
+			};
+			let mut conflicts = diverged(&root, || target(100), || target(200));
+			// The frontend can send a number back as a float.
+			if let [merge::Conflict::Field { theirs, .. }] = conflicts.as_mut_slice() {
+				*theirs = serde_json::json!(100.0);
+			}
+
+			settled_as(&root, conflicts, theirs);
+			let manifest = read_manifest(&root).unwrap();
+			let words = if theirs { 100 } else { 200 };
+			assert_eq!(manifest.documents()[0].target, Some(words));
+		}
+	}
+
+	#[test]
+	fn the_book_and_a_cover_of_another_kind_settle_either_way() {
+		for theirs in [false, true] {
+			let (_parent, root, ..) = novel();
+			let change = |title: &str, file: &str, image: &[u8]| {
+				let source = root.parent().unwrap().join(file);
+				fs::write(&source, image).unwrap();
+				set_cover(root.clone(), source).unwrap();
+				let mut book = read_manifest(&root).unwrap().book;
+				book.title = title.to_owned();
+				write_book(root.clone(), book).unwrap();
+			};
+			let conflicts = diverged(
+				&root,
+				|| change("Theirs", "cover.jpg", b"\xff\xd8\xff\xe0theirs"),
+				|| change("Ours", "cover.png", b"\x89PNG\r\n\x1a\nours"),
+			);
+			assert!(conflicts.contains(&merge::Conflict::Cover {
+				ours: Some("cover.png".to_owned()),
+				theirs: Some("cover.jpg".to_owned()),
+			}));
+			assert!(side_cover(&root, false).unwrap().ends_with(b"ours"));
+			assert!(side_cover(&root, true).unwrap().ends_with(b"theirs"));
+
+			settled_as(&root, conflicts, theirs);
+			let book = read_manifest(&root).unwrap().book;
+			let (title, kept, gone) = match theirs {
+				true => ("Theirs", "cover.jpg", "cover.png"),
+				false => ("Ours", "cover.png", "cover.jpg"),
+			};
+			assert_eq!((book.title.as_str(), book.cover.as_str()), (title, kept));
+			assert!(root.join(kept).is_file());
+			assert!(!root.join(gone).exists());
+		}
+	}
+
+	#[test]
+	fn a_checkpoint_finishes_the_merge_once_text_and_binder_are_settled() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, BASE.to_owned()).unwrap();
+		let conflicts = diverged(
+			&root,
+			|| {
+				let draft = "One, in Act two.\n\nTwo.\n\nThree.\n";
+				write_document(root.clone(), seeded, draft.to_owned()).unwrap();
+				rename_document(root.clone(), seeded, "There".to_owned()).unwrap();
+			},
+			|| {
+				write_document(root.clone(), seeded, MAINS.to_owned()).unwrap();
+				rename_document(root.clone(), seeded, "Here".to_owned()).unwrap();
+			},
+		);
+		let (text, binder): (Vec<_>, Vec<_>) = conflicts
+			.into_iter()
+			.partition(|conflict| matches!(conflict, merge::Conflict::Text { .. }));
+		assert_eq!(text.len(), 1);
+
+		// The document moves to its new name still conflicted.
+		settle_rest(&root, &binder).unwrap();
+		assert_eq!(placed(&root, seeded).1, "There.md");
+		assert!(spots(&root, seeded).unwrap().is_some());
+		waits(&root);
+
+		settle(&root, seeded, "One, settled.\n\nTwo.\n\nThree.\n").unwrap();
+		checkpoint(&root, "Merged Act two", "").unwrap();
+		assert_eq!(parents(&root).len(), 2);
+		assert!(!pending(&root).unwrap());
+		assert_eq!(body_now(&root, seeded), "One, settled.\n\nTwo.\n\nThree.\n");
 	}
 }

@@ -190,6 +190,8 @@ pub fn run() {
 			versions::abort_merge,
 			versions::merge_spots,
 			versions::settle_document,
+			versions::settle_binder,
+			versions::merge_cover,
 			versions::list_versions,
 			versions::nested_notice_shown,
 			versions::rename_version,

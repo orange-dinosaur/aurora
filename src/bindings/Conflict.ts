@@ -4,4 +4,4 @@
  * Something both versions changed differently. Until the writer chooses,
  * the merge keeps what the version they are in has.
  */
-export type Conflict = { "kind": "text", id: string | null, path: string, } | { "kind": "renamed", id: string, ours: string, theirs: string, } | { "kind": "moved", id: string, ours: string | null, theirs: string | null, } | { "kind": "deleted", id: string, here: boolean, } | { "kind": "reordered", id: string | null, ours: Array<string>, theirs: Array<string>, } | { "kind": "field", id: string | null, field: string, ours: unknown, theirs: unknown, } | { "kind": "cover" };
+export type Conflict = { "kind": "text", id: string | null, path: string, } | { "kind": "renamed", id: string, ours: string, theirs: string, } | { "kind": "moved", id: string, ours: string | null, theirs: string | null, } | { "kind": "deleted", id: string, here: boolean, name: string, documents: number, } | { "kind": "reordered", id: string | null, ours: Array<string>, theirs: Array<string>, } | { "kind": "field", id: string | null, field: string, ours: unknown, theirs: unknown, } | { "kind": "cover", ours: string | null, theirs: string | null, };
