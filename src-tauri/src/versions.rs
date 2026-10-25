@@ -115,9 +115,14 @@ pub struct Branch {
 	pub current: bool,
 	/// Checkpoints no other version reaches, which deleting this one loses.
 	pub unmerged: u32,
+	/// Main, or a checkout no version names: neither can be renamed or
+	/// deleted.
+	pub fixed: bool,
 }
 
 const MAIN: &str = "main";
+/// What Main is in an adopted repository that has no `main`.
+const MASTER: &str = "master";
 
 /// A version the frontend asks to keep. Every count is in words.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, ts_rs::TS)]
@@ -580,10 +585,37 @@ fn current_branch(repo: &Repository) -> Result<Option<String>> {
 		.map(str::to_owned))
 }
 
+/// The version shown as Main: `main`, or `master` in an adopted repository
+/// that has no `main`.
+fn main_slug(repo: &Repository) -> Result<&'static str> {
+	let current = current_branch(repo)?;
+	let has = |slug: &str| {
+		repo.find_branch(slug, BranchType::Local).is_ok() || current.as_deref() == Some(slug)
+	};
+	Ok(if !has(MAIN) && has(MASTER) {
+		MASTER
+	} else {
+		MAIN
+	})
+}
+
+/// A checkout no version names, as its short id and checkpoint.
+fn detached(repo: &Repository) -> Result<Option<(String, Oid)>> {
+	if !repo.head_detached()? {
+		return Ok(None);
+	}
+	let head = repo.head()?.peel_to_commit()?;
+	let short = head.as_object().short_id()?;
+	Ok(Some((
+		short.as_str().unwrap_or_default().to_owned(),
+		head.id(),
+	)))
+}
+
 fn branches(root: &Path) -> Result<Vec<Branch>> {
 	let repo = Repository::open(root)?;
-	let config = repo.config()?;
 	let current = current_branch(&repo)?;
+	let main = main_slug(&repo)?;
 
 	let mut tips = Vec::new();
 	for branch in repo.branches(Some(BranchType::Local))? {
@@ -592,6 +624,12 @@ fn branches(root: &Path) -> Result<Vec<Branch>> {
 			tips.push((slug.to_owned(), branch.get().peel_to_commit()?.id()));
 		}
 	}
+	// Counted like a version, since leaving it loses what only it reaches.
+	let detached = detached(&repo)?;
+	if let Some((short, id)) = &detached {
+		tips.push((short.clone(), *id));
+	}
+	let left = |slug: &str| detached.as_ref().is_some_and(|(short, _)| short == slug);
 
 	let mut rows = Vec::new();
 	for (slug, tip) in &tips {
@@ -610,8 +648,9 @@ fn branches(root: &Path) -> Result<Vec<Branch>> {
 		rows.push(Branch {
 			slug: slug.clone(),
 			name: String::new(),
-			current: current.as_ref() == Some(slug),
+			current: current.as_ref() == Some(slug) || left(slug),
 			unmerged,
+			fixed: slug == main || left(slug),
 		});
 	}
 	// Main before its first checkpoint has no branch yet, but the writer is in it.
@@ -619,6 +658,7 @@ fn branches(root: &Path) -> Result<Vec<Branch>> {
 		&& !tips.iter().any(|(slug, _)| *slug == current)
 	{
 		rows.push(Branch {
+			fixed: current == main,
 			slug: current,
 			name: String::new(),
 			current: true,
@@ -627,20 +667,21 @@ fn branches(root: &Path) -> Result<Vec<Branch>> {
 	}
 
 	for row in &mut rows {
-		row.name = version_name(&config, &row.slug);
+		row.name = version_name(&repo, &row.slug)?;
 	}
-	rows.sort_by_key(|row| (row.slug != MAIN, row.name.to_lowercase()));
+	rows.sort_by_key(|row| (row.slug != main, row.name.to_lowercase()));
 	Ok(rows)
 }
 
 /// A version's name as the writer typed it.
-fn version_name(config: &git2::Config, slug: &str) -> String {
-	if slug == MAIN {
-		return "Main".to_owned();
+fn version_name(repo: &Repository, slug: &str) -> Result<String> {
+	if slug == main_slug(repo)? {
+		return Ok("Main".to_owned());
 	}
-	config
+	Ok(repo
+		.config()?
 		.get_string(&name_key(slug))
-		.unwrap_or_else(|_| slug.to_owned())
+		.unwrap_or_else(|_| slug.to_owned()))
 }
 
 /// Starts a version at the current checkpoint and moves the writer into it.
@@ -662,11 +703,11 @@ fn new_branch(root: &Path, name: &str) -> Result<String> {
 
 /// Returns the version's new slug.
 fn renamed_branch(root: &Path, slug: &str, name: &str) -> Result<String> {
-	if slug == MAIN {
+	let repo = Repository::open(root)?;
+	if slug == main_slug(&repo)? {
 		return Err(Error::MainFixed);
 	}
 	let renamed = self::slug(name)?;
-	let repo = Repository::open(root)?;
 	let mut branch = repo.find_branch(slug, BranchType::Local)?;
 	if renamed != slug {
 		match branch.rename(&renamed, false) {
@@ -679,10 +720,13 @@ fn renamed_branch(root: &Path, slug: &str, name: &str) -> Result<String> {
 }
 
 fn dropped_branch(root: &Path, slug: &str) -> Result<()> {
-	if slug == MAIN {
+	let repo = Repository::open(root)?;
+	if slug == main_slug(&repo)? {
 		return Err(Error::MainFixed);
 	}
-	let repo = Repository::open(root)?;
+	if detached(&repo)?.is_some_and(|(short, _)| short == slug) {
+		return Err(Error::CurrentVersion);
+	}
 	let mut branch = repo.find_branch(slug, BranchType::Local)?;
 	if branch.is_head() {
 		return Err(Error::CurrentVersion);
@@ -1800,7 +1844,7 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 	index.write()?;
 	settle_folders(root, &ours.manifest, &merged.manifest)?;
 
-	let message = format!("Merged {}", version_name(&repo.config()?, slug));
+	let message = format!("Merged {}", version_name(&repo, slug)?);
 	if index.has_conflicts() {
 		fs::write(repo.path().join("MERGE_HEAD"), format!("{}\n", theirs.id()))?;
 		fs::write(repo.path().join("MERGE_MSG"), format!("{message}\n"))?;
@@ -1832,7 +1876,7 @@ fn merging(root: &Path) -> Result<Option<Merging>> {
 		if branch.get().target() == Some(merged.id())
 			&& let Some(slug) = branch.name()?
 		{
-			name = Some(version_name(&repo.config()?, slug));
+			name = Some(version_name(&repo, slug)?);
 		}
 	}
 
@@ -2732,12 +2776,14 @@ mod tests {
 				name: "Main".to_owned(),
 				current: false,
 				unmerged: 0,
+				fixed: true,
 			},
 			Branch {
 				slug: "second-draft".to_owned(),
 				name: "Second Draft".to_owned(),
 				current: true,
 				unmerged: 0,
+				fixed: false,
 			},
 		];
 		assert_eq!(rows, expected);
@@ -2817,6 +2863,92 @@ mod tests {
 			.map(|row| row.slug)
 			.collect();
 		assert_eq!(slugs, ["main"]);
+	}
+
+	/// The project as a repository made elsewhere leaves it, on `master`.
+	fn adopted(root: &Path) {
+		let repo = Repository::open(root).unwrap();
+		repo.find_branch("main", BranchType::Local)
+			.unwrap()
+			.rename("master", false)
+			.unwrap();
+		repo.set_head("refs/heads/master").unwrap();
+	}
+
+	fn listed(root: &Path) -> Vec<(String, String, bool, bool)> {
+		branches(root)
+			.unwrap()
+			.into_iter()
+			.map(|row| (row.slug, row.name, row.current, row.fixed))
+			.collect()
+	}
+
+	#[test]
+	fn an_adopted_master_is_main_from_any_other_version() {
+		let (_parent, root, _, _, _) = novel();
+		adopted(&root);
+		new_branch(&root, "Feature").unwrap();
+		let repo = Repository::open(&root).unwrap();
+		let head = repo.head().unwrap().peel_to_commit().unwrap();
+		repo.branch("zebra", &head, false).unwrap();
+
+		assert_eq!(
+			listed(&root),
+			[
+				("master".to_owned(), "Main".to_owned(), false, true),
+				("feature".to_owned(), "Feature".to_owned(), true, false),
+				("zebra".to_owned(), "zebra".to_owned(), false, false),
+			]
+		);
+		let renamed = renamed_branch(&root, "master", "Trunk");
+		assert!(matches!(renamed, Err(Error::MainFixed)));
+		let dropped = dropped_branch(&root, "master");
+		assert!(matches!(dropped, Err(Error::MainFixed)));
+	}
+
+	#[test]
+	fn master_beside_main_is_a_version_like_any_other() {
+		let (_parent, root, _, _, _) = novel();
+		let repo = Repository::open(&root).unwrap();
+		let head = repo.head().unwrap().peel_to_commit().unwrap();
+		repo.branch("master", &head, false).unwrap();
+
+		assert_eq!(
+			listed(&root),
+			[
+				("main".to_owned(), "Main".to_owned(), true, true),
+				("master".to_owned(), "master".to_owned(), false, false),
+			]
+		);
+		dropped_branch(&root, "master").unwrap();
+	}
+
+	#[test]
+	fn a_detached_checkout_can_be_left_but_not_deleted() {
+		let (_parent, root, _, _, _) = novel();
+		let repo = Repository::open(&root).unwrap();
+		let head = repo.head().unwrap().peel_to_commit().unwrap();
+		repo.set_head_detached(head.id()).unwrap();
+		let kept = checkpoint(&root, "Only here", "").unwrap();
+
+		let found = branches(&root).unwrap();
+		let main = found.iter().find(|row| row.slug == "main").unwrap();
+		assert!(!main.current);
+		let loose = found.iter().find(|row| row.current).unwrap();
+		assert!(kept.to_string().starts_with(&loose.slug));
+		assert_eq!(loose.name, loose.slug);
+		assert!(loose.fixed);
+		assert_eq!(loose.unmerged, 1);
+
+		let refused = dropped_branch(&root, &loose.slug);
+		assert!(matches!(refused, Err(Error::CurrentVersion)));
+
+		switch(&root, "main").unwrap();
+		assert_eq!(head_target(&root), "refs/heads/main");
+		assert_eq!(
+			listed(&root),
+			[("main".to_owned(), "Main".to_owned(), true, true)]
+		);
 	}
 
 	#[test]

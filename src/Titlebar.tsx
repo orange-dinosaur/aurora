@@ -13,9 +13,6 @@ import type { Running } from "./sessions";
 import ThemeToggle from "./ThemeToggle";
 import type { Branch, Checkpoint, Merging, Theme } from "./types";
 
-/** Main's slug. Main can be neither renamed nor deleted. */
-const MAIN = "main";
-
 type Props = {
 	name: string;
 	root: string;
@@ -593,7 +590,7 @@ function VersionMenu({
 							</span>
 							{version.name}
 						</MenuItem>
-						{(version.slug !== MAIN || !version.current) && (
+						{(!version.fixed || !version.current) && (
 							<span className="titlebar__row-actions">
 								{!version.current && (
 									<button
@@ -606,7 +603,7 @@ function VersionMenu({
 										<Icon name="arrow-left-right" />
 									</button>
 								)}
-								{version.slug !== MAIN && (
+								{!version.fixed && (
 									<button
 										type="button"
 										className="menu__trigger"
@@ -622,7 +619,7 @@ function VersionMenu({
 										<Icon name="pencil" />
 									</button>
 								)}
-								{!version.current && version.slug !== MAIN && (
+								{!version.current && !version.fixed && (
 									<button
 										type="button"
 										className="menu__trigger"

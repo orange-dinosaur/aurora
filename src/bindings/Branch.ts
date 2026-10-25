@@ -11,4 +11,9 @@ name: string, current: boolean,
 /**
  * Checkpoints no other version reaches, which deleting this one loses.
  */
-unmerged: number, };
+unmerged: number, 
+/**
+ * Main, or a checkout no version names: neither can be renamed or
+ * deleted.
+ */
+fixed: boolean, };
