@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { failure } from "./errors";
+import { BINDER } from "./lib/merge";
 import {
 	byDay,
 	detail,
@@ -592,8 +593,7 @@ function Group({
 							</span>
 						</span>
 					);
-					// The binder and details get a screen of their own later.
-					const id = line.kind === "document" ? line.id : null;
+					const id = line.kind === "binder" ? BINDER : line.id;
 					return (
 						<li
 							key={line.key}

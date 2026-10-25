@@ -21,7 +21,7 @@ import BookView from "./Book";
 import Compare from "./Compare";
 import Overwrite from "./Overwrite";
 import Merge from "./Merge";
-import type { Choices } from "./lib/merge";
+import type { Choices, Sides } from "./lib/merge";
 import {
 	overwritten,
 	type MergeUnderway,
@@ -330,9 +330,11 @@ export default function Project({
 	// tab both show.
 	const [merge, setMerge] = useState<MergeUnderway | null>(null);
 	// The document open on the merge screen, and what the writer has chosen
-	// for each document's spots. Choices last until the merge ends.
+	// for each document's spots and the binder's cards. Choices last until
+	// the merge ends.
 	const [settling, setSettling] = useState<string | null>(null);
 	const [choices, setChoices] = useState<Record<string, Choices>>({});
+	const [sides, setSides] = useState<Sides>({});
 
 	async function readMerge() {
 		try {
@@ -343,6 +345,7 @@ export default function Project({
 				setMerge(null);
 				setSettling(null);
 				setChoices({});
+				setSides({});
 				return;
 			}
 			const versions = await invoke<Branch[]>("list_branches", { root });
@@ -1431,6 +1434,8 @@ export default function Project({
 					onChoices={(id, chosen) =>
 						setChoices((all) => ({ ...all, [id]: chosen }))
 					}
+					sides={sides}
+					onSides={setSides}
 					onBack={() => setSettling(null)}
 					onSettle={putBack}
 					onMergeChanged={readMerge}
