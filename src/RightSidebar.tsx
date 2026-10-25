@@ -12,7 +12,7 @@ import type { Limit, Sessions } from "./sessions";
 import type { FolderRef } from "./tree";
 import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
-import type { Overwrites } from "./lib/versions";
+import type { MergeUnderway, Overwrites } from "./lib/versions";
 import { MANUSCRIPT } from "./kinds";
 import { isSubject } from "./subjects";
 import type {
@@ -78,6 +78,10 @@ type Props = {
 	onVersionsScope: (scope: VersionsScope) => void;
 	/** A repository the project sits inside, while the writer has not been told. */
 	enclosing: string | null;
+	/** The merge waiting to be settled, if there is one. */
+	merge: MergeUnderway | null;
+	/** Reads the merge again after something here settled or ended it. */
+	onMergeChanged: () => Promise<void>;
 	/** Writes every open document to disk before a version is kept. */
 	onBeforeKeep: () => Promise<void>;
 	onCompare: (checkpoint: Checkpoint, document?: string) => void;
@@ -120,6 +124,8 @@ export default function RightSidebar({
 	versionsScope,
 	onVersionsScope,
 	enclosing,
+	merge,
+	onMergeChanged,
 	onBeforeKeep,
 	onCompare,
 	onPutBack,
@@ -213,6 +219,8 @@ export default function RightSidebar({
 						scope={versionsScope}
 						onScope={onVersionsScope}
 						enclosing={enclosing}
+						merge={merge}
+						onMergeChanged={onMergeChanged}
 						onBeforeKeep={onBeforeKeep}
 						logged={logged}
 						onCompare={onCompare}

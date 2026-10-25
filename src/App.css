@@ -990,6 +990,17 @@ body,
 	text-overflow: ellipsis;
 }
 
+.titlebar__state {
+	flex: none;
+	max-width: 14rem;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--accent);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .titlebar__menu--version .menu__items {
 	left: -0.4rem;
 	right: auto;
@@ -2419,6 +2430,67 @@ div.changes__pick {
 .changes__back:focus-visible,
 .changes__move:focus-visible,
 .changes__head .versions__action:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.changes__why {
+	min-height: 1.4em;
+	margin: 0;
+	font-size: 0.75rem;
+	line-height: 1.4;
+	color: var(--text-faint);
+}
+
+.changes__settle {
+	flex: none;
+	margin: 0.45rem 0.3rem 0 0;
+	padding: 0 0.45rem;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	color: var(--danger);
+	border: 1px solid currentColor;
+	border-radius: 9px;
+}
+
+.merge-banner {
+	margin-top: 0.5rem;
+	padding: 0.6rem 0.75rem;
+	background: var(--accent-wash);
+	border-radius: 6px;
+}
+
+.merge-banner__title {
+	margin: 0;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+.merge-banner__text {
+	margin: 0.15rem 0 0.5rem;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
+.merge-banner__abort {
+	padding: 0.15rem 0.6rem;
+	font: inherit;
+	font-size: 0.75rem;
+	color: var(--danger);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.merge-banner__abort:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.merge-banner__abort:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 }

@@ -11,7 +11,7 @@ import { failure } from "./errors";
 import { SEARCH, SESSION, shortcutLabel } from "./formatting";
 import type { Running } from "./sessions";
 import ThemeToggle from "./ThemeToggle";
-import type { Branch, Checkpoint, Theme } from "./types";
+import type { Branch, Checkpoint, Merging, Theme } from "./types";
 
 /** Main's slug. Main can be neither renamed nor deleted. */
 const MAIN = "main";
@@ -52,6 +52,10 @@ type Props = {
 	onBeforeSwitch: () => Promise<void>;
 	/** Runs a switch the way put back runs, catching the tabs up after it. */
 	onSwitch: (task: () => Promise<unknown>) => Promise<void>;
+	/** The merge waiting to be settled, if there is one. */
+	merging: Merging | null;
+	/** Reads the merge again after a switch or a merge from here. */
+	onMergeChanged: () => Promise<void>;
 };
 
 export default function Titlebar({
@@ -77,6 +81,8 @@ export default function Titlebar({
 	onCompare,
 	onBeforeSwitch,
 	onSwitch,
+	merging,
+	onMergeChanged,
 }: Props) {
 	const [busy, setBusy] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
@@ -96,8 +102,8 @@ export default function Titlebar({
 	}, [root]);
 
 	// Whether there are changes the writer has to decide about first. With
-	// none, the switch is already under way.
-	async function choose(slug: string): Promise<boolean> {
+	// none, the switch or the merge is already under way.
+	async function choose(slug: string, merge: boolean): Promise<boolean> {
 		await onBeforeSwitch();
 		try {
 			if (await invoke<boolean>("changes_pending", { root })) {
@@ -107,11 +113,17 @@ export default function Titlebar({
 			setMessage(failure(error).message);
 			return false;
 		}
-		void switchTo(slug, null);
+		void switchTo(slug, null, merge);
 		return false;
 	}
 
-	async function switchTo(slug: string, checkpoint: string | null) {
+	// Merging rewrites files the way switching does, so it catches the tabs
+	// up the same way.
+	async function switchTo(
+		slug: string,
+		checkpoint: string | null,
+		merge: boolean,
+	) {
 		try {
 			await onSwitch(async () => {
 				if (checkpoint !== null) {
@@ -120,12 +132,16 @@ export default function Titlebar({
 						message: checkpoint,
 					});
 				}
-				await invoke("switch_branch", { root, slug });
+				await invoke(merge ? "merge_branch" : "switch_branch", {
+					root,
+					slug,
+				});
 			});
 			setMessage(null);
 		} catch (error) {
 			setMessage(failure(error).message);
 		}
+		await onMergeChanged();
 		await listVersions();
 	}
 
@@ -210,10 +226,11 @@ export default function Titlebar({
 							root={root}
 							versions={versions}
 							current={current}
+							merging={merging !== null}
 							close={close}
 							onChoose={choose}
-							onCheckpoint={(slug, words) =>
-								void switchTo(slug, words)
+							onCheckpoint={(slug, words, merge) =>
+								void switchTo(slug, words, merge)
 							}
 							onCompare={onCompare}
 							onChanged={listVersions}
@@ -221,6 +238,12 @@ export default function Titlebar({
 						/>
 					)}
 				</Menu>
+			)}
+
+			{merging !== null && (
+				<span className="titlebar__state">
+					Merging {merging.name ?? "another version"}
+				</span>
 			)}
 
 			<span className="titlebar__path" title={root}>
@@ -315,7 +338,8 @@ export default function Titlebar({
 
 type Doing =
 	| { kind: "list" }
-	| { kind: "switching"; slug: string }
+	| { kind: "switching"; slug: string; merge: boolean }
+	| { kind: "picking" }
 	| { kind: "naming" }
 	| { kind: "renaming"; slug: string }
 	| { kind: "deleting"; version: Branch };
@@ -326,6 +350,7 @@ function VersionMenu({
 	root,
 	versions,
 	current,
+	merging,
 	close,
 	onChoose,
 	onCheckpoint,
@@ -336,9 +361,12 @@ function VersionMenu({
 	root: string;
 	versions: Branch[];
 	current: Branch;
+	/** Whether a merge is waiting to be settled, which rules out another. */
+	merging: boolean;
 	close: () => void;
-	onChoose: (slug: string) => Promise<boolean>;
-	onCheckpoint: (slug: string, message: string) => void;
+	/** Switches to the version, or merges it in. True when it has to ask first. */
+	onChoose: (slug: string, merge: boolean) => Promise<boolean>;
+	onCheckpoint: (slug: string, message: string, merge: boolean) => void;
 	onCompare: (checkpoint: string, slug: string) => void;
 	/** Lists the versions again after one was made, renamed or deleted. */
 	onChanged: () => Promise<void>;
@@ -458,7 +486,7 @@ function VersionMenu({
 					event.preventDefault();
 					if (words.trim() !== "") {
 						close();
-						onCheckpoint(doing.slug, words);
+						onCheckpoint(doing.slug, words, doing.merge);
 					}
 				}}
 			>
@@ -486,10 +514,39 @@ function VersionMenu({
 						className="sprint__go"
 						disabled={words.trim() === ""}
 					>
-						Add checkpoint and switch
+						{doing.merge
+							? "Add checkpoint and merge"
+							: "Add checkpoint and switch"}
 					</button>
 				</span>
 			</form>
+		);
+	}
+
+	function pick(slug: string, merge: boolean) {
+		void onChoose(slug, merge).then((ask) =>
+			ask ? setDoing({ kind: "switching", slug, merge }) : close(),
+		);
+	}
+
+	const others = versions.filter((version) => !version.current);
+
+	if (doing.kind === "picking") {
+		return (
+			<>
+				<p className="titlebar__note">
+					Which version goes into {current.name}?
+				</p>
+				{others.map((version) => (
+					<MenuItem
+						key={version.slug}
+						onSelect={() => pick(version.slug, true)}
+					>
+						<span className="menu__tick" />
+						{version.name}
+					</MenuItem>
+				))}
+			</>
 		);
 	}
 
@@ -528,14 +585,7 @@ function VersionMenu({
 									close();
 									return;
 								}
-								void onChoose(version.slug).then((ask) =>
-									ask
-										? setDoing({
-												kind: "switching",
-												slug: version.slug,
-											})
-										: close(),
-								);
+								pick(version.slug, false);
 							}}
 						>
 							<span className="menu__tick">
@@ -626,6 +676,17 @@ function VersionMenu({
 					{kept === false && (
 						<p className="titlebar__note">
 							Add a first checkpoint to start another version.
+						</p>
+					)}
+					<MenuItem
+						disabled={others.length === 0 || merging}
+						onSelect={() => setDoing({ kind: "picking" })}
+					>
+						Merge into {current.name}…
+					</MenuItem>
+					{merging && (
+						<p className="titlebar__note">
+							Settle or abort the merge under way first.
 						</p>
 					)}
 				</>

@@ -3,7 +3,14 @@
 // next.
 
 import { timeOfDay, when } from "../dates";
-import type { Change, Changes, Checkpoint, Status, StatusRow } from "../types";
+import type {
+	Change,
+	Changes,
+	Checkpoint,
+	Merging,
+	Status,
+	StatusRow,
+} from "../types";
 
 /** A day of checkpoints, with the heading it is listed under. */
 export type CheckpointDay = {
@@ -183,4 +190,77 @@ export function overwriteQuestion(names: string[]): string {
 			? `${names[0]} has`
 			: `${names.length.toLocaleString()} documents have`;
 	return `${who} changes that aren't in a checkpoint. Putting back overwrites them.`;
+}
+
+/** A merge waiting to be settled, and the name of the version it goes into. */
+export type MergeUnderway = { merging: Merging; into: string };
+
+/** A row of the Changes list that a merge left to settle. */
+export type SettleLine = {
+	key: string;
+	name: string;
+	what: string;
+	/** A conflicted document, or the one row for the binder and details. */
+	kind: "document" | "binder";
+	/** The document's id, null for the binder and for a file no manifest names. */
+	id: string | null;
+};
+
+/**
+ * The rows a merge leaves to settle: each conflicted document with its count
+ * of spots, then one row for every conflict outside the text. A document
+ * whose spots are not counted yet shows none.
+ */
+export function settleLines(
+	merging: Merging,
+	spots: Record<string, number>,
+): SettleLine[] {
+	const documents = merging.conflicts.flatMap((conflict): SettleLine[] => {
+		if (conflict.kind !== "text") {
+			return [];
+		}
+		const count = conflict.id === null ? undefined : spots[conflict.id];
+		return [
+			{
+				key: conflict.path,
+				name: nameIn(conflict.path),
+				what:
+					count === undefined
+						? ""
+						: `${count.toLocaleString()} ${count === 1 ? "spot" : "spots"}`,
+				kind: "document",
+				id: conflict.id,
+			},
+		];
+	});
+	const rest = merging.conflicts.length - documents.length;
+	if (rest === 0) {
+		return documents;
+	}
+	return [
+		...documents,
+		{
+			key: "binder",
+			name: "Binder and details",
+			what: `${rest.toLocaleString()} to settle`,
+			kind: "binder",
+			id: null,
+		},
+	];
+}
+
+/** The banner's line under "Merging X into Y". */
+export function settleBanner(rows: number): string {
+	if (rows === 0) {
+		return "Everything is settled. Add the checkpoint to finish the merge.";
+	}
+	const things = rows === 1 ? "1 thing" : `${rows.toLocaleString()} things`;
+	return `${things} to settle before the merge can be a checkpoint.`;
+}
+
+/** Why Add checkpoint is off while a merge has rows to settle. */
+export function settleFirst(rows: number): string {
+	return rows === 1
+		? "Settle the marked row first."
+		: `Settle the ${rows.toLocaleString()} marked rows first.`;
 }

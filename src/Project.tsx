@@ -20,10 +20,16 @@ import Trash from "./Trash";
 import BookView from "./Book";
 import Compare from "./Compare";
 import Overwrite from "./Overwrite";
-import { overwritten, type Overwrites } from "./lib/versions";
+import {
+	overwritten,
+	type MergeUnderway,
+	type Overwrites,
+} from "./lib/versions";
 import type {
+	Branch,
 	DocumentText,
 	FolderNode,
+	Merging,
 	Preferences,
 	ProjectDocument,
 	Status,
@@ -318,6 +324,30 @@ export default function Project({
 		names: string[];
 		answer: (go: boolean) => void;
 	} | null>(null);
+	// The merge waiting to be settled, which the titlebar and the Versions
+	// tab both show.
+	const [merge, setMerge] = useState<MergeUnderway | null>(null);
+
+	async function readMerge() {
+		try {
+			const merging = await invoke<Merging | null>("merge_state", {
+				root,
+			});
+			if (merging === null) {
+				setMerge(null);
+				return;
+			}
+			const versions = await invoke<Branch[]>("list_branches", { root });
+			const into = versions.find((version) => version.current);
+			setMerge({ merging, into: into?.name ?? "" });
+		} catch {
+			// The Versions tab reads the same repository and says what is wrong.
+		}
+	}
+
+	useEffect(() => {
+		void readMerge();
+	}, [root]);
 
 	// Why a folder's target was refused, when one was.
 	const [aiming, setAiming] = useState<string | null>(null);
@@ -1359,6 +1389,8 @@ export default function Project({
 				}
 				onBeforeSwitch={writeAll}
 				onSwitch={putBack}
+				merging={merge?.merging ?? null}
+				onMergeChanged={readMerge}
 			/>
 
 			{comparing !== null && (
@@ -1670,6 +1702,8 @@ export default function Project({
 							onPreferences({ ...preferences, versionsScope })
 						}
 						enclosing={enclosingRepository}
+						merge={merge}
+						onMergeChanged={readMerge}
 						onBeforeKeep={writeAll}
 						onCompare={(checkpoint, document) =>
 							void writeAll().then(() => {

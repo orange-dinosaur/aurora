@@ -9,11 +9,17 @@ import {
 	detail,
 	lineKey,
 	lines,
+	settleBanner,
+	settleFirst,
+	settleLines,
 	type Line,
+	type MergeUnderway,
 	type Overwrites,
+	type SettleLine,
 } from "./lib/versions";
 import type {
 	Checkpoint,
+	Piece,
 	ProjectDocument,
 	Status,
 	StatusRow,
@@ -28,6 +34,10 @@ type Props = {
 	onScope: (scope: VersionsScope) => void;
 	/** A repository the project sits inside, while the writer has not been told. */
 	enclosing: string | null;
+	/** The merge waiting to be settled, if there is one. */
+	merge: MergeUnderway | null;
+	/** Reads the merge again after a checkpoint or Abort merge ended it. */
+	onMergeChanged: () => Promise<void>;
 	/** Writes every open document to disk, so a version holds what is on screen. */
 	onBeforeKeep: () => Promise<void>;
 	/** Bumped when a session has been recorded. */
@@ -38,7 +48,7 @@ type Props = {
 	/** Asks first when the target has changes not in a checkpoint. */
 	onPutBack: (
 		task: () => Promise<unknown>,
-		target: Overwrites,
+		target?: Overwrites,
 	) => Promise<void>;
 };
 
@@ -48,6 +58,8 @@ export default function Versions({
 	scope,
 	onScope,
 	enclosing,
+	merge,
+	onMergeChanged,
 	onBeforeKeep,
 	logged,
 	onCompare,
@@ -61,6 +73,54 @@ export default function Versions({
 	const [asked, setAsked] = useState(0);
 	const [status, setStatus] = useState<Status | null>(null);
 	const [message, setMessage] = useState("");
+	// How many spots each conflicted document has, by id.
+	const [spots, setSpots] = useState<Record<string, number>>({});
+	const merging = merge?.merging ?? null;
+
+	// The checkpoint that finishes a merge says so, until the writer changes it.
+	useEffect(() => {
+		if (merging !== null) {
+			setMessage(merging.message);
+		}
+	}, [merging?.message]);
+
+	useEffect(() => {
+		if (merging === null) {
+			setSpots({});
+			return;
+		}
+		let current = true;
+		const ids = merging.conflicts.flatMap((conflict) =>
+			conflict.kind === "text" && conflict.id !== null
+				? [conflict.id]
+				: [],
+		);
+		Promise.all(
+			ids.map(async (id) => {
+				const pieces = await invoke<Piece[] | null>("merge_spots", {
+					root,
+					id,
+				});
+				const count = (pieces ?? []).filter(
+					(piece) => piece.kind === "spot",
+				).length;
+				return [id, count] as const;
+			}),
+		)
+			.then((counted) => {
+				if (current) {
+					setSpots(Object.fromEntries(counted));
+				}
+			})
+			.catch((reason: unknown) => {
+				if (current) {
+					setError(failure(reason).message);
+				}
+			});
+		return () => {
+			current = false;
+		};
+	}, [root, merging]);
 
 	// A folder overview has no document of its own to narrow to.
 	const document = scope === "document" && page !== null ? page.id : null;
@@ -166,8 +226,13 @@ export default function Versions({
 	const unstaged = status === null ? [] : lines(status.unstaged);
 	const said =
 		message.trim() !== "" ? message : first ? "First checkpoint" : "";
+	const settle = merging === null ? [] : settleLines(merging, spots);
+	// A merge is a checkpoint of its own even when it changed nothing here.
 	const canAdd =
-		!busy && said.trim() !== "" && staged.length + unstaged.length > 0;
+		!busy &&
+		said.trim() !== "" &&
+		settle.length === 0 &&
+		(merging !== null || staged.length + unstaged.length > 0);
 
 	function addCheckpoint() {
 		if (!canAdd) {
@@ -177,6 +242,18 @@ export default function Versions({
 			await onBeforeKeep();
 			await invoke("add_checkpoint", { root, message: said });
 			setMessage("");
+			if (merging !== null) {
+				await onMergeChanged();
+			}
+		});
+	}
+
+	// Everything goes back to the last checkpoint, so the tabs catch up after.
+	function abort() {
+		void run(async () => {
+			await onPutBack(() => invoke("abort_merge", { root }));
+			setMessage("");
+			await onMergeChanged();
 		});
 	}
 
@@ -265,6 +342,27 @@ export default function Versions({
 
 			{scope === "changes" && (
 				<>
+					{merge !== null && (
+						<div className="merge-banner" role="status">
+							<p className="merge-banner__title">
+								Merging{" "}
+								{merge.merging.name ?? "another version"} into{" "}
+								{merge.into}
+							</p>
+							<p className="merge-banner__text">
+								{settleBanner(settle.length)}
+							</p>
+							<button
+								type="button"
+								className="merge-banner__abort"
+								disabled={busy}
+								onClick={abort}
+							>
+								Abort merge
+							</button>
+						</div>
+					)}
+
 					<div className="changes__add">
 						<textarea
 							className="changes__message"
@@ -293,14 +391,26 @@ export default function Versions({
 						>
 							Add checkpoint
 						</button>
+						{/* Held open for the whole merge, so settling the last
+						    row does not pull the list up. */}
+						{merging !== null && (
+							<p className="changes__why">
+								{settle.length > 0
+									? settleFirst(settle.length)
+									: ""}
+							</p>
+						)}
 					</div>
 
+					{/* While merging, moving rows would stage over the
+					    conflicts, so the rows stay where the merge put them. */}
 					<Group
 						heading="In the next checkpoint"
 						all="Take all out"
 						lines={staged}
+						settle={[]}
 						into={false}
-						busy={busy}
+						busy={busy || merging !== null}
 						onMove={move}
 						onCompare={compareLine}
 						onPutBack={putBackLine}
@@ -309,13 +419,15 @@ export default function Versions({
 						heading="Changes"
 						all="Add all"
 						lines={unstaged}
+						settle={settle}
 						into={true}
-						busy={busy}
+						busy={busy || merging !== null}
 						onMove={move}
 						onCompare={compareLine}
 						onPutBack={putBackLine}
 					/>
 					{status !== null &&
+						merging === null &&
 						staged.length + unstaged.length === 0 && (
 							<p className="right-sidebar__empty">
 								Nothing has changed since the last checkpoint.
@@ -370,6 +482,7 @@ function Group({
 	heading,
 	all,
 	lines,
+	settle,
 	into,
 	busy,
 	onMove,
@@ -379,13 +492,15 @@ function Group({
 	heading: string;
 	all: string;
 	lines: Line[];
+	/** What a merge left to settle, listed after the rows. */
+	settle: SettleLine[];
 	into: boolean;
 	busy: boolean;
 	onMove: (row: StatusRow | null, into: boolean) => void;
 	onCompare: (line: Line) => (() => void) | null;
 	onPutBack: (line: Line) => (() => void) | null;
 }) {
-	if (lines.length === 0) {
+	if (lines.length + settle.length === 0) {
 		return null;
 	}
 	return (
@@ -461,6 +576,21 @@ function Group({
 						</li>
 					);
 				})}
+				{settle.map((line) => (
+					<li key={line.key} className="versions__item changes__row">
+						<div className="versions__pick changes__pick">
+							<span className="versions__text">
+								<span className="versions__name">
+									{line.name}
+								</span>
+								<span className="versions__detail">
+									{line.what}
+								</span>
+							</span>
+						</div>
+						<span className="changes__settle">To settle</span>
+					</li>
+				))}
 			</ul>
 		</section>
 	);

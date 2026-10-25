@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { timeOfDay, when } from "../dates";
-import type { Change, Checkpoint } from "../types";
+import type { Change, Checkpoint, Merging } from "../types";
 import {
 	byDay,
 	counts,
@@ -9,6 +9,9 @@ import {
 	lines,
 	overwriteQuestion,
 	overwritten,
+	settleBanner,
+	settleFirst,
+	settleLines,
 	summary,
 } from "./versions";
 
@@ -223,5 +226,72 @@ describe("overwritten", () => {
 		expect(overwriteQuestion(["Mill", "Letter"])).toBe(
 			"2 documents have changes that aren't in a checkpoint. Putting back overwrites them.",
 		);
+	});
+});
+
+describe("settleLines", () => {
+	const merging = (conflicts: Merging["conflicts"]): Merging => ({
+		name: "Second pass",
+		message: "Merged Second pass",
+		conflicts,
+	});
+	const text = (id: string | null, path: string) =>
+		({ kind: "text", id, path }) as const;
+
+	it("marks each conflicted document with its spots, then one binder row", () => {
+		const rows = settleLines(
+			merging([
+				text("s2", "Manuscript/Chapter 1/Scene 2.md"),
+				{ kind: "renamed", id: "s3", ours: "A.md", theirs: "B.md" },
+				text("s7", "Manuscript/Chapter 2/Scene 7.md"),
+				{ kind: "cover", ours: "cover.png", theirs: null },
+			]),
+			{ s2: 3, s7: 1 },
+		);
+
+		expect(rows.map(({ name, what, kind }) => [name, what, kind])).toEqual([
+			["Scene 2", "3 spots", "document"],
+			["Scene 7", "1 spot", "document"],
+			["Binder and details", "2 to settle", "binder"],
+		]);
+		expect(rows.map((row) => row.id)).toEqual(["s2", "s7", null]);
+	});
+
+	it("has no binder row with only text to settle", () => {
+		const rows = settleLines(merging([text("s2", "Notes/Scene 2.md")]), {
+			s2: 2,
+		});
+		expect(rows.map((row) => row.kind)).toEqual(["document"]);
+	});
+
+	it("leaves the count off until it is known, and for a file with no id", () => {
+		const rows = settleLines(
+			merging([text("s2", "Notes/Scene 2.md"), text(null, "notes.txt")]),
+			{},
+		);
+		expect(rows.map(({ name, what, id }) => [name, what, id])).toEqual([
+			["Scene 2", "", "s2"],
+			["notes.txt", "", null],
+		]);
+	});
+
+	it("is empty once everything is settled", () => {
+		expect(settleLines(merging([]), {})).toEqual([]);
+	});
+});
+
+describe("settle wording", () => {
+	it("counts the rows left, in the singular for one", () => {
+		expect(settleBanner(3)).toBe(
+			"3 things to settle before the merge can be a checkpoint.",
+		);
+		expect(settleBanner(1)).toBe(
+			"1 thing to settle before the merge can be a checkpoint.",
+		);
+		expect(settleBanner(0)).toBe(
+			"Everything is settled. Add the checkpoint to finish the merge.",
+		);
+		expect(settleFirst(3)).toBe("Settle the 3 marked rows first.");
+		expect(settleFirst(1)).toBe("Settle the marked row first.");
 	});
 });
