@@ -5835,6 +5835,79 @@ button.compare__pick:focus-visible {
 	color: var(--accent);
 }
 
+/* The ways of writing this document, one thin line above the text. Sized in
+   rem with the rest of the chrome, and the list wraps rather than losing a
+   take off the end. */
+.takes {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+	margin: 0 0 0.5rem;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
+.takes__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.1rem 0.25rem;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.takes__item {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	min-width: 0;
+}
+
+.takes__item + .takes__item::before {
+	content: "·";
+	color: var(--text-faint);
+}
+
+.takes__button {
+	padding: 0.1rem 0.35rem;
+	font: inherit;
+	color: inherit;
+	overflow-wrap: anywhere;
+	text-align: left;
+	background: none;
+	border: 0;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.takes__button:hover:not(:disabled) {
+	color: var(--text);
+	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+}
+
+/* Colour and a wash rather than weight, so the names stay put as the choice
+   moves along them. */
+.takes__button[aria-current="true"] {
+	color: var(--accent);
+	background: var(--accent-wash);
+}
+
+.takes__button:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.takes__button:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+
+.takes__try {
+	flex: none;
+}
+
 /* Holds the writing surface and the placeholder that sits over it. */
 .editor__surface {
 	position: relative;

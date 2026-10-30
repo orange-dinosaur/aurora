@@ -16,6 +16,9 @@ type Props = {
 	onDelete: () => void;
 	/** Given only for a subject, which is the only kind with a page. */
 	onSubject?: () => void;
+	/** Given only for a document in the Manuscript. */
+	onTry?: () => void;
+	merging: boolean;
 };
 
 export default function DocumentMenu({ label, ...rest }: Props) {
@@ -39,6 +42,8 @@ function Actions({
 	onRename,
 	onDelete,
 	onSubject,
+	onTry,
+	merging,
 }: Omit<Props, "label"> & { close: () => void }) {
 	const [choosing, setChoosing] = useState(false);
 
@@ -93,6 +98,17 @@ function Actions({
 					}}
 				>
 					Open subject page
+				</MenuItem>
+			)}
+			{onTry !== undefined && (
+				<MenuItem
+					disabled={merging}
+					onSelect={() => {
+						close();
+						onTry();
+					}}
+				>
+					Try something
 				</MenuItem>
 			)}
 			<MenuItem

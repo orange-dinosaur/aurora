@@ -42,6 +42,8 @@ import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import { documentsOf, folderOf, rows } from "./tree";
 import { deleteDocument, deleteFolder } from "./documents";
+import type { TakeView } from "./bindings/TakeView";
+import { chooseTake, readTakes, trySomething } from "./takes";
 import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
 // `changed` under another name: this file already has one of its own.
@@ -98,6 +100,8 @@ type DocumentTab = {
 	save: Save;
 	/** What search asked Find to open on here, or null if nothing did. */
 	seed: Seed | null;
+	/** Here rather than in the strip, so one mounted again keeps its line. */
+	takes: TakeView[];
 };
 
 type FolderTab = {
@@ -569,14 +573,24 @@ export default function Project({
 			content: { kind: "loading" },
 			save: { kind: "clean" },
 			seed,
+			takes: [],
 		};
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
 
-		const content = await read(root, document.id);
+		const [content, takes] = await Promise.all([
+			read(root, document.id),
+			readTakes(root, document.id),
+		]);
 		// Keyed by id, so a slow read can only ever fill in its own tab — and
 		// quietly does nothing if that tab was closed while it was in flight.
-		patch(document.id, (tab) => ({ ...tab, content }));
+		patch(document.id, (tab) => ({ ...tab, content, takes }));
+	}
+
+	// The writer sees the new take, so a document that was shut opens.
+	async function startTake(document: ProjectDocument) {
+		await putBack(() => trySomething(root, document.id));
+		await openDocument(document);
 	}
 
 	function openFolder(folder: FolderRef) {
@@ -933,9 +947,15 @@ export default function Project({
 				latest.current.flatMap((tab) =>
 					tab.kind === "document" && now.has(tab.document.id)
 						? [
-								read(root, tab.document.id).then(
-									(content) =>
-										[tab.document.id, content] as const,
+								Promise.all([
+									read(root, tab.document.id),
+									readTakes(root, tab.document.id),
+								]).then(
+									([content, takes]) =>
+										[
+											tab.document.id,
+											{ content, takes },
+										] as const,
 								),
 							]
 						: [],
@@ -970,18 +990,26 @@ export default function Project({
 				}
 				case "document": {
 					const document = now.get(tab.document.id);
-					const content = contents.get(tab.document.id);
+					const found = contents.get(tab.document.id);
 					if (document === undefined) {
 						return [];
 					}
-					if (content?.kind !== "ready") {
+					if (found?.content.kind !== "ready") {
 						return [{ ...tab, document }];
 					}
+					const { content, takes } = found;
 					if (
 						tab.content.kind === "ready" &&
 						tab.content.text === content.text
 					) {
-						return [{ ...tab, document, save: { kind: "clean" } }];
+						return [
+							{
+								...tab,
+								document,
+								takes,
+								save: { kind: "clean" },
+							},
+						];
 					}
 					return [
 						{
@@ -989,6 +1017,7 @@ export default function Project({
 							key: again(tab),
 							document,
 							content,
+							takes,
 							save: { kind: "clean" },
 						},
 					];
@@ -1314,7 +1343,13 @@ export default function Project({
 					error={tab.save.kind === "failed" ? tab.save.message : null}
 					target={tab.document.target}
 					seed={tab.seed}
+					takes={tab.takes}
+					merging={merge !== null}
 					preferences={preferences}
+					onChooseTake={(take) =>
+						putBack(() => chooseTake(root, tab.document.id, take))
+					}
+					onTry={() => startTake(tab.document)}
 					onChange={(text) => edit(tab.document.id, text)}
 					onWrote={(delta) => record(tab.document.id, delta)}
 					onFields={setFields}
@@ -1472,8 +1507,10 @@ export default function Project({
 					}
 					selectedTrash={active?.kind === "trash"}
 					selectedBook={active?.kind === "book"}
+					merging={merge !== null}
 					onSelect={(document) => void openDocument(document)}
 					onSubject={openSubject}
+					onTry={startTake}
 					onOpenFolder={openFolder}
 					onOpenTrash={openTrash}
 					onOpenBook={openBook}
@@ -1555,9 +1592,11 @@ export default function Project({
 									root={root}
 									folder={active.folder}
 									reload={listing}
+									merging={merge !== null}
 									onSelect={(document) =>
 										void openDocument(document)
 									}
+									onTry={startTake}
 									onOpenFolder={openFolder}
 									onCreated={(document) =>
 										void created(document)

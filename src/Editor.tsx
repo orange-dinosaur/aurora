@@ -8,6 +8,8 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { EditorState, EditorThemeClasses } from "lexical";
+import type { TakeView } from "./bindings/TakeView";
+import { failure } from "./errors";
 import Icon from "./Icon";
 import type { Preferences } from "./types";
 import {
@@ -32,6 +34,7 @@ import Links from "./Links";
 import { useOutline, type OutlineHandle } from "./lib/outline";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
+import TakeStrip from "./TakeStrip";
 import Target from "./Target";
 import Toolbar from "./Toolbar";
 import Typewriter from "./Typewriter";
@@ -136,7 +139,11 @@ type Props = {
 	target: number | null;
 	/** A hit clicked in search, which opens Find on that word. */
 	seed: Seed | null;
+	takes: TakeView[];
+	merging: boolean;
 	preferences: Preferences;
+	onChooseTake: (take: string) => Promise<void>;
+	onTry: () => Promise<void>;
 	onChange: (text: string) => void;
 	/** How many words a change added, or took away when it is negative. */
 	onWrote: (delta: number) => void;
@@ -158,7 +165,11 @@ export default function Editor({
 	error,
 	target,
 	seed,
+	takes,
+	merging,
 	preferences,
+	onChooseTake,
+	onTry,
 	onChange,
 	onWrote,
 	onFields,
@@ -184,7 +195,14 @@ export default function Editor({
 			}),
 		[preferences, showing, onPreferences],
 	);
-	const note = error ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
+	// A take refused goes in the status line, which has room whatever it says.
+	const [refused, setRefused] = useState<string | null>(null);
+	const attempt = (task: () => Promise<void>) => {
+		setRefused(null);
+		task().catch((failed: unknown) => setRefused(failure(failed).message));
+	};
+	const wrong = error ?? refused;
+	const note = wrong ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
 	// Counted from the markdown the editor would save, less the front matter,
 	// which is exactly what the Rust side counts when it summarises the file.
 	// The three numbers are taken from one draft together, so they cannot
@@ -365,6 +383,14 @@ export default function Editor({
 			</div>
 			<LexicalComposer initialConfig={config}>
 				{preferences.toolbar && <Toolbar />}
+				{takes.length > 0 && !preferences.focus && (
+					<TakeStrip
+						takes={takes}
+						merging={merging}
+						onChoose={(take) => attempt(() => onChooseTake(take))}
+						onTry={() => attempt(onTry)}
+					/>
+				)}
 				<div className="editor__surface">
 					<RichTextPlugin
 						contentEditable={
@@ -433,7 +459,7 @@ export default function Editor({
 				</p>
 				<p
 					className={
-						error === null && !missing
+						wrong === null && !missing
 							? "editor__status"
 							: "editor__status editor__status--error"
 					}

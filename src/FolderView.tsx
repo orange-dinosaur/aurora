@@ -21,6 +21,7 @@ import { when } from "./dates";
 import type { Spot } from "./reorder";
 import { useReorder } from "./reorder";
 import { failure } from "./errors";
+import { canTry } from "./takes";
 
 type Status =
 	{ kind: "busy" } | { kind: "idle" } | { kind: "error"; message: string };
@@ -50,7 +51,9 @@ type Props = {
 	folder: FolderRef;
 	// Changes when the project view has altered the manifest.
 	reload: number;
+	merging: boolean;
 	onSelect: (document: ProjectDocument) => void;
+	onTry: (document: ProjectDocument) => Promise<void>;
 	onOpenFolder: (folder: FolderRef) => void;
 	onCreated: (document: ProjectDocument) => void;
 	/** The renamed document, and the title it answered to before. */
@@ -70,7 +73,9 @@ export default function FolderView({
 	root,
 	folder,
 	reload,
+	merging,
 	onSelect,
+	onTry,
 	onOpenFolder,
 	onCreated,
 	onRenamed,
@@ -184,6 +189,14 @@ export default function FolderView({
 	async function remove(id: string, what: Making["what"]) {
 		try {
 			await (what === "folder" ? onDeleteFolder(id) : onDelete(id));
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
+		}
+	}
+
+	async function startTake(document: ProjectDocument) {
+		try {
+			await onTry(document);
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
@@ -410,6 +423,12 @@ export default function FolderView({
 								onDelete={() =>
 									void remove(document.id, "document")
 								}
+								onTry={
+									canTry(document.trail)
+										? () => void startTake(document)
+										: undefined
+								}
+								merging={merging}
 							/>
 						</li>
 					);

@@ -59,9 +59,11 @@ type Props = {
 	selectedFolder: string | null;
 	selectedTrash: boolean;
 	selectedBook: boolean;
+	merging: boolean;
 	onSelect: (document: ProjectDocument) => void;
 	/** Opens the page about a character or a place, for the rows that are one. */
 	onSubject: (document: ProjectDocument) => void;
+	onTry: (document: ProjectDocument) => Promise<void>;
 	onOpenFolder: (folder: FolderRef) => void;
 	onOpenTrash: () => void;
 	/** Opens the page about the book the project adds up to. */
@@ -99,8 +101,10 @@ export default function Sidebar({
 	selectedFolder,
 	selectedTrash,
 	selectedBook,
+	merging,
 	onSelect,
 	onSubject,
+	onTry,
 	onOpenFolder,
 	onOpenTrash,
 	onOpenBook,
@@ -223,6 +227,14 @@ export default function Sidebar({
 	async function remove(id: string, what: Making["what"]) {
 		try {
 			await (what === "folder" ? onDeleteFolder(id) : onDelete(id));
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
+		}
+	}
+
+	async function startTake(document: ProjectDocument) {
+		try {
+			await onTry(document);
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}
@@ -501,11 +513,17 @@ export default function Sidebar({
 														row.document.id,
 													)}
 													drag={draggable(row)}
+													merging={merging}
 													onOpen={() =>
 														onSelect(row.document)
 													}
 													onSubject={() =>
 														onSubject(row.document)
+													}
+													onTry={() =>
+														void startTake(
+															row.document,
+														)
 													}
 													onMove={(parentId, to) =>
 														void move(
