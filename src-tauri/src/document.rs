@@ -15,6 +15,7 @@ use crate::project::{
 	Error, MANUSCRIPT, Manifest, Result, adopt_matter, matter, read_manifest, validate_name,
 	write_atomic, write_manifest,
 };
+use crate::takes;
 use crate::tree::{self, Fields, FolderKind, Node};
 
 /// A document inside a project. The path is relative to the project root and
@@ -1342,7 +1343,8 @@ fn stamp(at: OffsetDateTime) -> String {
 /// at, with the moment of the deletion in front of its own name. That is the
 /// whole record of where it came from: nothing is written down beside it, and a
 /// writer looking in `.trash` sees the shape they deleted from. A folder goes
-/// in as one directory, so what was inside it stays inside it.
+/// in as one directory, so what was inside it stays inside it. Takes go along,
+/// to the same path under `.trash/.takes`.
 ///
 /// The name keeps its stamp so that deleting two things called the same thing
 /// does not lose the first.
@@ -1379,18 +1381,19 @@ fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
 	}
 
 	let at = stamp(at);
-	let mut to = into.join(format!("{at} {name}"));
+	let mut stamped = format!("{at} {name}");
 	// Two deletions within the same second would otherwise write over each
 	// other.
 	let mut again = 1;
-	while to.exists() {
-		to = into.join(format!("{at}-{again} {name}"));
+	while into.join(&stamped).exists() {
+		stamped = format!("{at}-{again} {name}");
 		again += 1;
 	}
 
 	// The file moves first. If writing the manifest then fails, the next
 	// refresh drops the node anyway, since it is no longer in the section.
-	fs::rename(&from, &to)?;
+	fs::rename(&from, into.join(&stamped))?;
+	takes::into_trash(root, &manifest, &was, &format!("{inside}/{stamped}"))?;
 
 	tree::remove(&mut manifest.nodes, id);
 	write_manifest(root, &mut manifest)
@@ -1768,7 +1771,7 @@ pub fn restore_from_trash(root: PathBuf, path: String) -> Result<()> {
 	// adopts anything that appears in a section: at the end of the folder it
 	// landed in, and inside a restored folder in the order the disk lists it.
 	refresh(&root)?;
-	Ok(())
+	takes::out_of_trash(&root, &path, &back)
 }
 
 /// Throws one thing in the trash away for good, a folder with everything that
@@ -1786,7 +1789,7 @@ pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
 	} else {
 		fs::remove_file(file)?;
 	}
-	Ok(())
+	takes::purge(&root, &path)
 }
 
 /// What a folder holds, one card at a time, in the order the folder keeps

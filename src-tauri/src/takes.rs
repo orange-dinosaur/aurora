@@ -9,10 +9,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::document::{body, resolve, with_body};
+use crate::document::{TRASH_DIR, body, resolve, with_body};
 use crate::project::{
 	Error, MANUSCRIPT, Manifest, NameError, Result, read_manifest, write_atomic, write_manifest,
 };
@@ -20,6 +20,16 @@ use crate::tree::{self, Node, Take};
 use crate::versions::{self, merge_underway};
 
 pub const TAKES_DIR: &str = ".takes";
+
+/// The file beside a trashed document's takes. The manifest has let go of them
+/// by then, so this is what still knows their names and which was chosen.
+const DETAILS: &str = "takes.json";
+
+#[derive(Serialize, Deserialize)]
+struct Details {
+	takes: BTreeMap<Uuid, Take>,
+	chosen: Option<Uuid>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
@@ -37,10 +47,16 @@ pub struct TakeView {
 fn folder(root: &Path, id: Uuid) -> Result<PathBuf> {
 	let folder = root.join(TAKES_DIR).join(id.to_string());
 	fs::create_dir_all(&folder)?;
-	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
-		return Err(Error::OutsideProject);
-	}
+	within(root, &folder)?;
 	Ok(folder)
+}
+
+fn within(root: &Path, path: &Path) -> Result<()> {
+	if path.canonicalize()?.starts_with(root.canonicalize()?) {
+		Ok(())
+	} else {
+		Err(Error::OutsideProject)
+	}
 }
 
 fn file(root: &Path, id: Uuid, take: Uuid) -> Result<PathBuf> {
@@ -156,6 +172,95 @@ pub(crate) fn restore(
 	}
 	if files.is_empty() {
 		fs::remove_dir(folder)?;
+	}
+	Ok(())
+}
+
+/// Where the takes of something in the trash wait: at the path it has there, so
+/// a folder's take folders sit as its documents do inside it.
+fn waiting(root: &Path, at: &str) -> PathBuf {
+	root.join(TRASH_DIR).join(TAKES_DIR).join(at)
+}
+
+/// What follows `top` in a path at or below it, which is nothing for `top`.
+fn below<'a>(path: &'a str, top: &str) -> Option<&'a str> {
+	let rest = path.strip_prefix(top)?;
+	(rest.is_empty() || rest.starts_with('/')).then_some(rest)
+}
+
+/// Moves the takes of everything at or below `was` to wait beside the trash
+/// entry at `at`, with their details, while the manifest still has them.
+pub(crate) fn into_trash(root: &Path, manifest: &Manifest, was: &str, at: &str) -> Result<()> {
+	for document in manifest.documents() {
+		let Some(rest) = below(&document.path, was) else {
+			continue;
+		};
+		let (takes, chosen) = takes_of(manifest, document.id)?;
+		if takes.is_empty() {
+			continue;
+		}
+
+		let takes = takes.clone();
+		let details = serde_json::to_vec(&Details { takes, chosen })?;
+		let from = folder(root, document.id)?;
+		write_atomic(&from.join(DETAILS), &details)?;
+
+		let to = waiting(root, &format!("{at}{rest}"));
+		let above = to.parent().ok_or(Error::BadDocumentPath)?;
+		fs::create_dir_all(above)?;
+		within(root, above)?;
+		fs::rename(from, to)?;
+	}
+	Ok(())
+}
+
+/// Gives what came back from `at` to `back` its takes again. The documents have
+/// new ids by now, so the takes are found by path. The manifest only learns of
+/// them once every file has landed, and the details stay until it has.
+pub(crate) fn out_of_trash(root: &Path, at: &str, back: &str) -> Result<()> {
+	let entry = waiting(root, at);
+	if !entry.exists() {
+		return Ok(());
+	}
+	within(root, &entry)?;
+	let takes_dir = root.join(TAKES_DIR);
+	fs::create_dir_all(&takes_dir)?;
+	within(root, &takes_dir)?;
+
+	let mut manifest = read_manifest(root)?;
+	let mut landed = Vec::new();
+	for document in manifest.documents() {
+		let Some(rest) = below(&document.path, back) else {
+			continue;
+		};
+		let from = waiting(root, &format!("{at}{rest}"));
+		if !from.exists() {
+			continue;
+		}
+
+		let details: Details = serde_json::from_slice(&fs::read(from.join(DETAILS))?)?;
+		let to = takes_dir.join(document.id.to_string());
+		fs::rename(from, &to)?;
+		landed.push(to.join(DETAILS));
+
+		let (takes, chosen) = takes_mut(&mut manifest, document.id)?;
+		*takes = details.takes;
+		*chosen = details.chosen;
+	}
+	write_manifest(root, &mut manifest)?;
+
+	for details in landed {
+		fs::remove_file(details)?;
+	}
+	Ok(())
+}
+
+/// Throws away the takes waiting beside a trash entry.
+pub(crate) fn purge(root: &Path, at: &str) -> Result<()> {
+	let entry = waiting(root, at);
+	if entry.exists() {
+		within(root, &entry)?;
+		fs::remove_dir_all(entry)?;
 	}
 	Ok(())
 }
@@ -338,8 +443,13 @@ pub fn delete_take(root: PathBuf, id: Uuid, take: Uuid) -> Result<Vec<TakeView>>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::document::{read_document, refresh, write_document};
+	use crate::document::{
+		TrashEntry, create_document, create_folder, delete_document, delete_folder, list_trash,
+		move_node, purge_trash_entry, read_document, refresh, rename_document, restore_from_trash,
+		write_document,
+	};
 	use crate::project::{Format, create};
+	use crate::tree::FolderKind;
 	use crate::versions::ensure_repository;
 	use git2::{Repository, Signature};
 	use time::OffsetDateTime;
@@ -763,5 +873,210 @@ mod tests {
 			assert!(!json.contains("takes"));
 			assert!(!json.contains("chosen"));
 		}
+	}
+
+	fn section(root: &Path, name: &str) -> Uuid {
+		let manifest = read_manifest(root).unwrap();
+		manifest
+			.nodes
+			.iter()
+			.find(|node| node.name() == name)
+			.unwrap()
+			.id()
+	}
+
+	fn at(root: &Path, path: &str) -> Uuid {
+		read_manifest(root)
+			.unwrap()
+			.documents()
+			.into_iter()
+			.find(|document| document.path == path)
+			.unwrap()
+			.id
+	}
+
+	fn path_of(root: &Path, id: Uuid) -> String {
+		tree::path(&read_manifest(root).unwrap().nodes, id).unwrap()
+	}
+
+	fn only_entry(root: &Path) -> TrashEntry {
+		let mut listed = list_trash(root.to_owned()).unwrap();
+		assert_eq!(listed.len(), 1);
+		listed.remove(0)
+	}
+
+	/// A part holding a scene, and a chapter with one scene that has takes and
+	/// one that has none.
+	fn part(root: &Path) -> (Uuid, Uuid, Uuid) {
+		let make = |parent, name: &str, kind| {
+			create_folder(root.to_owned(), parent, name.to_owned(), Some(kind))
+				.unwrap()
+				.id()
+		};
+		let scene = |parent, name: &str| {
+			let id = create_document(root.to_owned(), parent, name.to_owned())
+				.unwrap()
+				.id;
+			write_document(root.to_owned(), id, format!("{FRONT}{name}\n")).unwrap();
+			id
+		};
+		let part = make(section(root, MANUSCRIPT), "Part", FolderKind::Part);
+		let chapter = make(part, "Chapter", FolderKind::Chapter);
+		let loose = scene(part, "Loose");
+		let deep = scene(chapter, "Deep");
+		scene(chapter, "Plain");
+		try_something(root.to_owned(), loose).unwrap();
+		try_something(root.to_owned(), deep).unwrap();
+		(part, loose, deep)
+	}
+
+	#[test]
+	fn a_deleted_document_gets_its_takes_back_under_its_new_id() {
+		let (_dir, root) = project();
+		let (id, takes) = three(&root);
+		let path = path_of(&root, id);
+
+		delete_document(root.clone(), id).unwrap();
+
+		assert!(!root.join(TAKES_DIR).join(id.to_string()).exists());
+		let entry = only_entry(&root);
+		assert!(waiting(&root, &entry.path).join(DETAILS).exists());
+
+		restore_from_trash(root.clone(), entry.path.clone()).unwrap();
+
+		let back = at(&root, &path);
+		assert_ne!(back, id);
+		assert_eq!(list_takes(root.clone(), back).unwrap(), takes);
+		assert_eq!(
+			read_document(root.clone(), back).unwrap(),
+			format!("{FRONT}Three\n")
+		);
+		let folder = root.join(TAKES_DIR).join(back.to_string());
+		assert!(!folder.join(DETAILS).exists());
+		assert!(!waiting(&root, &entry.path).exists());
+		assert!(list_trash(root.clone()).unwrap().is_empty());
+
+		choose_take(root.clone(), back, takes[0].id).unwrap();
+		assert_eq!(
+			read_document(root, back).unwrap(),
+			format!("{FRONT}One\n"),
+			"a waiting take's file came back too"
+		);
+	}
+
+	#[test]
+	fn a_deleted_folder_gets_the_takes_of_everything_inside_back() {
+		let (_dir, root) = project();
+		let (part, loose, deep) = part(&root);
+		let loose_takes = list_takes(root.clone(), loose).unwrap();
+		let deep_takes = list_takes(root.clone(), deep).unwrap();
+
+		delete_folder(root.clone(), part).unwrap();
+
+		let entry = only_entry(&root);
+		assert_eq!(entry.inside, Some(3));
+		let chapter = format!("{}/Chapter", entry.path);
+		assert!(waiting(&root, &format!("{}/Loose.md", entry.path)).exists());
+		assert!(waiting(&root, &format!("{chapter}/Deep.md")).exists());
+		assert!(!waiting(&root, &format!("{chapter}/Plain.md")).exists());
+
+		restore_from_trash(root.clone(), entry.path).unwrap();
+
+		let back = |path: &str| list_takes(root.clone(), at(&root, path)).unwrap();
+		assert_eq!(back("Manuscript/Part/Loose.md"), loose_takes);
+		assert_eq!(back("Manuscript/Part/Chapter/Deep.md"), deep_takes);
+		assert!(back("Manuscript/Part/Chapter/Plain.md").is_empty());
+	}
+
+	#[test]
+	fn purging_a_document_or_a_folder_removes_its_takes() {
+		let (_dir, root) = project();
+		let (id, _) = three(&root);
+		let (part, ..) = part(&root);
+
+		delete_document(root.clone(), id).unwrap();
+		delete_folder(root.clone(), part).unwrap();
+		for entry in list_trash(root.clone()).unwrap() {
+			purge_trash_entry(root.clone(), entry.path.clone()).unwrap();
+			assert!(!waiting(&root, &entry.path).exists());
+		}
+
+		assert!(list_trash(root).unwrap().is_empty());
+	}
+
+	#[test]
+	fn two_documents_of_one_name_keep_their_own_takes() {
+		let (_dir, root) = project();
+		let manuscript = section(&root, MANUSCRIPT);
+		for name in ["North", "South"] {
+			let id = create_document(root.clone(), manuscript, "Twin".to_owned())
+				.unwrap()
+				.id;
+			let takes = try_something(root.clone(), id).unwrap();
+			rename_take(root.clone(), id, takes[1].id, name.to_owned()).unwrap();
+			delete_document(root.clone(), id).unwrap();
+		}
+
+		let mut found = Vec::new();
+		for (number, entry) in list_trash(root.clone()).unwrap().into_iter().enumerate() {
+			restore_from_trash(root.clone(), entry.path).unwrap();
+			let back = at(&root, "Manuscript/Twin.md");
+			found.push(list_takes(root.clone(), back).unwrap()[1].name.clone());
+			rename_document(root.clone(), back, format!("Twin {number}")).unwrap();
+		}
+
+		found.sort();
+		assert_eq!(found, ["North", "South"]);
+	}
+
+	#[test]
+	fn a_document_with_no_takes_leaves_nothing_beside_it() {
+		let (_dir, root) = project();
+		let id = scene(&root);
+		let path = path_of(&root, id);
+
+		delete_document(root.clone(), id).unwrap();
+		restore_from_trash(root.clone(), only_entry(&root).path).unwrap();
+
+		let back = at(&root, &path);
+		assert_eq!(read_document(root.clone(), back).unwrap(), SCENE);
+		assert!(list_takes(root.clone(), back).unwrap().is_empty());
+
+		delete_document(root.clone(), back).unwrap();
+		purge_trash_entry(root.clone(), only_entry(&root).path).unwrap();
+
+		assert!(!root.join(TRASH_DIR).join(TAKES_DIR).exists());
+		assert!(!root.join(TAKES_DIR).exists());
+		let json = fs::read_to_string(root.join("aurora.json")).unwrap();
+		assert!(!json.contains("takes"));
+	}
+
+	#[test]
+	fn a_document_outside_the_manuscript_still_gets_its_takes_back() {
+		let (_dir, root) = project();
+		let (id, takes) = three(&root);
+		move_node(root.clone(), id, section(&root, "Notes"), 0).unwrap();
+		let path = path_of(&root, id);
+
+		delete_document(root.clone(), id).unwrap();
+		restore_from_trash(root.clone(), only_entry(&root).path).unwrap();
+
+		let back = at(&root, &path);
+		assert_eq!(list_takes(root.clone(), back).unwrap(), takes);
+		assert!(try_something(root, back).is_err());
+	}
+
+	#[test]
+	fn takes_whose_files_are_gone_do_not_stop_a_deletion() {
+		let (_dir, root) = project();
+		let (id, takes) = three(&root);
+		let path = path_of(&root, id);
+		fs::remove_dir_all(root.join(TAKES_DIR).join(id.to_string())).unwrap();
+
+		delete_document(root.clone(), id).unwrap();
+		restore_from_trash(root.clone(), only_entry(&root).path).unwrap();
+
+		let back = list_takes(root.clone(), at(&root, &path)).unwrap();
+		assert_eq!(names(&back), names(&takes));
 	}
 }

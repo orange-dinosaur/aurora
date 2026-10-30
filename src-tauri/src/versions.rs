@@ -3715,7 +3715,7 @@ mod tests {
 		try_something(root.clone(), seeded).unwrap();
 		let start = kept(&root);
 		delete_document(root.clone(), seeded).unwrap();
-		fs::remove_dir_all(takes_on_disk(&root, seeded)).unwrap();
+		assert!(!takes_on_disk(&root, seeded).exists());
 
 		put_back_document(root.clone(), start.clone(), seeded).unwrap();
 
