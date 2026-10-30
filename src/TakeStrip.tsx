@@ -16,8 +16,14 @@ type Props = {
 	words: number;
 	/** Set while a merge is under way, when takes cannot change. */
 	merging: boolean;
+	/** Whether the page is showing marks. */
+	marking: boolean;
+	/** The take they are against, or null when there is none to compare. */
+	compared: string | null;
 	onChoose: (take: string) => void;
 	onTry: () => void;
+	onMarks: () => void;
+	onCompare: (take: string) => void;
 	/** Rejects with what Rust made of the name, which the field shows. */
 	onRename: (take: string, name: string) => Promise<void>;
 	onDelete: (take: string) => void;
@@ -27,12 +33,18 @@ export default function TakeStrip({
 	takes,
 	words,
 	merging,
+	marking,
+	compared,
 	onChoose,
 	onTry,
+	onMarks,
+	onCompare,
 	onRename,
 	onDelete,
 }: Props) {
 	const [renaming, setRenaming] = useState<Renaming | null>(null);
+	const against = takes.find((take) => take.id === compared);
+	const chosen = takes.find((take) => take.chosen);
 
 	async function rename(take: string, name: string) {
 		setRenaming({ id: take, busy: true, error: null });
@@ -115,14 +127,55 @@ export default function TakeStrip({
 					),
 				)}
 			</ul>
-			<button
-				type="button"
-				className="takes__button takes__try"
-				disabled={merging}
-				onClick={onTry}
-			>
-				Try something
-			</button>
+			<div className="takes__actions">
+				{marking && (
+					<Menu
+						label="Take to compare with"
+						text={
+							against === undefined
+								? `No marks to show on ${chosen?.name}`
+								: `Compared with ${against.name}`
+						}
+						icon="chevron-down"
+						trailing
+						wrapper="takes__compare"
+						className="takes__button takes__picker"
+					>
+						{(close) =>
+							takes
+								.filter((take) => !take.chosen)
+								.map((take) => (
+									<MenuItem
+										key={take.id}
+										checked={take.id === compared}
+										onSelect={() => {
+											close();
+											onCompare(take.id);
+										}}
+									>
+										{take.name}
+									</MenuItem>
+								))
+						}
+					</Menu>
+				)}
+				<button
+					type="button"
+					className="takes__button"
+					aria-pressed={marking}
+					onClick={onMarks}
+				>
+					Show marks
+				</button>
+				<button
+					type="button"
+					className="takes__button"
+					disabled={merging}
+					onClick={onTry}
+				>
+					Try something
+				</button>
+			</div>
 		</div>
 	);
 }

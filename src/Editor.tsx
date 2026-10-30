@@ -34,6 +34,9 @@ import Links from "./Links";
 import { useOutline, type OutlineHandle } from "./lib/outline";
 import Shortcuts from "./Shortcuts";
 import SlashMenu from "./SlashMenu";
+import { split } from "./frontmatter";
+import { baseline } from "./lib/compare";
+import Marks from "./Marks";
 import TakeStrip from "./TakeStrip";
 import Target from "./Target";
 import Toolbar from "./Toolbar";
@@ -125,6 +128,9 @@ function tallied(counts: ReturnType<typeof counted>): string {
 	return ` · ${characters} · ${counts.tight.toLocaleString()} without spaces`;
 }
 
+/** A page of marks: the text as it stood and the take it is against. */
+type Marking = { take: string | null; live: string; prose: string };
+
 type Props = {
 	title: string;
 	/** The folders it sits in, from its section down, drawn above the title. */
@@ -146,6 +152,7 @@ type Props = {
 	onTry: () => Promise<void>;
 	onRenameTake: (take: string, name: string) => Promise<void>;
 	onDeleteTake: (take: string) => Promise<void>;
+	onTakeText: (take: string) => Promise<string>;
 	onChange: (text: string) => void;
 	/** How many words a change added, or took away when it is negative. */
 	onWrote: (delta: number) => void;
@@ -174,6 +181,7 @@ export default function Editor({
 	onTry,
 	onRenameTake,
 	onDeleteTake,
+	onTakeText,
 	onChange,
 	onWrote,
 	onFields,
@@ -207,6 +215,19 @@ export default function Editor({
 	};
 	const wrong = error ?? refused;
 	const note = wrong ?? (saving ? "Saving…" : dirty ? "Unsaved" : "Saved");
+	const latest = useRef(text);
+	const [marks, setMarks] = useState<Marking | null>(null);
+	const marking = marks !== null && !preferences.focus;
+	const compareWith = (take: string | null) =>
+		attempt(async () => {
+			const live = latest.current;
+			setMarks({
+				take,
+				live,
+				prose:
+					take === null ? split(live).body : await onTakeText(take),
+			});
+		});
 	// Counted from the markdown the editor would save, less the front matter,
 	// which is exactly what the Rust side counts when it summarises the file.
 	// The three numbers are taken from one draft together, so they cannot
@@ -246,6 +267,7 @@ export default function Editor({
 	const edited = useCallback(
 		(state: EditorState) => {
 			const markdown = state.read(() => $toMarkdown());
+			latest.current = markdown;
 			const next = counted(markdown);
 			setTally(next);
 			// Moving the caret is a change like any other here, and it has
@@ -386,19 +408,49 @@ export default function Editor({
 				</div>
 			</div>
 			<LexicalComposer initialConfig={config}>
-				{preferences.toolbar && <Toolbar />}
+				{/* Its buttons act on the text even with the surface hidden. */}
+				{preferences.toolbar && (
+					<div className="editor__tools" inert={marking}>
+						<Toolbar />
+					</div>
+				)}
 				{takes.length > 0 && !preferences.focus && (
 					<TakeStrip
 						takes={takes}
 						words={tally.words}
 						merging={merging}
-						onChoose={(take) => attempt(() => onChooseTake(take))}
-						onTry={() => attempt(onTry)}
+						marking={marking}
+						compared={marks?.take ?? null}
+						onChoose={(take) => {
+							setMarks(null);
+							attempt(() => onChooseTake(take));
+						}}
+						onTry={() => {
+							setMarks(null);
+							attempt(onTry);
+						}}
+						onMarks={() =>
+							marks === null
+								? compareWith(baseline(takes))
+								: setMarks(null)
+						}
+						onCompare={compareWith}
 						onRename={onRenameTake}
-						onDelete={(take) => attempt(() => onDeleteTake(take))}
+						onDelete={(take) => {
+							setMarks(null);
+							attempt(() => onDeleteTake(take));
+						}}
 					/>
 				)}
-				<div className="editor__surface">
+				{marking && (
+					<Marks
+						live={marks.live}
+						prose={marks.prose}
+						onClose={() => setMarks(null)}
+					/>
+				)}
+				{/* Hidden rather than unmounted, so the caret and undo survive. */}
+				<div className="editor__surface" hidden={marking}>
 					<RichTextPlugin
 						contentEditable={
 							<ContentEditable

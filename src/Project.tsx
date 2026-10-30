@@ -48,6 +48,7 @@ import {
 	deleteTake,
 	readTakes,
 	renameTake,
+	takeText,
 	trySomething,
 } from "./takes";
 import type { Seed } from "./lib/find";
@@ -1364,6 +1365,7 @@ export default function Project({
 					onDeleteTake={(take) =>
 						putBack(() => deleteTake(root, tab.document.id, take))
 					}
+					onTakeText={(take) => takeText(root, tab.document.id, take)}
 					onChange={(text) => edit(tab.document.id, text)}
 					onWrote={(delta) => record(tab.document.id, delta)}
 					onFields={setFields}

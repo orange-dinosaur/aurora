@@ -1,8 +1,107 @@
 import { describe, expect, it } from "vitest";
 import { differences } from "../differences";
-import { blocks, change, follow, tally } from "./compare";
+import type { TakeView } from "../bindings/TakeView";
+import { baseline, blocks, change, follow, marked, tally } from "./compare";
 
 const plain = { strong: false, em: false, difference: null };
+
+describe("marked", () => {
+	function page(live: string, prose: string) {
+		const { body, cut } = marked(live, prose);
+		return body.map((block) =>
+			block.kind === "break"
+				? "---"
+				: block.runs
+						.map(({ text, difference }) => {
+							if (difference === null) {
+								return text;
+							}
+							return cut.has(difference)
+								? `[-${text}-]`
+								: `[+${text}+]`;
+						})
+						.join(""),
+		);
+	}
+
+	it("sets cut words just before what replaced them", () => {
+		expect(page("The rain came down.", "The rain fell softly.")).toEqual([
+			"The rain [-fell softly-] [+came down+].",
+		]);
+	});
+
+	it("keeps words that were only cut or only added in their places", () => {
+		expect(page("One two.", "One big two.")).toEqual(["One [-big -]two."]);
+		expect(page("One big two.", "One two.")).toEqual(["One [+big +]two."]);
+	});
+
+	it("gives a cut paragraph its own block", () => {
+		expect(page("One.\n\nThree.", "One.\n\nTwo.\n\nThree.")).toEqual([
+			"One.",
+			"[-Two.-]",
+			"Three.",
+		]);
+	});
+
+	it("leaves the front matter out of it", () => {
+		const head = "---\nsynopsis: A\n---\n\n";
+		expect(page(`${head}Same words.`, "Same words.")).toEqual([
+			"Same words.",
+		]);
+	});
+
+	it("ignores space at either end of the prose", () => {
+		expect(page("Same words.\n", "\nSame words.")).toEqual(["Same words."]);
+	});
+
+	it("drops the markers of cut words, so they do not flip what follows", () => {
+		const { body } = marked("*One* two three", "*One two* three");
+		expect(
+			body.flatMap((block) =>
+				block.kind === "break"
+					? []
+					: block.runs.filter((run) => run.em).map((run) => run.text),
+			),
+		).toEqual(["One"]);
+	});
+});
+
+describe("baseline", () => {
+	function take(id: string, rest: Partial<TakeView> = {}): TakeView {
+		return {
+			id,
+			name: id,
+			from: null,
+			chosen: false,
+			words: 0,
+			...rest,
+		};
+	}
+
+	it("is the take the chosen one started from", () => {
+		expect(
+			baseline([
+				take("a"),
+				take("b"),
+				take("c", { from: "a", chosen: true }),
+			]),
+		).toBe("a");
+	});
+
+	it("is the take to the left once that one is gone", () => {
+		expect(
+			baseline([
+				take("a"),
+				take("b"),
+				take("c", { from: "gone", chosen: true }),
+			]),
+		).toBe("b");
+	});
+
+	it("is nothing on the first take with no start", () => {
+		expect(baseline([take("a", { chosen: true }), take("b")])).toBeNull();
+	});
+});
 
 describe("blocks", () => {
 	it("draws emphasis without its markers and washes a changed word", () => {

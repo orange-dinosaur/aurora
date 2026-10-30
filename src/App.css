@@ -5904,8 +5904,58 @@ button.compare__pick:focus-visible {
 	opacity: 0.55;
 }
 
-.takes__try {
+.takes__button[aria-pressed="true"] {
+	color: var(--accent);
+	background: var(--accent-wash);
+}
+
+.takes__actions {
 	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.menu.takes__compare {
+	position: relative;
+}
+
+.takes__picker {
+	display: flex;
+	align-items: center;
+	gap: 0.2rem;
+	white-space: nowrap;
+}
+
+.takes__picker svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* Stands in for the writing surface, which stays mounted under it. */
+.editor__surface[hidden] {
+	display: none;
+}
+
+.marks {
+	cursor: text;
+}
+
+.marks__cut {
+	text-decoration: line-through;
+	background: var(--removed-wash);
+}
+
+.marks__added {
+	background: var(--added-wash);
+}
+
+.editor__tools {
+	flex: none;
+}
+
+.editor__tools[inert] {
+	opacity: 0.55;
 }
 
 /* Faded rather than removed, so the names do not shift as the pointer moves

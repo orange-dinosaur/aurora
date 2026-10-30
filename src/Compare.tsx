@@ -19,14 +19,8 @@ import { differences, putBack } from "./differences";
 import { failure } from "./errors";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
-import {
-	type Block,
-	blocks,
-	change,
-	follow,
-	type Run,
-	tally,
-} from "./lib/compare";
+import { draw, Wash } from "./Blocks";
+import { type Block, blocks, change, follow, tally } from "./lib/compare";
 import {
 	byDay,
 	counts,
@@ -887,6 +881,11 @@ function Column({
 	onScroll: (event: UIEvent<HTMLDivElement>) => void;
 	children?: ReactNode;
 }) {
+	const look = (difference: number) =>
+		difference === current
+			? "compare__wash compare__wash--current"
+			: "compare__wash";
+
 	return (
 		<article className={`compare__column compare__column--${side}`}>
 			<header className="compare__head">
@@ -909,15 +908,13 @@ function Column({
 					)}
 					{fields.map((field) => (
 						<p key={field.index} className="compare__field">
-							<Wash difference={field.index} current={current}>
+							<Wash difference={field.index} look={look}>
 								{field.text}
 							</Wash>
 						</p>
 					))}
 					<div className="editor__text compare__text">
-						{body.map((block, index) =>
-							draw(block, index, current),
-						)}
+						{body.map((block, index) => draw(block, index, look))}
 					</div>
 				</div>
 				{children}
@@ -947,89 +944,4 @@ function marks(
 			});
 		});
 	return found;
-}
-
-function draw(block: Block, key: number, current: number | null): ReactNode {
-	switch (block.kind) {
-		case "break":
-			return <hr key={key} className="editor__rule" />;
-		case "heading": {
-			const Heading = `h${block.level}` as "h1";
-			return (
-				<Heading
-					key={key}
-					className={`editor__heading editor__heading--${block.level}`}
-				>
-					{block.runs.map((run, index) =>
-						drawRun(run, index, current),
-					)}
-				</Heading>
-			);
-		}
-		case "quote":
-			return (
-				<blockquote key={key} className="editor__quote">
-					{block.runs.map((run, index) =>
-						drawRun(run, index, current),
-					)}
-				</blockquote>
-			);
-		case "item":
-		case "paragraph":
-			return (
-				<p
-					key={key}
-					className={
-						block.kind === "item"
-							? "editor__paragraph compare__item"
-							: "editor__paragraph"
-					}
-				>
-					{block.runs.map((run, index) =>
-						drawRun(run, index, current),
-					)}
-				</p>
-			);
-	}
-}
-
-function drawRun(run: Run, key: number, current: number | null): ReactNode {
-	// An empty run stays empty, so its mark draws as a caret.
-	let drawn: ReactNode = run.text === "" ? null : run.text;
-	if (run.em && drawn !== null) {
-		drawn = <em>{drawn}</em>;
-	}
-	if (run.strong && drawn !== null) {
-		drawn = <strong>{drawn}</strong>;
-	}
-	return run.difference === null ? (
-		<span key={key}>{drawn}</span>
-	) : (
-		<Wash key={key} difference={run.difference} current={current}>
-			{drawn}
-		</Wash>
-	);
-}
-
-function Wash({
-	difference,
-	current,
-	children,
-}: {
-	difference: number;
-	current: number | null;
-	children: ReactNode;
-}) {
-	return (
-		<mark
-			className={
-				difference === current
-					? "compare__wash compare__wash--current"
-					: "compare__wash"
-			}
-			data-difference={difference}
-		>
-			{children}
-		</mark>
-	);
 }

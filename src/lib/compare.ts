@@ -2,7 +2,8 @@
 // editor would draw, each a list of runs that know their emphasis and which
 // difference, if any, washes them.
 
-import type { Difference, Span } from "../differences";
+import type { TakeView } from "../bindings/TakeView";
+import { type Difference, differences, type Span } from "../differences";
 import { split } from "../frontmatter";
 import { BREAK_LINE } from "../markdown";
 import { words } from "../words";
@@ -162,6 +163,63 @@ function runs(
 		pieces(last, range.to);
 	});
 	return found.filter((run) => run.text !== "" || run.difference !== null);
+}
+
+/**
+ * One page of a document's `live` text with the words `prose` had and it lost
+ * set in just before what replaced them. `cut` holds the differences that are
+ * those words, and every other difference is words put in. Space at either end
+ * of the prose is not a change, as a take's file keeps it differently.
+ */
+export function marked(
+	live: string,
+	prose: string,
+): { body: Block[]; cut: Set<number> } {
+	const { body } = split(live);
+	const head = live.slice(0, live.length - body.length);
+	const then = head + prose.trim();
+	const now = head + body.trim();
+	const spans: Span[] = [];
+	const cut = new Set<number>();
+	let page = "";
+	let at = 0;
+
+	function mark(words: string) {
+		spans.push({ from: page.length, to: page.length + words.length });
+		page += words;
+	}
+
+	for (const found of differences(then, now)) {
+		page += now.slice(at, found.now.from);
+		at = found.now.to;
+		// ponytail: cut words lose their emphasis, as a lone marker would flip
+		// the words after it. Pair the markers up if the plain cuts jar.
+		const gone = then
+			.slice(found.then.from, found.then.to)
+			.replace(MARKER, "");
+		const put = now.slice(found.now.from, found.now.to);
+		if (gone.trim() !== "") {
+			cut.add(spans.length);
+			mark(gone);
+			if (put !== "" && !/\s$/.test(gone)) {
+				page += " ";
+			}
+		}
+		if (put !== "") {
+			mark(put);
+		}
+	}
+	return { body: blocks(page + now.slice(at), spans), cut };
+}
+
+/** The take to measure the chosen one against: its start, or the one to its left. */
+export function baseline(takes: TakeView[]): string | null {
+	const at = takes.findIndex((take) => take.chosen);
+	if (at === -1) {
+		return null;
+	}
+	const start = takes.find((take) => take.id === takes[at].from);
+	return (start ?? takes[at - 1])?.id ?? null;
 }
 
 /** Whether a difference only puts words in, only takes them out, or swaps them. */

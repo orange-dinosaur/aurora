@@ -8,6 +8,14 @@ export function readTakes(root: string, id: string): Promise<TakeView[]> {
 	return invoke<TakeView[]>("list_takes", { root, id }).catch(() => []);
 }
 
+export function takeText(
+	root: string,
+	id: string,
+	take: string,
+): Promise<string> {
+	return invoke<string>("take_text", { root, id, take });
+}
+
 export function trySomething(root: string, id: string): Promise<TakeView[]> {
 	return invoke<TakeView[]>("try_something", { root, id });
 }
