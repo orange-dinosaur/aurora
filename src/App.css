@@ -1008,80 +1008,8 @@ body,
 	top: calc(100% + 4px);
 }
 
-/* The name is at the start of the row, so its menu opens to the right of it
-   rather than to the left. */
-.titlebar__menu--project .menu__items {
-	left: 0;
-	right: auto;
-	min-width: 14rem;
-}
-
 .titlebar__menu--account .menu__items {
 	min-width: 15.5rem;
-}
-
-/* The name keeps to one line while there is room for it. The path gives way
-   first, and only when it is gone does a long name wrap, so the buttons never
-   leave the row. The wrapper is a flex row so the button shrinks as an item;
-   a percentage max-width on it made WebKitGTK size the name as narrow as its
-   longest word, wrapping even a short name in an empty row. */
-.menu.titlebar__menu--project,
-.menu.titlebar__menu--version {
-	flex: 0 1 auto;
-	display: flex;
-	min-width: 0;
-}
-
-.titlebar__name {
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
-	min-width: 0;
-	min-height: 26px;
-	padding: 0 0.4rem;
-	overflow: hidden;
-	font: inherit;
-	font-size: 0.8125rem;
-	font-weight: 600;
-	letter-spacing: normal;
-	line-height: normal;
-	text-transform: none;
-	color: var(--text);
-	background: none;
-	border: 0;
-	border-radius: var(--radius-xs);
-	cursor: pointer;
-	text-align: left;
-}
-
-.titlebar__name:hover,
-.titlebar__name[aria-expanded="true"] {
-	background: var(--bg-hover);
-}
-
-.titlebar__name:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: -1px;
-}
-
-.titlebar__name svg {
-	flex: none;
-	color: var(--text-dim);
-}
-
-/* Quieter than the project's name. The path beside it gives way first, then
-   the name is cut short, so a narrow window keeps the right edge in view. */
-.titlebar__version {
-	font-weight: 400;
-	color: var(--text-dim);
-}
-
-.titlebar__version-name {
-	min-width: 0;
-	max-width: 14rem;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .titlebar__state {
@@ -1096,12 +1024,6 @@ body,
 	text-overflow: ellipsis;
 }
 
-.titlebar__menu--version .menu__items {
-	left: -0.4rem;
-	right: auto;
-	min-width: 12rem;
-}
-
 /* A fixed slot, so the names line up whichever one is ticked. */
 .menu__tick {
 	display: inline-flex;
@@ -1110,42 +1032,42 @@ body,
 	vertical-align: -3px;
 }
 
-.titlebar__ask {
+.version__ask {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
 	width: 17rem;
 }
 
-.titlebar__ask-text {
+.version__ask-text {
 	margin: 0;
 	white-space: normal;
 }
 
-.titlebar__ask-buttons {
+.version__ask-buttons {
 	display: flex;
 	justify-content: flex-end;
 	gap: 0.4rem;
 }
 
 /* Two classes, to outrank the sprint's button it borrows its shape from. */
-.titlebar__ask .titlebar__danger {
+.version__ask .version__danger {
 	color: var(--danger);
 }
 
 /* The rename and delete buttons sit over the end of a version's row and show
    on hover, the way a document row's actions do. */
-.titlebar__row {
+.version__row {
 	position: relative;
 	display: flex;
 	flex-direction: column;
 }
 
-.titlebar__row .menu__item {
+.version__row .menu__item {
 	padding-right: 3.5rem;
 }
 
-.titlebar__row-actions {
+.version__row-actions {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -1156,56 +1078,48 @@ body,
 	opacity: 0;
 }
 
-.titlebar__row:hover .titlebar__row-actions,
-.titlebar__row:focus-within .titlebar__row-actions {
+.version__row:hover .version__row-actions,
+.version__row:focus-within .version__row-actions {
 	opacity: 1;
 }
 
 /* A menu row's size rather than the sidebar's, with room kept beneath for
    what Rust says about the name, so a refusal does not cover the next row. */
-.titlebar__field {
+.version__field {
 	position: relative;
 	padding-bottom: 1.1rem;
 }
 
-.titlebar__field .namefield__message {
+.version__field .namefield__message {
 	left: 0.5rem;
 	right: 0.5rem;
 	bottom: 0.1rem;
 }
 
-.titlebar__menu--version .namefield__input {
+.binder__menu--version .namefield__input {
 	height: 24px;
 	padding: 0 0.5rem;
 	font-size: inherit;
 }
 
-.titlebar__note {
+.version__note {
 	max-width: 14rem;
 	margin: 0.2rem 0.5rem 0;
 	color: var(--text-dim);
 	white-space: normal;
 }
 
-/* Takes a share of the row beside the tabs and stays against the buttons on
-   its right, with or without them. */
-.titlebar__path {
-	flex: 1 1 0;
+/* Takes what the row has left, tabs or none, so the buttons after it stay put. */
+.titlebar__tabs {
+	flex: 1;
+	display: flex;
 	min-width: 0;
-	max-width: 12rem;
-	margin-left: auto;
-	font-size: 0.75rem;
-	color: var(--text-faint);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 /* The readout is the control, the way the word count is: no box of its own,
-   and fixed-width digits so a running clock cannot jog the row. It takes its
-   width out of the path beside it, which gives room back first, so nothing
-   else on the row moves when a session opens. WebKitGTK resets the three
-   properties below on a button and `font: inherit` restores none of them. */
+   and fixed-width digits so a running clock cannot jog the row. WebKitGTK
+   resets the three properties below on a button and `font: inherit` restores
+   none of them. */
 .titlebar__session {
 	flex: none;
 	font: inherit;
@@ -1884,21 +1798,6 @@ body,
 	color: var(--danger);
 }
 
-/* Always in the DOM and out of flow, so a failed refresh appears without
-   moving the row or the writing below it. */
-.titlebar__message {
-	position: absolute;
-	top: 100%;
-	left: 1rem;
-	right: 1rem;
-	z-index: 1;
-	margin: 0;
-	font-size: 0.75rem;
-	color: var(--danger);
-	background: var(--bg);
-	overflow-wrap: anywhere;
-}
-
 /* Only there to be hidden as one: its children stand on the project's grid. */
 .project__body {
 	display: contents;
@@ -2007,9 +1906,136 @@ body,
 	flex-direction: column;
 	width: 248px;
 	min-height: 0;
-	padding: 1rem 0.75rem;
 	background: var(--bg-chrome);
 	border-right: 1px solid var(--border);
+}
+
+.binder__head {
+	flex: none;
+	padding: var(--space-md) var(--space-sm) var(--space-sm);
+}
+
+/* Both menus sit in the flow here. Every other menu is raised from the end of
+   a row, which is what `.menu` sets further down, so this carries both classes
+   to outrank it. */
+.menu.binder__menu {
+	position: relative;
+}
+
+.binder__menu .menu__items {
+	top: calc(100% + var(--space-xxs));
+	left: 0;
+	right: auto;
+	min-width: 15rem;
+}
+
+.binder__book {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	width: 100%;
+	padding: var(--space-xxs);
+	color: var(--text);
+	text-align: left;
+	background: none;
+	border: 0;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.binder__book:hover,
+.binder__book[aria-expanded="true"] {
+	background: var(--bg-hover);
+}
+
+.binder__book:focus-visible,
+.binder__version:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+.binder__cover {
+	flex: none;
+	width: 38px;
+	height: 54px;
+	overflow: hidden;
+	border-radius: 2px 4px 4px 2px;
+	box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+}
+
+.binder__cover img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.binder__names {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.binder__title {
+	display: block;
+	font: 400 21px/1.1 var(--font-title);
+	letter-spacing: var(--tracking-heading);
+}
+
+.binder__author {
+	display: block;
+	margin-top: 2px;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+/* Under the menu's own width, so a long path does not stretch the menu. */
+.binder__path {
+	display: block;
+	max-width: 14rem;
+	font: var(--text-caption);
+	color: var(--text-dim);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.menu.binder__menu--version {
+	width: fit-content;
+	max-width: calc(100% - var(--space-xxs));
+	margin: var(--space-xs) 0 0 var(--space-xxs);
+}
+
+.binder__version {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	max-width: 100%;
+	padding: 2px var(--space-xs);
+	font: var(--text-caption);
+	color: var(--text);
+	background: var(--accent-wash);
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.binder__version:hover,
+.binder__version[aria-expanded="true"] {
+	color: var(--on-accent);
+	background: var(--accent);
+}
+
+.binder__version svg {
+	flex: none;
+	width: 12px;
+	height: 12px;
+}
+
+.binder__version-name {
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Out of the layout altogether rather than hidden in place: the point of the
@@ -3975,8 +4001,8 @@ button.compare__pick:focus-visible {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	/* Room for the message, which floats over the foot of the list. */
-	padding-bottom: 2rem;
+	/* The foot's is room for the message, which floats over the list's end. */
+	padding: var(--space-xs) var(--space-sm) 2rem;
 	/* The rows reach the full width of the column and each carries a menu at
 	   its right edge, so a scrollbar drawn over them would land on the one
 	   control they hold. The list scrolls by wheel and a row can always be
@@ -3988,17 +4014,13 @@ button.compare__pick:focus-visible {
 	display: none;
 }
 
-/* The two ways out of the writing, kept together below a rule so neither can
-   be taken for another section. */
+/* Below a rule, so Trash cannot be taken for another section. */
 .sidebar__foot {
 	flex: none;
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 0.5rem;
-	margin-top: 0.75rem;
-	padding-top: 0.75rem;
-	border-top: 1px solid var(--border);
+	padding: var(--space-xs) var(--space-sm);
+	border-top: var(--hairline);
 }
 
 .sidebar__leave {
@@ -4032,78 +4054,76 @@ button.compare__pick:focus-visible {
 	outline-offset: -2px;
 }
 
-/* A line of its own above the foot, for a place to go rather than a way out. */
-.sidebar__page {
-	flex: none;
-	width: 100%;
-	margin-top: 0.75rem;
-}
-
 /* Everything inside a section stands one column right of its header, so a part
    reads as something in the Manuscript rather than a sibling of it. The header
    keeps its own chevron at the sidebar's edge. Every row, every chevron and
    every drop-line inside a section is placed from here; the fallback is what
    the same rows use anywhere else. */
 .section {
-	--nest: 1.25rem;
+	--nest: 0.5rem;
 }
 
 .section + .section {
-	margin-top: 1.25rem;
+	margin-top: var(--space-xs);
 }
 
 .section__header {
 	display: flex;
 	align-items: center;
-	gap: 0.25rem;
-	margin-bottom: 0.25rem;
+	border-radius: var(--radius-xs);
 }
 
-/* The section's own chevron, in the slot the rows below keep for theirs. Laid
-   out in the header's flex row rather than over it, which is what the + at the
-   other end does; a row's chevron floats because the row itself is a button
-   and cannot hold one. */
+.section__header:hover {
+	background: var(--bg-hover);
+}
+
+/* Pulled back so the names stand where they would without it. Laid out in the
+   header's flex row, where a row's chevron floats because the row itself is a
+   button and cannot hold one. */
 .section__fold {
 	flex: none;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 1rem;
-	height: 1rem;
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 26px;
+	margin-left: -3px;
 	padding: 0;
-	color: var(--text-dim);
+	color: var(--text-faint);
 	background: none;
 	border: 0;
 	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
+.section__fold svg {
+	width: 13px;
+	height: 13px;
+}
+
+.section__fold[aria-expanded="false"] svg {
+	transform: rotate(-90deg);
+}
+
 .section__fold:hover {
 	color: var(--text);
 }
 
+/* Inset, because the list clips anything drawn past its edge. */
 .section__fold:focus-visible {
 	outline: 2px solid var(--accent-text);
-	outline-offset: 1px;
+	outline-offset: -2px;
 }
 
-/* An eyebrow rather than a heading: the sidebar is an index of the writing,
-   and its own labels should be the quietest thing in it. */
 .section__title {
+	flex: 1;
 	min-width: 0;
 	margin: 0;
-	font-size: 0.75rem;
-	font-weight: 600;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--text-dim);
+	font: var(--text-ui-strong);
+	color: var(--text);
 }
 
 .section__count {
 	flex: none;
-	/* Takes the slack, so the count sits by its section and the + stays at the
-	   far edge whatever the section is called. */
-	margin-right: auto;
 	font-size: 0.6875rem;
 	font-variant-numeric: tabular-nums;
 	color: var(--text-dim);
@@ -4116,13 +4136,17 @@ button.compare__pick:focus-visible {
 .section__header .menu {
 	position: relative;
 	flex: none;
+	opacity: 0;
 }
 
-/* Smaller than the ⋮ on a row. The header it sits in is an eyebrow, and a + at
-   full size beside it is the loudest thing in the sidebar. */
+.section__header:hover .menu,
+.section__header:focus-within .menu {
+	opacity: 1;
+}
+
 .section__header .menu__trigger {
-	width: 18px;
-	height: 18px;
+	width: 24px;
+	height: 24px;
 }
 
 .section__header .menu__trigger .icon {
@@ -4137,18 +4161,13 @@ button.compare__pick:focus-visible {
 	margin-bottom: 0.35rem;
 }
 
-/* Wraps rather than ellipsising: the eyebrow has no fixed height to keep, so a
-   long section name should be readable in full. */
+/* Wraps rather than ellipsising: a section has no fixed height to keep, so a
+   long name should be readable in full. */
 .section__open {
-	padding: 0.1rem 0.25rem;
-	margin-left: -0.25rem;
+	display: block;
+	width: 100%;
+	padding: 5px var(--space-xxs);
 	font: inherit;
-	/* Said again here rather than left to the heading above. WebKit's own
-	   stylesheet resets both of these on a control, and `font: inherit` does
-	   not put them back: neither is part of the shorthand. Without this the
-	   eyebrow draws as plain mixed case. */
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 	text-align: left;
 	color: inherit;
 	background: none;
@@ -4158,24 +4177,21 @@ button.compare__pick:focus-visible {
 	overflow-wrap: anywhere;
 }
 
-.section__open:hover {
-	color: var(--text);
-}
-
-/* Colour alone, no wash behind it. The eyebrow is the quietest label in the
-   sidebar, and filling it makes the quietest thing on the screen the loudest.
-   The rows below it keep their wash: they are the writing, not the chrome. */
+/* Colour alone, no wash behind it: the rows below keep the wash, because they
+   are the writing rather than the chrome. */
 .section__open[aria-current="page"] {
 	color: var(--accent-text);
 }
 
 .section__open:focus-visible {
 	outline: 2px solid var(--accent-text);
-	outline-offset: 1px;
+	outline-offset: -2px;
 }
 
+/* In line with the section's name, past its chevron. */
 .section__empty {
 	margin: 0;
+	padding: var(--space-xxs) 0 var(--space-xxs) 25px;
 	font-size: 0.85rem;
 	color: var(--text-dim);
 }
@@ -4396,17 +4412,17 @@ button.compare__pick:focus-visible {
 }
 
 .document[aria-current="page"] {
+	font-weight: 600;
 	color: var(--text);
 	background: var(--accent-wash);
 }
 
-/* Holds its width against a long project name, which gives way first. */
 .tabs-wrap {
-	flex: 3 1 0;
+	flex: 1;
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	min-width: 8rem;
+	min-width: 0;
 }
 
 .tabs {
@@ -6691,6 +6707,7 @@ button.compare__pick:focus-visible {
 	left: 0;
 	right: 0;
 	margin: 0;
+	padding: 0 var(--space-sm);
 	font-size: 0.8rem;
 	color: var(--danger);
 	background: var(--bg);

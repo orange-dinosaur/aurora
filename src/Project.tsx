@@ -325,6 +325,9 @@ export default function Project({
 	// bar and the Stats tab read it again.
 	const [logged, setLogged] = useState(0);
 
+	// Bumped when Book details has written the book, which the binder leads with.
+	const [bookWritten, setBookWritten] = useState(0);
+
 	// In a narrow window the sidebar floats over the writing until the next
 	// click, so it has its own open and the writer's lasting choice is left for
 	// the wider window. Watched rather than read once, so resizing across the
@@ -1449,7 +1452,6 @@ export default function Project({
 	return (
 		<section className="project">
 			<Titlebar
-				name={name}
 				root={root}
 				session={deliberate}
 				sessionClock={preferences.sessionClock}
@@ -1488,17 +1490,7 @@ export default function Project({
 				onSettings={onSettings}
 				onLogin={onLogin}
 				onProfile={onProfile}
-				onCloseProject={onClose}
-				onRefreshed={() => setListing((version) => version + 1)}
-				onCompare={(checkpoint, slug) =>
-					void writeAll().then(() =>
-						setComparing({ checkpoint, pick: null, slug }),
-					)
-				}
-				onBeforeSwitch={writeAll}
-				onSwitch={putBack}
 				merging={merge?.merging ?? null}
-				onMergeChanged={readMerge}
 			/>
 
 			{comparing !== null && (
@@ -1553,7 +1545,9 @@ export default function Project({
 						onPreferences({ ...preferences, sidebarWidth })
 					}
 					root={root}
+					name={name}
 					reload={listing}
+					bookWritten={bookWritten}
 					onWords={measured}
 					unsaved={tabs.flatMap((tab) =>
 						tab.kind === "document" && tab.save.kind !== "clean"
@@ -1567,8 +1561,15 @@ export default function Project({
 						active?.kind === "folder" ? active.folder.id : null
 					}
 					selectedTrash={active?.kind === "trash"}
-					selectedBook={active?.kind === "book"}
 					merging={merge !== null}
+					onCompare={(checkpoint, slug) =>
+						void writeAll().then(() =>
+							setComparing({ checkpoint, pick: null, slug }),
+						)
+					}
+					onBeforeSwitch={writeAll}
+					onSwitch={putBack}
+					onMergeChanged={readMerge}
 					onSelect={(document) => void openDocument(document)}
 					onSubject={openSubject}
 					onTry={startTake}
@@ -1669,6 +1670,9 @@ export default function Project({
 									key={active.key}
 									root={root}
 									changed={listing + written}
+									onWritten={() =>
+										setBookWritten((times) => times + 1)
+									}
 								/>
 							</div>
 						) : active.kind === "trash" ? (

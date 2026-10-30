@@ -18,6 +18,8 @@ type Props = {
 	root: string;
 	/** Goes up whenever a document or the manifest is written. */
 	changed: number;
+	/** The book reached the disk, so what shows it elsewhere can read it. */
+	onWritten: () => void;
 };
 
 /** How long the writer has to stop typing before the book is written. */
@@ -28,7 +30,7 @@ const AUTOSAVE_MS = 800;
  * record while it is being edited and sends the whole of it back, because that
  * is the shape `write_book` takes and there is only ever one of these open.
  */
-export default function BookView({ root, changed: moved }: Props) {
+export default function BookView({ root, changed: moved, onWritten }: Props) {
 	const [book, setBook] = useState<Book | null>(null);
 	const [shut, setShut] = useState<GroupKey[]>([]);
 	const [trouble, setTrouble] = useState("");
@@ -98,6 +100,7 @@ export default function BookView({ root, changed: moved }: Props) {
 				book: { ...next, contributors: kept(next.contributors) },
 			});
 			setTrouble("");
+			onWritten();
 		} catch (error) {
 			setTrouble(failure(error).message);
 		}

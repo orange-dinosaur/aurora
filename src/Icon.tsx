@@ -19,7 +19,6 @@ export type IconName =
 	| "refresh"
 	| "tag"
 	| "trash"
-	| "log-out"
 	| "user"
 	| "x"
 	| "sun"
@@ -129,13 +128,6 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
 			<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
 			<path d="M10 11v6M14 11v6" />
-		</>
-	),
-	"log-out": (
-		<>
-			<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-			<path d="m16 17 5-5-5-5" />
-			<path d="M21 12H9" />
 		</>
 	),
 	user: (

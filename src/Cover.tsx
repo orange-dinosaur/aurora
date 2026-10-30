@@ -11,21 +11,16 @@ type Props = {
 };
 
 /**
- * The book's cover. What the writer picks is copied into the project, so the
- * book names a file beside `aurora.json` rather than a path into their home
- * directory: the project folder carries its own cover wherever it goes, and
- * moving or deleting the original breaks nothing.
+ * The project's cover image as something an `img` can show. The bytes come back
+ * through a command and become an object URL. Pointing an `img` straight at the
+ * file would mean turning on the asset protocol with a path scope wide enough
+ * to reach wherever projects are kept.
  *
- * The bytes come back through a command and become an object URL. Pointing an
- * `img` straight at the file would mean turning on the asset protocol with a
- * path scope wide enough to reach wherever projects are kept.
+ * `stamp` reloads the image when the file was replaced under the same name.
  */
-export default function Cover({ root, cover, onChange }: Props) {
+export function useCoverImage(root: string, cover: string, stamp: number) {
 	const [src, setSrc] = useState("");
 	const [trouble, setTrouble] = useState("");
-	// Bumped when a cover is chosen, so that replacing a PNG with another PNG
-	// reloads the image even though the name it is filed under has not changed.
-	const [stamp, setStamp] = useState(0);
 
 	useEffect(() => {
 		if (cover === "") {
@@ -60,6 +55,23 @@ export default function Cover({ root, cover, onChange }: Props) {
 		};
 	}, [root, cover, stamp]);
 
+	return { src, trouble };
+}
+
+/**
+ * The book's cover. What the writer picks is copied into the project, so the
+ * book names a file beside `aurora.json` rather than a path into their home
+ * directory: the project folder carries its own cover wherever it goes, and
+ * moving or deleting the original breaks nothing.
+ */
+export default function Cover({ root, cover, onChange }: Props) {
+	// Bumped when a cover is chosen, so that replacing a PNG with another PNG
+	// reloads the image even though the name it is filed under has not changed.
+	const [stamp, setStamp] = useState(0);
+	const { src, trouble: unread } = useCoverImage(root, cover, stamp);
+	const [refused, setRefused] = useState("");
+	const trouble = refused === "" ? unread : refused;
+
 	async function choose() {
 		const picked = await open({
 			multiple: false,
@@ -77,20 +89,20 @@ export default function Cover({ root, cover, onChange }: Props) {
 				source: picked,
 			});
 			setStamp((n) => n + 1);
-			setTrouble("");
+			setRefused("");
 			onChange(name);
 		} catch (error) {
-			setTrouble(failure(error).message);
+			setRefused(failure(error).message);
 		}
 	}
 
 	async function remove() {
 		try {
 			await invoke("clear_cover", { root });
-			setTrouble("");
+			setRefused("");
 			onChange("");
 		} catch (error) {
-			setTrouble(failure(error).message);
+			setRefused(failure(error).message);
 		}
 	}
 
