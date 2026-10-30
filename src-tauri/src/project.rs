@@ -407,6 +407,8 @@ pub enum Error {
 	ChangesPending,
 	AlreadyMerged,
 	ConflictsRemain,
+	MergeUnderway,
+	NotInManuscript,
 	UnsupportedFormat(Format),
 	Trash(trash::Error),
 	Git(git2::Error),
@@ -481,6 +483,10 @@ impl fmt::Display for Error {
 			Error::ConflictsRemain => {
 				write!(f, "settle every conflict before adding the checkpoint")
 			}
+			Error::MergeUnderway => write!(f, "finish the merge first"),
+			Error::NotInManuscript => {
+				write!(f, "only a document in the Manuscript can start a take")
+			}
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
@@ -525,6 +531,8 @@ impl Error {
 			Error::ChangesPending => "changesPending",
 			Error::AlreadyMerged => "alreadyMerged",
 			Error::ConflictsRemain => "conflictsRemain",
+			Error::MergeUnderway => "mergeUnderway",
+			Error::NotInManuscript => "notInManuscript",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",
@@ -576,6 +584,8 @@ impl std::error::Error for Error {
 			| Error::AlreadyMerged
 			| Error::ConflictsRemain
 			| Error::ChangesPending
+			| Error::MergeUnderway
+			| Error::NotInManuscript
 			| Error::UnsupportedFormat(_) => None,
 			Error::Trash(e) => Some(e),
 			Error::Git(e) => Some(e),

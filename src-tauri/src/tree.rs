@@ -57,6 +57,20 @@ impl FolderKind {
 	}
 }
 
+/// One way of writing a document. Its text is in
+/// `.takes/<document id>/<take id>.md`, except for the chosen take, whose text
+/// is the document's own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Take {
+	pub name: String,
+	/// Where it sits among the document's takes, and what its first name
+	/// counted. A merge can bring two with one number.
+	pub number: u32,
+	/// The take it began as a copy of.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub from: Option<Uuid>,
+}
+
 /// One entry in a project's tree.
 ///
 /// Folders and documents share a single ordered list at each level rather than
@@ -94,6 +108,15 @@ pub enum Node {
 		/// How many words the writer is aiming at, if they have said.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		target: Option<u32>,
+		// ponytail: the manifest version stays put, so an older build drops
+		// these two on its next save. Bumping it would leave a change no row
+		// shows on every project whose Book page is opened.
+		/// The document's takes, by id. One with none writes no key at all.
+		#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+		takes: BTreeMap<Uuid, Take>,
+		/// The take the document's own file holds.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		chosen: Option<Uuid>,
 	},
 }
 
@@ -139,6 +162,8 @@ impl Node {
 			id: Uuid::new_v4(),
 			name: name.to_owned(),
 			target: None,
+			takes: BTreeMap::new(),
+			chosen: None,
 		}
 	}
 
@@ -208,6 +233,8 @@ pub fn tree_from_flat(folders: &[String], documents: &[Document]) -> Vec<Node> {
 			id: document.id,
 			name: file.to_owned(),
 			target: document.target,
+			takes: BTreeMap::new(),
+			chosen: None,
 		});
 	}
 
@@ -313,7 +340,9 @@ pub fn documents(nodes: &[Node]) -> Vec<Document> {
 fn gather(nodes: &[Node], prefix: &str, documents: &mut Vec<Document>) {
 	for node in nodes {
 		match node {
-			Node::Document { id, name, target } => documents.push(Document {
+			Node::Document {
+				id, name, target, ..
+			} => documents.push(Document {
 				id: *id,
 				path: format!("{prefix}{name}"),
 				target: *target,
@@ -509,6 +538,8 @@ mod tests {
 					id: Uuid::new_v4(),
 					name: "Chapter 1.md".to_owned(),
 					target: None,
+					takes: BTreeMap::new(),
+					chosen: None,
 				}],
 			}],
 		}];
@@ -544,6 +575,8 @@ mod tests {
 			id: Uuid::new_v4(),
 			name: name.to_owned(),
 			target: None,
+			takes: BTreeMap::new(),
+			chosen: None,
 		}
 	}
 

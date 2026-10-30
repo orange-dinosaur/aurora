@@ -7,6 +7,7 @@ pub mod history;
 pub mod merge;
 pub mod project;
 pub mod store;
+pub mod takes;
 pub mod text;
 pub mod tree;
 pub mod versions;
@@ -202,6 +203,9 @@ pub fn run() {
 			versions::put_back_document,
 			versions::put_back_book,
 			versions::put_back_everything,
+			takes::list_takes,
+			takes::take_text,
+			takes::try_something,
 			store::read_preferences,
 			store::write_preferences,
 			store::read_expanded,

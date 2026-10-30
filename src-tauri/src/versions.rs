@@ -1401,6 +1401,11 @@ fn merge_head(repo: &Repository) -> Result<Option<Commit<'_>>> {
 	}
 }
 
+/// Whether a merge is waiting to be settled.
+pub(crate) fn merge_underway(root: &Path) -> Result<bool> {
+	Ok(merge_head(&Repository::open(root)?)?.is_some())
+}
+
 /// The checkpoint both versions grew from, or none for histories that never
 /// met.
 fn merge_base<'r>(

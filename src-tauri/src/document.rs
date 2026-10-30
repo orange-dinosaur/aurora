@@ -359,7 +359,9 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 					in_book: folder_in_book(fields),
 				});
 			}
-			Node::Document { id, name, target } => {
+			Node::Document {
+				id, name, target, ..
+			} => {
 				let document = Document {
 					id: *id,
 					path: format!("{prefix}{name}"),
@@ -453,11 +455,7 @@ fn read_level(dir: &Path) -> Result<Option<Vec<Node>>> {
 				children: read_level(&entry.path())?.unwrap_or_default(),
 			});
 		} else if entry_type.is_file() && is_markdown(name) {
-			found.push(Node::Document {
-				id: Uuid::new_v4(),
-				name: name.to_owned(),
-				target: None,
-			});
+			found.push(Node::document(name));
 		}
 	}
 
@@ -735,7 +733,7 @@ fn summarise(document: &Document, path: &Path) -> DocumentSummary {
 /// Turns a document id into a path on disk, refusing anything that does not
 /// end up inside the project. `aurora.json` is an ordinary file a writer can
 /// edit, so the path it records is not to be trusted.
-fn resolve(manifest: &Manifest, root: &Path, id: Uuid) -> Result<PathBuf> {
+pub(crate) fn resolve(manifest: &Manifest, root: &Path, id: Uuid) -> Result<PathBuf> {
 	let relative = match tree::find(&manifest.nodes, id) {
 		Some(Node::Document { .. }) => {
 			tree::path(&manifest.nodes, id).ok_or(Error::UnknownDocument)?
@@ -1818,7 +1816,9 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 				children: children.len(),
 				words: words_under(&counting_root, children, &format!("{prefix}/{name}/")),
 			},
-			Node::Document { id, name, target } => {
+			Node::Document {
+				id, name, target, ..
+			} => {
 				let document = Document {
 					id: *id,
 					path: format!("{prefix}/{name}"),
@@ -1894,7 +1894,9 @@ mod tests {
 		children
 			.iter()
 			.filter_map(|node| match node {
-				Node::Document { id, name, target } => Some(DocumentView::from(&Document {
+				Node::Document {
+					id, name, target, ..
+				} => Some(DocumentView::from(&Document {
 					id: *id,
 					path: format!("{section}/{name}"),
 					target: *target,
@@ -2413,6 +2415,8 @@ mod tests {
 				id,
 				name: path.to_owned(),
 				target,
+				takes: Default::default(),
+				chosen: None,
 			},
 		);
 		write_manifest(root, &mut manifest).unwrap();
