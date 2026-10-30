@@ -409,6 +409,7 @@ pub enum Error {
 	ConflictsRemain,
 	MergeUnderway,
 	NotInManuscript,
+	TakeExists,
 	UnsupportedFormat(Format),
 	Trash(trash::Error),
 	Git(git2::Error),
@@ -487,6 +488,7 @@ impl fmt::Display for Error {
 			Error::NotInManuscript => {
 				write!(f, "only a document in the Manuscript can start a take")
 			}
+			Error::TakeExists => write!(f, "a take of that name is already there"),
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
@@ -533,6 +535,7 @@ impl Error {
 			Error::ConflictsRemain => "conflictsRemain",
 			Error::MergeUnderway => "mergeUnderway",
 			Error::NotInManuscript => "notInManuscript",
+			Error::TakeExists => "takeExists",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",
@@ -586,6 +589,7 @@ impl std::error::Error for Error {
 			| Error::ChangesPending
 			| Error::MergeUnderway
 			| Error::NotInManuscript
+			| Error::TakeExists
 			| Error::UnsupportedFormat(_) => None,
 			Error::Trash(e) => Some(e),
 			Error::Git(e) => Some(e),

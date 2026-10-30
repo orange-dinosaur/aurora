@@ -623,6 +623,18 @@ pub(crate) fn body(text: &str) -> &str {
 	split(text).1
 }
 
+/// A document with its prose replaced and its front matter block as it was. A
+/// block that closes at the very end of the file needs a newline to stay a block.
+pub(crate) fn with_body(text: &str, prose: &str) -> String {
+	let head = &text[..text.len() - body(text).len()];
+	let close = if head.is_empty() || head.ends_with('\n') {
+		""
+	} else {
+		"\n"
+	};
+	format!("{head}{close}{prose}")
+}
+
 /// The key a scene carries in its front matter, and a folder in its fields,
 /// when the writer has taken it out of the book. It is written only when it is
 /// `false`, so anything that says nothing is in: a project written before the
