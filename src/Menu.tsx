@@ -3,7 +3,7 @@
 // makes something new.
 
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -39,6 +39,44 @@ type Props = {
 	children: (close: () => void) => ReactNode;
 };
 
+/**
+ * Closes something open on a click outside `within`, or on Escape. It watches
+ * the document rather than the thing losing focus: this webview does not focus
+ * a button when it is clicked, so a blur handler would close it on mousedown
+ * and the click that followed would land on whatever it was covering.
+ */
+export function useDismissal(
+	open: boolean,
+	within: RefObject<HTMLElement | null>,
+	close: () => void,
+) {
+	useEffect(() => {
+		if (!open) {
+			return;
+		}
+
+		function away(event: MouseEvent) {
+			const at = event.target;
+			if (!(at instanceof Node) || !within.current?.contains(at)) {
+				close();
+			}
+		}
+
+		function escape(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				close();
+			}
+		}
+
+		document.addEventListener("mousedown", away);
+		document.addEventListener("keydown", escape);
+		return () => {
+			document.removeEventListener("mousedown", away);
+			document.removeEventListener("keydown", escape);
+		};
+	}, [open, within, close]);
+}
+
 export default function Menu({
 	label,
 	icon,
@@ -53,35 +91,7 @@ export default function Menu({
 	const menu = useRef<HTMLDivElement>(null);
 	const items = useRef<HTMLDivElement>(null);
 
-	// Dismissal is watched on the document rather than through the menu losing
-	// focus: this webview does not focus a button when it is clicked, so a
-	// blur handler would close the menu on mousedown and the click that
-	// followed would land on whatever the menu was covering.
-	useEffect(() => {
-		if (!open) {
-			return;
-		}
-
-		function away(event: MouseEvent) {
-			const at = event.target;
-			if (!(at instanceof Node) || !menu.current?.contains(at)) {
-				setOpen(false);
-			}
-		}
-
-		function escape(event: KeyboardEvent) {
-			if (event.key === "Escape") {
-				setOpen(false);
-			}
-		}
-
-		document.addEventListener("mousedown", away);
-		document.addEventListener("keydown", escape);
-		return () => {
-			document.removeEventListener("mousedown", away);
-			document.removeEventListener("keydown", escape);
-		};
-	}, [open]);
+	useDismissal(open, menu, () => setOpen(false));
 
 	useEffect(() => {
 		if (!open) {

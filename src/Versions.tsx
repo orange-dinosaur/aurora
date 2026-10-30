@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { failure } from "./errors";
 import { BINDER } from "./lib/merge";
+import PutBack from "./PutBack";
 import {
 	byDay,
 	detail,
@@ -212,6 +213,10 @@ export default function Versions({
 		);
 	}
 
+	const removes = (version: string, id: string) => () =>
+		invoke<string[]>("put_back_removes", { root, version, id });
+	const refuse = (reason: unknown) => setError(failure(reason).message);
+
 	// A null row moves every row at once.
 	function move(row: StatusRow | null, into: boolean) {
 		void run(async () => {
@@ -281,6 +286,13 @@ export default function Versions({
 						: { kind: "document", id },
 				),
 			);
+	}
+
+	function removesLine(line: Line) {
+		const id = line.change?.id;
+		return head === null || id === undefined
+			? undefined
+			: removes(head.id, id);
 	}
 
 	// Only an edited document has words to compare.
@@ -419,6 +431,8 @@ export default function Versions({
 						onMove={move}
 						onCompare={compareLine}
 						onPutBack={putBackLine}
+						onRemoves={removesLine}
+						onRefused={refuse}
 					/>
 					<Group
 						heading="Changes"
@@ -431,6 +445,8 @@ export default function Versions({
 						onMove={move}
 						onCompare={compareLine}
 						onPutBack={putBackLine}
+						onRemoves={removesLine}
+						onRefused={refuse}
 					/>
 					{status !== null &&
 						merging === null &&
@@ -473,6 +489,12 @@ export default function Versions({
 											? null
 											: () => putBack(checkpoint)
 									}
+									removes={
+										document === null
+											? undefined
+											: removes(checkpoint.id, document)
+									}
+									onRefused={refuse}
 								/>
 							))}
 						</ul>
@@ -495,6 +517,8 @@ function Group({
 	onMove,
 	onCompare,
 	onPutBack,
+	onRemoves,
+	onRefused,
 }: {
 	heading: string;
 	all: string;
@@ -507,6 +531,8 @@ function Group({
 	onMove: (row: StatusRow | null, into: boolean) => void;
 	onCompare: (line: Line) => (() => void) | null;
 	onPutBack: (line: Line) => (() => void) | null;
+	onRemoves: (line: Line) => (() => Promise<string[]>) | undefined;
+	onRefused: (reason: unknown) => void;
 }) {
 	if (lines.length + settle.length === 0) {
 		return null;
@@ -559,14 +585,15 @@ function Group({
 								</button>
 							)}
 							{putBack !== null && (
-								<button
-									type="button"
+								<PutBack
 									className="versions__action changes__back"
 									disabled={busy}
-									onClick={putBack}
+									removes={onRemoves(line)}
+									onPutBack={putBack}
+									onRefused={onRefused}
 								>
 									Put back
-								</button>
+								</PutBack>
 							)}
 							<button
 								type="button"
@@ -627,6 +654,8 @@ function Row({
 	onSelect,
 	onCompare,
 	onPutBack,
+	removes,
+	onRefused,
 }: {
 	checkpoint: Checkpoint;
 	selected: boolean;
@@ -634,6 +663,8 @@ function Row({
 	/** Null while there is no document to act on. */
 	onCompare: (() => void) | null;
 	onPutBack: (() => void) | null;
+	removes?: () => Promise<string[]>;
+	onRefused: (reason: unknown) => void;
 }) {
 	return (
 		<li
@@ -667,14 +698,14 @@ function Row({
 					>
 						Compare
 					</button>
-					<button
-						type="button"
+					<PutBack
 						className="versions__action"
-						disabled={onPutBack === null}
-						onClick={onPutBack ?? undefined}
+						removes={removes}
+						onPutBack={onPutBack}
+						onRefused={onRefused}
 					>
 						Put back
-					</button>
+					</PutBack>
 				</span>
 			)}
 		</li>

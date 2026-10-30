@@ -19,6 +19,7 @@ import { differences, putBack } from "./differences";
 import { failure } from "./errors";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
+import PutBack from "./PutBack";
 import { draw, Wash } from "./Blocks";
 import { type Block, blocks, change, follow, tally } from "./lib/compare";
 import {
@@ -408,6 +409,10 @@ export default function Compare({
 		}
 	}
 
+	const removes = (id: string) => () =>
+		invoke<string[]>("put_back_removes", { ...asked, id });
+	const refuse = (reason: unknown) => setRefused(failure(reason).message);
+
 	function backEverything() {
 		if (asked !== null) {
 			void back(() => invoke("put_back_everything", asked), {
@@ -557,12 +562,14 @@ export default function Compare({
 								<Change
 									what="Book details changed"
 									onPutBack={bookBack}
+									onRefused={refuse}
 								/>
 							)}
 							{changes.cover && (
 								<Change
 									what="Cover changed"
 									onPutBack={bookBack}
+									onRefused={refuse}
 								/>
 							)}
 							{changes.nodes.map((change) => (
@@ -583,12 +590,17 @@ export default function Compare({
 												? null
 												: () => backDocument(change.id)
 									}
+									removes={removes(change.id)}
+									onRefused={refuse}
 								/>
 							))}
 							{changes.nodes.length === 0 &&
 								!changes.book &&
 								!changes.cover && (
-									<Change what="Nothing has changed since this checkpoint" />
+									<Change
+										what="Nothing has changed since this checkpoint"
+										onRefused={refuse}
+									/>
 								)}
 						</ul>
 					)}
@@ -733,20 +745,23 @@ export default function Compare({
 						>
 							put this one back
 						</button>
-						<button
-							type="button"
+						<PutBack
 							className="compare__put"
 							disabled={asked === null}
-							onClick={
+							removes={
+								open === null ? undefined : removes(open.id)
+							}
+							onPutBack={
 								open === null
 									? backEverything
 									: () => backDocument(open.id)
 							}
+							onRefused={refuse}
 						>
 							{open === null
 								? "Put back everything"
 								: "Put back this document"}
-						</button>
+						</PutBack>
 						{/* A message takes the note's line, so it moves nothing. */}
 						<p
 							className={
@@ -812,12 +827,16 @@ function Change({
 	picked = null,
 	onPick,
 	onPutBack,
+	removes,
+	onRefused,
 }: {
 	name?: string;
 	what: string;
 	picked?: boolean | null;
 	onPick?: () => void;
 	onPutBack?: (() => void) | null;
+	removes?: () => Promise<string[]>;
+	onRefused: (reason: unknown) => void;
 }) {
 	const body = (
 		<>
@@ -842,14 +861,14 @@ function Change({
 				</button>
 			)}
 			{onPutBack !== undefined && (
-				<button
-					type="button"
+				<PutBack
 					className="compare__step compare__change-back"
-					disabled={onPutBack === null}
-					onClick={onPutBack ?? undefined}
+					removes={removes}
+					onPutBack={onPutBack}
+					onRefused={onRefused}
 				>
 					Put back
-				</button>
+				</PutBack>
 			)}
 		</li>
 	);

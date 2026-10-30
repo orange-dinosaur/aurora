@@ -2331,6 +2331,22 @@ body.dragging * {
 	cursor: default;
 }
 
+/* Out of flow, so asking moves nothing on the row it asks about. */
+.putback {
+	position: relative;
+	flex: none;
+}
+
+.putback .menu__items {
+	min-width: 12rem;
+}
+
+/* This button starts near the left of the panel, so the question hangs right. */
+.versions__actions .menu__items {
+	left: 0;
+	right: auto;
+}
+
 .versions > .versions__scope {
 	margin-top: 0;
 }
@@ -3338,8 +3354,17 @@ button.compare__pick:focus-visible {
 	cursor: default;
 }
 
-.compare__put {
+.compare__foot > .putback {
 	margin-left: auto;
+}
+
+/* The foot sits on the window's edge, so the question opens upward. */
+.compare__foot .menu__items {
+	top: auto;
+	bottom: 100%;
+}
+
+.compare__put {
 	padding: 0.25rem 0.75rem;
 	font: inherit;
 	color: var(--accent);
