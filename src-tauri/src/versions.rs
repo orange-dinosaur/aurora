@@ -85,7 +85,12 @@ pub fn ensure_repository(root: &Path) -> Result<Option<PathBuf>> {
 		Ok(repo) => repo,
 		Err(e) if e.code() == ErrorCode::NotFound => {
 			// Named here so the machine's `init.defaultBranch` has no say.
-			Repository::init_opts(root, RepositoryInitOptions::new().initial_head("main"))?
+			let repo =
+				Repository::init_opts(root, RepositoryInitOptions::new().initial_head("main"))?;
+			// Nor its `core.autocrlf`: Git for Windows usually turns that on, and
+			// every checkout would then rewrite the documents with CRLF.
+			repo.config()?.set_bool("core.autocrlf", false)?;
+			repo
 		}
 		Err(e) => return Err(e.into()),
 	};
@@ -1983,6 +1988,23 @@ mod tests {
 
 		assert_eq!(repo.head().unwrap().target(), Some(theirs));
 		assert_eq!(versions(&repo), 1);
+		assert_eq!(own_autocrlf(&repo), None);
+	}
+
+	/// The setting in the repository's own config, whatever the machine says.
+	fn own_autocrlf(repo: &Repository) -> Option<bool> {
+		let config = repo.config().unwrap();
+		let own = config.open_level(git2::ConfigLevel::Local).unwrap();
+		own.get_bool("core.autocrlf").ok()
+	}
+
+	#[test]
+	fn a_new_repository_keeps_line_endings_as_they_were_kept() {
+		let dir = project();
+		ensure_repository(dir.path()).unwrap();
+
+		let repo = Repository::open(dir.path()).unwrap();
+		assert_eq!(own_autocrlf(&repo), Some(false));
 	}
 
 	#[test]
