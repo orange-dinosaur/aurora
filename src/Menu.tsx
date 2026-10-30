@@ -49,6 +49,11 @@ export function useDismissal(
 	open: boolean,
 	within: RefObject<HTMLElement | null>,
 	close: () => void,
+	/**
+	 * The button that opens it, when that sits outside `within`. Its press
+	 * must not close what its click is about to toggle.
+	 */
+	trigger?: RefObject<HTMLElement | null>,
 ) {
 	useEffect(() => {
 		if (!open) {
@@ -57,7 +62,13 @@ export function useDismissal(
 
 		function away(event: MouseEvent) {
 			const at = event.target;
-			if (!(at instanceof Node) || !within.current?.contains(at)) {
+			if (
+				!(at instanceof Node) ||
+				!(
+					within.current?.contains(at) ||
+					trigger?.current?.contains(at)
+				)
+			) {
 				close();
 			}
 		}
@@ -74,7 +85,7 @@ export function useDismissal(
 			document.removeEventListener("mousedown", away);
 			document.removeEventListener("keydown", escape);
 		};
-	}, [open, within, close]);
+	}, [open, within, close, trigger]);
 }
 
 export default function Menu({

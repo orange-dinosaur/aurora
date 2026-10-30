@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { AccountChip } from "./Account";
@@ -9,9 +10,10 @@ import Session from "./Session";
 import { unmergedQuestion } from "./branches";
 import { failure } from "./errors";
 import { SEARCH, SESSION, shortcutLabel } from "./formatting";
-import type { Running } from "./sessions";
+import { dayTally } from "./lib/stats";
+import type { Running, Sessions } from "./sessions";
 import ThemeToggle from "./ThemeToggle";
-import type { Branch, Checkpoint, Merging, Theme } from "./types";
+import type { Branch, Checkpoint, Merging, PastSession, Theme } from "./types";
 
 type Props = {
 	name: string;
@@ -23,8 +25,16 @@ type Props = {
 	onStartSession: () => void;
 	onStopSession: () => void;
 	onTickSession: () => void;
+	/** The two layers as they stand, for today's words not on disk yet. */
+	sessions: Sessions;
+	/** What the whole project holds. */
+	words: number;
+	/** Bumped when a session has been written to the history file. */
+	logged: number;
 	sidebar: boolean;
 	onSidebar: (open: boolean) => void;
+	/** The sidebar's button, which a floating sidebar treats as part of itself. */
+	sidebarButton: RefObject<HTMLButtonElement | null>;
 	/**
 	 * Whether the right sidebar is showing, or null when what is open has
 	 * nothing to say about itself and the panel does not apply.
@@ -63,8 +73,12 @@ export default function Titlebar({
 	onStartSession,
 	onStopSession,
 	onTickSession,
+	sessions,
+	words,
+	logged,
 	sidebar,
 	onSidebar,
+	sidebarButton,
 	rightSidebar,
 	onRightSidebar,
 	onSearch,
@@ -170,6 +184,17 @@ export default function Titlebar({
 
 	return (
 		<header className="titlebar">
+			<button
+				ref={sidebarButton}
+				type="button"
+				className="titlebar__button"
+				aria-label={sidebar ? "Hide sidebar" : "Show sidebar"}
+				aria-pressed={sidebar}
+				onClick={() => onSidebar(!sidebar)}
+			>
+				<Icon name="panel-left" />
+			</button>
+
 			{/* The project's name is the way into what can be done to the
 			    project as a whole, so it is the trigger rather than a
 			    heading. */}
@@ -247,18 +272,51 @@ export default function Titlebar({
 				{root}
 			</span>
 
-			<Session
-				session={session}
-				shown={sessionClock}
-				onStart={onStartSession}
-				onStop={onStopSession}
-				onTick={onTickSession}
-				shortcut={shortcutLabel(SESSION)}
-			/>
+			<button
+				type="button"
+				className="titlebar__button"
+				aria-label={busy ? "Refreshing…" : "Refresh documents"}
+				disabled={busy}
+				onClick={() => void refresh()}
+			>
+				<Icon name="refresh" />
+			</button>
 
-			<span className="titlebar__rule" />
+			{/* Disabled rather than dropped where it does not apply: a
+			    button that comes and goes would shuffle the row every time
+			    the writer moved between a document and the trash. */}
+			<button
+				type="button"
+				className="titlebar__button"
+				aria-label={
+					rightSidebar ? "Hide right sidebar" : "Show right sidebar"
+				}
+				aria-pressed={rightSidebar === true}
+				disabled={rightSidebar === null}
+				onClick={() => onRightSidebar(rightSidebar !== true)}
+			>
+				<Icon name="panel-right" />
+			</button>
 
-			<div className="titlebar__tools">
+			{/* Never shrinks, so these hold the window's right edge however
+			    little room the row has. */}
+			<div className="titlebar__right">
+				<Today
+					root={root}
+					sessions={sessions}
+					words={words}
+					logged={logged}
+				/>
+
+				<Session
+					session={session}
+					shown={sessionClock}
+					onStart={onStartSession}
+					onStop={onStopSession}
+					onTick={onTickSession}
+					shortcut={shortcutLabel(SESSION)}
+				/>
+
 				{/* The one place search is reachable from in every
 				    configuration: the toolbar and the sidebar can both be
 				    hidden, and this cannot. */}
@@ -271,15 +329,6 @@ export default function Titlebar({
 				>
 					<Icon name="search" />
 				</button>
-				<button
-					type="button"
-					className="titlebar__button"
-					aria-label={busy ? "Refreshing…" : "Refresh documents"}
-					disabled={busy}
-					onClick={() => void refresh()}
-				>
-					<Icon name="refresh" />
-				</button>
 
 				<ThemeToggle
 					theme={theme}
@@ -287,49 +336,72 @@ export default function Titlebar({
 					className="titlebar__button"
 				/>
 
-				{/* What looks at the project, then what arranges the window
-				    around it. */}
-				<span className="titlebar__rule" />
-
-				<button
-					type="button"
-					className="titlebar__button"
-					aria-label={sidebar ? "Hide sidebar" : "Show sidebar"}
-					aria-pressed={sidebar}
-					onClick={() => onSidebar(!sidebar)}
-				>
-					<Icon name="panel-left" />
-				</button>
-				{/* Disabled rather than dropped where it does not apply: a
-				    button that comes and goes would shuffle the row every time
-				    the writer moved between a document and the trash. */}
-				<button
-					type="button"
-					className="titlebar__button"
-					aria-label={
-						rightSidebar
-							? "Hide right sidebar"
-							: "Show right sidebar"
-					}
-					aria-pressed={rightSidebar === true}
-					disabled={rightSidebar === null}
-					onClick={() => onRightSidebar(rightSidebar !== true)}
-				>
-					<Icon name="panel-right" />
-				</button>
+				<AccountChip
+					onLogin={onLogin}
+					onProfile={onProfile}
+					onSettings={onSettings}
+				/>
 			</div>
-
-			<AccountChip
-				onLogin={onLogin}
-				onProfile={onProfile}
-				onSettings={onSettings}
-			/>
 
 			{/* Out of flow, so a failed refresh cannot push the writing down. */}
 			<p className="titlebar__message" role="status">
 				{message}
 			</p>
 		</header>
+	);
+}
+
+/**
+ * The words written across the project today. The automatic layer runs whether
+ * or not the writer opened a session, so it is the one number that holds them
+ * all. A history that cannot be read leaves this empty: the Stats tab says why.
+ */
+function Today({
+	root,
+	sessions,
+	words,
+	logged,
+}: {
+	root: string;
+	sessions: Sessions;
+	words: number;
+	logged: number;
+}) {
+	const [history, setHistory] = useState<PastSession[] | null>(null);
+
+	useEffect(() => {
+		let listening = true;
+		invoke<PastSession[]>("read_history", { root })
+			.then((read) => {
+				if (listening) {
+					setHistory(read);
+				}
+			})
+			.catch(() => {
+				if (listening) {
+					setHistory(null);
+				}
+			});
+
+		return () => {
+			listening = false;
+		};
+	}, [root, logged]);
+
+	if (history === null) {
+		return null;
+	}
+
+	const at = Date.now();
+	const { written } = dayTally(history, sessions, words, at).automatic;
+
+	return (
+		<span
+			className="titlebar__today"
+			title="Words written in this project today"
+		>
+			{written.toLocaleString()} today
+		</span>
 	);
 }
 

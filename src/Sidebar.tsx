@@ -1,9 +1,11 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentRow from "./DocumentRow";
 import FolderRow from "./FolderRow";
 import Grip from "./Grip";
 import Icon from "./Icon";
+import { useDismissal } from "./Menu";
 import { SIDEBAR } from "./panels";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
@@ -44,6 +46,11 @@ type Props = {
 	// Styled out rather than unmounted, so a half-typed section name and the
 	// sections already read are still there when it comes back.
 	hidden: boolean;
+	/** Whether it is open over the writing, to close on a click elsewhere. */
+	floating: boolean;
+	onDismiss: () => void;
+	/** The button in the bar that opens it. */
+	opener: RefObject<HTMLButtonElement | null>;
 	/** How wide the writer has dragged it, in pixels. */
 	width: number;
 	onWidth: (width: number) => void;
@@ -92,6 +99,9 @@ type Props = {
 
 export default function Sidebar({
 	hidden,
+	floating,
+	onDismiss,
+	opener,
 	width,
 	onWidth,
 	root,
@@ -121,6 +131,7 @@ export default function Sidebar({
 	// Held here rather than passed in, so the element the grip moves is the
 	// one this component drew.
 	const panel = useRef<HTMLElement>(null);
+	useDismissal(floating, panel, onDismiss, opener);
 	const [tree, setTree] = useState<TreeNode[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });

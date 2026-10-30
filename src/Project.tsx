@@ -169,6 +169,9 @@ type Retagging =
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
 
+// Where the sidebar floats, which the stylesheet's own query has to match.
+const NARROW = "(max-width: 820px)";
+
 /**
  * One tab as the strip shows it. The kind travels with it: a folder called
  * `Notes` and a document called `Notes` are not the same tab, and the strip
@@ -319,8 +322,30 @@ export default function Project({
 	const [deliberate, setDeliberate] = useState<Running | null>(null);
 
 	// Bumped every time a closed session reaches the history file, so the
-	// Stats tab reads it again.
+	// bar and the Stats tab read it again.
 	const [logged, setLogged] = useState(0);
+
+	// In a narrow window the sidebar floats over the writing until the next
+	// click, so it has its own open and the writer's lasting choice is left for
+	// the wider window. Watched rather than read once, so resizing across the
+	// line swaps one for the other.
+	const [narrow, setNarrow] = useState(
+		() => window.matchMedia(NARROW).matches,
+	);
+	const [floating, setFloating] = useState(false);
+	const sidebarButton = useRef<HTMLButtonElement>(null);
+	const sidebar = narrow ? floating : preferences.sidebar;
+
+	useEffect(() => {
+		const query = window.matchMedia(NARROW);
+		function changed(event: MediaQueryListEvent) {
+			setNarrow(event.matches);
+			setFloating(false);
+		}
+
+		query.addEventListener("change", changed);
+		return () => query.removeEventListener("change", changed);
+	}, []);
 
 	// The version the compare view opened on. It takes the whole window and
 	// reads now from disk, so every editor is written before it opens.
@@ -1428,10 +1453,18 @@ export default function Project({
 				onStartSession={() => startSession()}
 				onStopSession={stopSession}
 				onTickSession={tickSession}
-				sidebar={preferences.sidebar}
-				onSidebar={(open) =>
-					onPreferences({ ...preferences, sidebar: open })
-				}
+				sessions={sessions.current}
+				words={words.current}
+				logged={logged}
+				sidebar={sidebar}
+				onSidebar={(open) => {
+					if (narrow) {
+						setFloating(open);
+					} else {
+						onPreferences({ ...preferences, sidebar: open });
+					}
+				}}
+				sidebarButton={sidebarButton}
 				rightSidebar={about === null ? null : preferences.rightSidebar}
 				onRightSidebar={(open) =>
 					onPreferences({ ...preferences, rightSidebar: open })
@@ -1503,7 +1536,10 @@ export default function Project({
 				}
 			>
 				<Sidebar
-					hidden={!preferences.sidebar}
+					hidden={!sidebar}
+					floating={floating}
+					onDismiss={() => setFloating(false)}
+					opener={sidebarButton}
 					width={preferences.sidebarWidth}
 					onWidth={(sidebarWidth) =>
 						onPreferences({ ...preferences, sidebarWidth })
