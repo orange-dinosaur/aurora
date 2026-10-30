@@ -144,6 +144,8 @@ type Props = {
 	preferences: Preferences;
 	onChooseTake: (take: string) => Promise<void>;
 	onTry: () => Promise<void>;
+	onRenameTake: (take: string, name: string) => Promise<void>;
+	onDeleteTake: (take: string) => Promise<void>;
 	onChange: (text: string) => void;
 	/** How many words a change added, or took away when it is negative. */
 	onWrote: (delta: number) => void;
@@ -170,6 +172,8 @@ export default function Editor({
 	preferences,
 	onChooseTake,
 	onTry,
+	onRenameTake,
+	onDeleteTake,
 	onChange,
 	onWrote,
 	onFields,
@@ -386,9 +390,12 @@ export default function Editor({
 				{takes.length > 0 && !preferences.focus && (
 					<TakeStrip
 						takes={takes}
+						words={tally.words}
 						merging={merging}
 						onChoose={(take) => attempt(() => onChooseTake(take))}
 						onTry={() => attempt(onTry)}
+						onRename={onRenameTake}
+						onDelete={(take) => attempt(() => onDeleteTake(take))}
 					/>
 				)}
 				<div className="editor__surface">

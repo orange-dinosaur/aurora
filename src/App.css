@@ -5908,6 +5908,65 @@ button.compare__pick:focus-visible {
 	flex: none;
 }
 
+/* Faded rather than removed, so the names do not shift as the pointer moves
+   along them. The chosen take always shows its own. */
+.menu.takes__menu {
+	position: relative;
+	display: flex;
+	opacity: 0;
+}
+
+.takes__item:hover .takes__menu,
+.takes__item:focus-within .takes__menu,
+.takes__item:has([aria-expanded="true"]) .takes__menu,
+.takes__item--chosen .takes__menu {
+	opacity: 1;
+}
+
+.takes__menu .menu__trigger {
+	width: 16px;
+	height: 18px;
+}
+
+/* The strip starts at the left of the page, so the menu hangs to the right. */
+.takes__menu .menu__items {
+	left: 0;
+	right: auto;
+	min-width: 12rem;
+}
+
+.takes__note {
+	margin: 0;
+	padding: 0.3rem 0.5rem;
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}
+
+.takes__note:focus {
+	outline: none;
+}
+
+.takes__item--naming {
+	position: relative;
+	width: 9rem;
+}
+
+.takes__item--naming .namefield__input {
+	height: 22px;
+	padding: 0 0.35rem;
+	font-size: inherit;
+}
+
+/* Over the text, which needs covering for a refusal to be read. */
+.takes__item--naming .namefield__message {
+	top: 100%;
+	left: 0;
+	z-index: 5;
+	width: max-content;
+	max-width: 16rem;
+	background: var(--bg);
+}
+
 /* Holds the writing surface and the placeholder that sits over it. */
 .editor__surface {
 	position: relative;

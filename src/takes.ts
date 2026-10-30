@@ -20,6 +20,23 @@ export function chooseTake(
 	return invoke<TakeView[]>("choose_take", { root, id, take });
 }
 
+export function renameTake(
+	root: string,
+	id: string,
+	take: string,
+	name: string,
+): Promise<TakeView[]> {
+	return invoke<TakeView[]>("rename_take", { root, id, take, name });
+}
+
+export function deleteTake(
+	root: string,
+	id: string,
+	take: string,
+): Promise<TakeView[]> {
+	return invoke<TakeView[]>("delete_take", { root, id, take });
+}
+
 /** Only a document in the Manuscript can start a take. */
 export function canTry(trail: string[]): boolean {
 	return trail[0] === "Manuscript";

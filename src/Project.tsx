@@ -43,7 +43,13 @@ import type { FolderRef } from "./tree";
 import { documentsOf, folderOf, rows } from "./tree";
 import { deleteDocument, deleteFolder } from "./documents";
 import type { TakeView } from "./bindings/TakeView";
-import { chooseTake, readTakes, trySomething } from "./takes";
+import {
+	chooseTake,
+	deleteTake,
+	readTakes,
+	renameTake,
+	trySomething,
+} from "./takes";
 import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
 // `changed` under another name: this file already has one of its own.
@@ -1350,6 +1356,14 @@ export default function Project({
 						putBack(() => chooseTake(root, tab.document.id, take))
 					}
 					onTry={() => startTake(tab.document)}
+					onRenameTake={(take, name) =>
+						putBack(() =>
+							renameTake(root, tab.document.id, take, name),
+						)
+					}
+					onDeleteTake={(take) =>
+						putBack(() => deleteTake(root, tab.document.id, take))
+					}
 					onChange={(text) => edit(tab.document.id, text)}
 					onWrote={(delta) => record(tab.document.id, delta)}
 					onFields={setFields}
