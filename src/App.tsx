@@ -123,12 +123,12 @@ function App() {
 		}
 	}, [preferences.theme]);
 
-	// The manuscript is not the only thing set in --serif: a card title and a
-	// trashed document's name are too, and they follow it on purpose. It is
+	// The manuscript is not the only thing set in --font-page: a card title and
+	// a trashed document's name are too, and they follow it on purpose. It is
 	// the one voice the writing has, wherever the writing is named.
 	useEffect(() => {
 		document.documentElement.style.setProperty(
-			"--serif",
+			"--font-page",
 			face(preferences.manuscriptFont),
 		);
 	}, [preferences.manuscriptFont]);

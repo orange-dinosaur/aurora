@@ -75,7 +75,7 @@ export const FACES: { id: ManuscriptFont; family: string }[] = [
 	{ id: "system", family: "System UI" },
 ];
 
-/** What to set `--serif` to for the face the writer chose. */
+/** What to set `--font-page` to for the face the writer chose. */
 export function face(font: ManuscriptFont): string {
 	return STACKS[font];
 }
