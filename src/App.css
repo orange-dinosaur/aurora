@@ -526,8 +526,7 @@
 	   surface take --accent-text, because the pastel is too pale to read. */
 	--accent: #f8a67c;
 	--accent-text: #a8451f;
-	/* Behind whatever is selected, at full strength; hover takes the same wash
-	   at half. A selection is never drawn with a border. */
+	/* Behind whatever is selected. A selection is never drawn with a border. */
 	--accent-wash: #f8a67c47;
 	--on-accent: #2b1b16;
 	/* What the writer labels, such as tags. Never a control. */
@@ -563,9 +562,27 @@
 	--tracking-heading: -0.01em;
 	--tracking-title: 0;
 	--tracking-ui: 0;
-	/* The one shadow in the app, and only ever under something that floats.
-	   Everything that sits in the layout is separated by a hairline instead. */
-	--shadow-pop: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.1);
+	--radius-xs: 5px;
+	--radius-sm: 8px;
+	--radius-md: 11px;
+	--radius-lg: 18px;
+	--radius-pill: 9999px;
+	--space-xxs: 4px;
+	--space-xs: 8px;
+	--space-sm: 12px;
+	--space-md: 16px;
+	--space-lg: 24px;
+	--space-xl: 32px;
+	--space-xxl: 48px;
+	--space-section: 80px;
+	--hairline: 1px solid var(--border);
+	/* Only ever under something that floats, or a book cover. Everything that
+	   sits in the layout is separated by a hairline instead. */
+	--shadow-float: 0 8px 30px rgb(0 0 0 / 0.16);
+	--shadow-cover: 3px 5px 30px rgb(0 0 0 / 0.22);
+	--material: saturate(180%) blur(20px);
+	--press: scale(0.95);
+	--lift: translateY(-3px);
 
 	font-family: var(--font-ui);
 	font-size: 16px;
@@ -607,6 +624,7 @@
 		--accent-3-wash: #8bd5ca2e;
 		--danger: #f38ba8;
 		--surface-float: rgb(43 43 58 / 0.72);
+		--shadow-float: 0 8px 30px rgb(0 0 0 / 0.5);
 	}
 }
 
@@ -632,6 +650,7 @@
 	--accent-3-wash: #8bd5ca2e;
 	--danger: #f38ba8;
 	--surface-float: rgb(43 43 58 / 0.72);
+	--shadow-float: 0 8px 30px rgb(0 0 0 / 0.5);
 }
 
 /* Named three times so it beats both dark blocks. */
@@ -641,6 +660,13 @@
 	:root[data-theme="dark"] {
 		--surface-float: var(--bg-card);
 		--material: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--press: none;
+		--lift: none;
 	}
 }
 
@@ -710,7 +736,7 @@ body,
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -802,7 +828,7 @@ body,
 	color: var(--text);
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 	cursor: pointer;
 	transition:
 		border-color 0.15s,
@@ -843,7 +869,7 @@ body,
 	text-transform: uppercase;
 	color: var(--text-dim);
 	border: 1px solid var(--border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 }
 
 .format__description {
@@ -863,17 +889,6 @@ body,
 .welcome__create {
 	padding: 0.6rem 1.5rem;
 	font: inherit;
-	font-weight: 500;
-	color: var(--on-accent);
-	background: var(--accent);
-	border: none;
-	border-radius: 8px;
-	cursor: pointer;
-}
-
-.welcome__create:disabled {
-	opacity: 0.4;
-	cursor: not-allowed;
 }
 
 .setup {
@@ -897,9 +912,6 @@ body,
 	padding: 0.55rem 0.75rem;
 	font: inherit;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
 }
 
 .setup__input:focus-visible,
@@ -938,21 +950,7 @@ body,
 .welcome__back {
 	padding: 0.6rem 1.25rem;
 	font: inherit;
-	color: var(--text-dim);
-	background: none;
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	cursor: pointer;
-}
-
-.welcome__back:hover:not(:disabled) {
 	color: var(--text);
-	border-color: var(--accent);
-}
-
-.welcome__back:disabled {
-	opacity: 0.4;
-	cursor: not-allowed;
 }
 
 /* Out of flow at the foot of the screen, so a message appearing cannot move
@@ -1052,7 +1050,7 @@ body,
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	text-align: left;
 }
@@ -1275,7 +1273,7 @@ body,
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	transition:
 		color 120ms ease-out,
@@ -1284,7 +1282,7 @@ body,
 
 .titlebar__button:hover:not(:disabled) {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .titlebar__button:disabled {
@@ -1293,8 +1291,7 @@ body,
 }
 
 /* There is nobody signed in and no way to sign in yet, so the chip is drawn as
-   an invitation rather than as a name. It carries the only outline in the
-   header. */
+   an invitation rather than as a name. */
 .account__chip {
 	display: flex;
 	align-items: center;
@@ -1307,17 +1304,18 @@ body,
 	letter-spacing: normal;
 	line-height: normal;
 	text-transform: none;
-	color: var(--text);
+	color: var(--accent-text);
 	background: var(--accent-wash);
-	border: 1px solid var(--accent);
-	border-radius: 15px;
+	border: 0;
+	border-radius: var(--radius-pill);
 	cursor: pointer;
 	white-space: nowrap;
 }
 
 .account__chip:hover,
 .account__chip[aria-expanded="true"] {
-	background: var(--bg-hover);
+	color: var(--on-accent);
+	background: var(--accent);
 }
 
 .account__chip:focus-visible {
@@ -1329,7 +1327,6 @@ body,
 .account__chip > svg {
 	width: 14px;
 	height: 14px;
-	color: var(--text-faint);
 }
 
 /* A dashed ring where a face or a pair of initials will go. */
@@ -1374,7 +1371,7 @@ body,
 		justify-content: center;
 		width: 28px;
 		height: 28px;
-		border-radius: 6px;
+		border-radius: var(--radius-xs);
 	}
 
 	.titlebar__session--idle svg {
@@ -1383,11 +1380,11 @@ body,
 
 	.titlebar__session--idle:hover {
 		text-decoration: none;
-		background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+		background: var(--bg-hover);
 	}
 
 	.titlebar__session--idle:focus-visible {
-		border-radius: 6px;
+		border-radius: var(--radius-xs);
 	}
 }
 
@@ -1444,7 +1441,7 @@ body,
 	padding: 1.25rem;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 }
 
 .account__card .account__name {
@@ -1464,20 +1461,9 @@ body,
 	padding: 0 0.85rem;
 	font: inherit;
 	font-size: 0.8125rem;
-	font-weight: 600;
 	letter-spacing: normal;
 	line-height: normal;
 	text-transform: none;
-	color: var(--on-accent);
-	background: var(--accent);
-	border: 0;
-	border-radius: 7px;
-	cursor: pointer;
-}
-
-.account__in:disabled {
-	opacity: 0.5;
-	cursor: default;
 }
 
 .account__blurb {
@@ -1560,9 +1546,6 @@ body,
 	font: inherit;
 	font-size: 0.9375rem;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border-strong);
-	border-radius: 8px;
 }
 
 .login__input:focus-visible {
@@ -1576,20 +1559,9 @@ body,
 	margin-top: 0.5rem;
 	font: inherit;
 	font-size: 0.9375rem;
-	font-weight: 600;
 	letter-spacing: normal;
 	line-height: normal;
 	text-transform: none;
-	color: var(--on-accent);
-	background: var(--accent);
-	border: 0;
-	border-radius: 8px;
-	cursor: pointer;
-}
-
-.login__go:disabled {
-	opacity: 0.5;
-	cursor: default;
 }
 
 .login__note {
@@ -1703,7 +1675,7 @@ body,
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -1786,7 +1758,7 @@ body,
 	padding: 0.9rem 1rem;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 }
 
 /* Faint, because it is a dash. A figure this size in the reading colour would
@@ -1820,7 +1792,7 @@ body,
 	padding: 1.25rem 1.25rem 1.4rem;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 }
 
 .profile__field {
@@ -1840,9 +1812,6 @@ body,
 	font: inherit;
 	font-size: 0.875rem;
 	color: var(--text);
-	background: var(--bg);
-	border: 1px solid var(--border-strong);
-	border-radius: 7px;
 }
 
 .profile__input:focus-visible {
@@ -1874,21 +1843,11 @@ body,
 	line-height: normal;
 	text-transform: none;
 	color: var(--text);
-	background: var(--bg);
-	border: 1px solid var(--border-strong);
-	border-radius: 7px;
-	cursor: pointer;
-}
-
-.profile__quiet:disabled {
-	opacity: 0.5;
-	cursor: default;
 }
 
 .profile__who .profile__quiet {
 	align-self: flex-start;
 	margin-left: auto;
-	background: var(--bg-card);
 }
 
 .profile__note {
@@ -1923,15 +1882,6 @@ body,
 	line-height: normal;
 	text-transform: none;
 	color: var(--danger);
-	background: none;
-	border: 1px solid var(--border-strong);
-	border-radius: 7px;
-	cursor: pointer;
-}
-
-.profile__out-of:disabled {
-	opacity: 0.5;
-	cursor: default;
 }
 
 /* Always in the DOM and out of flow, so a failed refresh appears without
@@ -1986,8 +1936,8 @@ body,
 	font-size: 0.85rem;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 6px;
-	box-shadow: var(--shadow-pop);
+	border-radius: var(--radius-xs);
+	box-shadow: var(--shadow-float);
 }
 
 .retag__said {
@@ -2005,7 +1955,7 @@ body,
 	padding: 0.0625rem 0.375rem;
 	color: var(--text);
 	background: var(--accent-wash);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 }
 
 .retag__do {
@@ -2016,19 +1966,6 @@ body,
 	letter-spacing: inherit;
 	line-height: inherit;
 	text-transform: inherit;
-	background: none;
-	border: 1px solid var(--border);
-	border-radius: 4px;
-	cursor: pointer;
-}
-
-.retag__do:hover:not(:disabled) {
-	background: var(--accent-wash);
-}
-
-.retag__do:disabled {
-	color: var(--text-dim);
-	cursor: default;
 }
 
 .retag__do:focus-visible {
@@ -2187,7 +2124,7 @@ body.dragging * {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	transition:
 		color 120ms ease-out,
@@ -2201,7 +2138,7 @@ body.dragging * {
 
 .right-sidebar__tab:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .right-sidebar__tab--on {
@@ -2222,7 +2159,7 @@ body.dragging * {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	transition:
 		color 120ms ease-out,
@@ -2231,7 +2168,7 @@ body.dragging * {
 
 .right-sidebar__close:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .right-sidebar__tab:focus-visible,
@@ -2260,7 +2197,7 @@ body.dragging * {
 	font-size: 0.75rem;
 	color: var(--text-dim);
 	background: var(--accent-wash);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	overflow-wrap: anywhere;
 }
 
@@ -2273,12 +2210,6 @@ body.dragging * {
 	padding: 0 0.6rem;
 	font: inherit;
 	font-size: 0.8125rem;
-	font-weight: 500;
-	color: var(--on-accent);
-	background: var(--accent);
-	border: 0;
-	border-radius: 6px;
-	cursor: pointer;
 }
 
 .versions__keep:focus-visible {
@@ -2292,7 +2223,7 @@ body.dragging * {
 	margin-top: 0.5rem;
 	padding: 2px;
 	background: var(--bg-hover);
-	border-radius: 7px;
+	border-radius: var(--radius-pill);
 }
 
 .versions__scope-button {
@@ -2303,7 +2234,7 @@ body.dragging * {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-pill);
 	cursor: pointer;
 }
 
@@ -2346,7 +2277,7 @@ body.dragging * {
 .versions__item {
 	position: relative;
 	border: 1px solid transparent;
-	border-radius: 7px;
+	border-radius: var(--radius-sm);
 }
 
 .versions__item--selected {
@@ -2366,7 +2297,7 @@ body.dragging * {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 7px;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 }
 
@@ -2447,12 +2378,6 @@ body.dragging * {
 	margin-top: 0;
 }
 
-.versions__keep:disabled {
-	color: var(--text-faint);
-	background: var(--bg-hover);
-	cursor: default;
-}
-
 .changes__add {
 	display: flex;
 	flex-direction: column;
@@ -2465,9 +2390,6 @@ body.dragging * {
 	font: inherit;
 	font-size: 0.8125rem;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 6px;
 	resize: vertical;
 }
 
@@ -2525,7 +2447,7 @@ div.changes__pick {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -2562,14 +2484,14 @@ div.changes__pick {
 	font-weight: 600;
 	color: var(--danger);
 	border: 1px solid currentColor;
-	border-radius: 9px;
+	border-radius: var(--radius-md);
 }
 
 .merge-banner {
 	margin-top: 0.5rem;
 	padding: 0.6rem 0.75rem;
 	background: var(--accent-wash);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 }
 
 .merge-banner__title {
@@ -2591,15 +2513,6 @@ div.changes__pick {
 	font: inherit;
 	font-size: 0.75rem;
 	color: var(--danger);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 5px;
-	cursor: pointer;
-}
-
-.merge-banner__abort:disabled {
-	color: var(--text-faint);
-	cursor: default;
 }
 
 .merge-banner__abort:focus-visible {
@@ -2624,7 +2537,7 @@ div.changes__pick {
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -2750,7 +2663,7 @@ div.changes__pick {
 	margin: 0 -0.75rem 1.25rem;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 }
 
 .merge-spot--current {
@@ -2819,14 +2732,6 @@ div.changes__pick {
 	padding: 0.2rem 0.7rem;
 	font: inherit;
 	color: var(--text);
-	background: var(--bg);
-	border: 1px solid var(--border);
-	border-radius: 5px;
-	cursor: pointer;
-}
-
-.merge-spot__choice:hover {
-	background: var(--bg-hover);
 }
 
 .merge-spot__choice:focus-visible {
@@ -2851,7 +2756,7 @@ div.changes__pick {
 .merge-card {
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 }
 
 .merge-card__head {
@@ -2916,7 +2821,7 @@ div.changes__pick {
 	color: var(--text);
 	background: var(--bg);
 	border: 1px solid var(--border);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -3005,8 +2910,8 @@ div.changes__pick {
 	color: var(--text);
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: var(--shadow-pop);
+	border-radius: var(--radius-sm);
+	box-shadow: var(--shadow-float);
 }
 
 .overwrite__text {
@@ -3028,7 +2933,7 @@ div.changes__pick {
 	font-size: 0.75rem;
 	color: var(--text-dim);
 	background: var(--bg-hover);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 }
 
 .overwrite__buttons {
@@ -3066,7 +2971,7 @@ div.changes__pick {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -3144,7 +3049,7 @@ div.changes__pick {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -3187,7 +3092,7 @@ div.changes__pick {
 	color: var(--text-faint);
 	background: none;
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 }
 
 button.compare__pick {
@@ -3470,19 +3375,6 @@ button.compare__pick:focus-visible {
 	padding: 0.25rem 0.75rem;
 	font: inherit;
 	color: var(--accent-text);
-	background: none;
-	border: 1px solid var(--border);
-	border-radius: 5px;
-	cursor: pointer;
-}
-
-.compare__put:hover:not(:disabled) {
-	background: var(--bg-hover);
-}
-
-.compare__put:disabled {
-	color: var(--text-faint);
-	cursor: default;
 }
 
 .compare__put:focus-visible {
@@ -3587,9 +3479,6 @@ button.compare__pick:focus-visible {
 	font: inherit;
 	font-size: 0.8125rem;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 3px;
 	text-align: right;
 }
 
@@ -3597,12 +3486,12 @@ button.compare__pick:focus-visible {
    desktop theme's colours whatever the page asks for, which came out white on
    white; nothing else in Aurora is a native widget either. */
 .sprint__units {
-	display: flex;
+	display: inline-flex;
 	flex: none;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 3px;
-	overflow: hidden;
+	gap: 2px;
+	padding: 2px;
+	background: var(--bg-hover);
+	border-radius: var(--radius-pill);
 }
 
 .sprint__unit {
@@ -3615,21 +3504,17 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
+	border-radius: var(--radius-pill);
 	cursor: pointer;
-}
-
-.sprint__unit + .sprint__unit {
-	border-left: 1px solid var(--border);
 }
 
 .sprint__unit:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .sprint__unit[aria-pressed="true"] {
 	color: var(--text);
-	background: var(--accent-wash);
+	background: var(--bg-card);
 }
 
 /* Drawn inside its own edge: the group clips what overflows it, so a ring set
@@ -3649,37 +3534,11 @@ button.compare__pick:focus-visible {
 	line-height: normal;
 	text-transform: none;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 3px;
-	cursor: pointer;
-}
-
-/* Filled once there is a number to start on, so the control that finishes the
-   job stands out from the two that set it up. */
-.sprint__go:not(:disabled) {
-	color: var(--on-accent);
-	background: var(--accent);
-	border-color: var(--accent);
-}
-
-.sprint__go:not(:disabled):hover {
-	background: color-mix(in srgb, var(--accent) 88%, var(--text));
-	border-color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
 /* Clear of the fill, or the ring lands on its own colour. */
 .sprint__go:not(:disabled):focus-visible {
 	outline-offset: 2px;
-}
-
-.sprint__stop:hover {
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
-}
-
-.sprint__go:disabled {
-	opacity: 0.5;
-	cursor: default;
 }
 
 .sprint__amount:focus-visible,
@@ -3775,13 +3634,13 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .history__more:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .history__more:focus-visible {
@@ -3841,13 +3700,13 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .field__remove:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .field__remove:focus-visible {
@@ -3876,9 +3735,6 @@ button.compare__pick:focus-visible {
 	font-size: 0.8125rem;
 	line-height: 1.5;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 6px;
 }
 
 .field__box {
@@ -3893,11 +3749,6 @@ button.compare__pick:focus-visible {
 	outline-offset: -1px;
 }
 
-.field__box::placeholder,
-.field__line::placeholder {
-	color: var(--text-dim);
-}
-
 /* The way out of the panel and into the page about this document. Outlined and
    full width, so it reads as a door rather than as one more field. */
 .info__page {
@@ -3910,14 +3761,6 @@ button.compare__pick:focus-visible {
 	line-height: normal;
 	text-transform: none;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border-strong);
-	border-radius: 7px;
-	cursor: pointer;
-}
-
-.info__page:hover {
-	background: var(--bg-hover);
 }
 
 .info__page:focus-visible {
@@ -4012,7 +3855,7 @@ button.compare__pick:focus-visible {
 	font-size: 0.75rem;
 	color: var(--text);
 	background: var(--accent-wash);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 }
 
 /* A tag that goes somewhere. It stays a chip and does not underline until it is
@@ -4051,7 +3894,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	cursor: pointer;
 }
 
@@ -4081,7 +3924,7 @@ button.compare__pick:focus-visible {
 	list-style: none;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 }
 
 .suggestion {
@@ -4096,12 +3939,12 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .suggestion:hover {
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .suggestion:focus-visible {
@@ -4158,14 +4001,14 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	white-space: nowrap;
 }
 
 .sidebar__leave:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .sidebar__leave[aria-current="page"] {
@@ -4220,7 +4063,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -4299,7 +4142,7 @@ button.compare__pick:focus-visible {
 	color: inherit;
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	overflow-wrap: anywhere;
 }
@@ -4397,7 +4240,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -4418,7 +4261,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -4466,7 +4309,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -4496,7 +4339,7 @@ button.compare__pick:focus-visible {
 
 .folder:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .folder[aria-current="page"] {
@@ -4538,7 +4381,7 @@ button.compare__pick:focus-visible {
 
 .document:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .document[aria-current="page"] {
@@ -4660,7 +4503,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	opacity: 0;
 }
@@ -4758,12 +4601,6 @@ button.compare__pick:focus-visible {
 	padding: 0.4rem 0.7rem 0.4rem 0.55rem;
 	font: inherit;
 	font-size: 0.8125rem;
-	color: var(--on-accent);
-	background: var(--accent);
-	border: 0;
-	border-radius: 8px;
-	cursor: pointer;
-	transition: opacity 120ms ease-out;
 }
 
 /* Centring the two boxes is not the same as aligning what is in them: this
@@ -4771,11 +4608,6 @@ button.compare__pick:focus-visible {
    pixels below the word beside it. Measured against "New", not guessed. */
 .overview__new .icon {
 	margin-top: -3px;
-}
-
-.overview__new:hover,
-.overview__new[aria-expanded="true"] {
-	opacity: 0.85;
 }
 
 .overview__note {
@@ -4822,7 +4654,7 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 }
 
@@ -4972,19 +4804,14 @@ button.compare__pick:focus-visible {
 	font: inherit;
 	font-size: 0.9rem;
 	color: var(--text);
-	background: var(--bg);
-	border: 1px solid var(--border);
-	border-radius: 6px;
 }
 
 /* Underlined rather than ringed. A box that lights up on all four sides reads
    as another button in a column already full of them; the writer only needs to
    be told which line the caret is on. */
 .namefield__input:focus {
-	outline: none;
-	border-color: var(--border);
-	border-bottom-color: var(--accent-text);
-	box-shadow: inset 0 -1px 0 var(--accent-text);
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
 }
 
 /* The field stands among rows of documents, so it is their size and their
@@ -5036,9 +4863,6 @@ button.compare__pick:focus-visible {
 	padding: 0.4rem 0.6rem;
 	font: inherit;
 	color: var(--text);
-	background: var(--bg);
-	border: 1px solid var(--border);
-	border-radius: 6px;
 }
 
 .search__field:focus-visible {
@@ -5089,12 +4913,12 @@ button.compare__pick:focus-visible {
 	text-align: left;
 	background: none;
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .search__document:hover {
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .search__document:focus-visible {
@@ -5128,7 +4952,7 @@ button.compare__pick:focus-visible {
 	padding: 0.0625rem 0.4375rem;
 	color: var(--text);
 	background: var(--accent-wash);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 }
 
 /* Pushed to the far edge and lined up, so a column of counts can be read down
@@ -5164,12 +4988,12 @@ button.compare__pick:focus-visible {
 	text-align: left;
 	background: none;
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .search__hit:hover {
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .search__hit:focus-visible {
@@ -5222,13 +5046,13 @@ button.compare__pick:focus-visible {
 	font-size: 0.85rem;
 	background: none;
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .search__more:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .search__more:focus-visible {
@@ -5363,14 +5187,6 @@ button.compare__pick:focus-visible {
 	line-height: normal;
 	text-transform: none;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border-strong);
-	border-radius: 7px;
-	cursor: pointer;
-}
-
-.subject__draft:hover {
-	background: var(--bg-hover);
 }
 
 .subject__draft:focus-visible {
@@ -5391,7 +5207,7 @@ button.compare__pick:focus-visible {
 	padding: 0.9rem 1rem;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 }
 
 /* The writer's own spelling of the field name, the way Info shows it. */
@@ -5427,9 +5243,6 @@ button.compare__pick:focus-visible {
 	font-size: 0.9375rem;
 	line-height: 1.7;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 9px;
 	resize: vertical;
 }
 
@@ -5478,7 +5291,7 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 }
 
@@ -5535,7 +5348,7 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 	overflow-wrap: anywhere;
 }
@@ -5586,7 +5399,7 @@ button.compare__pick:focus-visible {
 	   these documents are no longer part of the project. */
 	background: var(--bg-chrome);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 }
 
 .trashed__what {
@@ -5619,21 +5432,7 @@ button.compare__pick:focus-visible {
 	padding: 0.25rem 0.5rem;
 	font: inherit;
 	font-size: 0.8rem;
-	color: var(--text-dim);
-	background: none;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	cursor: pointer;
-}
-
-.trashed__action:hover:not(:disabled) {
 	color: var(--text);
-	border-color: var(--accent);
-}
-
-.trashed__action:disabled {
-	opacity: 0.5;
-	cursor: default;
 }
 
 .trashed__action--danger {
@@ -5658,10 +5457,12 @@ button.compare__pick:focus-visible {
 .editor__find {
 	padding: 0.5rem;
 	font-size: 0.75rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	box-shadow: var(--shadow-pop);
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
 }
 
 /* And every square control inside one is the same button: the glyph changes,
@@ -5675,7 +5476,7 @@ button.compare__pick:focus-visible {
 	width: 22px;
 	height: 22px;
 	padding: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 }
 
 .menu {
@@ -5742,14 +5543,14 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .menu__trigger:hover,
 .menu__trigger[aria-expanded="true"] {
 	color: var(--text);
-	background: var(--accent-wash);
+	background: var(--bg-hover);
 }
 
 .menu__items {
@@ -5766,6 +5567,8 @@ button.compare__pick:focus-visible {
    growing off the bottom of a deep project. */
 .menu__items {
 	max-height: 60vh;
+	padding: var(--space-xxs);
+	font: var(--text-ui);
 	overflow-y: auto;
 	scrollbar-width: none;
 }
@@ -5780,7 +5583,7 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	white-space: nowrap;
 	overflow: hidden;
@@ -5790,7 +5593,7 @@ button.compare__pick:focus-visible {
 /* Between what a menu does inside the project and what leaves it. */
 .menu__rule {
 	height: 1px;
-	margin: 0.3rem 0.35rem;
+	margin: var(--space-xxs);
 	background: var(--border);
 }
 
@@ -5819,16 +5622,16 @@ button.compare__pick:focus-visible {
 .menu__note {
 	margin: 0;
 	padding: 0.3rem 0.5rem;
+	font: var(--text-caption);
 	color: var(--text-dim);
 }
 
 .menu__item:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--accent-wash);
 }
 
 .menu__item:disabled {
-	color: var(--text-dim);
-	opacity: 0.5;
+	color: var(--text-faint);
 	cursor: default;
 }
 
@@ -5851,8 +5654,7 @@ button.compare__pick:focus-visible {
 }
 
 .menu__chord {
-	font-family: var(--font-mono);
-	font-size: 0.75rem;
+	font: var(--text-caption);
 	color: var(--text-faint);
 }
 
@@ -5861,8 +5663,8 @@ button.compare__pick:focus-visible {
    pair reads as one item rather than two. */
 .menu__hint {
 	display: block;
-	font-size: 0.6875rem;
-	color: var(--text-faint);
+	font: var(--text-caption);
+	color: var(--text-dim);
 }
 
 .menu__item--danger .menu__hint {
@@ -5946,17 +5748,18 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .editor__toggle:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .editor__toggle[aria-pressed="true"] {
-	color: var(--accent-text);
+	color: var(--text);
+	background: var(--bg-hover);
 }
 
 /* The ways of writing this document, one thin line above the text. Sized in
@@ -6002,13 +5805,13 @@ button.compare__pick:focus-visible {
 	text-align: left;
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .takes__button:hover:not(:disabled) {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 /* Colour and a wash rather than weight, so the names stay put as the choice
@@ -6244,7 +6047,7 @@ button.compare__pick:focus-visible {
 	font-size: 0.875rem;
 	line-height: 1.5;
 	background: color-mix(in srgb, var(--text) 6%, transparent);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	overflow-x: auto;
 	tab-size: 4;
 }
@@ -6254,7 +6057,7 @@ button.compare__pick:focus-visible {
 	font-family: var(--font-mono);
 	font-size: 0.875em;
 	background: color-mix(in srgb, var(--text) 8%, transparent);
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 }
 
 /* Short and centred, the way a novel marks a change of scene, rather than a
@@ -6336,7 +6139,7 @@ button.compare__pick:focus-visible {
 	background: none;
 	border: 0;
 	border-left: 2px solid transparent;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 	/* The panel is narrow enough that a chapter title would be nearly all
 	   ellipsis, so a long heading wraps instead of being cut off. */
@@ -6345,7 +6148,7 @@ button.compare__pick:focus-visible {
 
 .outline__item:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .outline__item:focus-visible {
@@ -6411,7 +6214,7 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -6448,7 +6251,7 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -6486,7 +6289,7 @@ button.compare__pick:focus-visible {
 
 .controls__mark:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .controls__mark[aria-pressed="true"] {
@@ -6529,14 +6332,11 @@ button.compare__pick:focus-visible {
 	padding: 0.25rem 0.4rem;
 	font: inherit;
 	color: var(--text);
-	background: none;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	outline: none;
 }
 
 .controls__url:focus {
-	border-color: var(--accent-text);
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
 }
 
 .controls__mark--code {
@@ -6572,9 +6372,6 @@ button.compare__pick:focus-visible {
 	padding: 0.2rem 0.35rem;
 	font: inherit;
 	color: var(--text);
-	background: var(--bg);
-	border: 1px solid var(--border);
-	border-radius: 4px;
 }
 
 /* Wide enough for "12 of 34" so the buttons hold still as the count changes. */
@@ -6594,7 +6391,7 @@ button.compare__pick:focus-visible {
 }
 
 .editor__find-step:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .editor__find-step:disabled {
@@ -6608,19 +6405,6 @@ button.compare__pick:focus-visible {
 	padding: 0.2rem 0.5rem;
 	font: inherit;
 	color: var(--text);
-	background: var(--bg);
-	border: 1px solid var(--border);
-	border-radius: 4px;
-	cursor: pointer;
-}
-
-.editor__find-do:hover:not(:disabled) {
-	border-color: var(--accent);
-}
-
-.editor__find-do:disabled {
-	color: var(--text-dim);
-	cursor: default;
 }
 
 /* Nothing in the panel had a ring of its own, so every control in it took the
@@ -6687,18 +6471,19 @@ button.compare__pick:focus-visible {
 .typography__step {
 	font: inherit;
 	line-height: 1;
-	color: var(--text);
+	color: var(--text-dim);
 	background: none;
 	border: 0;
 	cursor: pointer;
 }
 
 .typography__step:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	color: var(--text);
+	background: var(--bg-hover);
 }
 
 .typography__step:disabled {
-	color: var(--border);
+	color: var(--border-strong);
 	cursor: default;
 }
 
@@ -6767,9 +6552,6 @@ button.compare__pick:focus-visible {
 	padding: 0 0.15rem;
 	font: inherit;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 3px;
 	text-align: right;
 }
 
@@ -6915,7 +6697,7 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 	cursor: pointer;
 }
 
@@ -6963,7 +6745,7 @@ button.compare__pick:focus-visible {
 	padding: 0.9rem;
 	background: color-mix(in srgb, var(--danger) 8%, var(--bg-card));
 	border: 1px solid var(--danger);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 }
 
 .recents__question {
@@ -6994,18 +6776,12 @@ button.compare__pick:focus-visible {
 	letter-spacing: normal;
 	line-height: normal;
 	text-transform: none;
-	border-radius: 7px;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 }
 
 .recents__keep {
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border-strong);
-}
-
-.recents__keep:hover:not(:disabled) {
-	background: var(--bg-hover);
 }
 
 .recents__bin {
@@ -7015,7 +6791,6 @@ button.compare__pick:focus-visible {
 	border: 0;
 }
 
-.recents__keep:disabled,
 .recents__bin:disabled {
 	opacity: 0.5;
 	cursor: default;
@@ -7053,7 +6828,7 @@ button.compare__pick:focus-visible {
 	background: var(--bg);
 	border: 1px solid var(--border-strong);
 	border-radius: 14px;
-	box-shadow: var(--shadow-pop);
+	box-shadow: var(--shadow-float);
 }
 
 /* It is focused when it opens so a key has somewhere to land. Nothing is drawn
@@ -7102,7 +6877,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 7px;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 }
 
@@ -7164,7 +6939,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -7216,16 +6991,15 @@ button.compare__pick:focus-visible {
    page asks for. */
 .settings__choices {
 	flex: none;
-	display: flex;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	overflow: hidden;
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	background: var(--bg-hover);
+	border-radius: var(--radius-pill);
 }
 
 .settings__choice {
-	height: 30px;
-	padding: 0 0.75rem;
+	padding: 3px var(--space-sm);
 	font: inherit;
 	font-size: 0.8125rem;
 	letter-spacing: normal;
@@ -7234,6 +7008,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
+	border-radius: var(--radius-pill);
 	cursor: pointer;
 }
 
@@ -7242,21 +7017,15 @@ button.compare__pick:focus-visible {
 	cursor: default;
 }
 
-.settings__choice + .settings__choice {
-	border-left: 1px solid var(--border);
-}
-
 .settings__choice:hover {
 	color: var(--text);
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
 }
 
 .settings__choice[aria-pressed="true"] {
 	color: var(--text);
-	background: var(--accent-wash);
+	background: var(--bg-card);
 }
 
-/* Inside its own edge, since the group clips what overflows it. */
 .settings__choice:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
@@ -7294,12 +7063,12 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: 7px;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 }
 
 .settings__face:hover {
-	background: color-mix(in srgb, var(--accent-wash) 50%, transparent);
+	background: var(--bg-hover);
 }
 
 .settings__face[aria-pressed="true"] {
@@ -7387,9 +7156,6 @@ button.compare__pick:focus-visible {
 	font-variant-numeric: tabular-nums;
 	text-align: right;
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
 }
 
 .settings__field:focus-visible {
@@ -7409,14 +7175,14 @@ button.compare__pick:focus-visible {
 .settings__switch,
 .info__toggle {
 	flex: none;
-	width: 40px;
-	height: 24px;
+	width: 36px;
+	height: 22px;
 	padding: 2px;
-	background: var(--border);
+	background: var(--graphic-faint);
 	border: 0;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	cursor: pointer;
-	transition: background 0.15s ease;
+	transition: background 120ms ease;
 }
 
 .settings__switch[aria-checked="true"],
@@ -7433,53 +7199,51 @@ button.compare__pick:focus-visible {
 .settings__knob,
 .info__knob {
 	display: block;
-	width: 20px;
-	height: 20px;
+	width: 18px;
+	height: 18px;
 	background: var(--bg-card);
-	border-radius: 999px;
-	transition: transform 0.15s ease;
+	border-radius: 50%;
+	transition: transform 120ms ease;
 }
 
 .settings__switch[aria-checked="true"] .settings__knob,
 .info__toggle[aria-checked="true"] .info__knob {
-	transform: translateX(16px);
+	transform: translateX(14px);
 }
 
 .settings__stepper {
-	display: flex;
+	display: inline-flex;
+	flex: none;
 	align-items: center;
 	gap: 0.25rem;
-	padding: 2px;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: 8px;
 }
 
 .settings__step {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 28px;
+	width: 26px;
 	height: 26px;
 	padding: 0;
 	font: inherit;
 	letter-spacing: normal;
 	line-height: normal;
 	text-transform: none;
-	color: var(--text);
+	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
 .settings__step:hover:not(:disabled) {
+	color: var(--text);
 	background: var(--bg-hover);
 }
 
 .settings__step:disabled {
-	color: var(--text-faint);
-	cursor: not-allowed;
+	color: var(--border-strong);
+	cursor: default;
 }
 
 .settings__step:focus-visible {
@@ -7566,7 +7330,7 @@ button.compare__pick:focus-visible {
 .group__head:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 }
 
 .group__chevron {
@@ -7673,7 +7437,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 1px dashed var(--border);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -7709,7 +7473,7 @@ button.compare__pick:focus-visible {
 	text-align: left;
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -7743,7 +7507,7 @@ button.compare__pick:focus-visible {
 	padding: 0.5rem;
 	background: var(--bg-card);
 	border: 1px dashed var(--border);
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 }
 
 .cover__image {
@@ -7771,17 +7535,7 @@ button.compare__pick:focus-visible {
 	padding: 0 0.625rem;
 	font: inherit;
 	font-size: 0.75rem;
-	color: var(--text-dim);
-	background: none;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	cursor: pointer;
-}
-
-.cover__button:hover,
-.export__button:hover {
 	color: var(--text);
-	background: var(--bg-hover);
 }
 
 .cover__button:focus-visible,
@@ -7822,7 +7576,7 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: none;
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -7834,10 +7588,10 @@ button.compare__pick:focus-visible {
 .export__tick {
 	position: relative;
 	flex: none;
-	width: 14px;
-	height: 14px;
-	border: 1px solid var(--border);
-	border-radius: 3px;
+	width: 16px;
+	height: 16px;
+	border: 1px solid var(--graphic-faint);
+	border-radius: var(--radius-pill);
 }
 
 .export__format:hover .export__tick {
@@ -7853,8 +7607,8 @@ button.compare__pick:focus-visible {
 .export__format[aria-checked="true"] .export__tick::after {
 	content: "";
 	position: absolute;
-	top: 1px;
-	left: 4px;
+	top: 2px;
+	left: 5px;
 	width: 4px;
 	height: 8px;
 	border: solid var(--on-accent);
@@ -7866,13 +7620,6 @@ button.compare__pick:focus-visible {
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
-}
-
-.export__button:disabled {
-	color: var(--text-dim);
-	background: none;
-	opacity: 0.5;
-	cursor: default;
 }
 
 .export__size {
@@ -7887,7 +7634,7 @@ button.compare__pick:focus-visible {
 	height: 4px;
 	overflow: hidden;
 	background: var(--bg-hover);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 }
 
 .export__track[data-shown="false"] {
@@ -7927,8 +7674,8 @@ button.compare__pick:focus-visible {
 	color: var(--text);
 	background: var(--bg-card);
 	border: 1px solid var(--border);
-	border-radius: 9px;
-	box-shadow: var(--shadow-pop);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
 }
 
 .update__message {
@@ -7941,12 +7688,6 @@ button.compare__pick:focus-visible {
 	padding: 0 0.6rem;
 	font: inherit;
 	font-size: 0.75rem;
-	font-weight: 600;
-	color: var(--on-accent);
-	background: var(--accent);
-	border: 0;
-	border-radius: 6px;
-	cursor: pointer;
 }
 
 .update__dismiss {
@@ -7960,7 +7701,7 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -7973,4 +7714,157 @@ button.compare__pick:focus-visible {
 .update__dismiss:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
+}
+
+/* The shared controls. The rules above give each one its size and place, and
+   these give it its look, which is why they come last. */
+
+/* The main thing to do here, and the only pill. */
+.welcome__create,
+.account__in,
+.login__go,
+.versions__keep,
+.sprint__go,
+.overview__new,
+.update__action {
+	font-weight: 600;
+	color: var(--on-accent);
+	background: var(--accent);
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+	transition: transform 120ms ease;
+}
+
+.welcome__create:disabled,
+.account__in:disabled,
+.login__go:disabled,
+.versions__keep:disabled,
+.sprint__go:disabled,
+.overview__new:disabled,
+.update__action:disabled {
+	color: var(--text-faint);
+	background: var(--bg-hover);
+	cursor: default;
+}
+
+/* The same height as the boxes beside it in the sprint form. */
+.sprint__go {
+	border: 1px solid transparent;
+}
+
+.welcome__back,
+.profile__quiet,
+.profile__out-of,
+.retag__do,
+.merge-banner__abort,
+.merge-spot__choice,
+.compare__put,
+.sprint__stop,
+.info__page,
+.subject__draft,
+.trashed__action,
+.editor__find-do,
+.recents__keep,
+.cover__button,
+.export__button {
+	background: var(--bg-card);
+	border: var(--hairline);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	transition: transform 120ms ease;
+}
+
+.welcome__back:hover:not(:disabled),
+.profile__quiet:hover:not(:disabled),
+.profile__out-of:hover:not(:disabled),
+.retag__do:hover:not(:disabled),
+.merge-banner__abort:hover:not(:disabled),
+.merge-spot__choice:hover:not(:disabled),
+.compare__put:hover:not(:disabled),
+.sprint__stop:hover:not(:disabled),
+.info__page:hover:not(:disabled),
+.subject__draft:hover:not(:disabled),
+.trashed__action:hover:not(:disabled),
+.editor__find-do:hover:not(:disabled),
+.recents__keep:hover:not(:disabled),
+.cover__button:hover:not(:disabled),
+.export__button:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.welcome__back:disabled,
+.profile__quiet:disabled,
+.profile__out-of:disabled,
+.retag__do:disabled,
+.merge-banner__abort:disabled,
+.merge-spot__choice:disabled,
+.compare__put:disabled,
+.sprint__stop:disabled,
+.info__page:disabled,
+.subject__draft:disabled,
+.trashed__action:disabled,
+.editor__find-do:disabled,
+.recents__keep:disabled,
+.cover__button:disabled,
+.export__button:disabled {
+	color: var(--text-faint);
+	background: none;
+	cursor: default;
+}
+
+.welcome__create:active:not(:disabled),
+.account__in:active:not(:disabled),
+.login__go:active:not(:disabled),
+.versions__keep:active:not(:disabled),
+.sprint__go:active:not(:disabled),
+.overview__new:active:not(:disabled),
+.update__action:active:not(:disabled),
+.welcome__back:active:not(:disabled),
+.profile__quiet:active:not(:disabled),
+.profile__out-of:active:not(:disabled),
+.retag__do:active:not(:disabled),
+.merge-banner__abort:active:not(:disabled),
+.merge-spot__choice:active:not(:disabled),
+.compare__put:active:not(:disabled),
+.sprint__stop:active:not(:disabled),
+.info__page:active:not(:disabled),
+.subject__draft:active:not(:disabled),
+.trashed__action:active:not(:disabled),
+.editor__find-do:active:not(:disabled),
+.recents__keep:active:not(:disabled),
+.cover__button:active:not(:disabled),
+.export__button:active:not(:disabled) {
+	transform: var(--press);
+}
+
+.setup__input,
+.setup__folder,
+.login__input,
+.profile__input,
+.changes__message,
+.sprint__amount,
+.field__box,
+.field__line,
+.namefield__input,
+.search__field,
+.subject__remarks,
+.controls__url,
+.editor__find-input,
+.editor__aim-input,
+.settings__field {
+	background: var(--bg);
+	border: 1px solid var(--graphic-faint);
+	border-radius: var(--radius-sm);
+}
+
+input::placeholder,
+textarea::placeholder {
+	color: var(--text-faint);
+}
+
+input:disabled,
+textarea:disabled {
+	background: var(--bg-chrome);
+	border-color: var(--border);
 }
