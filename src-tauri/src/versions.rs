@@ -2002,7 +2002,9 @@ mod tests {
 		read_document, rename_document, rename_folder, write_document,
 	};
 	use crate::project::{Format, create, set_cover, write_book, write_manifest};
-	use crate::takes::{choose_take, delete_take, list_takes, take_text, try_something};
+	use crate::takes::{
+		choose_take, delete_take, list_takes, open_as_take, take_text, try_something,
+	};
 	use crate::tree::Node;
 	use git2::RepositoryState;
 
@@ -3785,6 +3787,88 @@ mod tests {
 		put_back_everything(root.clone(), first.clone()).unwrap();
 		assert!(changes(&root, Some(&first), None).unwrap().nodes.is_empty());
 		assert!(!takes_on_disk(&root, seeded).exists());
+	}
+
+	#[test]
+	fn a_version_opens_as_a_take_and_the_text_it_replaced_is_kept() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "Old words".to_owned()).unwrap();
+		let first = kept(&root);
+		write_document(root.clone(), seeded, "New words".to_owned()).unwrap();
+
+		let takes = open_as_take(root.clone(), first, seeded).unwrap();
+
+		assert_eq!(take_names(&root, seeded), ["Take 1", "Take 2"]);
+		assert!(takes[1].chosen);
+		assert_eq!(takes[1].from, Some(takes[0].id));
+		assert_eq!(body_now(&root, seeded), "Old words");
+		assert_eq!(
+			take_text(root.clone(), seeded, takes[0].id).unwrap(),
+			"New words"
+		);
+	}
+
+	#[test]
+	fn a_version_opens_beside_the_takes_a_document_has() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "Old words".to_owned()).unwrap();
+		let first = kept(&root);
+		let was = try_something(root.clone(), seeded).unwrap()[1].id;
+		write_document(root.clone(), seeded, "Rewritten".to_owned()).unwrap();
+
+		let takes = open_as_take(root.clone(), first, seeded).unwrap();
+
+		assert_eq!(take_names(&root, seeded), ["Take 1", "Take 2", "Take 3"]);
+		assert!(takes[2].chosen);
+		assert_eq!(takes[2].from, Some(was));
+		assert_eq!(body_now(&root, seeded), "Old words");
+		assert_eq!(take_text(root.clone(), seeded, was).unwrap(), "Rewritten");
+	}
+
+	#[test]
+	fn a_renamed_document_opens_from_a_version_by_its_id() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "Old words".to_owned()).unwrap();
+		let first = kept(&root);
+		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
+
+		open_as_take(root.clone(), first, seeded).unwrap();
+
+		assert_eq!(body_now(&root, seeded), "Old words");
+	}
+
+	#[test]
+	fn opening_a_version_as_a_take_keeps_the_front_matter_of_now() {
+		let (_parent, root, seeded, ..) = novel();
+		let then = "---\nsynopsis: Then.\n---\nOld words".to_owned();
+		write_document(root.clone(), seeded, then).unwrap();
+		let first = kept(&root);
+		let now = "---\nsynopsis: Now.\n---\nNew words".to_owned();
+		write_document(root.clone(), seeded, now).unwrap();
+
+		open_as_take(root.clone(), first, seeded).unwrap();
+
+		assert_eq!(
+			read_document(root.clone(), seeded).unwrap(),
+			"---\nsynopsis: Now.\n---\nOld words"
+		);
+	}
+
+	#[test]
+	fn a_version_without_the_document_cannot_open_as_a_take() {
+		let (_parent, root, seeded, ..) = novel();
+		let manifest = read_manifest(&root).unwrap();
+		let folder = tree::parent(&manifest.nodes, seeded).unwrap().id();
+		let first = kept(&root);
+		let newer = create_document(root.clone(), folder, "Newer".to_owned())
+			.unwrap()
+			.id;
+
+		assert!(matches!(
+			open_as_take(root.clone(), first, newer),
+			Err(Error::UnknownDocument)
+		));
+		assert!(list_takes(root.clone(), newer).unwrap().is_empty());
 	}
 
 	#[test]

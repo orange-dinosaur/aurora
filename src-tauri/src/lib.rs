@@ -206,6 +206,7 @@ pub fn run() {
 			versions::put_back_everything,
 			takes::list_takes,
 			takes::take_text,
+			takes::open_as_take,
 			takes::try_something,
 			takes::choose_take,
 			takes::rename_take,

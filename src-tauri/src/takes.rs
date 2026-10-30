@@ -17,7 +17,7 @@ use crate::project::{
 	Error, MANUSCRIPT, Manifest, NameError, Result, read_manifest, write_atomic, write_manifest,
 };
 use crate::tree::{self, Node, Take};
-use crate::versions::merge_underway;
+use crate::versions::{self, merge_underway};
 
 pub const TAKES_DIR: &str = ".takes";
 
@@ -198,12 +198,17 @@ pub fn take_text(root: PathBuf, id: Uuid, take: Uuid) -> Result<String> {
 	prose(&root, &read_manifest(&root)?, id, take)
 }
 
-/// Starts a new take as a copy of the document's text and chooses it. The first
-/// time, the text as it stands becomes a take too, so it can be gone back to.
-#[tauri::command]
-pub fn try_something(root: PathBuf, id: Uuid) -> Result<Vec<TakeView>> {
-	let mut manifest = editable(&root)?;
-	let text = read(&resolve(&manifest, &root, id)?)?;
+/// Starts a new take and chooses it, holding `prose` or else a copy of the
+/// document's text. The first time, the text as it stands becomes a take too,
+/// so it can be gone back to.
+fn start(
+	root: &Path,
+	mut manifest: Manifest,
+	id: Uuid,
+	prose: Option<&str>,
+) -> Result<Vec<TakeView>> {
+	let path = resolve(&manifest, root, id)?;
+	let text = read(&path)?;
 	let in_manuscript =
 		tree::trail(&manifest.nodes, id).is_some_and(|chain| chain[0].name() == MANUSCRIPT);
 	if !in_manuscript {
@@ -220,11 +225,28 @@ pub fn try_something(root: PathBuf, id: Uuid) -> Result<Vec<TakeView>> {
 
 	// The take being left has moved on from its file, which holds what it was
 	// when it was last left.
-	for take in [from, new] {
-		write_atomic(&file(&root, id, take)?, body(&text).as_bytes())?;
+	write_atomic(&file(root, id, from)?, body(&text).as_bytes())?;
+	let arriving = prose.unwrap_or(body(&text));
+	write_atomic(&file(root, id, new)?, arriving.as_bytes())?;
+	if prose.is_some() {
+		write_atomic(&path, with_body(&text, arriving).as_bytes())?;
 	}
-	write_manifest(&root, &mut manifest)?;
-	views(&root, &manifest, id)
+	write_manifest(root, &mut manifest)?;
+	views(root, &manifest, id)
+}
+
+#[tauri::command]
+pub fn try_something(root: PathBuf, id: Uuid) -> Result<Vec<TakeView>> {
+	start(&root, editable(&root)?, id, None)
+}
+
+/// Starts a new take from the document's prose at a version, found by id, under
+/// the front matter it has now.
+#[tauri::command]
+pub fn open_as_take(root: PathBuf, version: String, id: Uuid) -> Result<Vec<TakeView>> {
+	let manifest = editable(&root)?;
+	let then = versions::text(&root, &version, id)?.ok_or(Error::UnknownDocument)?;
+	start(&root, manifest, id, Some(body(&then)))
 }
 
 /// Makes a waiting take the document's text. Choosing the chosen take does
