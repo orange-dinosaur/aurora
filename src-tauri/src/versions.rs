@@ -1618,6 +1618,14 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 	if let Some(cover) = merged.cover {
 		index.add(&staged_entry(&repo, &merged.manifest.book.cover, cover, 0)?)?;
 	}
+	settle_takes(
+		&repo,
+		root,
+		&mut index,
+		&merged.manifest,
+		&our_tree,
+		&their_tree,
+	)?;
 	// With a conflict, ours here is the merge with this version's side of
 	// each, so it is what the writer sees until they choose.
 	let manifest = repo.blob(&to_json(&merged.manifest)?)?;
@@ -1667,6 +1675,70 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 		&[&head, &theirs],
 	)?;
 	Ok(None)
+}
+
+/// Makes `.takes/` match a merged manifest, in the index and on disk. The merge
+/// screen cannot settle a path no document owns, so a conflict here is dropped
+/// and the take's file comes from this version, or else the other. That also
+/// returns a file one side deleted when the merge kept its take, and anything
+/// no take names goes.
+fn settle_takes(
+	repo: &Repository,
+	root: &Path,
+	index: &mut Index,
+	manifest: &Manifest,
+	ours: &Tree,
+	theirs: &Tree,
+) -> Result<()> {
+	let named: HashSet<String> = tree::walk(&manifest.nodes)
+		.flat_map(|node| match node {
+			Node::Document { id, takes, .. } => takes
+				.keys()
+				.map(|take| format!("{}/{take}.md", takes_folder(*id)))
+				.collect(),
+			Node::Folder { .. } => Vec::new(),
+		})
+		.collect();
+	let held: Vec<(String, u16)> = index
+		.iter()
+		.map(|entry| {
+			(
+				String::from_utf8_lossy(&entry.path).into_owned(),
+				stage_of(&entry),
+			)
+		})
+		.filter(|(path, _)| path.starts_with(&format!("{TAKES_DIR}/")))
+		.collect();
+
+	for (path, stage) in held {
+		let unnamed = !named.contains(&path);
+		if stage != 0 || unnamed {
+			index.remove(Path::new(&path), i32::from(stage))?;
+		}
+		if unnamed {
+			let file = root.join(&path);
+			remove_if_there(&file)?;
+			// The last file out takes the folder with it.
+			if let Some(folder) = file.parent() {
+				let _ = fs::remove_dir(folder);
+			}
+		}
+	}
+	for path in named {
+		if index.get_path(Path::new(&path), 0).is_some() {
+			continue;
+		}
+		let Some(blob) = blob_at(ours, &path).or_else(|| blob_at(theirs, &path)) else {
+			continue;
+		};
+		index.add(&staged_entry(repo, &path, blob, 0)?)?;
+		let file = root.join(&path);
+		if let Some(folder) = file.parent() {
+			fs::create_dir_all(folder)?;
+		}
+		write_atomic(&file, repo.find_blob(blob)?.content())?;
+	}
+	Ok(())
 }
 
 fn merging(root: &Path) -> Result<Option<Merging>> {
@@ -1859,8 +1931,8 @@ fn settle_rest(root: &Path, theirs: &[merge::Conflict]) -> Result<()> {
 	};
 	let base = merge_base(&repo, &head, &merged)?;
 	let (_, base) = merge_side(&repo, base.as_ref())?;
-	let (_, ours) = merge_side(&repo, Some(&head))?;
-	let (_, other) = merge_side(&repo, Some(&merged))?;
+	let (our_tree, ours) = merge_side(&repo, Some(&head))?;
+	let (their_tree, other) = merge_side(&repo, Some(&merged))?;
 	let settled = merge::manifests(&base, &ours, &other, theirs);
 	// ponytail: the binder is merged afresh, so a rename or move made while
 	// the merge was under way is lost; carry `was` over if writers do that.
@@ -1938,6 +2010,15 @@ fn settle_rest(root: &Path, theirs: &[merge::Conflict]) -> Result<()> {
 		}
 	}
 
+	settle_takes(
+		&repo,
+		root,
+		&mut index,
+		&settled.manifest,
+		&our_tree,
+		&their_tree,
+	)?;
+
 	let manifest = to_json(&settled.manifest)?;
 	write_atomic(&root.join(MANIFEST_FILE), &manifest)?;
 	index.remove_path(Path::new(MANIFEST_FILE))?;
@@ -2003,7 +2084,8 @@ mod tests {
 	};
 	use crate::project::{Format, create, set_cover, write_book, write_manifest};
 	use crate::takes::{
-		choose_take, delete_take, list_takes, open_as_take, take_text, try_something,
+		TakeView, choose_take, delete_take, list_takes, open_as_take, rename_take, take_text,
+		try_something,
 	};
 	use crate::tree::Node;
 	use git2::RepositoryState;
@@ -4274,6 +4356,279 @@ mod tests {
 		checkpoint(root, "Merged Act two", "").unwrap();
 		assert_eq!(parents(root).len(), 2);
 		assert!(!pending(root).unwrap());
+	}
+
+	/// Takes `One`, `Two` and `Three`, the last chosen.
+	fn written_takes(root: &Path, id: Uuid) -> Vec<TakeView> {
+		write_document(root.to_path_buf(), id, "One\n".to_owned()).unwrap();
+		try_something(root.to_path_buf(), id).unwrap();
+		write_document(root.to_path_buf(), id, "Two\n".to_owned()).unwrap();
+		try_something(root.to_path_buf(), id).unwrap();
+		write_document(root.to_path_buf(), id, "Three\n".to_owned()).unwrap();
+		list_takes(root.to_path_buf(), id).unwrap()
+	}
+
+	fn chosen_take(root: &Path, id: Uuid) -> Uuid {
+		let takes = list_takes(root.to_path_buf(), id).unwrap();
+		takes.iter().find(|take| take.chosen).unwrap().id
+	}
+
+	/// Every take has its file, one is chosen, and nothing else is in `.takes`.
+	fn takes_whole(root: &Path) {
+		let manifest = read_manifest(root).unwrap();
+		let mut folders = 0;
+		for node in tree::walk(&manifest.nodes) {
+			let Node::Document {
+				id, takes, chosen, ..
+			} = node
+			else {
+				continue;
+			};
+			if takes.is_empty() {
+				assert!(chosen.is_none());
+				assert!(!takes_on_disk(root, *id).exists());
+				continue;
+			}
+			assert!(takes.len() > 1);
+			assert!(takes.contains_key(&chosen.unwrap()));
+			folders += 1;
+			let mut files: Vec<String> = fs::read_dir(takes_on_disk(root, *id))
+				.unwrap()
+				.map(|file| file.unwrap().file_name().into_string().unwrap())
+				.collect();
+			let mut named: Vec<String> = takes.keys().map(|take| format!("{take}.md")).collect();
+			files.sort();
+			named.sort();
+			assert_eq!(files, named);
+		}
+		let on_disk = fs::read_dir(root.join(TAKES_DIR)).map_or(0, |dir| dir.count());
+		assert_eq!(on_disk, folders);
+	}
+
+	#[test]
+	fn takes_one_version_made_come_across() {
+		let (_parent, root, seeded, here, _) = novel();
+		let conflicts = diverged(
+			&root,
+			|| {
+				try_something(root.clone(), seeded).unwrap();
+				write_document(root.clone(), seeded, "Rewritten".to_owned()).unwrap();
+			},
+			|| {
+				create_document(root.clone(), here, "New".to_owned()).unwrap();
+			},
+		);
+
+		assert_eq!(conflicts, []);
+		assert_eq!(take_names(&root, seeded), ["Take 1", "Take 2"]);
+		assert_eq!(read_document(root.clone(), seeded).unwrap(), "Rewritten");
+		takes_whole(&root);
+		assert!(!pending(&root).unwrap());
+	}
+
+	#[test]
+	fn try_something_on_both_sides_keeps_all_of_them() {
+		let (_parent, root, seeded, ..) = novel();
+		let mut mine = None;
+		let conflicts = diverged(
+			&root,
+			|| {
+				try_something(root.clone(), seeded).unwrap();
+			},
+			|| {
+				try_something(root.clone(), seeded).unwrap();
+				mine = Some(chosen_take(&root, seeded));
+			},
+		);
+
+		assert_eq!(conflicts, []);
+		assert_eq!(
+			take_names(&root, seeded),
+			["Take 1", "Take 1", "Take 2", "Take 2"]
+		);
+		assert_eq!(Some(chosen_take(&root, seeded)), mine);
+		takes_whole(&root);
+	}
+
+	#[test]
+	fn each_side_choosing_a_different_take_finishes_with_every_file() {
+		let (_parent, root, seeded, ..) = novel();
+		let takes = written_takes(&root, seeded);
+		let conflicts = diverged(
+			&root,
+			|| {
+				choose_take(root.clone(), seeded, takes[0].id).unwrap();
+			},
+			|| {
+				choose_take(root.clone(), seeded, takes[1].id).unwrap();
+			},
+		);
+
+		assert!(matches!(
+			conflicts.as_slice(),
+			[merge::Conflict::Text { id: Some(id), .. }] if *id == seeded
+		));
+		assert_eq!(chosen_take(&root, seeded), takes[1].id);
+		settle(&root, seeded, "Two\n").unwrap();
+		checkpoint(&root, "Merged Act two", "").unwrap();
+
+		assert_eq!(parents(&root).len(), 2);
+		assert_eq!(
+			take_text(root.clone(), seeded, takes[2].id).unwrap(),
+			"Three\n"
+		);
+		takes_whole(&root);
+	}
+
+	#[test]
+	fn a_take_deleted_on_one_side_while_chosen_on_the_other_falls_to_the_first() {
+		for deleted_here in [false, true] {
+			let (_parent, root, seeded, ..) = novel();
+			let takes = written_takes(&root, seeded);
+			let gone = takes[0].id;
+			let delete = || {
+				delete_take(root.clone(), seeded, gone).unwrap();
+			};
+			let choose = || {
+				choose_take(root.clone(), seeded, gone).unwrap();
+			};
+			let conflicts = match deleted_here {
+				true => diverged(&root, choose, delete),
+				false => diverged(&root, delete, choose),
+			};
+
+			assert_eq!(conflicts, []);
+			assert_eq!(take_names(&root, seeded), ["Take 2", "Take 3"]);
+			assert_eq!(chosen_take(&root, seeded), takes[1].id);
+			assert_eq!(read_document(root.clone(), seeded).unwrap(), "One\n");
+			takes_whole(&root);
+		}
+	}
+
+	#[test]
+	fn a_clash_over_a_waiting_take_keeps_this_version_and_raises_nothing() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "One\n".to_owned()).unwrap();
+		let takes = try_something(root.clone(), seeded).unwrap();
+		write_document(root.clone(), seeded, "Two\n".to_owned()).unwrap();
+		let (waiting, chosen) = (takes[0].id, takes[1].id);
+		let rewrite = |text: &str| {
+			choose_take(root.clone(), seeded, waiting).unwrap();
+			write_document(root.clone(), seeded, text.to_owned()).unwrap();
+			choose_take(root.clone(), seeded, chosen).unwrap();
+		};
+
+		let conflicts = diverged(&root, || rewrite("There\n"), || rewrite("Here\n"));
+
+		assert_eq!(conflicts, []);
+		assert_eq!(parents(&root).len(), 2);
+		assert_eq!(take_text(root.clone(), seeded, waiting).unwrap(), "Here\n");
+		assert!(!pending(&root).unwrap());
+		takes_whole(&root);
+	}
+
+	#[test]
+	fn a_take_renamed_here_and_deleted_there_keeps_its_file() {
+		let (_parent, root, seeded, ..) = novel();
+		let takes = written_takes(&root, seeded);
+		let kept = takes[0].id;
+		let conflicts = diverged(
+			&root,
+			|| {
+				delete_take(root.clone(), seeded, kept).unwrap();
+			},
+			|| {
+				rename_take(root.clone(), seeded, kept, "Opening".to_owned()).unwrap();
+			},
+		);
+
+		assert_eq!(conflicts, []);
+		assert_eq!(take_names(&root, seeded), ["Opening", "Take 2", "Take 3"]);
+		assert_eq!(take_text(root.clone(), seeded, kept).unwrap(), "One\n");
+		assert!(!pending(&root).unwrap());
+		takes_whole(&root);
+	}
+
+	#[test]
+	fn a_document_left_with_takes_and_none_chosen_chooses_the_first() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "One\n".to_owned()).unwrap();
+		let takes = try_something(root.clone(), seeded).unwrap();
+		write_document(root.clone(), seeded, "Two\n".to_owned()).unwrap();
+		let conflicts = diverged(
+			&root,
+			|| {
+				try_something(root.clone(), seeded).unwrap();
+				try_something(root.clone(), seeded).unwrap();
+				choose_take(root.clone(), seeded, takes[1].id).unwrap();
+			},
+			|| {
+				delete_take(root.clone(), seeded, takes[1].id).unwrap();
+			},
+		);
+
+		assert_eq!(conflicts, []);
+		assert_eq!(take_names(&root, seeded), ["Take 3", "Take 4"]);
+		takes_whole(&root);
+		assert_eq!(read_document(root.clone(), seeded).unwrap(), "One\n");
+
+		let left = list_takes(root.clone(), seeded).unwrap();
+		choose_take(root.clone(), seeded, left[1].id).unwrap();
+		assert_eq!(
+			take_text(root.clone(), seeded, left[0].id).unwrap(),
+			"One\n",
+			"the document's text went into the take it stood for"
+		);
+	}
+
+	#[test]
+	fn a_document_merged_down_to_one_take_is_ordinary_again() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "One\n".to_owned()).unwrap();
+		let takes = try_something(root.clone(), seeded).unwrap();
+		write_document(root.clone(), seeded, "Two\n".to_owned()).unwrap();
+		let conflicts = diverged(
+			&root,
+			|| {
+				try_something(root.clone(), seeded).unwrap();
+			},
+			|| {
+				delete_take(root.clone(), seeded, takes[1].id).unwrap();
+			},
+		);
+
+		assert_eq!(conflicts, []);
+		assert!(take_names(&root, seeded).is_empty());
+		takes_whole(&root);
+		assert!(!pending(&root).unwrap());
+		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
+		assert!(!json.contains("takes"));
+	}
+
+	#[test]
+	fn a_document_deleted_on_one_side_settles_with_its_takes_either_way() {
+		for deleted_here in [false, true] {
+			for theirs in [false, true] {
+				let (_parent, root, seeded, ..) = novel();
+				try_something(root.clone(), seeded).unwrap();
+				let delete = || delete_document(root.clone(), seeded).unwrap();
+				let edit = || write_document(root.clone(), seeded, "Edited".to_owned()).unwrap();
+				let conflicts = match deleted_here {
+					true => diverged(&root, edit, delete),
+					false => diverged(&root, delete, edit),
+				};
+
+				settled_as(&root, conflicts, theirs);
+
+				let survives = deleted_here == theirs;
+				let manifest = read_manifest(&root).unwrap();
+				assert_eq!(tree::find(&manifest.nodes, seeded).is_some(), survives);
+				if survives {
+					assert_eq!(take_names(&root, seeded), ["Take 1", "Take 2"]);
+				}
+				takes_whole(&root);
+			}
+		}
 	}
 
 	#[test]

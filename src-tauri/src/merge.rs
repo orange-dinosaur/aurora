@@ -10,6 +10,7 @@ use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::project::{Book, Manifest};
+use crate::takes::in_order;
 use crate::tree::{self, Node};
 
 /// Something both versions changed differently. Until the writer chooses,
@@ -178,8 +179,8 @@ fn changed(id: Uuid, base: &Flat, side: &Flat) -> bool {
 			.any(|child| changed(*child, base, side))
 }
 
-/// A node's details as JSON: everything but its id, name and children, then
-/// its own fields apart, so each merges key by key.
+/// A node's details as JSON: everything but its id, name, children and takes,
+/// then its own fields apart, so each merges key by key.
 fn details(node: &Node) -> (Map<String, Value>, Map<String, Value>) {
 	let mut map = match serde_json::to_value(node) {
 		Ok(Value::Object(map)) => map,
@@ -189,10 +190,58 @@ fn details(node: &Node) -> (Map<String, Value>, Map<String, Value>) {
 		Some(Value::Object(fields)) => fields,
 		_ => Map::new(),
 	};
-	for key in ["node", "id", "name", "children"] {
+	for key in ["node", "id", "name", "children", "takes", "chosen"] {
 		map.remove(key);
 	}
 	(map, fields)
+}
+
+/// Takes merge one by one, so both versions' new ones survive, and neither they
+/// nor `chosen` raise a card: a clash keeps ours. A `chosen` left with no take
+/// falls to the first one, and the document's text then stands as that take's.
+fn merge_takes(node: &mut Node, base: &Node, ours: &Node, theirs: &Node) {
+	// ponytail: Try something on both sides leaves two takes of each number, and
+	// the other version's chosen take keeps a stale file, so its text is only in
+	// the document's conflict. Copying that text into its file would keep it.
+	let (
+		Node::Document { takes, chosen, .. },
+		Node::Document {
+			takes: b,
+			chosen: base_chosen,
+			..
+		},
+		Node::Document {
+			takes: o,
+			chosen: our_chosen,
+			..
+		},
+		Node::Document {
+			takes: t,
+			chosen: their_chosen,
+			..
+		},
+	) = (node, base, ours, theirs)
+	else {
+		return;
+	};
+
+	let ids: BTreeSet<&Uuid> = b.keys().chain(o.keys()).chain(t.keys()).collect();
+	*takes = ids
+		.into_iter()
+		.filter_map(|id| {
+			let (b, o, t) = (b.get(id), o.get(id), t.get(id));
+			let take = three_way(&b, &o, &t).unwrap_or(o)?;
+			Some((*id, take.clone()))
+		})
+		.collect();
+	*chosen = three_way(base_chosen, our_chosen, their_chosen).unwrap_or(*our_chosen);
+
+	if takes.len() < 2 {
+		takes.clear();
+		*chosen = None;
+	} else if !chosen.is_some_and(|take| takes.contains_key(&take)) {
+		*chosen = in_order(takes).first().map(|(take, _)| *take);
+	}
 }
 
 fn merge_map(
@@ -265,7 +314,7 @@ fn merge_node(
 		}
 	});
 
-	let ((base, base_fields), (here, here_fields), (there, there_fields)) =
+	let ((then, then_fields), (here, here_fields), (there, there_fields)) =
 		(details(base), details(ours), details(theirs));
 	let mut map = match serde_json::to_value(ours) {
 		Ok(Value::Object(map)) => map,
@@ -274,15 +323,16 @@ fn merge_node(
 	for key in here.keys().chain(there.keys()) {
 		map.remove(key);
 	}
-	map.extend(merge_map(Some(id), &base, &here, &there, found));
+	map.extend(merge_map(Some(id), &then, &here, &there, found));
 	map.remove("fields");
-	let fields = merge_map(Some(id), &base_fields, &here_fields, &there_fields, found);
+	let fields = merge_map(Some(id), &then_fields, &here_fields, &there_fields, found);
 	if !fields.is_empty() {
 		map.insert("fields".to_owned(), Value::Object(fields));
 	}
 	let mut node: Node =
 		serde_json::from_value(Value::Object(map)).unwrap_or_else(|_| ours.clone());
 	renamed(&mut node, name.to_owned());
+	merge_takes(&mut node, base, ours, theirs);
 	(parent, node)
 }
 
