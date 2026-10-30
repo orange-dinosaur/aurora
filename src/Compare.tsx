@@ -20,6 +20,7 @@ import { failure } from "./errors";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import PutBack from "./PutBack";
+import { canTry, openAsTake } from "./takes";
 import { draw, Wash } from "./Blocks";
 import { type Block, blocks, change, follow, tally } from "./lib/compare";
 import {
@@ -52,13 +53,15 @@ type Props = {
 	slug: string | null;
 	fontSize: number;
 	lineHeight: number;
+	/** Set while a merge is under way, when takes cannot change. */
+	merging: boolean;
 	onScope: (scope: VersionsScope) => void;
 	onBack: () => void;
 	/** Writes everything down, runs the put back, and reloads what it changed. */
 	/** Asks first when the target has changes not in a checkpoint. */
 	onPutBack: (
 		task: () => Promise<unknown>,
-		target: Overwrites,
+		target?: Overwrites,
 	) => Promise<void>;
 };
 
@@ -82,6 +85,7 @@ export default function Compare({
 	slug,
 	fontSize,
 	lineHeight,
+	merging,
 	onScope,
 	onBack,
 	onPutBack,
@@ -373,13 +377,15 @@ export default function Compare({
 
 	// Every put back goes through the project, which writes the editors down
 	// first and reloads them after. The view then reads what is left.
-	async function back(task: () => Promise<unknown>, target: Overwrites) {
+	async function back(task: () => Promise<unknown>, target?: Overwrites) {
 		setBusy(true);
 		setRefused(null);
 		try {
 			await onPutBack(task, target);
+			return true;
 		} catch (reason) {
 			setRefused(failure(reason).message);
+			return false;
 		} finally {
 			setBusy(false);
 			setAgain((times) => times + 1);
@@ -412,6 +418,17 @@ export default function Compare({
 	const removes = (id: string) => () =>
 		invoke<string[]>("put_back_removes", { ...asked, id });
 	const refuse = (reason: unknown) => setRefused(failure(reason).message);
+
+	// Nothing is overwritten, since the text leaving stays as a take, so this
+	// has no target to ask about.
+	async function openTake(id: string) {
+		if (
+			asked !== null &&
+			(await back(() => openAsTake(root, asked.version, id)))
+		) {
+			onBack();
+		}
+	}
 
 	function backEverything() {
 		if (asked !== null) {
@@ -745,6 +762,19 @@ export default function Compare({
 						>
 							put this one back
 						</button>
+						{open !== null &&
+							texts !== null &&
+							texts.then !== null &&
+							canTry(open.trail) && (
+								<button
+									type="button"
+									className="compare__put"
+									disabled={asked === null || merging}
+									onClick={() => void openTake(open.id)}
+								>
+									Open as a take
+								</button>
+							)}
 						<PutBack
 							className="compare__put"
 							disabled={asked === null}

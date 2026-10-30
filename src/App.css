@@ -3358,6 +3358,11 @@ button.compare__pick:focus-visible {
 	margin-left: auto;
 }
 
+/* The button before it has already taken the free space. */
+.compare__foot > .compare__put + .putback {
+	margin-left: 0;
+}
+
 /* The foot sits on the window's edge, so the question opens upward. */
 .compare__foot .menu__items {
 	top: auto;
@@ -3365,6 +3370,7 @@ button.compare__pick:focus-visible {
 }
 
 .compare__put {
+	margin-left: auto;
 	padding: 0.25rem 0.75rem;
 	font: inherit;
 	color: var(--accent);

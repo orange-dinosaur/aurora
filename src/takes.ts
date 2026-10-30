@@ -16,6 +16,14 @@ export function takeText(
 	return invoke<string>("take_text", { root, id, take });
 }
 
+export function openAsTake(
+	root: string,
+	version: string,
+	id: string,
+): Promise<TakeView[]> {
+	return invoke<TakeView[]>("open_as_take", { root, version, id });
+}
+
 export function trySomething(root: string, id: string): Promise<TakeView[]> {
 	return invoke<TakeView[]>("try_something", { root, id });
 }

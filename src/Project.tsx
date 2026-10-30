@@ -1467,6 +1467,7 @@ export default function Project({
 					slug={comparing.slug}
 					fontSize={preferences.fontSize}
 					lineHeight={preferences.lineHeight}
+					merging={merge !== null}
 					onScope={(versionsScope) =>
 						onPreferences({ ...preferences, versionsScope })
 					}
