@@ -1,7 +1,7 @@
 //! Every project keeps its versions as a git repository at its own root.
 
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -26,7 +26,8 @@ use crate::project::{
 	Book, COVER_NAMES, Error, Format, MANIFEST_FILE, Manifest, Result, read_manifest,
 	remove_if_there, to_json, write_atomic, write_book,
 };
-use crate::tree::{self, Node};
+use crate::takes::TAKES_DIR;
+use crate::tree::{self, Node, Take};
 
 const AUTHOR_EMAIL: &str = "aurora@localhost";
 
@@ -513,6 +514,9 @@ pub struct Change {
 	pub moved: bool,
 	/// A document whose text differs. Never set on a folder.
 	pub edited: bool,
+	/// A document whose takes differ, in their details or their files, which
+	/// can be the whole of what changed. Never set on a folder.
+	pub takes: bool,
 	/// In a folder, the children in both versions that changed places. Empty on
 	/// a document.
 	pub reordered: Vec<Reorder>,
@@ -547,6 +551,8 @@ struct Placed {
 	parent: Option<Uuid>,
 	path: String,
 	children: Vec<Uuid>,
+	/// A document's takes and which of them is chosen.
+	takes: (BTreeMap<Uuid, Take>, Option<Uuid>),
 }
 
 fn id_of(node: &Node) -> Uuid {
@@ -557,11 +563,19 @@ fn id_of(node: &Node) -> Uuid {
 
 fn place(nodes: &[Node], parent: Option<Uuid>, prefix: &str, placed: &mut Vec<(Uuid, Placed)>) {
 	for node in nodes {
-		let (name, folder, children) = match node {
-			Node::Folder { name, children, .. } => {
-				(name, true, children.iter().map(id_of).collect())
-			}
-			Node::Document { name, .. } => (name, false, Vec::new()),
+		let (name, folder, children, takes) = match node {
+			Node::Folder { name, children, .. } => (
+				name,
+				true,
+				children.iter().map(id_of).collect(),
+				Default::default(),
+			),
+			Node::Document {
+				name,
+				takes,
+				chosen,
+				..
+			} => (name, false, Vec::new(), (takes.clone(), *chosen)),
 		};
 		let id = id_of(node);
 		let path = format!("{prefix}{name}");
@@ -573,6 +587,7 @@ fn place(nodes: &[Node], parent: Option<Uuid>, prefix: &str, placed: &mut Vec<(U
 				parent,
 				path: path.clone(),
 				children,
+				takes,
 			},
 		));
 		if let Node::Folder { children, .. } = node {
@@ -696,6 +711,22 @@ fn blob_at(tree: &Tree, path: &str) -> Option<Oid> {
 	tree.get_path(Path::new(path)).ok().map(|entry| entry.id())
 }
 
+fn takes_folder(id: Uuid) -> String {
+	format!("{TAKES_DIR}/{id}")
+}
+
+/// The files of a document's takes in a tree, by path.
+fn take_files(repo: &Repository, tree: &Tree, id: Uuid) -> HashMap<String, Oid> {
+	let folder = takes_folder(id);
+	let Some(files) = blob_at(tree, &folder).and_then(|oid| repo.find_tree(oid).ok()) else {
+		return HashMap::new();
+	};
+	files
+		.iter()
+		.filter_map(|file| Some((format!("{folder}/{}", file.name().ok()?), file.id())))
+		.collect()
+}
+
 /// What changed from version `a` to version `b`, where none is the project as
 /// it stands on disk and `HEAD` is the latest checkpoint.
 pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes> {
@@ -748,6 +779,12 @@ fn compare((old_tree, old): &(Tree, Manifest), (new_tree, new): &(Tree, Manifest
 				&& then.is_some_and(|then| {
 					blob_at(old_tree, &then.path) != blob_at(new_tree, &now.path)
 				}),
+			takes: !now.folder
+				&& then.is_some_and(|then| {
+					let folder = takes_folder(*id);
+					then.takes != now.takes
+						|| blob_at(old_tree, &folder) != blob_at(new_tree, &folder)
+				}),
 			reordered: then.map_or_else(Vec::new, |then| {
 				reordered(&then.children, &now.children)
 					.into_iter()
@@ -762,6 +799,7 @@ fn compare((old_tree, old): &(Tree, Manifest), (new_tree, new): &(Tree, Manifest
 			|| change.renamed
 			|| change.moved
 			|| change.edited
+			|| change.takes
 			|| !change.reordered.is_empty()
 		{
 			nodes.push(change);
@@ -776,6 +814,7 @@ fn compare((old_tree, old): &(Tree, Manifest), (new_tree, new): &(Tree, Manifest
 			renamed: false,
 			moved: false,
 			edited: false,
+			takes: false,
 			reordered: Vec::new(),
 		});
 	}
@@ -862,6 +901,19 @@ fn carry(root: &Path, row: Row, staging: bool) -> Result<()> {
 	}
 	let mut new = files(&is, &blobs, cover);
 	new.insert(MANIFEST_FILE.to_owned(), repo.blob(&to_json(&is)?)?);
+
+	// A document's take files go where its node goes, so the two never part:
+	// the row's own document, and any a folder's row took out with it.
+	if let Row::Node { id } = row {
+		let staying: HashSet<Uuid> = is.documents().iter().map(|doc| doc.id).collect();
+		let gone = was.documents().into_iter().map(|doc| doc.id);
+		for document in gone.filter(|doc| !staying.contains(doc)).chain([id]) {
+			old.extend(take_files(&repo, &was_tree, document));
+			if tree::find(&from.nodes, document).is_some() {
+				new.extend(take_files(&repo, &from_tree, document));
+			}
+		}
+	}
 
 	let mut index = repo.index()?;
 	for path in old.keys().filter(|path| !new.contains_key(*path)) {
@@ -1923,6 +1975,7 @@ mod tests {
 		read_document, rename_document, rename_folder, write_document,
 	};
 	use crate::project::{Format, create, set_cover, write_book, write_manifest};
+	use crate::takes::{choose_take, delete_take, try_something};
 	use crate::tree::Node;
 	use git2::RepositoryState;
 
@@ -3089,6 +3142,171 @@ mod tests {
 	fn checkpoint_manifest(root: &Path, id: Oid) -> Manifest {
 		let repo = Repository::open(root).unwrap();
 		side(&repo, Some(&id.to_string())).unwrap().1
+	}
+
+	/// How many take files of a document the next checkpoint holds.
+	fn take_files_held(root: &Path, id: Uuid) -> usize {
+		let repo = Repository::open(root).unwrap();
+		let tree = staged_side(&repo).unwrap().0;
+		take_files(&repo, &tree, id).len()
+	}
+
+	/// A kept document with three takes, the last of them chosen.
+	fn three_takes(root: &Path, id: Uuid) -> Vec<Uuid> {
+		try_something(root.to_path_buf(), id).unwrap();
+		let takes = try_something(root.to_path_buf(), id).unwrap();
+		kept(root);
+		takes.iter().map(|take| take.id).collect()
+	}
+
+	#[test]
+	fn a_take_started_is_a_row_though_the_text_is_the_same() {
+		let (_parent, root, seeded, ..) = novel();
+
+		try_something(root.clone(), seeded).unwrap();
+
+		let status = status(&root).unwrap();
+		let change = change_of(&status.unstaged, seeded).unwrap();
+		assert!(change.takes);
+		assert!(!change.edited);
+	}
+
+	#[test]
+	fn a_waiting_take_deleted_is_a_row_though_the_text_is_the_same() {
+		let (_parent, root, seeded, ..) = novel();
+		let takes = three_takes(&root, seeded);
+
+		delete_take(root.clone(), seeded, takes[0]).unwrap();
+
+		let status = status(&root).unwrap();
+		let change = change_of(&status.unstaged, seeded).unwrap();
+		assert!(change.takes);
+		assert!(!change.edited);
+	}
+
+	#[test]
+	fn typing_in_the_chosen_take_changes_only_the_text() {
+		let (_parent, root, seeded, ..) = novel();
+		three_takes(&root, seeded);
+
+		write_document(root.clone(), seeded, "Rewritten".to_owned()).unwrap();
+
+		let status = status(&root).unwrap();
+		let change = change_of(&status.unstaged, seeded).unwrap();
+		assert!(change.edited);
+		assert!(!change.takes);
+	}
+
+	#[test]
+	fn choosing_a_take_changes_the_text_and_the_takes() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "One".to_owned()).unwrap();
+		let takes = try_something(root.clone(), seeded).unwrap();
+		write_document(root.clone(), seeded, "Two".to_owned()).unwrap();
+		kept(&root);
+
+		choose_take(root.clone(), seeded, takes[0].id).unwrap();
+
+		let status = status(&root).unwrap();
+		let change = change_of(&status.unstaged, seeded).unwrap();
+		assert!(change.edited);
+		assert!(change.takes);
+	}
+
+	#[test]
+	fn a_row_brings_its_take_files_in_and_takes_them_out_again() {
+		let (_parent, root, seeded, ..) = novel();
+		try_something(root.clone(), seeded).unwrap();
+		let row = Row::Node { id: seeded };
+
+		carry(&root, row, true).unwrap();
+
+		let picked = status(&root).unwrap();
+		assert!(change_of(&picked.staged, seeded).unwrap().takes);
+		assert!(nothing_in(&picked.unstaged));
+		assert_eq!(take_files_held(&root, seeded), 2);
+
+		carry(&root, row, false).unwrap();
+
+		let dropped = status(&root).unwrap();
+		assert!(nothing_in(&dropped.staged));
+		assert!(change_of(&dropped.unstaged, seeded).unwrap().takes);
+		assert_eq!(take_files_held(&root, seeded), 0);
+	}
+
+	#[test]
+	fn a_row_carries_a_deleted_take_file_both_ways() {
+		let (_parent, root, seeded, ..) = novel();
+		let takes = three_takes(&root, seeded);
+		delete_take(root.clone(), seeded, takes[0]).unwrap();
+		let row = Row::Node { id: seeded };
+
+		carry(&root, row, true).unwrap();
+		assert_eq!(take_files_held(&root, seeded), 2);
+		assert!(nothing_in(&status(&root).unwrap().unstaged));
+
+		carry(&root, row, false).unwrap();
+		assert_eq!(take_files_held(&root, seeded), 3);
+		assert!(nothing_in(&status(&root).unwrap().staged));
+	}
+
+	#[test]
+	fn picking_another_row_leaves_take_files_out() {
+		let (_parent, root, seeded, here, _) = novel();
+		let other = create_document(root.clone(), here, "Other".to_owned())
+			.unwrap()
+			.id;
+		kept(&root);
+		try_something(root.clone(), seeded).unwrap();
+		write_document(root.clone(), other, "Changed".to_owned()).unwrap();
+
+		carry(&root, Row::Node { id: other }, true).unwrap();
+
+		assert_eq!(take_files_held(&root, seeded), 0);
+		let status = status(&root).unwrap();
+		assert!(change_of(&status.staged, seeded).is_none());
+		assert!(change_of(&status.unstaged, seeded).unwrap().takes);
+	}
+
+	#[test]
+	fn a_checkpoint_of_a_picked_row_leaves_nothing_behind() {
+		let (_parent, root, seeded, ..) = novel();
+		try_something(root.clone(), seeded).unwrap();
+
+		carry(&root, Row::Node { id: seeded }, true).unwrap();
+		let id = checkpoint(&root, "Tried something", "").unwrap();
+
+		let status = status(&root).unwrap();
+		assert!(nothing_in(&status.staged));
+		assert!(nothing_in(&status.unstaged));
+		let repo = Repository::open(&root).unwrap();
+		let tree = repo.find_commit(id).unwrap().tree().unwrap();
+		assert_eq!(take_files(&repo, &tree, seeded).len(), 2);
+	}
+
+	#[test]
+	fn a_folder_row_takes_out_the_take_files_of_what_it_held() {
+		let (_parent, root, seeded, ..) = novel();
+		let manifest = read_manifest(&root).unwrap();
+		let section = tree::trail(&manifest.nodes, seeded).unwrap()[0].id();
+		let part = create_folder(
+			root.clone(),
+			section,
+			"Part".to_owned(),
+			Some(tree::FolderKind::Chapter),
+		)
+		.unwrap()
+		.id();
+		let inside = create_document(root.clone(), part, "Inside".to_owned())
+			.unwrap()
+			.id;
+		try_something(root.clone(), inside).unwrap();
+		kept(&root);
+		delete_folder(root.clone(), part).unwrap();
+
+		carry(&root, Row::Node { id: part }, true).unwrap();
+
+		assert_eq!(take_files_held(&root, inside), 0);
 	}
 
 	#[test]

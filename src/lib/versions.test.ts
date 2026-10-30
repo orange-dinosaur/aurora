@@ -84,6 +84,7 @@ describe("summary", () => {
 			renamed: false,
 			moved: false,
 			edited: false,
+			takes: false,
 			reordered: [],
 			...rest,
 		};
@@ -151,6 +152,7 @@ describe("lines", () => {
 			renamed: false,
 			moved: false,
 			edited: false,
+			takes: false,
 			reordered: [],
 		};
 		const listed = lines({ nodes: [scene], book: true, cover: true });
@@ -179,6 +181,7 @@ describe("overwritten", () => {
 			renamed: false,
 			moved: false,
 			edited: true,
+			takes: false,
 			reordered: [],
 			...rest,
 		};

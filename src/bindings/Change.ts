@@ -23,6 +23,11 @@ moved: boolean,
  */
 edited: boolean, 
 /**
+ * A document whose takes differ, in their details or their files, which
+ * can be the whole of what changed. Never set on a folder.
+ */
+takes: boolean, 
+/**
  * In a folder, the children in both versions that changed places. Empty on
  * a document.
  */
