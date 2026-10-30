@@ -449,38 +449,51 @@
 }
 
 :root {
-	--bg: oklch(0.993 0.002 220);
+	--bg: #ffffff;
 	/* The tint that separates chrome from paper: the sidebar, the tab strip and
 	   anything else that is not the manuscript. */
-	--bg-chrome: oklch(0.951 0.006 226);
-	--bg-card: oklch(1 0 0);
-	/* Under the pointer. Nothing reads it yet; hovers still take --accent-wash
-	   at half, and the chrome pass is what moves them onto this. */
-	--bg-hover: oklch(0.928 0.005 226);
-	--border: oklch(0.906 0.008 226);
+	--bg-chrome: #fcfbfb;
+	--bg-card: #ffffff;
+	/* Under the pointer. */
+	--bg-hover: #f1f0ef;
+	--border: #e8e7e5;
 	/* A rule that has to carry weight, around a control rather than between two
-	   rows of a list. Nothing reads it yet either. */
-	--border-strong: oklch(0.845 0.01 226);
-	--text: oklch(0.255 0.015 250);
-	--text-dim: oklch(0.515 0.012 245);
+	   rows of a list. */
+	--border-strong: #d6d4d2;
+	--text: #2e2b33;
+	--text-dim: #5f5c66;
 	/* A third tone below --text-dim, for a label sitting beside something that
-	   is already dim. Nothing reads it yet. */
-	--text-faint: oklch(0.66 0.01 245);
-	--accent: oklch(0.55 0.095 205);
+	   is already dim. */
+	--text-faint: #6c6972;
+	/* For shapes rather than words, which only need 3:1. */
+	--graphic-faint: #86838c;
+	color-scheme: light;
+	/* A pastel fill, labelled in --on-accent. Words and focus rings sitting on a
+	   surface take --accent-text, because the pastel is too pale to read. */
+	--accent: #f8a67c;
+	--accent-text: #a8451f;
 	/* Behind whatever is selected, at full strength; hover takes the same wash
 	   at half. A selection is never drawn with a border. */
-	--accent-wash: oklch(0.925 0.038 205);
-	--danger: oklch(0.505 0.15 22);
+	--accent-wash: #f8a67c47;
+	--on-accent: #2b1b16;
+	/* What the writer labels, such as tags. Never a control. */
+	--accent-2: #f5bde6;
+	--accent-2-wash: #f5bde666;
+	--accent-3: #8bd5ca;
+	--accent-3-wash: #8bd5ca59;
+	/* What a compare view shows as put in and as taken out. Too pale for words:
+	   they sit behind text or mark a shape. */
+	--added: var(--accent-3);
+	--added-wash: var(--accent-3-wash);
+	--removed: var(--accent-2);
+	--removed-wash: var(--accent-2-wash);
+	--danger: #b3362c;
 	/* The tint on a match that is not the one being read. */
-	--find: oklch(0.9 0.09 95);
-	/* What a compare view shows as put in and as taken out. */
-	--added: oklch(0.6 0.13 150);
-	--added-wash: oklch(0.93 0.06 150);
-	--removed: oklch(0.58 0.16 25);
-	--removed-wash: oklch(0.93 0.045 25);
+	--find: var(--accent-wash);
+	--surface-float: rgb(255 255 255 / 0.72);
 	/* Over the app while a dialog is open. Dark in both palettes: it is the
 	   room's lights going down, not a tint. */
-	--scrim: oklch(0.2 0.02 250 / 0.34);
+	--scrim: rgb(0 0 0 / 0.25);
 	--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 	--serif: Newsreader, Georgia, "Times New Roman", serif;
 	/* The one shadow in the app, and only ever under something that floats.
@@ -506,46 +519,62 @@
    Keep the two lists identical. */
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) {
-		--bg: oklch(0.212 0.006 240);
-		--bg-chrome: oklch(0.162 0.006 240);
-		--bg-card: oklch(0.242 0.008 240);
-		--bg-hover: oklch(0.262 0.006 240);
-		--border: oklch(0.305 0.008 240);
-		--border-strong: oklch(0.38 0.01 240);
-		--text: oklch(0.925 0.006 240);
-		--text-dim: oklch(0.665 0.01 240);
-		--text-faint: oklch(0.55 0.01 240);
-		--accent: oklch(0.745 0.09 205);
-		--accent-wash: oklch(0.325 0.048 205);
-		--danger: oklch(0.7 0.13 25);
-		--find: oklch(0.42 0.07 92);
-		--added: oklch(0.72 0.12 150);
-		--added-wash: oklch(0.33 0.06 150);
-		--removed: oklch(0.7 0.13 25);
-		--removed-wash: oklch(0.33 0.06 25);
-		--scrim: oklch(0.12 0.01 250 / 0.55);
+		--bg: #22222f;
+		--bg-chrome: #1c1c28;
+		--bg-card: #2b2b3a;
+		--bg-hover: #353545;
+		--border: #343444;
+		--border-strong: #484859;
+		--text: #dcdcea;
+		--text-dim: #b8b8ca;
+		--text-faint: #a0a0b4;
+		--graphic-faint: #838397;
+		color-scheme: dark;
+		--accent: #f8ac83;
+		--accent-text: #f8ac83;
+		--accent-wash: #f8ac8333;
+		--on-accent: #22222f;
+		--accent-2: #f5bde6;
+		--accent-2-wash: #f5bde62e;
+		--accent-3: #8bd5ca;
+		--accent-3-wash: #8bd5ca2e;
+		--danger: #f38ba8;
+		--surface-float: rgb(43 43 58 / 0.72);
 	}
 }
 
 :root[data-theme="dark"] {
-	--bg: oklch(0.212 0.006 240);
-	--bg-chrome: oklch(0.162 0.006 240);
-	--bg-card: oklch(0.242 0.008 240);
-	--bg-hover: oklch(0.262 0.006 240);
-	--border: oklch(0.305 0.008 240);
-	--border-strong: oklch(0.38 0.01 240);
-	--text: oklch(0.925 0.006 240);
-	--text-dim: oklch(0.665 0.01 240);
-	--text-faint: oklch(0.55 0.01 240);
-	--accent: oklch(0.745 0.09 205);
-	--accent-wash: oklch(0.325 0.048 205);
-	--danger: oklch(0.7 0.13 25);
-	--find: oklch(0.42 0.07 92);
-	--added: oklch(0.72 0.12 150);
-	--added-wash: oklch(0.33 0.06 150);
-	--removed: oklch(0.7 0.13 25);
-	--removed-wash: oklch(0.33 0.06 25);
-	--scrim: oklch(0.12 0.01 250 / 0.55);
+	--bg: #22222f;
+	--bg-chrome: #1c1c28;
+	--bg-card: #2b2b3a;
+	--bg-hover: #353545;
+	--border: #343444;
+	--border-strong: #484859;
+	--text: #dcdcea;
+	--text-dim: #b8b8ca;
+	--text-faint: #a0a0b4;
+	--graphic-faint: #838397;
+	color-scheme: dark;
+	--accent: #f8ac83;
+	--accent-text: #f8ac83;
+	--accent-wash: #f8ac8333;
+	--on-accent: #22222f;
+	--accent-2: #f5bde6;
+	--accent-2-wash: #f5bde62e;
+	--accent-3: #8bd5ca;
+	--accent-3-wash: #8bd5ca2e;
+	--danger: #f38ba8;
+	--surface-float: rgb(43 43 58 / 0.72);
+}
+
+/* Named three times so it beats both dark blocks. */
+@media (prefers-reduced-transparency: reduce) {
+	:root,
+	:root:not([data-theme="light"]),
+	:root[data-theme="dark"] {
+		--surface-float: var(--bg-card);
+		--material: none;
+	}
 }
 
 * {
@@ -628,7 +657,7 @@ body,
 .welcome__button:focus-visible,
 .login__button:focus-visible,
 .profile__button:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -723,7 +752,7 @@ body,
 }
 
 .format:has(:focus-visible) {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -768,7 +797,7 @@ body,
 	padding: 0.6rem 1.5rem;
 	font: inherit;
 	font-weight: 500;
-	color: var(--bg);
+	color: var(--on-accent);
 	background: var(--accent);
 	border: none;
 	border-radius: 8px;
@@ -808,7 +837,7 @@ body,
 
 .setup__input:focus-visible,
 .setup__folder:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -967,7 +996,7 @@ body,
 }
 
 .titlebar__name:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -1px;
 }
 
@@ -995,7 +1024,7 @@ body,
 	max-width: 14rem;
 	font-size: 0.75rem;
 	font-weight: 600;
-	color: var(--accent);
+	color: var(--accent-text);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1131,7 +1160,7 @@ body,
 }
 
 .titlebar__session:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 	border-radius: 3px;
 }
@@ -1139,7 +1168,7 @@ body,
 /* An open session is worth more than the dim grey around it: seeing that it is
    running is the whole reason it is drawn up here. */
 .titlebar__session--running {
-	color: var(--accent);
+	color: var(--accent-text);
 }
 
 /* The timer stands in for the words only when the window is narrow. */
@@ -1225,7 +1254,7 @@ body,
 }
 
 .account__chip:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -1372,7 +1401,7 @@ body,
 	letter-spacing: normal;
 	line-height: normal;
 	text-transform: none;
-	color: var(--bg);
+	color: var(--on-accent);
 	background: var(--accent);
 	border: 0;
 	border-radius: 7px;
@@ -1470,7 +1499,7 @@ body,
 }
 
 .login__input:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -1484,7 +1513,7 @@ body,
 	letter-spacing: normal;
 	line-height: normal;
 	text-transform: none;
-	color: var(--bg);
+	color: var(--on-accent);
 	background: var(--accent);
 	border: 0;
 	border-radius: 8px;
@@ -1533,7 +1562,7 @@ body,
 }
 
 .login__back:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 	border-radius: 3px;
 }
@@ -1548,7 +1577,7 @@ body,
 	letter-spacing: normal;
 	line-height: normal;
 	text-transform: none;
-	color: var(--accent);
+	color: var(--accent-text);
 	background: none;
 	border: 0;
 	text-decoration: underline;
@@ -1617,7 +1646,7 @@ body,
 }
 
 .profile__out:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -1750,7 +1779,7 @@ body,
 }
 
 .profile__input:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -1936,7 +1965,7 @@ body,
 }
 
 .retag__do:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -2022,7 +2051,7 @@ body,
 }
 
 .grip:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -2140,7 +2169,7 @@ body.dragging * {
 
 .right-sidebar__tab:focus-visible,
 .right-sidebar__close:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -2178,7 +2207,7 @@ body.dragging * {
 	font: inherit;
 	font-size: 0.8125rem;
 	font-weight: 500;
-	color: var(--bg);
+	color: var(--on-accent);
 	background: var(--accent);
 	border: 0;
 	border-radius: 6px;
@@ -2186,7 +2215,7 @@ body.dragging * {
 }
 
 .versions__keep:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -2222,7 +2251,7 @@ body.dragging * {
 }
 
 .versions__scope-button:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -2279,7 +2308,7 @@ body.dragging * {
 }
 
 .versions__pick:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -2320,7 +2349,7 @@ body.dragging * {
 	padding: 0;
 	font: inherit;
 	font-size: 0.75rem;
-	color: var(--accent);
+	color: var(--accent-text);
 	background: none;
 	border: 0;
 	cursor: pointer;
@@ -2376,7 +2405,7 @@ body.dragging * {
 }
 
 .changes__message:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -1px;
 }
 
@@ -2446,7 +2475,7 @@ div.changes__pick {
 .changes__back:focus-visible,
 .changes__move:focus-visible,
 .changes__head .versions__action:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -2507,7 +2536,7 @@ div.changes__pick {
 }
 
 .merge-banner__abort:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -2545,7 +2574,7 @@ div.changes__pick {
 }
 
 .merge__pick:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -2575,7 +2604,7 @@ div.changes__pick {
 
 .merge__pick-left--done {
 	font-weight: 600;
-	color: var(--added);
+	color: var(--accent-text);
 }
 
 .merge__rule {
@@ -2734,7 +2763,7 @@ div.changes__pick {
 }
 
 .merge-spot__choice:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -2798,7 +2827,7 @@ div.changes__pick {
 
 .merge-card__state--chosen {
 	font-weight: 600;
-	color: var(--added);
+	color: var(--accent-text);
 }
 
 .merge-card__options {
@@ -2834,7 +2863,7 @@ div.changes__pick {
 }
 
 .merge-card__option:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -2847,7 +2876,7 @@ div.changes__pick {
 }
 
 .merge-card__option[aria-pressed="true"] .merge-card__side {
-	color: var(--accent);
+	color: var(--accent-text);
 }
 
 .merge-card__value {
@@ -2918,7 +2947,7 @@ div.changes__pick {
 }
 
 .overwrite .versions__action:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -2981,7 +3010,7 @@ div.changes__pick {
 
 .compare__back:focus-visible,
 .compare__step:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -3058,7 +3087,7 @@ div.changes__pick {
 }
 
 .compare__in-trigger:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -3108,7 +3137,7 @@ button.compare__pick[aria-pressed="true"] {
 }
 
 button.compare__pick:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -3139,7 +3168,7 @@ button.compare__pick:focus-visible {
 	margin-left: auto;
 	font-size: 0.6875rem;
 	font-weight: 700;
-	color: var(--accent);
+	color: var(--accent-text);
 }
 
 .compare__main {
@@ -3342,7 +3371,7 @@ button.compare__pick:focus-visible {
 .compare__step {
 	padding: 0;
 	font: inherit;
-	color: var(--accent);
+	color: var(--accent-text);
 	background: none;
 	border: 0;
 	border-radius: 3px;
@@ -3373,7 +3402,7 @@ button.compare__pick:focus-visible {
 	margin-left: auto;
 	padding: 0.25rem 0.75rem;
 	font: inherit;
-	color: var(--accent);
+	color: var(--accent-text);
 	background: none;
 	border: 1px solid var(--border);
 	border-radius: 5px;
@@ -3390,7 +3419,7 @@ button.compare__pick:focus-visible {
 }
 
 .compare__put:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -3539,7 +3568,7 @@ button.compare__pick:focus-visible {
 /* Drawn inside its own edge: the group clips what overflows it, so a ring set
    outside the button would be cut off. */
 .sprint__unit:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -3560,11 +3589,9 @@ button.compare__pick:focus-visible {
 }
 
 /* Filled once there is a number to start on, so the control that finishes the
-   job stands out from the two that set it up. `--bg` reads against `--accent`
-   in both schemes: the accent is dark on a light ground and light on a dark
-   one, and the page's own background follows it the other way. */
+   job stands out from the two that set it up. */
 .sprint__go:not(:disabled) {
-	color: var(--bg);
+	color: var(--on-accent);
 	background: var(--accent);
 	border-color: var(--accent);
 }
@@ -3592,7 +3619,7 @@ button.compare__pick:focus-visible {
 .sprint__unit:focus-visible,
 .sprint__go:focus-visible,
 .sprint__stop:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -3691,7 +3718,7 @@ button.compare__pick:focus-visible {
 }
 
 .history__more:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -3757,7 +3784,7 @@ button.compare__pick:focus-visible {
 }
 
 .field__remove:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -1px;
 }
 
@@ -3793,7 +3820,7 @@ button.compare__pick:focus-visible {
 
 .field__box:focus-visible,
 .field__line:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	/* Inside the box rather than around it: the panel's own padding is only
 	   0.75rem and a ring outside would be clipped by the scroll container. */
 	outline-offset: -1px;
@@ -3827,7 +3854,7 @@ button.compare__pick:focus-visible {
 }
 
 .info__page:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -3943,7 +3970,7 @@ button.compare__pick:focus-visible {
 }
 
 .chip__open:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -1px;
 }
 
@@ -3966,7 +3993,7 @@ button.compare__pick:focus-visible {
 }
 
 .chip__remove:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -1px;
 }
 
@@ -4011,7 +4038,7 @@ button.compare__pick:focus-visible {
 }
 
 .suggestion:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -4080,7 +4107,7 @@ button.compare__pick:focus-visible {
 }
 
 .sidebar__leave:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -4135,7 +4162,7 @@ button.compare__pick:focus-visible {
 }
 
 .section__fold:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -4218,11 +4245,11 @@ button.compare__pick:focus-visible {
    sidebar, and filling it makes the quietest thing on the screen the loudest.
    The rows below it keep their wash: they are the writing, not the chrome. */
 .section__open[aria-current="page"] {
-	color: var(--accent);
+	color: var(--accent-text);
 }
 
 .section__open:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -4382,7 +4409,7 @@ button.compare__pick:focus-visible {
 }
 
 .disclosure:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -4665,7 +4692,7 @@ button.compare__pick:focus-visible {
 	padding: 0.4rem 0.7rem 0.4rem 0.55rem;
 	font: inherit;
 	font-size: 0.8125rem;
-	color: var(--bg);
+	color: var(--on-accent);
 	background: var(--accent);
 	border: 0;
 	border-radius: 8px;
@@ -4890,8 +4917,8 @@ button.compare__pick:focus-visible {
 .namefield__input:focus {
 	outline: none;
 	border-color: var(--border);
-	border-bottom-color: var(--accent);
-	box-shadow: inset 0 -1px 0 var(--accent);
+	border-bottom-color: var(--accent-text);
+	box-shadow: inset 0 -1px 0 var(--accent-text);
 }
 
 /* The field stands among rows of documents, so it is their size and their
@@ -4949,7 +4976,7 @@ button.compare__pick:focus-visible {
 }
 
 .search__field:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -5005,7 +5032,7 @@ button.compare__pick:focus-visible {
 }
 
 .search__document:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -5080,7 +5107,7 @@ button.compare__pick:focus-visible {
 }
 
 .search__hit:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -5139,7 +5166,7 @@ button.compare__pick:focus-visible {
 }
 
 .search__more:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -5281,7 +5308,7 @@ button.compare__pick:focus-visible {
 }
 
 .subject__draft:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -5341,7 +5368,7 @@ button.compare__pick:focus-visible {
 }
 
 .subject__remarks:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -5395,7 +5422,7 @@ button.compare__pick:focus-visible {
 }
 
 .subject__appearance:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -5453,7 +5480,7 @@ button.compare__pick:focus-visible {
 }
 
 .subject__link:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -5863,7 +5890,7 @@ button.compare__pick:focus-visible {
 }
 
 .editor__toggle[aria-pressed="true"] {
-	color: var(--accent);
+	color: var(--accent-text);
 }
 
 /* The ways of writing this document, one thin line above the text. Sized in
@@ -5921,12 +5948,12 @@ button.compare__pick:focus-visible {
 /* Colour and a wash rather than weight, so the names stay put as the choice
    moves along them. */
 .takes__button[aria-current="true"] {
-	color: var(--accent);
+	color: var(--accent-text);
 	background: var(--accent-wash);
 }
 
 .takes__button:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -5936,7 +5963,7 @@ button.compare__pick:focus-visible {
 }
 
 .takes__button[aria-pressed="true"] {
-	color: var(--accent);
+	color: var(--accent-text);
 	background: var(--accent-wash);
 }
 
@@ -6174,7 +6201,7 @@ button.compare__pick:focus-visible {
 }
 
 .editor__link {
-	color: var(--accent);
+	color: var(--accent-text);
 	text-decoration: underline;
 	cursor: pointer;
 }
@@ -6256,7 +6283,7 @@ button.compare__pick:focus-visible {
 }
 
 .outline__item:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -6365,7 +6392,7 @@ button.compare__pick:focus-visible {
 }
 
 .controls__option[aria-checked="true"] {
-	color: var(--accent);
+	color: var(--accent-text);
 }
 
 /* Quiet enough to ignore while reading the names, there to be noticed once. */
@@ -6397,7 +6424,7 @@ button.compare__pick:focus-visible {
 }
 
 .controls__mark[aria-pressed="true"] {
-	color: var(--accent);
+	color: var(--accent-text);
 	background: var(--accent-wash);
 }
 
@@ -6443,7 +6470,7 @@ button.compare__pick:focus-visible {
 }
 
 .controls__url:focus {
-	border-color: var(--accent);
+	border-color: var(--accent-text);
 }
 
 .controls__mark--code {
@@ -6535,7 +6562,7 @@ button.compare__pick:focus-visible {
 .editor__find-input:focus-visible,
 .editor__find-step:focus-visible,
 .editor__find-do:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -6549,7 +6576,7 @@ button.compare__pick:focus-visible {
    accent, light on a dark one. A fixed white was legible in one of the two. */
 ::highlight(aurora-find-current) {
 	background-color: var(--accent);
-	color: var(--bg);
+	color: var(--on-accent);
 }
 
 .slash {
@@ -6930,7 +6957,7 @@ button.compare__pick:focus-visible {
 
 .recents__keep:focus-visible,
 .recents__bin:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -7024,7 +7051,7 @@ button.compare__pick:focus-visible {
 }
 
 .settings__section:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -7081,7 +7108,7 @@ button.compare__pick:focus-visible {
 }
 
 .settings__close:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
 }
 
@@ -7165,7 +7192,7 @@ button.compare__pick:focus-visible {
 
 /* Inside its own edge, since the group clips what overflows it. */
 .settings__choice:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -7214,7 +7241,7 @@ button.compare__pick:focus-visible {
 }
 
 .settings__face:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -7300,7 +7327,7 @@ button.compare__pick:focus-visible {
 }
 
 .settings__field:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -1px;
 }
 
@@ -7333,7 +7360,7 @@ button.compare__pick:focus-visible {
 
 .settings__switch:focus-visible,
 .info__toggle:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -7390,7 +7417,7 @@ button.compare__pick:focus-visible {
 }
 
 .settings__step:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
@@ -7471,7 +7498,7 @@ button.compare__pick:focus-visible {
 }
 
 .group__head:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 	border-radius: 4px;
 }
@@ -7590,7 +7617,7 @@ button.compare__pick:focus-visible {
 }
 
 .book__add:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -7629,7 +7656,7 @@ button.compare__pick:focus-visible {
 }
 
 .book__pick:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: -1px;
 }
 
@@ -7693,7 +7720,7 @@ button.compare__pick:focus-visible {
 
 .cover__button:focus-visible,
 .export__button:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -7734,7 +7761,7 @@ button.compare__pick:focus-visible {
 }
 
 .export__format:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
@@ -7764,7 +7791,7 @@ button.compare__pick:focus-visible {
 	left: 4px;
 	width: 4px;
 	height: 8px;
-	border: solid var(--bg-card);
+	border: solid var(--on-accent);
 	border-width: 0 2px 2px 0;
 	transform: rotate(45deg);
 }
@@ -7849,7 +7876,7 @@ button.compare__pick:focus-visible {
 	font: inherit;
 	font-size: 0.75rem;
 	font-weight: 600;
-	color: var(--bg);
+	color: var(--on-accent);
 	background: var(--accent);
 	border: 0;
 	border-radius: 6px;
@@ -7878,6 +7905,6 @@ button.compare__pick:focus-visible {
 
 .update__action:focus-visible,
 .update__dismiss:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
