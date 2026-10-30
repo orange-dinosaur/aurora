@@ -107,6 +107,8 @@ export function summary(change: Change): { name: string; what: string } {
 	}
 	if (change.edited) {
 		parts.push("edited");
+	} else if (change.takes) {
+		parts.push("takes changed");
 	}
 	const what = parts.join(", ");
 	return { name, what: what.charAt(0).toUpperCase() + what.slice(1) };

@@ -123,6 +123,13 @@ describe("summary", () => {
 		});
 	});
 
+	it("notes changed takes only when the text did not change", () => {
+		expect(summary(change({ takes: true })).what).toBe("Takes changed");
+		expect(summary(change({ takes: true, edited: true })).what).toBe(
+			"Edited",
+		);
+	});
+
 	it("says where each document moved within a folder", () => {
 		expect(
 			summary(
