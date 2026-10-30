@@ -1443,6 +1443,9 @@ export default function Project({
 				? { kind: "folder", trail: active.folder.trail }
 				: null;
 
+	// Compare and Merge stand where the writing stands.
+	const covered = comparing !== null || (merge !== null && settling !== null);
+
 	return (
 		<section className="project">
 			<Titlebar
@@ -1465,6 +1468,16 @@ export default function Project({
 					}
 				}}
 				sidebarButton={sidebarButton}
+				tabs={
+					!covered && (
+						<Tabs
+							tabs={tabs.map(strip)}
+							activeKey={activeKey}
+							onActivate={setActiveKey}
+							onClose={closeTab}
+						/>
+					)
+				}
 				rightSidebar={about === null ? null : preferences.rightSidebar}
 				onRightSidebar={(open) =>
 					onPreferences({ ...preferences, rightSidebar: open })
@@ -1529,12 +1542,7 @@ export default function Project({
 
 			{/* Hidden rather than unmounted while comparing or merging, so
 			    every editor comes back with its cursor and its undo history. */}
-			<div
-				className="project__body"
-				hidden={
-					comparing !== null || (merge !== null && settling !== null)
-				}
-			>
+			<div className="project__body" hidden={covered}>
 				<Sidebar
 					hidden={!sidebar}
 					floating={floating}
@@ -1577,13 +1585,6 @@ export default function Project({
 					onClose={onClose}
 				/>
 				<div className="project__main">
-					<Tabs
-						tabs={tabs.map(strip)}
-						activeKey={activeKey}
-						onActivate={setActiveKey}
-						onClose={closeTab}
-					/>
-
 					<div className="project__panes">
 						{/* Every open document stays mounted and all but one
 						    is hidden. An editor torn down on a tab switch

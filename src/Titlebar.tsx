@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { AccountChip } from "./Account";
@@ -35,6 +35,8 @@ type Props = {
 	onSidebar: (open: boolean) => void;
 	/** The sidebar's button, which a floating sidebar treats as part of itself. */
 	sidebarButton: RefObject<HTMLButtonElement | null>;
+	/** The open tabs, or nothing while Compare or Merge covers them. */
+	tabs: ReactNode;
 	/**
 	 * Whether the right sidebar is showing, or null when what is open has
 	 * nothing to say about itself and the panel does not apply.
@@ -79,6 +81,7 @@ export default function Titlebar({
 	sidebar,
 	onSidebar,
 	sidebarButton,
+	tabs,
 	rightSidebar,
 	onRightSidebar,
 	onSearch,
@@ -267,6 +270,8 @@ export default function Titlebar({
 					Merging {merging.name ?? "another version"}
 				</span>
 			)}
+
+			{tabs}
 
 			<span className="titlebar__path" title={root}>
 				{root}
