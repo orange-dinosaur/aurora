@@ -26,7 +26,7 @@ use crate::project::{
 	Book, COVER_NAMES, Error, Format, MANIFEST_FILE, Manifest, Result, read_manifest,
 	remove_if_there, to_json, write_atomic, write_book,
 };
-use crate::takes::TAKES_DIR;
+use crate::takes::{TAKES_DIR, in_order, restore};
 use crate::tree::{self, Node, Take};
 
 const AUTHOR_EMAIL: &str = "aurora@localhost";
@@ -1294,16 +1294,15 @@ fn destination(then: &Manifest, now: &Manifest, id: Uuid) -> Result<(Uuid, usize
 	Ok((parent, index))
 }
 
-/// Puts one document back as a version had it: its text, its name and its
-/// folder. One the version did not have goes to the Trash, and one it had
-/// that has since been deleted comes back under its old id.
+/// Puts one document back as a version had it: its text, its name, its folder
+/// and its takes. One the version did not have goes to the Trash, and one it
+/// had that has since been deleted comes back under its old id.
 #[tauri::command]
 pub fn put_back_document(root: PathBuf, version: String, id: Uuid) -> Result<()> {
 	let repo = open_for_putting_back(&root)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	let now = read_manifest(&root)?;
-	let Some(node) = tree::find(&then.nodes, id).filter(|n| matches!(n, Node::Document { .. }))
-	else {
+	let Some(node @ Node::Document { takes, chosen, .. }) = tree::find(&then.nodes, id) else {
 		return match tree::find(&now.nodes, id) {
 			Some(Node::Document { .. }) => delete_document(root, id),
 			_ => Err(Error::UnknownDocument),
@@ -1313,10 +1312,17 @@ pub fn put_back_document(root: PathBuf, version: String, id: Uuid) -> Result<()>
 	let path = tree::path(&then.nodes, id).ok_or(Error::UnknownDocument)?;
 	let blob = blob_at(&files, &path).ok_or(Error::DocumentMissing)?;
 	let text = repo.find_blob(blob)?.content().to_vec();
+	let mut take_texts = BTreeMap::new();
+	for take in takes.keys() {
+		let path = format!("{}/{take}.md", takes_folder(id));
+		let blob = blob_at(&files, &path).ok_or(Error::DocumentMissing)?;
+		take_texts.insert(*take, repo.find_blob(blob)?.content().to_vec());
+	}
+
 	let (parent, index) = destination(&then, &now, id)?;
 	match tree::find(&now.nodes, id) {
-		None => recreate_document(&root, parent, index, node.clone(), &text),
-		Some(Node::Folder { .. }) => Err(Error::UnknownDocument),
+		None => recreate_document(&root, parent, index, node.clone(), &text)?,
+		Some(Node::Folder { .. }) => return Err(Error::UnknownDocument),
 		Some(Node::Document { name, .. }) => {
 			if name != node.name() {
 				rename_document(root.clone(), id, node.name().to_owned())?;
@@ -1325,9 +1331,30 @@ pub fn put_back_document(root: PathBuf, version: String, id: Uuid) -> Result<()>
 				move_node(root.clone(), id, parent, index)?;
 			}
 			let text = String::from_utf8(text).map_err(|_| Error::NotText)?;
-			write_document(root, id, text)
+			write_document(root.clone(), id, text)?;
 		}
 	}
+	restore(&root, id, takes.clone(), *chosen, &take_texts)
+}
+
+/// The names of the takes that putting a document back would remove for good,
+/// in order. A document the version lacks goes to the Trash with its takes, so
+/// that removes none.
+#[tauri::command]
+pub fn put_back_removes(root: PathBuf, version: String, id: Uuid) -> Result<Vec<String>> {
+	let repo = open_for_putting_back(&root)?;
+	let (_, then) = side(&repo, Some(&version))?;
+	let now = read_manifest(&root)?;
+	let (Some(Node::Document { takes: kept, .. }), Some(Node::Document { takes, .. })) =
+		(tree::find(&then.nodes, id), tree::find(&now.nodes, id))
+	else {
+		return Ok(Vec::new());
+	};
+	Ok(in_order(takes)
+		.into_iter()
+		.filter(|(take, _)| !kept.contains_key(take))
+		.map(|(_, details)| details.name.clone())
+		.collect())
 }
 
 /// Puts back the book's details and its cover as a version had them.
@@ -1975,7 +2002,7 @@ mod tests {
 		read_document, rename_document, rename_folder, write_document,
 	};
 	use crate::project::{Format, create, set_cover, write_book, write_manifest};
-	use crate::takes::{choose_take, delete_take, try_something};
+	use crate::takes::{choose_take, delete_take, list_takes, take_text, try_something};
 	use crate::tree::Node;
 	use git2::RepositoryState;
 
@@ -3616,6 +3643,148 @@ mod tests {
 		assert_eq!(body_now(&root, doomed), "Kept");
 		assert_eq!(list_trash(root.clone()).unwrap().len(), 2);
 		assert_eq!(checkpoint_and_index(&root), before);
+	}
+
+	fn takes_on_disk(root: &Path, id: Uuid) -> PathBuf {
+		root.join(TAKES_DIR).join(id.to_string())
+	}
+
+	fn take_names(root: &Path, id: Uuid) -> Vec<String> {
+		list_takes(root.to_path_buf(), id)
+			.unwrap()
+			.into_iter()
+			.map(|take| take.name)
+			.collect()
+	}
+
+	#[test]
+	fn putting_back_to_before_any_takes_leaves_an_ordinary_document() {
+		let (_parent, root, seeded, ..) = novel();
+		let then = "---\nsynopsis: Then.\n---\nFirst".to_owned();
+		write_document(root.clone(), seeded, then).unwrap();
+		let first = kept(&root);
+		try_something(root.clone(), seeded).unwrap();
+		let now = "---\nsynopsis: Now.\n---\nSecond".to_owned();
+		write_document(root.clone(), seeded, now).unwrap();
+		kept(&root);
+
+		put_back_document(root.clone(), first.clone(), seeded).unwrap();
+
+		// No row means the front matter, the keys and the files are all as then.
+		assert!(changes(&root, Some(&first), None).unwrap().nodes.is_empty());
+		assert!(list_takes(root.clone(), seeded).unwrap().is_empty());
+		assert!(!takes_on_disk(&root, seeded).exists());
+	}
+
+	#[test]
+	fn putting_back_brings_the_takes_of_that_checkpoint() {
+		let (_parent, root, seeded, ..) = novel();
+		let takes = try_something(root.clone(), seeded).unwrap();
+		write_document(root.clone(), seeded, "Second take".to_owned()).unwrap();
+		choose_take(root.clone(), seeded, takes[0].id).unwrap();
+		let two = kept(&root);
+		let third = try_something(root.clone(), seeded).unwrap()[2].id;
+		delete_take(root.clone(), seeded, takes[1].id).unwrap();
+		kept(&root);
+
+		put_back_document(root.clone(), two.clone(), seeded).unwrap();
+
+		assert!(changes(&root, Some(&two), None).unwrap().nodes.is_empty());
+		let back = list_takes(root.clone(), seeded).unwrap();
+		assert_eq!(
+			back.iter().map(|take| take.id).collect::<Vec<_>>(),
+			[takes[0].id, takes[1].id]
+		);
+		assert!(back[0].chosen);
+		assert_eq!(
+			take_text(root.clone(), seeded, takes[1].id).unwrap(),
+			"Second take"
+		);
+		assert!(
+			!takes_on_disk(&root, seeded)
+				.join(format!("{third}.md"))
+				.exists()
+		);
+	}
+
+	#[test]
+	fn a_deleted_document_returns_with_its_takes() {
+		let (_parent, root, seeded, ..) = novel();
+		try_something(root.clone(), seeded).unwrap();
+		let start = kept(&root);
+		delete_document(root.clone(), seeded).unwrap();
+		fs::remove_dir_all(takes_on_disk(&root, seeded)).unwrap();
+
+		put_back_document(root.clone(), start.clone(), seeded).unwrap();
+
+		assert!(changes(&root, Some(&start), None).unwrap().nodes.is_empty());
+		assert_eq!(take_names(&root, seeded), ["Take 1", "Take 2"]);
+	}
+
+	#[test]
+	fn put_back_on_a_changes_row_undoes_a_try_something() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "Kept".to_owned()).unwrap();
+		kept(&root);
+		try_something(root.clone(), seeded).unwrap();
+		write_document(root.clone(), seeded, "Rewritten".to_owned()).unwrap();
+		let before = checkpoint_and_index(&root);
+
+		put_back_document(root.clone(), "HEAD".to_owned(), seeded).unwrap();
+
+		assert!(changes(&root, Some("HEAD"), None).unwrap().nodes.is_empty());
+		assert_eq!(body_now(&root, seeded), "Kept");
+		assert!(!takes_on_disk(&root, seeded).exists());
+		assert_eq!(checkpoint_and_index(&root), before);
+	}
+
+	#[test]
+	fn put_back_removes_names_the_takes_that_would_go() {
+		let (_parent, root, seeded, ..) = novel();
+		let first = kept(&root);
+		try_something(root.clone(), seeded).unwrap();
+		let two = kept(&root);
+		try_something(root.clone(), seeded).unwrap();
+		let removes =
+			|version: &str| put_back_removes(root.clone(), version.to_owned(), seeded).unwrap();
+
+		assert_eq!(removes(&first), ["Take 1", "Take 2", "Take 3"]);
+		assert_eq!(removes(&two), ["Take 3"]);
+		assert_eq!(removes("HEAD"), ["Take 3"]);
+
+		// Going to the Trash takes the takes with it, so nothing is lost.
+		let manifest = read_manifest(&root).unwrap();
+		let folder = tree::parent(&manifest.nodes, seeded).unwrap().id();
+		let newer = create_document(root.clone(), folder, "Newer".to_owned())
+			.unwrap()
+			.id;
+		try_something(root.clone(), newer).unwrap();
+		assert!(
+			put_back_removes(root.clone(), first.clone(), newer)
+				.unwrap()
+				.is_empty()
+		);
+	}
+
+	#[test]
+	fn put_back_everything_takes_take_files_away() {
+		let (_parent, root, seeded, ..) = novel();
+		let first = kept(&root);
+		try_something(root.clone(), seeded).unwrap();
+		let two = kept(&root);
+		try_something(root.clone(), seeded).unwrap();
+
+		put_back_everything(root.clone(), two.clone()).unwrap();
+		assert!(changes(&root, Some(&two), None).unwrap().nodes.is_empty());
+		assert_eq!(take_names(&root, seeded), ["Take 1", "Take 2"]);
+		assert_eq!(
+			fs::read_dir(takes_on_disk(&root, seeded)).unwrap().count(),
+			2
+		);
+
+		put_back_everything(root.clone(), first.clone()).unwrap();
+		assert!(changes(&root, Some(&first), None).unwrap().nodes.is_empty());
+		assert!(!takes_on_disk(&root, seeded).exists());
 	}
 
 	#[test]

@@ -81,7 +81,7 @@ fn editable(root: &Path) -> Result<Manifest> {
 
 /// Takes in order, by number and then id, since a merge can bring two with one
 /// number.
-fn in_order(takes: &BTreeMap<Uuid, Take>) -> Vec<(Uuid, &Take)> {
+pub(crate) fn in_order(takes: &BTreeMap<Uuid, Take>) -> Vec<(Uuid, &Take)> {
 	let mut ordered: Vec<(Uuid, &Take)> = takes
 		.iter()
 		.map(|(&take, details)| (take, details))
@@ -119,6 +119,45 @@ fn views(root: &Path, manifest: &Manifest, id: Uuid) -> Result<Vec<TakeView>> {
 				.map_or(0, |text| text.split_whitespace().count()),
 		})
 		.collect())
+}
+
+/// Makes a document's takes these, each with the text in `files`, and drops any
+/// other. The new files land before the manifest names them and the old ones
+/// go after, so a take is never listed without its file.
+pub(crate) fn restore(
+	root: &Path,
+	id: Uuid,
+	takes: BTreeMap<Uuid, Take>,
+	chosen: Option<Uuid>,
+	files: &BTreeMap<Uuid, Vec<u8>>,
+) -> Result<()> {
+	let mut manifest = read_manifest(root)?;
+	let (now, was) = takes_mut(&mut manifest, id)?;
+	*now = takes;
+	*was = chosen;
+	if files.is_empty() && !root.join(TAKES_DIR).join(id.to_string()).exists() {
+		return write_manifest(root, &mut manifest);
+	}
+
+	let mut kept = Vec::new();
+	for (take, text) in files {
+		let path = file(root, id, *take)?;
+		write_atomic(&path, text)?;
+		kept.push(path);
+	}
+	write_manifest(root, &mut manifest)?;
+
+	let folder = folder(root, id)?;
+	for entry in fs::read_dir(&folder)? {
+		let path = entry?.path();
+		if !kept.contains(&path) {
+			fs::remove_file(path)?;
+		}
+	}
+	if files.is_empty() {
+		fs::remove_dir(folder)?;
+	}
+	Ok(())
 }
 
 /// Adds a take with the next number, named after it.
