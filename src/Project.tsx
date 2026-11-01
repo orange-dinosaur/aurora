@@ -1476,7 +1476,9 @@ export default function Project({
 				root={root}
 				session={deliberate}
 				sessionClock={preferences.sessionClock}
-				onStartSession={() => startSession()}
+				defaultSprint={preferences.defaultSprint}
+				defaultSprintUnit={preferences.defaultSprintUnit}
+				onStartSession={startSession}
 				onStopSession={stopSession}
 				onTickSession={tickSession}
 				sessions={sessions.current}
@@ -1835,10 +1837,6 @@ export default function Project({
 								rightSidebarWidth,
 							})
 						}
-						defaultSprint={preferences.defaultSprint}
-						defaultSprintUnit={preferences.defaultSprintUnit}
-						onStartSprint={(limit) => startSession(limit)}
-						onStopSession={stopSession}
 						logged={logged}
 						tab={preferences.rightSidebarTab}
 						onTab={(tab) =>

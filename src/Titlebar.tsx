@@ -6,9 +6,9 @@ import Icon from "./Icon";
 import Session from "./Session";
 import { SEARCH, SESSION, shortcutLabel } from "./formatting";
 import { dayTally } from "./lib/stats";
-import type { Running, Sessions } from "./sessions";
+import type { Limit, Running, Sessions } from "./sessions";
 import ThemeToggle from "./ThemeToggle";
-import type { Merging, PastSession, Theme } from "./types";
+import type { Merging, PastSession, SprintUnit, Theme } from "./types";
 
 type Props = {
 	root: string;
@@ -16,7 +16,11 @@ type Props = {
 	session: Running | null;
 	/** Whether the writer wants the session readout drawn here. */
 	sessionClock: boolean;
-	onStartSession: () => void;
+	/** What the sprint field starts on, from the writer's preferences. */
+	defaultSprint: number | null;
+	defaultSprintUnit: SprintUnit;
+	/** Opens a deliberate session. A limit makes it a sprint. */
+	onStartSession: (limit?: Limit) => void;
 	onStopSession: () => void;
 	onTickSession: () => void;
 	/** The two layers as they stand, for today's words not on disk yet. */
@@ -46,6 +50,8 @@ export default function Titlebar({
 	root,
 	session,
 	sessionClock,
+	defaultSprint,
+	defaultSprintUnit,
 	onStartSession,
 	onStopSession,
 	onTickSession,
@@ -99,6 +105,8 @@ export default function Titlebar({
 				<Session
 					session={session}
 					shown={sessionClock}
+					defaultAmount={defaultSprint}
+					defaultUnit={defaultSprintUnit}
 					onStart={onStartSession}
 					onStop={onStopSession}
 					onTick={onTickSession}

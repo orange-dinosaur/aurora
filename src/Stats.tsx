@@ -2,19 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import History from "./History";
 import Target from "./Target";
-import { Sprint } from "./Session";
 import { failure } from "./errors";
 import { dayTally, running, today, unexplained } from "./lib/stats";
 import type { Tally } from "./lib/stats";
-import type { Limit, Sessions } from "./sessions";
+import type { Sessions } from "./sessions";
 import { timed } from "./timing";
 import type { FolderRef } from "./tree";
-import type {
-	FolderProgress,
-	PastSession,
-	ProjectDocument,
-	SprintUnit,
-} from "./types";
+import type { FolderProgress, PastSession, ProjectDocument } from "./types";
 import { prose, words } from "./words";
 
 type Props = {
@@ -35,12 +29,6 @@ type Props = {
 	changed: number;
 	/** The target the writer typed over the number, for whichever is open. */
 	onTarget: (target: number | null) => void;
-	/** What the sprint field starts on, from the writer's preferences. */
-	defaultSprint: number | null;
-	defaultSprintUnit: SprintUnit;
-	/** Opens a deliberate session with something to reach. */
-	onStartSprint: (limit: Limit) => void;
-	onStopSession: () => void;
 };
 
 /**
@@ -105,10 +93,6 @@ export default function Stats({
 	logged,
 	changed,
 	onTarget,
-	defaultSprint,
-	defaultSprintUnit,
-	onStartSprint,
-	onStopSession,
 }: Props) {
 	const [history, setHistory] = useState<PastSession[]>([]);
 	const [progress, setProgress] = useState<FolderProgress | null>(null);
@@ -208,19 +192,6 @@ export default function Stats({
 			<Layer
 				name="Session"
 				total={sessions.deliberate === null ? null : now.deliberate}
-			/>
-
-			<h3 className="stats__heading">Sprint</h3>
-			{/* Remade when the default changes, so a default set in the
-			    settings dialog shows in the field behind it at once rather
-			    than the next time this panel is built. */}
-			<Sprint
-				key={`${defaultSprint}-${defaultSprintUnit}`}
-				session={sessions.deliberate}
-				defaultAmount={defaultSprint}
-				defaultUnit={defaultSprintUnit}
-				onStart={onStartSprint}
-				onStop={onStopSession}
 			/>
 
 			<h3 className="stats__heading">Today</h3>

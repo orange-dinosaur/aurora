@@ -64,7 +64,7 @@ export default function Overwrite({
 				{/* Focused rather than Put back, so Enter cannot lose work. */}
 				<button
 					type="button"
-					className="sprint__stop"
+					className="overwrite__cancel"
 					autoFocus
 					onClick={() => onAnswer(false)}
 				>
@@ -72,7 +72,7 @@ export default function Overwrite({
 				</button>
 				<button
 					type="button"
-					className="sprint__go"
+					className="overwrite__go"
 					onClick={() => onAnswer(true)}
 				>
 					Put back

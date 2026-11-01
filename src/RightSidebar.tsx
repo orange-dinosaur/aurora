@@ -10,7 +10,7 @@ import Synopsis from "./Synopsis";
 import type { MarksHandle } from "./TakeStrip";
 import Versions from "./Versions";
 import type { FieldsHandle } from "./fields";
-import type { Limit, Sessions } from "./sessions";
+import type { Sessions } from "./sessions";
 import type { FolderRef } from "./tree";
 import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
@@ -20,7 +20,6 @@ import { isSubject } from "./subjects";
 import type {
 	ProjectDocument,
 	RightSidebarTab,
-	SprintUnit,
 	Checkpoint,
 	VersionsScope,
 } from "./types";
@@ -74,12 +73,6 @@ type Props = {
 	/** How wide the writer has dragged it, in pixels. */
 	width: number;
 	onWidth: (width: number) => void;
-	/** What the sprint field starts on, from the writer's preferences. */
-	defaultSprint: number | null;
-	defaultSprintUnit: SprintUnit;
-	/** Opens a deliberate session with something to reach, and closes one. */
-	onStartSprint: (limit: Limit) => void;
-	onStopSession: () => void;
 	/** Bumped when a session has reached the history file and kept a version. */
 	logged: number;
 	tab: RightSidebarTab;
@@ -129,10 +122,6 @@ export default function RightSidebar({
 	words,
 	width,
 	onWidth,
-	defaultSprint,
-	defaultSprintUnit,
-	onStartSprint,
-	onStopSession,
 	logged,
 	tab,
 	onTab,
@@ -211,14 +200,10 @@ export default function RightSidebar({
 								folder={folder}
 								sessions={sessions}
 								words={words}
-								defaultSprint={defaultSprint}
-								defaultSprintUnit={defaultSprintUnit}
 								root={root}
 								logged={logged}
 								changed={changed}
 								onTarget={onTarget}
-								onStartSprint={onStartSprint}
-								onStopSession={onStopSession}
 							/>
 						) : tab === "mentions" ? (
 							about === null ? (

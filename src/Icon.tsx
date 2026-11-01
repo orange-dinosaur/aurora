@@ -4,7 +4,7 @@ export type IconName =
 	| "search"
 	| "contrast"
 	| "arrows-vertical"
-	| "timer"
+	| "play"
 	| "chevron-down"
 	| "chevron-left"
 	| "chevron-right"
@@ -54,13 +54,7 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="m8 18 4 4 4-4" />
 		</>
 	),
-	timer: (
-		<>
-			<path d="M10 2h4" />
-			<path d="m12 14 3-3" />
-			<circle cx="12" cy="14" r="8" />
-		</>
-	),
+	play: <path d="M6 3l14 9-14 9Z" />,
 	"chevron-down": <path d="m6 9 6 6 6-6" />,
 	"chevron-left": <path d="m15 18-6-6 6-6" />,
 	"chevron-right": <path d="m9 18 6-6-6-6" />,

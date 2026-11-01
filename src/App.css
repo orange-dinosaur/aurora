@@ -1148,46 +1148,53 @@ body,
 	min-width: 0;
 }
 
-/* The readout is the control, the way the word count is: no box of its own,
-   and fixed-width digits so a running clock cannot jog the row. WebKitGTK
-   resets the three properties below on a button and `font: inherit` restores
-   none of them. */
+/* WebKitGTK resets the two properties after `font` on a button, and a font
+   shorthand restores neither of them. */
 .titlebar__session {
 	flex: none;
-	font: inherit;
-	font-size: 0.75rem;
-	font-variant-numeric: tabular-nums;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	font: var(--text-ui);
 	letter-spacing: normal;
-	line-height: normal;
 	text-transform: none;
-	padding: 0;
+	padding: 4px var(--space-xs);
 	color: var(--text-dim);
 	background: none;
 	border: 0;
+	border-radius: var(--radius-xs);
 	white-space: nowrap;
 	cursor: pointer;
 }
 
-.titlebar__session:hover {
+.titlebar__session:hover,
+.titlebar__session[aria-expanded="true"] {
 	color: var(--text);
-	text-decoration: underline;
+	background: var(--bg-hover);
 }
 
 .titlebar__session:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
-	border-radius: 3px;
+}
+
+.titlebar__session svg {
+	width: 14px;
+	height: 14px;
 }
 
 /* An open session is worth more than the dim grey around it: seeing that it is
-   running is the whole reason it is drawn up here. */
-.titlebar__session--running {
+   running is the whole reason it is drawn up here. Fixed-width digits and a
+   floor on the width, so a running clock cannot jog the row. */
+.titlebar__clock {
+	min-width: 62px;
 	color: var(--accent-text);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
 }
 
-/* The timer stands in for the words only when the window is narrow. */
-.titlebar__session--idle svg {
-	display: none;
+.titlebar__menu--session .menu__items {
+	width: 240px;
 }
 
 .titlebar__right {
@@ -1309,28 +1316,6 @@ body,
 
 	.account__chip {
 		padding: 0 0.2rem;
-	}
-
-	.titlebar__session--idle {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-xs);
-	}
-
-	.titlebar__session--idle svg {
-		display: block;
-	}
-
-	.titlebar__session--idle:hover {
-		text-decoration: none;
-		background: var(--bg-hover);
-	}
-
-	.titlebar__session--idle:focus-visible {
-		border-radius: var(--radius-xs);
 	}
 }
 
@@ -3084,6 +3069,29 @@ div.changes__pick {
 	gap: 0.4rem;
 }
 
+.overwrite__cancel,
+.overwrite__go {
+	flex: none;
+	padding: 0.15rem 0.5rem;
+	font: inherit;
+	font-size: 0.75rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+}
+
+.overwrite__cancel:focus-visible,
+.overwrite__go:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* Clear of the fill, or the ring lands on its own colour. */
+.overwrite__go:focus-visible {
+	outline-offset: 2px;
+}
+
 /* The display the body sets would otherwise beat the attribute. */
 .project__body[hidden] {
 	display: none;
@@ -3582,30 +3590,29 @@ button.compare__pick:focus-visible {
 	font-variant-numeric: tabular-nums;
 }
 
-/* Wraps rather than squeezing: four controls do not always fit across a 240px
-   column, and Start dropping to a second line keeps it reachable. */
 .sprint {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.375rem;
+	gap: var(--space-xxs);
 	margin: 0;
+	padding: var(--space-xxs) var(--space-xs);
 }
 
-/* A form stands where a group of numbers would, so the heading after it has to
-   open a new group the same way one of those does. */
-.sprint + .stats__heading {
-	margin-top: 1rem;
-}
-
+/* A line to write on, like a new version's name. It takes the row's spare
+   width, so the gaps between the three stay equal. */
 .sprint__amount {
-	width: 4.5ch;
+	flex: 1;
 	min-width: 0;
-	padding: 0.15rem 0.25rem;
+	height: 23px;
+	padding: 0;
 	font: inherit;
-	font-size: 0.8125rem;
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
 	color: var(--text);
-	text-align: right;
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--graphic-faint);
+	border-radius: 0;
 }
 
 /* One shape made of two buttons. A native select is drawn by WebKitGTK in the
@@ -3621,11 +3628,10 @@ button.compare__pick:focus-visible {
 }
 
 .sprint__unit {
-	padding: 0.15rem 0.4rem;
-	font: inherit;
+	padding: 1px 6px;
+	font: var(--text-ui);
 	font-size: 0.75rem;
 	letter-spacing: normal;
-	line-height: normal;
 	text-transform: none;
 	color: var(--text-dim);
 	background: none;
@@ -3650,29 +3656,26 @@ button.compare__pick:focus-visible {
 	outline-offset: -2px;
 }
 
-.sprint__go,
-.sprint__stop {
+/* The same height as the field and the units beside it. */
+.sprint__go {
 	flex: none;
-	padding: 0.15rem 0.5rem;
-	font: inherit;
+	padding: 3px var(--space-xs);
+	font: var(--text-ui-strong);
 	font-size: 0.75rem;
 	letter-spacing: normal;
-	line-height: normal;
 	text-transform: none;
-	color: var(--text);
 }
 
 /* Clear of the fill, or the ring lands on its own colour. */
-.sprint__go:not(:disabled):focus-visible {
+.sprint__go:focus-visible {
+	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
-.sprint__amount:focus-visible,
-.sprint__unit:focus-visible,
-.sprint__go:focus-visible,
-.sprint__stop:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 1px;
+.sprint__amount:focus {
+	outline: none;
+	border-bottom-color: var(--accent-text);
+	box-shadow: 0 1px 0 var(--accent-text);
 }
 
 .history {
@@ -8071,6 +8074,7 @@ button.compare__pick:focus-visible {
 .login__go,
 .versions__keep,
 .sprint__go,
+.overwrite__go,
 .overview__new,
 .update__action {
 	font-weight: 600;
@@ -8087,16 +8091,12 @@ button.compare__pick:focus-visible {
 .login__go:disabled,
 .versions__keep:disabled,
 .sprint__go:disabled,
+.overwrite__go:disabled,
 .overview__new:disabled,
 .update__action:disabled {
 	color: var(--text-faint);
 	background: var(--bg-hover);
 	cursor: default;
-}
-
-/* The same height as the boxes beside it in the sprint form. */
-.sprint__go {
-	border: 1px solid transparent;
 }
 
 .welcome__back,
@@ -8106,7 +8106,7 @@ button.compare__pick:focus-visible {
 .merge-banner__abort,
 .merge-spot__choice,
 .compare__put,
-.sprint__stop,
+.overwrite__cancel,
 .info__page,
 .subject__draft,
 .trashed__action,
@@ -8128,7 +8128,7 @@ button.compare__pick:focus-visible {
 .merge-banner__abort:hover:not(:disabled),
 .merge-spot__choice:hover:not(:disabled),
 .compare__put:hover:not(:disabled),
-.sprint__stop:hover:not(:disabled),
+.overwrite__cancel:hover:not(:disabled),
 .info__page:hover:not(:disabled),
 .subject__draft:hover:not(:disabled),
 .trashed__action:hover:not(:disabled),
@@ -8146,7 +8146,7 @@ button.compare__pick:focus-visible {
 .merge-banner__abort:disabled,
 .merge-spot__choice:disabled,
 .compare__put:disabled,
-.sprint__stop:disabled,
+.overwrite__cancel:disabled,
 .info__page:disabled,
 .subject__draft:disabled,
 .trashed__action:disabled,
@@ -8164,6 +8164,7 @@ button.compare__pick:focus-visible {
 .login__go:active:not(:disabled),
 .versions__keep:active:not(:disabled),
 .sprint__go:active:not(:disabled),
+.overwrite__go:active:not(:disabled),
 .overview__new:active:not(:disabled),
 .update__action:active:not(:disabled),
 .welcome__back:active:not(:disabled),
@@ -8173,7 +8174,7 @@ button.compare__pick:focus-visible {
 .merge-banner__abort:active:not(:disabled),
 .merge-spot__choice:active:not(:disabled),
 .compare__put:active:not(:disabled),
-.sprint__stop:active:not(:disabled),
+.overwrite__cancel:active:not(:disabled),
 .info__page:active:not(:disabled),
 .subject__draft:active:not(:disabled),
 .trashed__action:active:not(:disabled),
@@ -8189,7 +8190,6 @@ button.compare__pick:focus-visible {
 .login__input,
 .profile__input,
 .changes__message,
-.sprint__amount,
 .field__box,
 .field__line,
 .namefield__input,
