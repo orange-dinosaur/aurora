@@ -154,6 +154,45 @@ export function lineKey(line: Line): string {
 	return line.row.kind === "node" ? line.row.id : line.row.kind;
 }
 
+/** A row of the Changes list, and whether it goes in the next checkpoint. */
+export type Tick = Line & { ticked: boolean };
+
+/**
+ * Every change as one list, in an order ticking does not disturb: the book and
+ * cover, then the rest by name. A row written to since its tick is one row.
+ */
+export function changeList(status: Status): Tick[] {
+	const ticked = lines(status.staged);
+	const held = new Set(ticked.map(lineKey));
+
+	return [
+		...ticked.map((line) => ({ ...line, ticked: true })),
+		...lines(status.unstaged)
+			.filter((line) => !held.has(lineKey(line)))
+			.map((line) => ({ ...line, ticked: false })),
+	].sort(
+		(a, b) =>
+			(a.name ?? "").localeCompare(b.name ?? "") ||
+			lineKey(a).localeCompare(lineKey(b)),
+	);
+}
+
+/** The ticked rows with words written since their tick. */
+export function behind(status: Status): StatusRow[] {
+	const newer = new Set(lines(status.unstaged).map(lineKey));
+
+	return lines(status.staged)
+		.filter((line) => newer.has(lineKey(line)))
+		.map((line) => line.row);
+}
+
+/** The line above the list. Nothing ticked is not nothing going in. */
+export function ticksLine(ticked: number, total: number): string {
+	return ticked === 0
+		? "All changes go in the next checkpoint"
+		: `${ticked.toLocaleString()} of ${total.toLocaleString()} in the next checkpoint`;
+}
+
 /** What a put back writes over. The book puts back the cover with it. */
 export type Overwrites =
 	| { kind: "everything" }

@@ -2557,34 +2557,44 @@ div.changes__pick {
 	opacity: 1;
 }
 
-.changes__move {
-	flex: none;
-	width: 22px;
-	height: 22px;
-	margin: 0.3rem 0.3rem 0 0;
-	padding: 0;
-	font: inherit;
-	font-size: 0.9375rem;
-	line-height: 1;
+.changes__ticks {
+	margin: 0;
+	font: var(--text-caption);
 	color: var(--text-dim);
+}
+
+.changes__tick {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 16px;
+	height: 16px;
+	margin-top: 0.45rem;
+	padding: 0;
+	color: var(--on-accent);
 	background: none;
-	border: 0;
-	border-radius: var(--radius-xs);
+	border: 1px solid var(--graphic-faint);
+	border-radius: var(--radius-pill);
 	cursor: pointer;
 }
 
-.changes__move:hover {
-	color: var(--text);
-	background: var(--bg-hover);
+.changes__tick[aria-pressed="true"] {
+	background: var(--accent);
+	border-color: var(--accent);
 }
 
-.changes__move:disabled {
-	color: var(--text-faint);
+.changes__tick .icon {
+	width: 10px;
+	height: 10px;
+}
+
+.changes__tick:disabled {
 	cursor: default;
+	opacity: 0.5;
 }
 
 .changes__back:focus-visible,
-.changes__move:focus-visible,
+.changes__tick:focus-visible,
 .changes__head .versions__action:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
