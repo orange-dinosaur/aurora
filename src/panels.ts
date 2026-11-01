@@ -9,8 +9,7 @@ export type Bounds = { min: number; max: number };
  * more room to grow than the panel opposite. */
 export const SIDEBAR: Bounds = { min: 200, max: 460 };
 
-/** The panel about what is open. Its floor is higher than the sidebar's
- * because its four tabs wrap onto a second line below it. */
+/** The panel about what is open. */
 export const RIGHT_SIDEBAR: Bounds = { min: 240, max: 480 };
 
 /**

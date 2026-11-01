@@ -27,7 +27,7 @@ import {
 } from "./markdown";
 import { useFields, type FieldsHandle } from "./fields";
 import type { Seed } from "./lib/find";
-import { FIND, OUTLINE, shortcutLabel, TOOLBAR } from "./formatting";
+import { FIND, shortcutLabel, TOOLBAR } from "./formatting";
 import Find from "./Find";
 import Focus from "./Focus";
 import Links from "./Links";
@@ -37,7 +37,7 @@ import SlashMenu from "./SlashMenu";
 import { split } from "./frontmatter";
 import { baseline } from "./lib/compare";
 import Marks from "./Marks";
-import TakeStrip from "./TakeStrip";
+import TakeStrip, { type MarksHandle } from "./TakeStrip";
 import Target from "./Target";
 import Toolbar from "./Toolbar";
 import Typewriter from "./Typewriter";
@@ -158,6 +158,7 @@ type Props = {
 	onWrote: (delta: number) => void;
 	onFields: (fields: FieldsHandle | null) => void;
 	onOutline: (outline: OutlineHandle | null) => void;
+	onMarks: (marks: MarksHandle | null) => void;
 	onRestore: () => void;
 	onPreferences: (next: Preferences) => void;
 	onTarget: (target: number | null) => void;
@@ -186,6 +187,7 @@ export default function Editor({
 	onWrote,
 	onFields,
 	onOutline,
+	onMarks,
 	onRestore,
 	onPreferences,
 	onTarget,
@@ -198,8 +200,8 @@ export default function Editor({
 		() => onPreferences({ ...preferences, focus: false }),
 		[preferences, onPreferences],
 	);
-	// The headings live in the right sidebar now, so the button and its
-	// shortcut bring that panel round to them instead of opening a column.
+	// The headings live in the Synopsis panel, so the shortcut brings it round
+	// to them.
 	const showing =
 		preferences.rightSidebar && preferences.rightSidebarTab === "synopsis";
 	const outline = useCallback(
@@ -232,6 +234,25 @@ export default function Editor({
 					take === null ? split(live).body : await onTakeText(take),
 			});
 		});
+	// Handed up for the Synopsis panel. Only what it draws is watched, because
+	// `Project` remakes the callbacks behind this on every render, and setting
+	// the handle renders it again.
+	const compared = marks?.take ?? null;
+	useEffect(() => {
+		if (!active || takes.length === 0) {
+			return;
+		}
+
+		onMarks({
+			takes,
+			marking,
+			compared,
+			onMarks: () =>
+				marking ? setMarks(null) : compareWith(baseline(takes)),
+			onCompare: compareWith,
+		});
+		return () => onMarks(null);
+	}, [active, takes, marking, compared, onMarks]);
 	// Counted from the markdown the editor would save, less the front matter,
 	// which is exactly what the Rust side counts when it summarises the file.
 	// The three numbers are taken from one draft together, so they cannot
@@ -350,19 +371,6 @@ export default function Editor({
 									>
 										<Icon name="search" />
 									</button>
-									<button
-										type="button"
-										className="editor__toggle"
-										aria-pressed={showing}
-										aria-label="Outline"
-										title={`Outline (${shortcutLabel(OUTLINE)})`}
-										aria-keyshortcuts={shortcutLabel(
-											OUTLINE,
-										)}
-										onClick={outline}
-									>
-										<Icon name="list" />
-									</button>
 									{/* The one way back once the dock is gone,
 									    so it stays off the dock. */}
 									<button
@@ -395,8 +403,6 @@ export default function Editor({
 									takes={takes}
 									words={tally.words}
 									merging={merging}
-									marking={marking}
-									compared={marks?.take ?? null}
 									onChoose={(take) => {
 										setMarks(null);
 										attempt(() => onChooseTake(take));
@@ -405,12 +411,6 @@ export default function Editor({
 										setMarks(null);
 										attempt(onTry);
 									}}
-									onMarks={() =>
-										marks === null
-											? compareWith(baseline(takes))
-											: setMarks(null)
-									}
-									onCompare={compareWith}
 									onRename={onRenameTake}
 									onDelete={(take) => {
 										setMarks(null);

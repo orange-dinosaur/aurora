@@ -53,6 +53,7 @@ import {
 } from "./takes";
 import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
+import type { MarksHandle } from "./TakeStrip";
 // `changed` under another name: this file already has one of its own.
 import {
 	changed as asChange,
@@ -288,6 +289,7 @@ export default function Project({
 	const [fields, setFields] = useState<FieldsHandle | null>(null);
 	// The headings of the same document, and for the same reason.
 	const [outline, setOutline] = useState<OutlineHandle | null>(null);
+	const [marks, setMarks] = useState<MarksHandle | null>(null);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
 
 	// A folder's fields are read on their own rather than carried on the tab:
@@ -1398,6 +1400,7 @@ export default function Project({
 					onWrote={(delta) => record(tab.document.id, delta)}
 					onFields={setFields}
 					onOutline={setOutline}
+					onMarks={setMarks}
 					onRestore={() => void restore(tab.document.id)}
 					onPreferences={onPreferences}
 					onTarget={(target) =>
@@ -1483,10 +1486,6 @@ export default function Project({
 							onClose={closeTab}
 						/>
 					)
-				}
-				rightSidebar={about === null ? null : preferences.rightSidebar}
-				onRightSidebar={(open) =>
-					onPreferences({ ...preferences, rightSidebar: open })
 				}
 				onSearch={openSearch}
 				theme={preferences.theme}
@@ -1783,10 +1782,12 @@ export default function Project({
 					)}
 				</div>
 
-				{about !== null && preferences.rightSidebar && (
+				{about !== null && (
 					<RightSidebar
+						open={preferences.rightSidebar}
 						fields={about === "document" ? fields : folderFields}
 						outline={about === "document" ? outline : null}
+						marks={about === "document" ? marks : null}
 						trouble={trouble ?? aiming}
 						about={panel}
 						root={root}
@@ -1829,6 +1830,7 @@ export default function Project({
 						onTab={(tab) =>
 							onPreferences({
 								...preferences,
+								rightSidebar: true,
 								rightSidebarTab: tab,
 							})
 						}

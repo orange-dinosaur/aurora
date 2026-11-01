@@ -31,12 +31,6 @@ type Props = {
 	sidebarButton: RefObject<HTMLButtonElement | null>;
 	/** The open tabs, or nothing while Compare or Merge covers them. */
 	tabs: ReactNode;
-	/**
-	 * Whether the right sidebar is showing, or null when what is open has
-	 * nothing to say about itself and the panel does not apply.
-	 */
-	rightSidebar: boolean | null;
-	onRightSidebar: (open: boolean) => void;
 	onSearch: () => void;
 	/** The writer's theme preference, which the header can move between two of. */
 	theme: Theme;
@@ -62,8 +56,6 @@ export default function Titlebar({
 	onSidebar,
 	sidebarButton,
 	tabs,
-	rightSidebar,
-	onRightSidebar,
 	onSearch,
 	theme,
 	onTheme,
@@ -93,22 +85,6 @@ export default function Titlebar({
 
 			{/* Drawn with nothing in it too, so what follows keeps its place. */}
 			<div className="titlebar__tabs">{tabs}</div>
-
-			{/* Disabled rather than dropped where it does not apply: a
-			    button that comes and goes would shuffle the row every time
-			    the writer moved between a document and the trash. */}
-			<button
-				type="button"
-				className="titlebar__button"
-				aria-label={
-					rightSidebar ? "Hide right sidebar" : "Show right sidebar"
-				}
-				aria-pressed={rightSidebar === true}
-				disabled={rightSidebar === null}
-				onClick={() => onRightSidebar(rightSidebar !== true)}
-			>
-				<Icon name="panel-right" />
-			</button>
 
 			{/* Never shrinks, so these hold the window's right edge however
 			    little room the row has. */}

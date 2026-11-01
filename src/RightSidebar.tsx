@@ -1,11 +1,13 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Grip from "./Grip";
 import Icon, { type IconName } from "./Icon";
 import Info from "./Info";
+import { useDismissal } from "./Menu";
 import { RIGHT_SIDEBAR } from "./panels";
 import Mentions, { type About } from "./Mentions";
 import Stats from "./Stats";
 import Synopsis from "./Synopsis";
+import type { MarksHandle } from "./TakeStrip";
 import Versions from "./Versions";
 import type { FieldsHandle } from "./fields";
 import type { Limit, Sessions } from "./sessions";
@@ -23,24 +25,32 @@ import type {
 	VersionsScope,
 } from "./types";
 
-// The panel on the far side of the writing from the sidebar, about whatever is
-// open. It serves a document and a folder overview alike, which is why it takes
-// what it shows rather than reading it: `Project` knows which of the two is in
-// front of the writer, and this only lays it out.
+// The rail on the far right and the one panel it opens, about whatever is open.
+// It serves a document and a folder overview alike, which is why it takes what
+// it shows rather than reading it: `Project` knows which of the two is in front
+// of the writer, and this only lays it out.
 
 const TABS: { name: RightSidebarTab; label: string; icon: IconName }[] = [
-	{ name: "synopsis", label: "Synopsis", icon: "file-text" },
-	{ name: "info", label: "Info", icon: "info" },
-	{ name: "mentions", label: "Mentions", icon: "at-sign" },
-	{ name: "stats", label: "Stats", icon: "chart-column" },
-	{ name: "versions", label: "Versions", icon: "history" },
+	{ name: "synopsis", label: "Synopsis", icon: "card" },
+	{ name: "info", label: "Info", icon: "tag" },
+	{ name: "mentions", label: "Mentions", icon: "quote" },
+	{ name: "stats", label: "Stats", icon: "bars" },
+	{ name: "versions", label: "Versions", icon: "layers" },
 ];
 
+// Where the panel leaves the page's width alone and floats over it, which the
+// stylesheet's own query has to match.
+const OVERLAY = "(max-width: 1080px)";
+
 type Props = {
+	/** Whether the panel is showing. The rail always is. */
+	open: boolean;
 	/** The open document's fields, or null when what is open has none yet. */
 	fields: FieldsHandle | null;
 	/** The open document's headings, or null for a folder overview. */
 	outline: OutlineHandle | null;
+	/** The open document's takes, or null when it has none. */
+	marks: MarksHandle | null;
 	/** What is open: a document, or the folder whose overview is showing. */
 	about: About | null;
 	/** Why a folder's last change was refused, when one was. */
@@ -73,6 +83,7 @@ type Props = {
 	/** Bumped when a session has reached the history file and kept a version. */
 	logged: number;
 	tab: RightSidebarTab;
+	/** Opens the panel on that tab. */
 	onTab: (tab: RightSidebarTab) => void;
 	versionsScope: VersionsScope;
 	onVersionsScope: (scope: VersionsScope) => void;
@@ -101,8 +112,10 @@ type Props = {
 };
 
 export default function RightSidebar({
+	open,
 	fields,
 	outline,
+	marks,
 	about,
 	trouble,
 	root,
@@ -140,155 +153,144 @@ export default function RightSidebar({
 	// Held here rather than passed in, so the element the grip moves is the
 	// one this component drew.
 	const panel = useRef<HTMLElement>(null);
+	const rail = useRef<HTMLDivElement>(null);
 
-	// The tabs stay on one line: names while they fit, icons when they do not.
-	// `needed` is how wide the names were when they stopped fitting, so the
-	// panel knows when widening brings them back.
-	const strip = useRef<HTMLDivElement>(null);
-	const needed = useRef(0);
-	const [icons, setIcons] = useState(false);
-	useLayoutEffect(() => {
-		const row = strip.current;
-		if (row === null) {
-			return;
+	// Floating over the page, it goes the way the floating binder does.
+	const [overlay, setOverlay] = useState(
+		() => window.matchMedia(OVERLAY).matches,
+	);
+	useEffect(() => {
+		const query = window.matchMedia(OVERLAY);
+		function changed(event: MediaQueryListEvent) {
+			setOverlay(event.matches);
 		}
-		const fit = () => {
-			if (row.scrollWidth > row.clientWidth) {
-				needed.current = row.scrollWidth;
-				setIcons(true);
-			} else if (row.clientWidth >= needed.current) {
-				setIcons(false);
-			}
-		};
-		fit();
-		const observer = new ResizeObserver(fit);
-		observer.observe(row);
-		return () => observer.disconnect();
-	}, [icons]);
+		query.addEventListener("change", changed);
+		return () => query.removeEventListener("change", changed);
+	}, []);
+	useDismissal(open && overlay, panel, onClose, rail);
 
 	return (
-		<aside
-			ref={panel}
-			className="right-sidebar"
-			aria-label="About what is open"
-			style={{ width }}
-		>
-			<div
-				ref={strip}
-				className={
-					icons
-						? "right-sidebar__tabs right-sidebar__tabs--icons"
-						: "right-sidebar__tabs"
-				}
-			>
-				{TABS.map(({ name, label, icon }) => (
-					<button
-						key={name}
-						type="button"
-						className={
-							name === tab
-								? "right-sidebar__tab right-sidebar__tab--on"
-								: "right-sidebar__tab"
-						}
-						aria-pressed={name === tab}
-						aria-label={icons ? label : undefined}
-						title={icons ? label : undefined}
-						onClick={() => onTab(name)}
-					>
-						{icons ? <Icon name={icon} /> : label}
-					</button>
-				))}
-				<button
-					type="button"
-					className="right-sidebar__close"
-					aria-label="Hide the right sidebar"
-					onClick={onClose}
+		<>
+			{open && (
+				<aside
+					ref={panel}
+					className="right-sidebar"
+					aria-label="About what is open"
+					style={{ width }}
 				>
-					<Icon name="x" />
-				</button>
+					<h2 className="right-sidebar__title">
+						{TABS.find(({ name }) => name === tab)?.label}
+					</h2>
+
+					{/* Over the panel rather than in it, so a refused change does
+					    not push the field the writer is looking at down the page. */}
+					<p className="right-sidebar__trouble" role="alert">
+						{trouble ?? ""}
+					</p>
+
+					<div className="right-sidebar__body">
+						{tab === "versions" ? (
+							<Versions
+								root={root}
+								page={page}
+								scope={versionsScope}
+								onScope={onVersionsScope}
+								enclosing={enclosing}
+								merge={merge}
+								onMergeChanged={onMergeChanged}
+								onSettle={onSettle}
+								onBeforeKeep={onBeforeKeep}
+								logged={logged}
+								onCompare={onCompare}
+								onPutBack={onPutBack}
+							/>
+						) : tab === "stats" ? (
+							<Stats
+								page={page}
+								text={text}
+								folder={folder}
+								sessions={sessions}
+								words={words}
+								defaultSprint={defaultSprint}
+								defaultSprintUnit={defaultSprintUnit}
+								root={root}
+								logged={logged}
+								changed={changed}
+								onTarget={onTarget}
+								onStartSprint={onStartSprint}
+								onStopSession={onStopSession}
+							/>
+						) : tab === "mentions" ? (
+							about === null ? (
+								<p className="right-sidebar__empty">
+									Nothing here yet.
+								</p>
+							) : (
+								<Mentions
+									root={root}
+									about={about}
+									changed={changed}
+									live={live}
+									onOpen={onOpen}
+								/>
+							)
+						) : fields === null ? (
+							<p className="right-sidebar__empty">
+								Nothing here yet.
+							</p>
+						) : tab === "synopsis" ? (
+							<Synopsis
+								{...fields}
+								outline={outline}
+								marks={marks}
+							/>
+						) : (
+							<Info
+								{...fields}
+								subject={
+									about?.kind === "document" &&
+									isSubject(about.page.trail)
+								}
+								manuscript={inManuscript(about)}
+								root={root}
+								changed={changed}
+								onOpenTag={onOpenTag}
+								onSubject={onSubject}
+							/>
+						)}
+					</div>
+
+					<Grip
+						side="right"
+						panel={panel}
+						width={width}
+						bounds={RIGHT_SIDEBAR}
+						label="Panel width"
+						onWidth={onWidth}
+					/>
+				</aside>
+			)}
+
+			<div ref={rail} className="rail" role="group" aria-label="Panels">
+				{TABS.map(({ name, label, icon }) => {
+					const on = open && name === tab;
+
+					return (
+						<button
+							key={name}
+							type="button"
+							className="rail__tile"
+							aria-label={label}
+							aria-pressed={on}
+							title={label}
+							onClick={() => (on ? onClose() : onTab(name))}
+						>
+							<Icon name={icon} />
+						</button>
+					);
+				})}
 			</div>
-
-			{/* Over the panel rather than in it, so a refused change does not
-			    push the field the writer is looking at down the page. */}
-			<p className="right-sidebar__trouble" role="alert">
-				{trouble ?? ""}
-			</p>
-
-			<div className="right-sidebar__body">
-				{tab === "versions" ? (
-					<Versions
-						root={root}
-						page={page}
-						scope={versionsScope}
-						onScope={onVersionsScope}
-						enclosing={enclosing}
-						merge={merge}
-						onMergeChanged={onMergeChanged}
-						onSettle={onSettle}
-						onBeforeKeep={onBeforeKeep}
-						logged={logged}
-						onCompare={onCompare}
-						onPutBack={onPutBack}
-					/>
-				) : tab === "stats" ? (
-					<Stats
-						page={page}
-						text={text}
-						folder={folder}
-						sessions={sessions}
-						words={words}
-						defaultSprint={defaultSprint}
-						defaultSprintUnit={defaultSprintUnit}
-						root={root}
-						logged={logged}
-						changed={changed}
-						onTarget={onTarget}
-						onStartSprint={onStartSprint}
-						onStopSession={onStopSession}
-					/>
-				) : tab === "mentions" ? (
-					about === null ? (
-						<p className="right-sidebar__empty">
-							Nothing here yet.
-						</p>
-					) : (
-						<Mentions
-							root={root}
-							about={about}
-							changed={changed}
-							live={live}
-							onOpen={onOpen}
-						/>
-					)
-				) : fields === null ? (
-					<p className="right-sidebar__empty">Nothing here yet.</p>
-				) : tab === "synopsis" ? (
-					<Synopsis {...fields} outline={outline} />
-				) : (
-					<Info
-						{...fields}
-						subject={
-							about?.kind === "document" &&
-							isSubject(about.page.trail)
-						}
-						manuscript={inManuscript(about)}
-						root={root}
-						changed={changed}
-						onOpenTag={onOpenTag}
-						onSubject={onSubject}
-					/>
-				)}
-			</div>
-
-			<Grip
-				side="right"
-				panel={panel}
-				width={width}
-				bounds={RIGHT_SIDEBAR}
-				label="Right sidebar width"
-				onWidth={onWidth}
-			/>
-		</aside>
+		</>
 	);
 }
 

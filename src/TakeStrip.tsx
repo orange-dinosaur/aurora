@@ -1,5 +1,6 @@
 // The pills under the title that switch between a document's takes, and where
-// each of them is renamed or deleted.
+// each of them is renamed or deleted. Comparing them is drawn in the Synopsis
+// panel, and the page answers.
 
 import { useEffect, useRef, useState } from "react";
 import type { TakeView } from "./bindings/TakeView";
@@ -16,35 +17,34 @@ type Props = {
 	words: number;
 	/** Set while a merge is under way, when takes cannot change. */
 	merging: boolean;
+	onChoose: (take: string) => void;
+	onTry: () => void;
+	/** Rejects with what Rust made of the name, which the field shows. */
+	onRename: (take: string, name: string) => Promise<void>;
+	onDelete: (take: string) => void;
+};
+
+/** What the open editor hands up for the Synopsis panel to draw. */
+export type MarksHandle = {
+	takes: TakeView[];
 	/** Whether the page is showing marks. */
 	marking: boolean;
 	/** The take they are against, or null when there is none to compare. */
 	compared: string | null;
-	onChoose: (take: string) => void;
-	onTry: () => void;
 	onMarks: () => void;
 	onCompare: (take: string) => void;
-	/** Rejects with what Rust made of the name, which the field shows. */
-	onRename: (take: string, name: string) => Promise<void>;
-	onDelete: (take: string) => void;
 };
 
 export default function TakeStrip({
 	takes,
 	words,
 	merging,
-	marking,
-	compared,
 	onChoose,
 	onTry,
-	onMarks,
-	onCompare,
 	onRename,
 	onDelete,
 }: Props) {
 	const [renaming, setRenaming] = useState<Renaming | null>(null);
-	const against = takes.find((take) => take.id === compared);
-	const chosen = takes.find((take) => take.chosen);
 
 	async function rename(take: string, name: string) {
 		setRenaming({ id: take, busy: true, error: null });
@@ -134,14 +134,34 @@ export default function TakeStrip({
 					</button>
 				</li>
 			</ul>
+		</div>
+	);
+}
+
+export function TakeMarks({
+	takes,
+	marking,
+	compared,
+	onMarks,
+	onCompare,
+}: MarksHandle) {
+	const others = takes.filter((take) => !take.chosen);
+	const against = others.find((take) => take.id === compared);
+	const chosen = takes.find((take) => take.chosen);
+
+	return (
+		<>
+			<h3 className="panel__heading">Takes</h3>
 			<div className="takes__actions">
-				{marking && (
+				{(marking || others.length > 0) && (
 					<Menu
 						label="Take to compare with"
 						text={
-							against === undefined
-								? `No marks to show on ${chosen?.name}`
-								: `Compared with ${against.name}`
+							against !== undefined
+								? `Compared with ${against.name}`
+								: marking
+									? `No marks to show on ${chosen?.name}`
+									: "Compare takes"
 						}
 						icon="chevron-down"
 						trailing
@@ -149,20 +169,18 @@ export default function TakeStrip({
 						className="takes__button takes__picker"
 					>
 						{(close) =>
-							takes
-								.filter((take) => !take.chosen)
-								.map((take) => (
-									<MenuItem
-										key={take.id}
-										checked={take.id === compared}
-										onSelect={() => {
-											close();
-											onCompare(take.id);
-										}}
-									>
-										{take.name}
-									</MenuItem>
-								))
+							others.map((take) => (
+								<MenuItem
+									key={take.id}
+									checked={take.id === compared}
+									onSelect={() => {
+										close();
+										onCompare(take.id);
+									}}
+								>
+									{take.name}
+								</MenuItem>
+							))
 						}
 					</Menu>
 				)}
@@ -175,7 +193,7 @@ export default function TakeStrip({
 					Show marks
 				</button>
 			</div>
-		</div>
+		</>
 	);
 }
 
