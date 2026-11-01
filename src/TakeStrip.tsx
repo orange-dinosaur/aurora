@@ -1,5 +1,5 @@
-// The thin line above the text that switches between a document's takes, and
-// where each of them is renamed or deleted.
+// The pills under the title that switch between a document's takes, and where
+// each of them is renamed or deleted.
 
 import { useEffect, useRef, useState } from "react";
 import type { TakeView } from "./bindings/TakeView";
@@ -65,10 +65,7 @@ export default function TakeStrip({
 			<ul className="takes__list" aria-label="Takes">
 				{takes.map((take) =>
 					renaming?.id === take.id ? (
-						<li
-							key={take.id}
-							className="takes__item takes__item--naming"
-						>
+						<li key={take.id} className="takes__naming">
 							<NameField
 								label={`New name for ${take.name}`}
 								placeholder={take.name}
@@ -91,7 +88,7 @@ export default function TakeStrip({
 						>
 							<button
 								type="button"
-								className="takes__button"
+								className="takes__name"
 								aria-current={take.chosen ? "true" : undefined}
 								disabled={merging}
 								onClick={() => onChoose(take.id)}
@@ -126,6 +123,16 @@ export default function TakeStrip({
 						</li>
 					),
 				)}
+				<li>
+					<button
+						type="button"
+						className="takes__try"
+						disabled={merging}
+						onClick={onTry}
+					>
+						Try something
+					</button>
+				</li>
 			</ul>
 			<div className="takes__actions">
 				{marking && (
@@ -166,14 +173,6 @@ export default function TakeStrip({
 					onClick={onMarks}
 				>
 					Show marks
-				</button>
-				<button
-					type="button"
-					className="takes__button"
-					disabled={merging}
-					onClick={onTry}
-				>
-					Try something
 				</button>
 			</div>
 		</div>

@@ -7,7 +7,7 @@ import type { ManuscriptFont, Preferences } from "../types";
 /** A preference the writer nudges rather than types. */
 export type Setting = {
 	id: "measure" | "fontSize" | "lineHeight";
-	/** In the popover, where one word has to do. */
+	/** In the Aa panel. */
 	label: string;
 	/** In Settings, which has room for what the thing is actually called. */
 	full: string;
@@ -24,7 +24,7 @@ export type Setting = {
 export const SETTINGS: Setting[] = [
 	{
 		id: "measure",
-		label: "Width",
+		label: "Line width",
 		full: "Measure",
 		hint: "Characters per line",
 		min: 40,
@@ -43,7 +43,7 @@ export const SETTINGS: Setting[] = [
 	},
 	{
 		id: "lineHeight",
-		label: "Spacing",
+		label: "Line spacing",
 		full: "Line spacing",
 		min: 1.2,
 		max: 2.4,

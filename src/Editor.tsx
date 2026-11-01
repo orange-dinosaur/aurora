@@ -315,181 +315,206 @@ export default function Editor({
 				} as CSSProperties
 			}
 		>
-			<div className="editor__head">
-				<div className="editor__heading">
-					{/* Where the document sits, above its name. Always in the
-					    tree, so the title never moves as the writer opens
-					    something filed one level deeper. */}
-					<p className="editor__where">{trail.join(" · ")}</p>
-					<h2 className="editor__title">{title}</h2>
-				</div>
-				<div className="editor__tools">
-					<Typography
-						preferences={preferences}
-						onPreferences={onPreferences}
-					/>
-					{/* The only way to the panel that does not need the caret
-					    to be in the text: Ctrl+F is the editor's own key, so
-					    it cannot answer when the focus is elsewhere. */}
-					<button
-						type="button"
-						className="editor__toggle"
-						aria-expanded={finding}
-						aria-label="Find in this document"
-						title={`Find (${shortcutLabel(FIND)})`}
-						aria-keyshortcuts={shortcutLabel(FIND)}
-						onClick={find}
-					>
-						<Icon name="search" />
-					</button>
-					<button
-						type="button"
-						className="editor__toggle"
-						aria-pressed={showing}
-						aria-label="Outline"
-						title={`Outline (${shortcutLabel(OUTLINE)})`}
-						aria-keyshortcuts={shortcutLabel(OUTLINE)}
-						onClick={outline}
-					>
-						<Icon name="list" />
-					</button>
-					{/* Turned on and off while writing rather than set once,
-					    so it stays in reach instead of going in the panel
-					    above. */}
-					<button
-						type="button"
-						className="editor__toggle"
-						aria-pressed={preferences.focus}
-						aria-label="Focus mode"
-						title="Dim other paragraphs"
-						onClick={() =>
-							onPreferences({
-								...preferences,
-								focus: !preferences.focus,
-							})
-						}
-					>
-						<Icon name="contrast" />
-					</button>
-					<button
-						type="button"
-						className="editor__toggle"
-						aria-pressed={preferences.typewriter}
-						aria-label="Typewriter scrolling"
-						title="Hold the line being written on"
-						onClick={() =>
-							onPreferences({
-								...preferences,
-								typewriter: !preferences.typewriter,
-							})
-						}
-					>
-						<Icon name="arrows-vertical" />
-					</button>
-					{/* The one way back once the bar is gone, so it stays on
-					    screen whichever way round it is. */}
-					<button
-						type="button"
-						className="editor__toggle"
-						aria-expanded={preferences.toolbar}
-						aria-label="Formatting bar"
-						title={`Formatting bar (${shortcutLabel(TOOLBAR)})`}
-						aria-keyshortcuts={shortcutLabel(TOOLBAR)}
-						onClick={toggle}
-					>
-						<Icon
-							name={
-								preferences.toolbar
-									? "chevron-down"
-									: "chevron-right"
-							}
-						/>
-					</button>
-				</div>
-			</div>
 			<LexicalComposer initialConfig={config}>
 				{/* Its buttons act on the text even with the surface hidden. */}
 				{preferences.toolbar && (
-					<div className="editor__tools" inert={marking}>
+					<div className="editor__column editor__bar" inert={marking}>
 						<Toolbar />
 					</div>
 				)}
-				{takes.length > 0 && !preferences.focus && (
-					<TakeStrip
-						takes={takes}
-						words={tally.words}
-						merging={merging}
-						marking={marking}
-						compared={marks?.take ?? null}
-						onChoose={(take) => {
-							setMarks(null);
-							attempt(() => onChooseTake(take));
-						}}
-						onTry={() => {
-							setMarks(null);
-							attempt(onTry);
-						}}
-						onMarks={() =>
-							marks === null
-								? compareWith(baseline(takes))
-								: setMarks(null)
-						}
-						onCompare={compareWith}
-						onRename={onRenameTake}
-						onDelete={(take) => {
-							setMarks(null);
-							attempt(() => onDeleteTake(take));
-						}}
-					/>
-				)}
-				{marking && (
-					<Marks
-						live={marks.live}
-						prose={marks.prose}
-						onClose={() => setMarks(null)}
-					/>
-				)}
-				{/* Hidden rather than unmounted, so the caret and undo survive. */}
-				<div className="editor__surface" hidden={marking}>
-					<RichTextPlugin
-						contentEditable={
-							<ContentEditable
-								className="editor__text"
-								aria-label={title}
-								aria-placeholder="Start writing…"
-								placeholder={
-									<p className="editor__placeholder">
-										Start writing…
+				<div className="editor__view">
+					<div className="editor__scroll">
+						<div className="editor__column editor__page">
+							<div className="editor__head">
+								<div className="editor__name">
+									{/* Where the document sits, above its name.
+									    Always in the tree, so the title never
+									    moves as the writer opens something filed
+									    one level deeper. */}
+									<p className="editor__where">
+										{trail.join(" · ")}
 									</p>
-								}
-								spellCheck
-							/>
-						}
-						ErrorBoundary={LexicalErrorBoundary}
-					/>
-					<HistoryPlugin />
-					{/* The same transformer list the file is read and written
-					    with, so what converts as you type is exactly what
-					    survives a save. */}
-					<MarkdownShortcutPlugin
-						transformers={MARKDOWN_TRANSFORMERS}
-					/>
-					<ListPlugin />
-					{/* Keeps link nodes tidy as they are edited, as well as
-					    answering for the toggle command. */}
-					<LinkPlugin />
-					<Links />
-					{/* Moving the caret is not an edit, or every click would
-					    mark the document unsaved. */}
-					<OnChangePlugin ignoreSelectionChange onChange={edited} />
-					{active && <Fields onFields={onFields} />}
-					{active && <Outline onOutline={onOutline} />}
-					<Shortcuts
-						onToolbar={toggle}
-						onOutline={outline}
-						onFind={find}
-						onReplace={replace}
-					/>
+									<h2 className="editor__title">{title}</h2>
+								</div>
+								<div className="editor__tools">
+									{/* The only way to the panel that does not
+									    need the caret to be in the text: Ctrl+F
+									    is the editor's own key, so it cannot
+									    answer when the focus is elsewhere. */}
+									<button
+										type="button"
+										className="editor__toggle"
+										aria-expanded={finding}
+										aria-label="Find in this document"
+										title={`Find (${shortcutLabel(FIND)})`}
+										aria-keyshortcuts={shortcutLabel(FIND)}
+										onClick={find}
+									>
+										<Icon name="search" />
+									</button>
+									<button
+										type="button"
+										className="editor__toggle"
+										aria-pressed={showing}
+										aria-label="Outline"
+										title={`Outline (${shortcutLabel(OUTLINE)})`}
+										aria-keyshortcuts={shortcutLabel(
+											OUTLINE,
+										)}
+										onClick={outline}
+									>
+										<Icon name="list" />
+									</button>
+									{/* Turned on and off while writing rather
+									    than set once, so it stays in reach
+									    instead of going in the panel beside it. */}
+									<button
+										type="button"
+										className="editor__toggle"
+										aria-pressed={preferences.focus}
+										aria-label="Focus mode"
+										title="Dim other paragraphs"
+										onClick={() =>
+											onPreferences({
+												...preferences,
+												focus: !preferences.focus,
+											})
+										}
+									>
+										<Icon name="contrast" />
+									</button>
+									<button
+										type="button"
+										className="editor__toggle"
+										aria-pressed={preferences.typewriter}
+										aria-label="Typewriter scrolling"
+										title="Hold the line being written on"
+										onClick={() =>
+											onPreferences({
+												...preferences,
+												typewriter:
+													!preferences.typewriter,
+											})
+										}
+									>
+										<Icon name="arrows-vertical" />
+									</button>
+									{/* The one way back once the bar is gone, so
+									    it stays on screen whichever way round
+									    it is. */}
+									<button
+										type="button"
+										className="editor__toggle"
+										aria-expanded={preferences.toolbar}
+										aria-label="Formatting bar"
+										title={`Formatting bar (${shortcutLabel(TOOLBAR)})`}
+										aria-keyshortcuts={shortcutLabel(
+											TOOLBAR,
+										)}
+										onClick={toggle}
+									>
+										<Icon
+											name={
+												preferences.toolbar
+													? "chevron-down"
+													: "chevron-right"
+											}
+										/>
+									</button>
+									<Typography
+										preferences={preferences}
+										onPreferences={onPreferences}
+									/>
+								</div>
+							</div>
+							{takes.length > 0 && !preferences.focus && (
+								<TakeStrip
+									takes={takes}
+									words={tally.words}
+									merging={merging}
+									marking={marking}
+									compared={marks?.take ?? null}
+									onChoose={(take) => {
+										setMarks(null);
+										attempt(() => onChooseTake(take));
+									}}
+									onTry={() => {
+										setMarks(null);
+										attempt(onTry);
+									}}
+									onMarks={() =>
+										marks === null
+											? compareWith(baseline(takes))
+											: setMarks(null)
+									}
+									onCompare={compareWith}
+									onRename={onRenameTake}
+									onDelete={(take) => {
+										setMarks(null);
+										attempt(() => onDeleteTake(take));
+									}}
+								/>
+							)}
+							{marking && (
+								<Marks
+									live={marks.live}
+									prose={marks.prose}
+									onClose={() => setMarks(null)}
+								/>
+							)}
+							{/* Hidden rather than unmounted, so the caret and
+							    undo survive. */}
+							<div className="editor__surface" hidden={marking}>
+								<RichTextPlugin
+									contentEditable={
+										<ContentEditable
+											className="editor__text"
+											aria-label={title}
+											aria-placeholder="Start writing…"
+											placeholder={
+												<p className="editor__placeholder">
+													Start writing…
+												</p>
+											}
+											spellCheck
+										/>
+									}
+									ErrorBoundary={LexicalErrorBoundary}
+								/>
+								<HistoryPlugin />
+								{/* The same transformer list the file is read
+								    and written with, so what converts as you
+								    type is exactly what survives a save. */}
+								<MarkdownShortcutPlugin
+									transformers={MARKDOWN_TRANSFORMERS}
+								/>
+								<ListPlugin />
+								{/* Keeps link nodes tidy as they are edited, as
+								    well as answering for the toggle command. */}
+								<LinkPlugin />
+								<Links />
+								{/* Moving the caret is not an edit, or every
+								    click would mark the document unsaved. */}
+								<OnChangePlugin
+									ignoreSelectionChange
+									onChange={edited}
+								/>
+								{active && <Fields onFields={onFields} />}
+								{active && <Outline onOutline={onOutline} />}
+								<Shortcuts
+									onToolbar={toggle}
+									onOutline={outline}
+									onFind={find}
+									onReplace={replace}
+								/>
+								<Focus on={preferences.focus} />
+								<Typewriter on={preferences.typewriter} />
+								<SlashMenu />
+							</div>
+						</div>
+					</div>
+					{/* Outside the scroll, so it stays put as the page moves
+					    from one match to the next. */}
 					{finding && (
 						<Find
 							asked={asked}
@@ -502,61 +527,60 @@ export default function Editor({
 							}}
 						/>
 					)}
-					<Focus on={preferences.focus} />
-					<Typewriter on={preferences.typewriter} />
-					<SlashMenu />
 				</div>
 			</LexicalComposer>
-			<div className="editor__foot">
-				<p className="editor__count">
-					<Target
-						words={tally.words}
-						target={target}
-						onTarget={onTarget}
+			<div className="editor__column editor__under">
+				<div className="editor__foot">
+					<p className="editor__count">
+						<Target
+							words={tally.words}
+							target={target}
+							onTarget={onTarget}
+						/>
+						{tallied(tally)}
+					</p>
+					<p
+						className={
+							wrong === null && !missing
+								? "editor__status"
+								: "editor__status editor__status--error"
+						}
+						role="status"
+					>
+						{missing ? (
+							<>
+								This document&rsquo;s file is no longer there.{" "}
+								<button
+									type="button"
+									className="editor__restore"
+									onClick={onRestore}
+								>
+									Write it back
+								</button>
+							</>
+						) : (
+							note
+						)}
+					</p>
+				</div>
+				{/* The number above is the real report; this is only its shape,
+				    and there is nothing to draw until a target is set. */}
+				{target !== null && (
+					<div
+						className="editor__progress"
+						style={
+							{
+								"--progress": `${Math.min(100, (tally.words / target) * 100)}%`,
+							} as CSSProperties
+						}
+						role="progressbar"
+						aria-label="Progress towards the word target"
+						aria-valuenow={tally.words}
+						aria-valuemin={0}
+						aria-valuemax={target}
 					/>
-					{tallied(tally)}
-				</p>
-				<p
-					className={
-						wrong === null && !missing
-							? "editor__status"
-							: "editor__status editor__status--error"
-					}
-					role="status"
-				>
-					{missing ? (
-						<>
-							This document&rsquo;s file is no longer there.{" "}
-							<button
-								type="button"
-								className="editor__restore"
-								onClick={onRestore}
-							>
-								Write it back
-							</button>
-						</>
-					) : (
-						note
-					)}
-				</p>
+				)}
 			</div>
-			{/* The number above is the real report; this is only its shape,
-			    and there is nothing to draw until a target is set. */}
-			{target !== null && (
-				<div
-					className="editor__progress"
-					style={
-						{
-							"--progress": `${Math.min(100, (tally.words / target) * 100)}%`,
-						} as CSSProperties
-					}
-					role="progressbar"
-					aria-label="Progress towards the word target"
-					aria-valuenow={tally.words}
-					aria-valuemin={0}
-					aria-valuemax={target}
-				/>
-			)}
 		</div>
 	);
 }

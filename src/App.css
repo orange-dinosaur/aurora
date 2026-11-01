@@ -1887,6 +1887,11 @@ body,
 	padding: 1.5rem;
 }
 
+/* The page scrolls from edge to edge and keeps its own gutters. */
+.project__pane:has(> .editor) {
+	padding: 0;
+}
+
 .project__pane--hidden {
 	visibility: hidden;
 }
@@ -5542,7 +5547,6 @@ button.compare__pick:focus-visible {
 /* And every square control inside one is the same button: the glyph changes,
    the box does not. */
 .controls__mark,
-.typography__step,
 .editor__find-step {
 	display: inline-flex;
 	align-items: center;
@@ -5746,34 +5750,92 @@ button.compare__pick:focus-visible {
 	opacity: 0.75;
 }
 
-/* The measure column centres itself in the pane now that the project fills the
-   window. An auto cross-axis margin, not align-items on the pane, which would
-   pull the overview and the trash in with it. */
+/* Here rather than on the text, so the line width's `ch` is read against the
+   face and size the writer chose. The chrome around it is sized in rem, so none
+   of it moves, and it takes its own face back below. */
 .editor {
+	--gutter: var(--space-lg);
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	width: 100%;
-	max-width: var(--measure);
-	margin-inline: auto;
 	min-height: 0;
-	/* Here rather than on the text, so the measure's `ch` is read against the
-	   size the writer chose. The chrome around it is sized in rem, so none of
-	   it moves. */
+	font-family: var(--font-page);
 	font-size: var(--font-size);
 }
 
-/* The title and the one control that is on screen whichever way round the bar
-   is, so hiding it is never a one-way door. */
-.editor__head {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 1rem;
-	margin: 0 0 0.5rem;
+.editor__bar,
+.editor__head,
+.editor__surface,
+.editor__find,
+.editor__foot {
+	font-family: var(--font-ui);
 }
 
-.editor__heading {
+/* Everything that lines up with the text: the gutters stand outside the line
+   width, so the width is the one the writer set. */
+.editor__column {
+	flex: none;
+	width: min(100%, calc(var(--measure) + 2 * var(--gutter)));
+	margin-inline: auto;
+	padding-inline: var(--gutter);
+}
+
+.editor__bar[inert] {
+	opacity: 0.55;
+}
+
+/* What Find floats over. */
+.editor__view {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+}
+
+/* The page scrolls as one piece, title and takes with it, and the scrollbar
+   stands at the edge of the pane rather than against the words. */
+.editor__scroll {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+/* Grows to fill the pane, so a click below a short document still lands in the
+   text. */
+.editor__page {
+	flex: 1 0 auto;
+	display: flex;
+	flex-direction: column;
+	padding-top: var(--space-xl);
+}
+
+@media (max-width: 820px) {
+	.editor {
+		--gutter: var(--space-md);
+	}
+
+	.editor__page {
+		padding-top: var(--space-md);
+	}
+}
+
+.editor__head {
+	flex: none;
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--space-md);
+	margin-bottom: var(--space-lg);
+}
+
+.editor__head:has(+ .takes) {
+	margin-bottom: 0;
+}
+
+.editor__name {
 	min-width: 0;
 }
 
@@ -5781,34 +5843,27 @@ button.compare__pick:focus-visible {
    under a section, and it keeps its line either way so the title does not
    move between one document and the next. */
 .editor__where {
-	min-height: 1em;
-	margin: 0 0 0.15rem;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
+	min-height: 1.35em;
+	margin: 0;
+	font: var(--text-caption);
 	color: var(--text-faint);
 	overflow-wrap: anywhere;
 }
 
 .editor__title {
-	margin: 0;
-	font-family: var(--font-page);
-	font-size: 1.625rem;
-	font-weight: 400;
-	line-height: 1.2;
+	margin: var(--space-xxs) 0 0;
+	font: var(--text-display);
+	letter-spacing: var(--tracking-display);
+	overflow-wrap: anywhere;
 }
 
-/* The two controls for how the page looks, kept together and away from the
-   title. */
+/* Stands a little above the caption, in the corner of the column. */
 .editor__tools {
 	flex: none;
-	/* The head aligns on baselines, and a row of icon buttons has no text to
-	   put one on. */
-	align-self: center;
 	display: flex;
 	align-items: center;
 	gap: 0.1rem;
+	margin-top: calc(var(--space-xs) * -1);
 }
 
 .editor__toggle {
@@ -5836,23 +5891,24 @@ button.compare__pick:focus-visible {
 	background: var(--bg-hover);
 }
 
-/* The ways of writing this document, one thin line above the text. Sized in
-   rem with the rest of the chrome, and the list wraps rather than losing a
-   take off the end. */
+/* The ways of writing this document, as pills under the title. The list wraps
+   rather than losing a take off the end. */
 .takes {
+	flex: none;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: flex-start;
 	justify-content: space-between;
-	gap: 1rem;
-	margin: 0 0 0.5rem;
-	font-size: 0.75rem;
+	gap: var(--space-xxs) var(--space-md);
+	margin: var(--space-sm) 0 var(--space-lg);
+	font: var(--text-caption);
 	color: var(--text-dim);
 }
 
 .takes__list {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.1rem 0.25rem;
+	gap: var(--space-xxs);
 	min-width: 0;
 	margin: 0;
 	padding: 0;
@@ -5860,19 +5916,62 @@ button.compare__pick:focus-visible {
 }
 
 .takes__item {
-	display: flex;
-	align-items: center;
-	gap: 0.25rem;
+	position: relative;
 	min-width: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-pill);
 }
 
-.takes__item + .takes__item::before {
-	content: "·";
-	color: var(--text-faint);
+.takes__item:hover {
+	background: var(--bg-hover);
+}
+
+/* Colour and a wash rather than weight, so the names stay put as the choice
+   moves along them. */
+.takes__item--chosen,
+.takes__item--chosen:hover {
+	color: var(--text);
+	background: var(--accent-wash);
+	border-color: var(--accent);
+}
+
+/* The side padding has room for the take's … in it, so every pill is even
+   whether or not the … is showing. */
+.takes__name {
+	display: block;
+	padding: 2px var(--space-md);
+	font: inherit;
+	color: inherit;
+	overflow-wrap: anywhere;
+	text-align: left;
+	background: none;
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.takes__try {
+	padding: 2px var(--space-sm);
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: 1px dashed var(--border);
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.takes__try:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.takes__name:disabled,
+.takes__try:disabled {
+	cursor: default;
+	opacity: 0.55;
 }
 
 .takes__button {
-	padding: 0.1rem 0.35rem;
+	padding: 2px var(--space-xs);
 	font: inherit;
 	color: inherit;
 	overflow-wrap: anywhere;
@@ -5883,26 +5982,16 @@ button.compare__pick:focus-visible {
 	cursor: pointer;
 }
 
-.takes__button:hover:not(:disabled) {
+.takes__button:hover {
 	color: var(--text);
 	background: var(--bg-hover);
 }
 
-/* Colour and a wash rather than weight, so the names stay put as the choice
-   moves along them. */
-.takes__button[aria-current="true"] {
-	color: var(--accent-text);
-	background: var(--accent-wash);
-}
-
+.takes__name:focus-visible,
+.takes__try:focus-visible,
 .takes__button:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: 1px;
-}
-
-.takes__button:disabled {
-	cursor: default;
-	opacity: 0.55;
 }
 
 .takes__button[aria-pressed="true"] {
@@ -5942,6 +6031,11 @@ button.compare__pick:focus-visible {
 	cursor: text;
 }
 
+.editor__page > .marks {
+	flex: 1 0 auto;
+	padding-bottom: 120px;
+}
+
 .marks__cut {
 	text-decoration: line-through;
 	background: var(--removed-wash);
@@ -5951,19 +6045,14 @@ button.compare__pick:focus-visible {
 	background: var(--added-wash);
 }
 
-.editor__tools {
-	flex: none;
-}
-
-.editor__tools[inert] {
-	opacity: 0.55;
-}
-
 /* Faded rather than removed, so the names do not shift as the pointer moves
    along them. The chosen take always shows its own. */
 .menu.takes__menu {
-	position: relative;
+	top: 0;
+	right: 1px;
+	bottom: 0;
 	display: flex;
+	align-items: center;
 	opacity: 0;
 }
 
@@ -5975,7 +6064,7 @@ button.compare__pick:focus-visible {
 }
 
 .takes__menu .menu__trigger {
-	width: 16px;
+	width: 14px;
 	height: 18px;
 }
 
@@ -5997,19 +6086,19 @@ button.compare__pick:focus-visible {
 	outline: none;
 }
 
-.takes__item--naming {
+.takes__naming {
 	position: relative;
 	width: 9rem;
 }
 
-.takes__item--naming .namefield__input {
+.takes__naming .namefield__input {
 	height: 22px;
 	padding: 0 0.35rem;
 	font-size: inherit;
 }
 
 /* Over the text, which needs covering for a refusal to be read. */
-.takes__item--naming .namefield__message {
+.takes__naming .namefield__message {
 	top: 100%;
 	left: 0;
 	z-index: 5;
@@ -6022,12 +6111,12 @@ button.compare__pick:focus-visible {
 .editor__surface {
 	position: relative;
 	display: flex;
-	flex: 1;
-	min-height: 0;
+	flex: 1 0 auto;
 }
 
 .editor__text {
 	flex: 1;
+	min-width: 0;
 	min-height: 0;
 	padding: 0;
 	font: inherit;
@@ -6039,9 +6128,13 @@ button.compare__pick:focus-visible {
 	line-height: var(--line-height);
 	color: inherit;
 	outline: none;
-	overflow-y: auto;
 	white-space: pre-wrap;
 	overflow-wrap: break-word;
+}
+
+/* Room for the dock, in the text so a click down there still lands in it. */
+.editor__surface .editor__text {
+	padding-bottom: 120px;
 }
 
 /* The blocks the writer can make. Their colours are mixed from --text and
@@ -6173,7 +6266,8 @@ button.compare__pick:focus-visible {
 	top: 0;
 	left: 0;
 	margin: 0;
-	line-height: 1.7;
+	font-family: var(--font-page);
+	line-height: var(--line-height);
 	color: var(--text-dim);
 	pointer-events: none;
 	user-select: none;
@@ -6252,8 +6346,7 @@ button.compare__pick:focus-visible {
 	flex: none;
 	display: flex;
 	align-items: center;
-	margin: 0 0 0.75rem;
-	padding-bottom: 0.5rem;
+	padding-block: var(--space-xs);
 	border-bottom: 1px solid var(--border);
 }
 
@@ -6425,8 +6518,8 @@ button.compare__pick:focus-visible {
    is going on, and the panel gives it back when it closes. */
 .editor__find {
 	position: absolute;
-	top: 0;
-	right: 0;
+	top: var(--space-xs);
+	right: var(--gutter);
 	z-index: 6;
 	display: flex;
 	flex-direction: column;
@@ -6517,37 +6610,50 @@ button.compare__pick:focus-visible {
 	position: relative;
 }
 
+.typography__toggle {
+	width: auto;
+	padding-inline: var(--space-xs);
+	font: var(--text-ui-strong);
+}
+
 .typography__panel {
 	position: absolute;
 	top: 100%;
 	right: 0;
 	z-index: 6;
-	/* One grid for every row at once, so the four columns line up without a
-	   wrapper per setting — no subgrid, which this webview's version is not
-	   worth betting on. */
 	display: grid;
-	grid-template-columns: auto auto minmax(2.5rem, auto) auto;
+	grid-template-columns: 1fr auto;
 	align-items: center;
-	gap: 0.15rem 0.5rem;
-	margin-top: 0.25rem;
+	gap: var(--space-xxs) var(--space-md);
+	margin-top: var(--space-xxs);
+	font: var(--text-ui);
 	white-space: nowrap;
 }
 
-.typography__label {
-	color: var(--text-dim);
+.typography__stepper {
+	display: inline-flex;
+	align-items: center;
 }
 
 .typography__value {
+	min-width: 44px;
 	font-variant-numeric: tabular-nums;
 	text-align: center;
 }
 
 .typography__step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
 	font: inherit;
 	line-height: 1;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -6580,15 +6686,17 @@ button.compare__pick:focus-visible {
 	padding-bottom: 60vh;
 }
 
+.editor__under {
+	padding-block: var(--space-xs) var(--space-sm);
+}
+
 /* The count and the save state share one row, so the row keeps its height
    whatever either of them says. */
 .editor__foot {
-	flex: none;
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 1rem;
-	margin: 0.5rem 0 0;
 }
 
 .editor__count {
@@ -6636,7 +6744,6 @@ button.compare__pick:focus-visible {
 /* A hairline under the foot rather than a widget: the number says how far
    along the writer is, and this only gives it a shape. */
 .editor__progress {
-	flex: none;
 	height: 2px;
 	margin-top: 0.4rem;
 	background: var(--border);
