@@ -1490,12 +1490,19 @@ body,
 .titlebar__tabs {
 	flex: 1;
 	display: flex;
+	gap: var(--space-xs);
 	min-width: 0;
+}
+
+/* Compare's two buttons cannot scroll as tabs do, so a merge's name gives way. */
+.titlebar__tabs:has(> .titlebar__quiet) {
+	flex: none;
+	margin-right: auto;
 }
 
 /* WebKitGTK resets the two properties after `font` on a button, and a font
    shorthand restores neither of them. */
-.titlebar__session {
+.titlebar__quiet {
 	flex: none;
 	display: inline-flex;
 	align-items: center;
@@ -1512,18 +1519,18 @@ body,
 	cursor: pointer;
 }
 
-.titlebar__session:hover,
-.titlebar__session[aria-expanded="true"] {
+.titlebar__quiet:hover,
+.titlebar__quiet[aria-expanded="true"] {
 	color: var(--text);
 	background: var(--bg-hover);
 }
 
-.titlebar__session:focus-visible {
+.titlebar__quiet:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
 
-.titlebar__session svg {
+.titlebar__quiet svg {
 	width: 14px;
 	height: 14px;
 }
@@ -2725,13 +2732,7 @@ body.dragging * {
 }
 
 .versions__item--selected {
-	background: var(--bg-card);
-	border-color: var(--border);
-}
-
-.versions .versions__item--selected {
 	background: var(--bg-hover);
-	border-color: transparent;
 }
 
 .versions__pick {
@@ -2759,15 +2760,6 @@ body.dragging * {
 	outline-offset: -2px;
 }
 
-.versions__mark {
-	flex: none;
-	width: 7px;
-	height: 7px;
-	margin-top: 6px;
-	border: 1px solid var(--border-strong);
-	border-radius: 50%;
-}
-
 .versions__text {
 	display: flex;
 	flex-direction: column;
@@ -2775,22 +2767,14 @@ body.dragging * {
 }
 
 .versions__name {
-	font-size: 0.8125rem;
-	font-weight: 600;
+	font: var(--text-ui);
 	color: var(--text);
 	overflow-wrap: anywhere;
 }
 
-.versions .versions__name {
-	font: var(--text-ui);
-}
-
 .versions__detail {
-	font-variant-numeric: tabular-nums;
-}
-
-.versions .versions__detail {
 	font: var(--text-caption);
+	font-variant-numeric: tabular-nums;
 }
 
 .versions__actions {
@@ -3496,9 +3480,76 @@ div.changes__pick {
 	border-right: 1px solid var(--border);
 }
 
-/* No menu at the end of these rows to leave room for. */
-.compare__history .versions__pick {
-	padding-right: 0.5rem;
+/* Compare's checkpoints stand where the binder stands. Only the list scrolls,
+   so the version menu can hang over it. */
+.checkpoints {
+	grid-area: 1 / 1 / 3 / 2;
+	display: flex;
+	flex-direction: column;
+	width: 244px;
+	min-height: 0;
+	background: var(--bg-chrome);
+	border-right: var(--hairline);
+}
+
+.checkpoints__head {
+	flex: none;
+	padding: var(--space-md) var(--space-md) var(--space-xs);
+}
+
+.checkpoints__of {
+	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.checkpoints__title {
+	margin: 2px 0 0;
+	font: 400 21px/1.1 var(--font-title);
+	letter-spacing: var(--tracking-heading);
+	overflow-wrap: anywhere;
+}
+
+.checkpoints__trail {
+	margin: 2px 0 0;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.checkpoints__list {
+	flex: 1;
+	min-height: 0;
+	padding: 0 var(--space-sm) var(--space-sm);
+	overflow-y: auto;
+}
+
+.checkpoints .versions__date {
+	margin-top: var(--space-sm);
+	padding-left: var(--space-xs);
+}
+
+.checkpoints .versions__item--selected {
+	background: var(--accent-wash);
+}
+
+/* The columns cannot spare the width here, so the list floats over them and
+   leaves a strip to click away on, as the binder does. */
+@media (max-width: 820px) {
+	.checkpoints {
+		grid-area: auto;
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 3;
+		display: none;
+		max-width: calc(100% - var(--space-xxl));
+		box-shadow: var(--shadow-float);
+	}
+
+	.checkpoints--open {
+		display: flex;
+	}
 }
 
 .compare__title {
@@ -3519,49 +3570,7 @@ div.changes__pick {
 }
 
 .compare__scope {
-	margin: 0.75rem 0;
-}
-
-.menu.compare__in {
-	position: relative;
-	margin-bottom: 0.25rem;
-}
-
-.compare__in .menu__items {
-	left: 0;
-	right: auto;
-	min-width: 12rem;
-}
-
-.compare__in-trigger {
-	display: flex;
-	align-items: center;
-	gap: 0.25rem;
-	max-width: 100%;
-	padding: 0.2rem 0.3rem;
-	font: inherit;
-	font-size: 0.75rem;
-	color: var(--text-dim);
-	background: none;
-	border: 0;
-	border-radius: var(--radius-xs);
-	cursor: pointer;
-}
-
-.compare__in-trigger:hover {
-	color: var(--text);
-	background: var(--bg-hover);
-}
-
-.compare__in-trigger:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 2px;
-}
-
-.compare__in-name {
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	margin-top: var(--space-sm);
 }
 
 /* Capped so the columns keep most of the height; the rest scrolls. */
@@ -3632,17 +3641,35 @@ button.compare__pick:focus-visible {
 
 .compare__letter {
 	flex: none;
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
 	margin-left: auto;
-	font-size: 0.6875rem;
-	font-weight: 700;
-	color: var(--accent-text);
+	font: 600 11px/1 var(--font-ui);
+	color: var(--text-dim);
+	background: var(--bg-hover);
+	border-radius: var(--radius-pill);
 }
 
+.compare__letter--b {
+	color: var(--accent-text);
+	background: var(--accent-wash);
+}
+
+.versions__pick[aria-pressed="true"] .compare__letter {
+	color: var(--text);
+	background: var(--bg-card);
+}
+
+/* The grid area is Compare's. Merge still lays this out in its own row. */
 .compare__main {
+	grid-area: 2 / 2 / 3 / 5;
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-width: 0;
+	min-height: 0;
 }
 
 .compare__columns {
@@ -3673,7 +3700,6 @@ button.compare__pick:focus-visible {
 
 .compare__head .compare__letter {
 	margin-left: 0;
-	font-size: 0.75rem;
 }
 
 .compare__heading {

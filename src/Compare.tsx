@@ -18,7 +18,7 @@ import {
 import { differences, putBack } from "./differences";
 import { failure } from "./errors";
 import Icon from "./Icon";
-import Menu, { MenuItem } from "./Menu";
+import Menu, { MenuItem, useDismissal } from "./Menu";
 import PutBack from "./PutBack";
 import { canTry, openAsTake } from "./takes";
 import { draw, Wash } from "./Blocks";
@@ -55,6 +55,11 @@ type Props = {
 	lineHeight: number;
 	/** Set while a merge is under way, when takes cannot change. */
 	merging: boolean;
+	/** Set while the list floats over the columns in a narrow window. */
+	floating: boolean;
+	onDismiss: () => void;
+	/** The bar's button, which a floating list treats as part of itself. */
+	opener: RefObject<HTMLButtonElement | null>;
 	onScope: (scope: VersionsScope) => void;
 	onBack: () => void;
 	/** Writes everything down, runs the put back, and reloads what it changed. */
@@ -86,11 +91,16 @@ export default function Compare({
 	fontSize,
 	lineHeight,
 	merging,
+	floating,
+	onDismiss,
+	opener,
 	onScope,
 	onBack,
 	onPutBack,
 }: Props) {
 	const open = scope === "document" ? document : null;
+	const list = useRef<HTMLElement>(null);
+	useDismissal(floating, list, onDismiss, opener);
 	const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
 	const [versions, setVersions] = useState<Branch[]>([]);
 	const [listing, setListing] = useState(slug);
@@ -449,27 +459,21 @@ export default function Compare({
 					});
 
 	return (
-		<div className="compare">
-			<div className="compare__bar">
-				<button
-					type="button"
-					className="compare__back"
-					onClick={onBack}
-				>
-					<Icon name="chevron-left" />
-					Back to writing
-				</button>
-			</div>
-
-			<div className="compare__body">
-				<nav className="compare__history" aria-label="Checkpoints">
-					<h2 className="compare__title">
-						{open === null
-							? "Checkpoints of the whole project"
-							: `Checkpoints of ${open.title}`}
-					</h2>
+		<>
+			<nav
+				ref={list}
+				className={
+					floating ? "checkpoints checkpoints--open" : "checkpoints"
+				}
+				aria-label="Checkpoints"
+			>
+				<div className="checkpoints__head">
+					<p className="checkpoints__of">Checkpoints of</p>
+					<h1 className="checkpoints__title">
+						{open === null ? "The whole project" : open.title}
+					</h1>
 					{open !== null && (
-						<p className="compare__trail">
+						<p className="checkpoints__trail">
 							{open.trail.join(" · ")}
 						</p>
 					)}
@@ -502,14 +506,14 @@ export default function Compare({
 							label="Checkpoints in"
 							trigger={
 								<>
-									<span className="compare__in-name">
+									<span className="binder__version-name">
 										Checkpoints in: {shownVersion.name}
 									</span>
 									<Icon name="chevron-down" />
 								</>
 							}
-							wrapper="compare__in"
-							className="compare__in-trigger"
+							wrapper="binder__menu binder__menu--version"
+							className="binder__version"
 						>
 							{(close) =>
 								versions.map((listed) => (
@@ -536,24 +540,25 @@ export default function Compare({
 							}
 						</Menu>
 					)}
+				</div>
 
+				<div className="checkpoints__list">
 					{days.map((day, index) => (
 						<section key={day.heading} className="versions__day">
-							<h3 className="versions__date">{day.heading}</h3>
+							<h2 className="versions__date">{day.heading}</h2>
 							<ul className="versions__list">
 								{here && index === 0 && (
 									<li className="versions__item">
 										<div className="versions__pick compare__now">
-											<span
-												className="versions__mark"
-												aria-hidden="true"
-											/>
-											<span className="versions__name">
-												Now (unsaved)
+											<span className="versions__text">
+												<span className="versions__name">
+													Now
+												</span>
+												<span className="versions__detail">
+													Not in a checkpoint yet
+												</span>
 											</span>
-											<span className="compare__letter">
-												B
-											</span>
+											<Letter of="B" />
 										</div>
 									</li>
 								)}
@@ -562,257 +567,267 @@ export default function Compare({
 										key={listed.id}
 										checkpoint={listed}
 										chosen={listed.id === chosen}
-										onChoose={() => setChosen(listed.id)}
+										onChoose={() => {
+											setChosen(listed.id);
+											onDismiss();
+										}}
 									/>
 								))}
 							</ul>
 						</section>
 					))}
-				</nav>
+				</div>
+			</nav>
 
-				<div className="compare__main">
-					{whole && changes !== null && (
-						<ul
-							className="compare__changes"
-							aria-label="What changed"
-						>
-							{/* One command puts back both, as they share the manifest. */}
-							{changes.book && (
+			<div className="compare__main">
+				{whole && changes !== null && (
+					<ul className="compare__changes" aria-label="What changed">
+						{/* One command puts back both, as they share the manifest. */}
+						{changes.book && (
+							<Change
+								what="Book details changed"
+								onPutBack={bookBack}
+								onRefused={refuse}
+							/>
+						)}
+						{changes.cover && (
+							<Change
+								what="Cover changed"
+								onPutBack={bookBack}
+								onRefused={refuse}
+							/>
+						)}
+						{changes.nodes.map((change) => (
+							<Change
+								key={change.id}
+								{...summary(change)}
+								picked={
+									change.edited ? change.id === picked : null
+								}
+								onPick={() => setPicked(change.id)}
+								// A folder comes back only with everything.
+								onPutBack={
+									change.folder
+										? undefined
+										: asked === null
+											? null
+											: () => backDocument(change.id)
+								}
+								removes={removes(change.id)}
+								onRefused={refuse}
+							/>
+						))}
+						{changes.nodes.length === 0 &&
+							!changes.book &&
+							!changes.cover && (
 								<Change
-									what="Book details changed"
-									onPutBack={bookBack}
+									what="Nothing has changed since this checkpoint"
 									onRefused={refuse}
 								/>
 							)}
-							{changes.cover && (
-								<Change
-									what="Cover changed"
-									onPutBack={bookBack}
-									onRefused={refuse}
-								/>
-							)}
-							{changes.nodes.map((change) => (
-								<Change
-									key={change.id}
-									{...summary(change)}
-									picked={
-										change.edited
-											? change.id === picked
-											: null
-									}
-									onPick={() => setPicked(change.id)}
-									// A folder comes back only with everything.
-									onPutBack={
-										change.folder
-											? undefined
-											: asked === null
-												? null
-												: () => backDocument(change.id)
-									}
-									removes={removes(change.id)}
-									onRefused={refuse}
-								/>
-							))}
-							{changes.nodes.length === 0 &&
-								!changes.book &&
-								!changes.cover && (
-									<Change
-										what="Nothing has changed since this checkpoint"
-										onRefused={refuse}
-									/>
-								)}
-						</ul>
-					)}
-					<div
-						className="compare__columns"
-						style={
-							{
-								"--font-size": `${fontSize}px`,
-								"--line-height": `${lineHeight}`,
-							} as CSSProperties
+					</ul>
+				)}
+				<div
+					className="compare__columns"
+					style={
+						{
+							"--font-size": `${fontSize}px`,
+							"--line-height": `${lineHeight}`,
+						} as CSSProperties
+					}
+				>
+					<Column
+						letter="A"
+						title={a === undefined ? "" : a.message}
+						detail={
+							a === undefined
+								? ""
+								: `${byDay([a], today)[0].heading} ${timeOfDay(a.at)} · ${words(prose(before)).toLocaleString()} words`
 						}
+						side="then"
+						fields={fieldsOf(before, "then")}
+						body={sides.a}
+						current={current}
+						missing={texts !== null && texts.then === null}
+						scroller={left}
+						onScroll={(event) =>
+							scrolled(
+								event.currentTarget,
+								right.current,
+								pairs.current,
+							)
+						}
+					/>
+					<Column
+						letter="B"
+						title="Now"
+						detail={[
+							"unsaved",
+							`${words(prose(now)).toLocaleString()} words`,
+							counts(added, removed),
+						]
+							.filter((part) => part !== "")
+							.join(" · ")}
+						side="now"
+						fields={fieldsOf(now, "now")}
+						body={sides.b}
+						current={current}
+						missing={false}
+						scroller={right}
+						onScroll={(event) => {
+							place(event.currentTarget);
+							scrolled(
+								event.currentTarget,
+								left.current,
+								pairs.current.map(([a, b]): Pair => [b, a]),
+							);
+						}}
 					>
-						<Column
-							letter="A"
-							title={a === undefined ? "" : a.message}
-							detail={
-								a === undefined
-									? ""
-									: `${byDay([a], today)[0].heading} ${timeOfDay(a.at)} · ${words(prose(before)).toLocaleString()} words`
-							}
-							side="then"
-							fields={fieldsOf(before, "then")}
-							body={sides.a}
-							current={current}
-							missing={texts !== null && texts.then === null}
-							scroller={left}
-							onScroll={(event) =>
-								scrolled(
-									event.currentTarget,
-									right.current,
-									pairs.current,
-								)
-							}
-						/>
-						<Column
-							letter="B"
-							title="Now"
-							detail={[
-								"unsaved",
-								`${words(prose(now)).toLocaleString()} words`,
-								counts(added, removed),
-							]
-								.filter((part) => part !== "")
-								.join(" · ")}
-							side="now"
-							fields={fieldsOf(now, "now")}
-							body={sides.b}
-							current={current}
-							missing={false}
-							scroller={right}
-							onScroll={(event) => {
-								place(event.currentTarget);
-								scrolled(
-									event.currentTarget,
-									left.current,
-									pairs.current.map(([a, b]): Pair => [b, a]),
+						{/* Out of the reading order: first and next do the
+						    same for a keyboard. */}
+						<div
+							className="compare__map"
+							aria-hidden="true"
+							onPointerDown={(event) => {
+								const tick = (event.target as HTMLElement)
+									.dataset.tick;
+								if (tick !== undefined) {
+									go(Number(tick));
+									return;
+								}
+								// Held, so dragging keeps scrolling even off
+								// the strip.
+								event.currentTarget.setPointerCapture(
+									event.pointerId,
 								);
+								seek(event);
 							}}
-						>
-							{/* Out of the reading order: first and next do the
-							    same for a keyboard. */}
-							<div
-								className="compare__map"
-								aria-hidden="true"
-								onPointerDown={(event) => {
-									const tick = (event.target as HTMLElement)
-										.dataset.tick;
-									if (tick !== undefined) {
-										go(Number(tick));
-										return;
-									}
-									// Held, so dragging keeps scrolling even off
-									// the strip.
-									event.currentTarget.setPointerCapture(
+							onPointerMove={(event) => {
+								if (
+									event.currentTarget.hasPointerCapture(
 										event.pointerId,
-									);
+									)
+								) {
 									seek(event);
-								}}
-								onPointerMove={(event) => {
-									if (
-										event.currentTarget.hasPointerCapture(
-											event.pointerId,
-										)
-									) {
-										seek(event);
-									}
-								}}
-							>
-								<div ref={view} className="compare__view" />
-								{ticks.map((tick) => (
-									<span
-										key={tick.index}
-										className={`compare__tick compare__tick--${tick.change}`}
-										style={{ top: `${tick.at * 100}%` }}
-										data-tick={tick.index}
-									/>
-								))}
-							</div>
-						</Column>
-					</div>
-
-					<div className="compare__foot">
-						<span className="compare__count">
-							{found.length === 1
-								? "1 difference"
-								: `${found.length.toLocaleString()} differences`}
-						</span>
-						<span aria-hidden="true">·</span>
-						<button
-							type="button"
-							className="compare__step"
-							disabled={found.length === 0}
-							onClick={() => go(0)}
-						>
-							first
-						</button>
-						<span aria-hidden="true">·</span>
-						<button
-							type="button"
-							className="compare__step"
-							disabled={found.length === 0}
-							onClick={() =>
-								go(
-									current === null
-										? 0
-										: (current + 1) % found.length,
-								)
-							}
-						>
-							next
-						</button>
-						<span aria-hidden="true">·</span>
-						<button
-							type="button"
-							className="compare__step"
-							disabled={asked === null || current === null}
-							onClick={() => {
-								if (current !== null) {
-									backOne(current);
 								}
 							}}
 						>
-							put this one back
-						</button>
-						{open !== null &&
-							texts !== null &&
-							texts.then !== null &&
-							canTry(open.trail) && (
-								<button
-									type="button"
-									className="compare__put"
-									disabled={asked === null || merging}
-									onClick={() => void openTake(open.id)}
-								>
-									Open as a take
-								</button>
-							)}
-						<PutBack
-							className="compare__put"
-							disabled={asked === null}
-							removes={
-								open === null
-									? removesEverything
-									: removes(open.id)
+							<div ref={view} className="compare__view" />
+							{ticks.map((tick) => (
+								<span
+									key={tick.index}
+									className={`compare__tick compare__tick--${tick.change}`}
+									style={{ top: `${tick.at * 100}%` }}
+									data-tick={tick.index}
+								/>
+							))}
+						</div>
+					</Column>
+				</div>
+
+				<div className="compare__foot">
+					<span className="compare__count">
+						{found.length === 1
+							? "1 difference"
+							: `${found.length.toLocaleString()} differences`}
+					</span>
+					<span aria-hidden="true">·</span>
+					<button
+						type="button"
+						className="compare__step"
+						disabled={found.length === 0}
+						onClick={() => go(0)}
+					>
+						first
+					</button>
+					<span aria-hidden="true">·</span>
+					<button
+						type="button"
+						className="compare__step"
+						disabled={found.length === 0}
+						onClick={() =>
+							go(
+								current === null
+									? 0
+									: (current + 1) % found.length,
+							)
+						}
+					>
+						next
+					</button>
+					<span aria-hidden="true">·</span>
+					<button
+						type="button"
+						className="compare__step"
+						disabled={asked === null || current === null}
+						onClick={() => {
+							if (current !== null) {
+								backOne(current);
 							}
-							onPutBack={
-								open === null
-									? backEverything
-									: () => backDocument(open.id)
-							}
-							onRefused={refuse}
-						>
-							{open === null
-								? "Put back everything"
-								: "Put back this document"}
-						</PutBack>
-						{/* A message takes the note's line, so it moves nothing. */}
-						<p
-							className={
-								(refused ?? error) === null
-									? "compare__note"
-									: "compare__note compare__note--trouble"
-							}
-							role="alert"
-						>
-							{refused ??
-								error ??
-								"Putting back first keeps Now as a version, so nothing is lost and it can be undone."}
-						</p>
-					</div>
+						}}
+					>
+						put this one back
+					</button>
+					{open !== null &&
+						texts !== null &&
+						texts.then !== null &&
+						canTry(open.trail) && (
+							<button
+								type="button"
+								className="compare__put"
+								disabled={asked === null || merging}
+								onClick={() => void openTake(open.id)}
+							>
+								Open as a take
+							</button>
+						)}
+					<PutBack
+						className="compare__put"
+						disabled={asked === null}
+						removes={
+							open === null ? removesEverything : removes(open.id)
+						}
+						onPutBack={
+							open === null
+								? backEverything
+								: () => backDocument(open.id)
+						}
+						onRefused={refuse}
+					>
+						{open === null
+							? "Put back everything"
+							: "Put back this document"}
+					</PutBack>
+					{/* A message takes the note's line, so it moves nothing. */}
+					<p
+						className={
+							(refused ?? error) === null
+								? "compare__note"
+								: "compare__note compare__note--trouble"
+						}
+						role="alert"
+					>
+						{refused ??
+							error ??
+							"Putting back first keeps Now as a version, so nothing is lost and it can be undone."}
+					</p>
 				</div>
 			</div>
-		</div>
+		</>
+	);
+}
+
+function Letter({ of }: { of: "A" | "B" }) {
+	return (
+		<span
+			className={
+				of === "B"
+					? "compare__letter compare__letter--b"
+					: "compare__letter"
+			}
+		>
+			{of}
+		</span>
 	);
 }
 
@@ -839,14 +854,13 @@ function Row({
 				aria-pressed={chosen}
 				onClick={onChoose}
 			>
-				<span className="versions__mark" aria-hidden="true" />
 				<span className="versions__text">
 					<span className="versions__name">{checkpoint.message}</span>
 					<span className="versions__detail">
 						{detail(checkpoint)}
 					</span>
 				</span>
-				{chosen && <span className="compare__letter">A</span>}
+				{chosen && <Letter of="A" />}
 			</button>
 		</li>
 	);
@@ -921,7 +935,7 @@ function Column({
 	onScroll,
 	children,
 }: {
-	letter: string;
+	letter: "A" | "B";
 	title: string;
 	detail: string;
 	/** Then is washed as taken out, now as put in. */
@@ -942,7 +956,7 @@ function Column({
 	return (
 		<article className={`compare__column compare__column--${side}`}>
 			<header className="compare__head">
-				<span className="compare__letter">{letter}</span>
+				<Letter of={letter} />
 				<span className="compare__heading">
 					<span className="compare__name">{title}</span>
 					<span className="compare__detail">{detail}</span>

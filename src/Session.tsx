@@ -83,7 +83,7 @@ export default function Session({
 		<Menu
 			label={clock === null ? "Session" : `Session, ${clock}`}
 			wrapper="titlebar__menu titlebar__menu--session"
-			className="titlebar__session"
+			className="titlebar__quiet"
 			trigger={
 				<>
 					<Icon name="play" />

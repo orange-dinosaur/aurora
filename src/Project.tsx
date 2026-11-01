@@ -19,6 +19,7 @@ import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import BookView from "./Book";
 import Compare from "./Compare";
+import Icon from "./Icon";
 import Overwrite from "./Overwrite";
 import Merge from "./Merge";
 import type { Choices, Sides } from "./lib/merge";
@@ -340,12 +341,16 @@ export default function Project({
 	const [floating, setFloating] = useState(false);
 	const sidebarButton = useRef<HTMLButtonElement>(null);
 	const sidebar = narrow ? floating : preferences.sidebar;
+	// Compare's list floats the same way, from its own button in the bar.
+	const [checkpoints, setCheckpoints] = useState(false);
+	const checkpointsButton = useRef<HTMLButtonElement>(null);
 
 	useEffect(() => {
 		const query = window.matchMedia(NARROW);
 		function changed(event: MediaQueryListEvent) {
 			setNarrow(event.matches);
 			setFloating(false);
+			setCheckpoints(false);
 		}
 
 		query.addEventListener("change", changed);
@@ -362,6 +367,10 @@ export default function Project({
 		pick: string | null;
 		slug: string | null;
 	} | null>(null);
+	function leaveCompare() {
+		setComparing(null);
+		setCheckpoints(false);
+	}
 	// The put back question while it waits for an answer.
 	const [asking, setAsking] = useState<{
 		names: string[];
@@ -1493,14 +1502,41 @@ export default function Project({
 					}
 				}}
 				sidebarButton={sidebarButton}
+				sidebarToggle={comparing === null}
 				tabs={
-					!covered && (
-						<Tabs
-							tabs={tabs.map(strip)}
-							activeKey={activeKey}
-							onActivate={setActiveKey}
-							onClose={closeTab}
-						/>
+					comparing !== null ? (
+						<>
+							<button
+								type="button"
+								className="titlebar__quiet"
+								onClick={leaveCompare}
+							>
+								<Icon name="chevron-left" />
+								Back to writing
+							</button>
+							{narrow && (
+								<button
+									ref={checkpointsButton}
+									type="button"
+									className="titlebar__quiet"
+									aria-expanded={checkpoints}
+									onClick={() =>
+										setCheckpoints((open) => !open)
+									}
+								>
+									Checkpoints
+								</button>
+							)}
+						</>
+					) : (
+						!covered && (
+							<Tabs
+								tabs={tabs.map(strip)}
+								activeKey={activeKey}
+								onActivate={setActiveKey}
+								onClose={closeTab}
+							/>
+						)
 					)
 				}
 				onSearch={openSearch}
@@ -1525,10 +1561,13 @@ export default function Project({
 					fontSize={preferences.fontSize}
 					lineHeight={preferences.lineHeight}
 					merging={merge !== null}
+					floating={checkpoints}
+					onDismiss={() => setCheckpoints(false)}
+					opener={checkpointsButton}
 					onScope={(versionsScope) =>
 						onPreferences({ ...preferences, versionsScope })
 					}
-					onBack={() => setComparing(null)}
+					onBack={leaveCompare}
 					onPutBack={putBack}
 				/>
 			)}

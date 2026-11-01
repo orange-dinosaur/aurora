@@ -33,7 +33,9 @@ type Props = {
 	onSidebar: (open: boolean) => void;
 	/** The sidebar's button, which a floating sidebar treats as part of itself. */
 	sidebarButton: RefObject<HTMLButtonElement | null>;
-	/** The open tabs, or nothing while Compare or Merge covers them. */
+	/** Off during Compare, whose checkpoints stand where the sidebar stands. */
+	sidebarToggle: boolean;
+	/** The open tabs, Compare's way back, or nothing while Merge covers them. */
 	tabs: ReactNode;
 	onSearch: () => void;
 	/** The writer's theme preference, which the header can move between two of. */
@@ -61,6 +63,7 @@ export default function Titlebar({
 	sidebar,
 	onSidebar,
 	sidebarButton,
+	sidebarToggle,
 	tabs,
 	onSearch,
 	theme,
@@ -72,16 +75,18 @@ export default function Titlebar({
 }: Props) {
 	return (
 		<header className="titlebar">
-			<button
-				ref={sidebarButton}
-				type="button"
-				className="titlebar__button"
-				aria-label={sidebar ? "Hide sidebar" : "Show sidebar"}
-				aria-pressed={sidebar}
-				onClick={() => onSidebar(!sidebar)}
-			>
-				<Icon name="panel-left" />
-			</button>
+			{sidebarToggle && (
+				<button
+					ref={sidebarButton}
+					type="button"
+					className="titlebar__button"
+					aria-label={sidebar ? "Hide sidebar" : "Show sidebar"}
+					aria-pressed={sidebar}
+					onClick={() => onSidebar(!sidebar)}
+				>
+					<Icon name="panel-left" />
+				</button>
+			)}
 
 			{merging !== null && (
 				<span className="titlebar__state">
