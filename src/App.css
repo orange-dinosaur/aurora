@@ -2590,7 +2590,6 @@ div.changes__pick {
 
 .changes__tick:disabled {
 	cursor: default;
-	opacity: 0.5;
 }
 
 .changes__back:focus-visible,
@@ -2603,41 +2602,36 @@ div.changes__pick {
 .changes__why {
 	min-height: 1.4em;
 	margin: 0;
-	font-size: 0.75rem;
-	line-height: 1.4;
-	color: var(--text-faint);
+	font: var(--text-caption);
+	color: var(--text-dim);
 }
 
 .changes__settle {
 	flex: none;
 	margin: 0.45rem 0.3rem 0 0;
-	padding: 0 0.45rem;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	color: var(--danger);
-	border: 1px solid currentColor;
-	border-radius: var(--radius-md);
+	font: var(--text-caption);
+	color: var(--accent-text);
 }
 
 .merge-banner {
-	margin-top: 0.5rem;
-	padding: 0.6rem 0.75rem;
+	margin-top: var(--space-xs);
+	padding: var(--space-sm);
 	background: var(--accent-wash);
-	border-radius: var(--radius-xs);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-sm);
 }
 
 .merge-banner__title {
 	margin: 0;
-	font-size: 0.8125rem;
-	font-weight: 600;
+	font: var(--text-ui-strong);
 	color: var(--text);
 	overflow-wrap: anywhere;
 }
 
 .merge-banner__text {
-	margin: 0.15rem 0 0.5rem;
-	font-size: 0.75rem;
-	color: var(--text-dim);
+	margin: 2px 0 var(--space-xxs);
+	font: var(--text-caption);
+	color: var(--text);
 }
 
 .merge-banner__abort {

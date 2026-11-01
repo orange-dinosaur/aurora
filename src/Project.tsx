@@ -401,6 +401,20 @@ export default function Project({
 		void readMerge();
 	}, [root]);
 
+	// What a merge needs next is in the Versions panel, so it opens there. Once,
+	// so the writer can still close it.
+	const underway = merge !== null;
+	useEffect(() => {
+		if (underway) {
+			onPreferences({
+				...preferences,
+				rightSidebar: true,
+				rightSidebarTab: "versions",
+				versionsScope: "changes",
+			});
+		}
+	}, [underway]);
+
 	// Why a folder's target was refused, when one was.
 	const [aiming, setAiming] = useState<string | null>(null);
 
