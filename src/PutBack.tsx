@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { removesNote } from "./lib/versions";
 import { MenuItem, useDismissal } from "./Menu";
 
 type Props = {
@@ -67,7 +68,7 @@ export default function PutBack({
 			{names !== null && (
 				<div ref={items} className="menu__items" role="menu">
 					<p ref={note} className="takes__note" tabIndex={-1}>
-						Also removes {names.join(", ")}
+						{removesNote(names)}
 					</p>
 					<MenuItem
 						danger

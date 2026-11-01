@@ -219,6 +219,8 @@ export default function Versions({
 
 	const removes = (version: string, id: string) => () =>
 		invoke<string[]>("put_back_removes", { root, version, id });
+	const removesEverything = (version: string) => () =>
+		invoke<string[]>("put_back_everything_removes", { root, version });
 	const refuse = (reason: unknown) => setError(failure(reason).message);
 
 	// A null row moves every row at once.
@@ -490,7 +492,7 @@ export default function Versions({
 									}
 									removes={
 										document === null
-											? undefined
+											? removesEverything(checkpoint.id)
 											: removes(checkpoint.id, document)
 									}
 									onRefused={refuse}

@@ -417,6 +417,8 @@ export default function Compare({
 
 	const removes = (id: string) => () =>
 		invoke<string[]>("put_back_removes", { ...asked, id });
+	const removesEverything = () =>
+		invoke<string[]>("put_back_everything_removes", { ...asked });
 	const refuse = (reason: unknown) => setRefused(failure(reason).message);
 
 	// Nothing is overwritten, since the text leaving stays as a take, so this
@@ -779,7 +781,9 @@ export default function Compare({
 							className="compare__put"
 							disabled={asked === null}
 							removes={
-								open === null ? undefined : removes(open.id)
+								open === null
+									? removesEverything
+									: removes(open.id)
 							}
 							onPutBack={
 								open === null

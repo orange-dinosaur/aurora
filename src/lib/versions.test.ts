@@ -11,6 +11,7 @@ import {
 	lines,
 	overwriteQuestion,
 	overwritten,
+	removesNote,
 	settleBanner,
 	settleFirst,
 	settleLines,
@@ -178,6 +179,19 @@ describe("lines", () => {
 			change: scene,
 		});
 		expect(lines({ nodes: [], book: false, cover: false })).toEqual([]);
+	});
+});
+
+describe("removesNote", () => {
+	it("names up to five takes and counts the rest", () => {
+		const takes = ["A", "B", "C", "D", "E", "F", "G"];
+
+		expect(removesNote(takes.slice(0, 5))).toBe(
+			"Also removes A, B, C, D, E",
+		);
+		expect(removesNote(takes)).toBe(
+			"Also removes A, B, C, D, E and 2 more",
+		);
 	});
 });
 

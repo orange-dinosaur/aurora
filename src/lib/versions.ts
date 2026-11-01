@@ -224,6 +224,19 @@ export function overwritten(status: Status, target: Overwrites): string[] {
 	return [...names.values()];
 }
 
+/**
+ * The note before a put back that removes takes. A whole project can lose dozens,
+ * and the list stops short so the buttons under it stay in reach.
+ */
+export function removesNote(names: string[]): string {
+	const shown = names.slice(0, 5).join(", ");
+	const more = names.length - 5;
+
+	return more > 0
+		? `Also removes ${shown} and ${more.toLocaleString()} more`
+		: `Also removes ${shown}`;
+}
+
 /** The question before a put back that would write over those names. */
 export function overwriteQuestion(names: string[]): string {
 	const who =
