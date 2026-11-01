@@ -22,6 +22,8 @@ import { failure } from "./errors";
 type FormatOption = {
 	id: Format;
 	name: string;
+	/** The format as a sentence would start on it. */
+	kind: string;
 	description: string;
 	folders: string[];
 	available: boolean;
@@ -29,21 +31,28 @@ type FormatOption = {
 
 // Rust owns which formats exist, what they create and whether they are ready.
 // The words for each live here, keyed by Rust's list so none can be missing.
-const COPY: Record<Format, { name: string; description: string }> = {
+const COPY: Record<
+	Format,
+	{ name: string; kind: string; description: string }
+> = {
 	novel: {
 		name: "Novel",
+		kind: "A novel",
 		description: "Long-form fiction, organised into chapters.",
 	},
 	screenplay: {
 		name: "Screenplay",
+		kind: "A screenplay",
 		description: "Film or television, in standard screenplay form.",
 	},
 	"short-stories": {
 		name: "Short Stories",
+		kind: "A collection of short stories",
 		description: "A collection of shorter pieces.",
 	},
 	"stage-play": {
 		name: "Stage Play",
+		kind: "A stage play",
 		description: "Theatre, organised into acts and scenes.",
 	},
 };
@@ -225,6 +234,216 @@ function Book({
 	);
 }
 
+/**
+ * The two stages of starting a project. Built when it opens, so a cancelled
+ * attempt leaves nothing behind for the next one.
+ */
+function NewProject({
+	formats,
+	busy,
+	onCancel,
+	onChange,
+	onCreate,
+}: {
+	formats: FormatOption[];
+	busy: boolean;
+	onCancel: () => void;
+	/** Something was edited, so an earlier failure no longer applies. */
+	onChange: () => void;
+	onCreate: (parent: string, name: string, format: Format) => void;
+}) {
+	const [stage, setStage] = useState<"format" | "details">("format");
+	const [selectedId, setSelectedId] = useState(
+		formats.find((format) => format.available)?.id ?? null,
+	);
+	const [name, setName] = useState("");
+	const [parent, setParent] = useState<string | null>(null);
+	const dialog = useRef<HTMLDivElement>(null);
+
+	const chosen = formats.find((format) => format.id === selectedId) ?? null;
+	const ready = parent !== null && name.trim() !== "" && !busy;
+
+	// Leaving while a project is being made would hide its failure.
+	function leave() {
+		if (!busy) {
+			onCancel();
+		}
+	}
+
+	// So a key has somewhere to land: what had focus is behind the dialog now.
+	useEffect(() => dialog.current?.focus(), []);
+
+	useEffect(() => {
+		function escape(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				leave();
+			}
+		}
+
+		document.addEventListener("keydown", escape);
+		return () => document.removeEventListener("keydown", escape);
+	});
+
+	async function chooseFolder() {
+		const picked = await open({
+			directory: true,
+			multiple: false,
+			title: "Where should the project live?",
+		});
+		if (typeof picked === "string") {
+			setParent(picked);
+			onChange();
+		}
+	}
+
+	return (
+		<div
+			className="scrim"
+			// On the press rather than the click, as in Settings, so a selection
+			// dragged out of the dialog and released here does not shut it.
+			onMouseDown={(event) => {
+				if (event.target === event.currentTarget) {
+					leave();
+				}
+			}}
+		>
+			<div
+				className="dialog"
+				role="dialog"
+				aria-modal="true"
+				aria-label="New project"
+				ref={dialog}
+				tabIndex={-1}
+			>
+				{stage === "format" || chosen === null ? (
+					<>
+						<h2 className="dialog__title">New project</h2>
+						<p className="dialog__lead">
+							Choose a format and create a new writing project.
+						</p>
+
+						<fieldset className="formats">
+							<legend className="visually-hidden">Format</legend>
+							{formats.map((format) => (
+								<label key={format.id} className="format">
+									<input
+										type="radio"
+										name="format"
+										className="visually-hidden"
+										value={format.id}
+										checked={format.id === selectedId}
+										disabled={!format.available}
+										onChange={() =>
+											setSelectedId(format.id)
+										}
+									/>
+									<span className="format__name">
+										{format.name}
+										{!format.available && (
+											<span className="format__soon">
+												Soon
+											</span>
+										)}
+									</span>
+									<span className="format__description">
+										{format.description}
+									</span>
+									{format.folders.length > 0 && (
+										<span className="format__files">
+											{format.folders.join(" · ")}
+										</span>
+									)}
+								</label>
+							))}
+						</fieldset>
+
+						<div className="dialog__foot">
+							<button
+								type="button"
+								className="welcome__back"
+								disabled={busy}
+								onClick={onCancel}
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								className="welcome__create"
+								disabled={chosen === null || busy}
+								onClick={() => setStage("details")}
+							>
+								Continue
+							</button>
+						</div>
+					</>
+				) : (
+					<form
+						onSubmit={(event) => {
+							event.preventDefault();
+							if (ready) {
+								onCreate(parent, name, chosen.id);
+							}
+						}}
+					>
+						<h2 className="dialog__title">Name your project</h2>
+						<p className="dialog__lead">
+							{chosen.kind}, in a folder of its own.
+						</p>
+
+						<label className="dialog__label">
+							Project name
+							<input
+								className="dialog__input"
+								value={name}
+								placeholder="Ithaca"
+								autoComplete="off"
+								autoFocus
+								spellCheck={false}
+								onChange={(event) => {
+									setName(event.target.value);
+									onChange();
+								}}
+							/>
+						</label>
+
+						<div className="dialog__label">
+							Location
+							<button
+								type="button"
+								className="dialog__folder"
+								onClick={() => void chooseFolder()}
+							>
+								{parent ?? "Choose a folder…"}
+							</button>
+						</div>
+
+						<div className="dialog__foot">
+							<button
+								type="button"
+								className="welcome__back"
+								disabled={busy}
+								onClick={() => {
+									setStage("format");
+									onChange();
+								}}
+							>
+								Back
+							</button>
+							<button
+								type="submit"
+								className="welcome__create"
+								disabled={!ready}
+							>
+								{busy ? "Creating…" : "Create project"}
+							</button>
+						</div>
+					</form>
+				)}
+			</div>
+		</div>
+	);
+}
+
 export default function Welcome({
 	notice,
 	onOpened,
@@ -236,12 +455,8 @@ export default function Welcome({
 }: Props) {
 	// Seeded once; the notice describes how this screen was reached.
 	const [reason, setReason] = useState(notice);
-	const [view, setView] = useState<"shelf" | "new">("shelf");
-	const [stage, setStage] = useState<"format" | "details">("format");
-	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [creating, setCreating] = useState(false);
 	const [formats, setFormats] = useState<FormatOption[]>([]);
-	const [name, setName] = useState("");
-	const [parent, setParent] = useState<string | null>(null);
 	// Null until the list arrives. Counting every project's words takes a
 	// moment, and the empty Shelf must not flash up in front of a full one.
 	const [recents, setRecents] = useState<RecentSummary[] | null>(null);
@@ -250,9 +465,7 @@ export default function Welcome({
 	const [asking, setAsking] = useState<string | null>(null);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 
-	const chosen = formats.find((format) => format.id === selectedId) ?? null;
 	const busy = status.kind === "busy";
-	const ready = parent !== null && name.trim() !== "" && !busy;
 
 	useEffect(() => {
 		invoke<FormatLayout[]>("format_layouts")
@@ -269,35 +482,18 @@ export default function Welcome({
 	}, []);
 
 	function startNew() {
-		setStage("format");
-		setView("new");
+		setCreating(true);
 		setReason(null);
 		setStatus({ kind: "idle" });
 	}
 
-	async function chooseFolder() {
-		const picked = await open({
-			directory: true,
-			multiple: false,
-			title: "Where should the project live?",
-		});
-		if (typeof picked === "string") {
-			setParent(picked);
-			setStatus({ kind: "idle" });
-		}
-	}
-
-	async function createProject() {
-		if (chosen === null || parent === null || name.trim() === "") {
-			return;
-		}
-
+	async function createProject(parent: string, name: string, format: Format) {
 		setStatus({ kind: "busy" });
 		try {
 			const root = await invoke<string>("create_project", {
 				parent,
 				name,
-				format: chosen.id,
+				format,
 			});
 			onOpened(await invoke<OpenProject>("open_project", { root }));
 		} catch (error) {
@@ -365,238 +561,94 @@ export default function Welcome({
 				/>
 			</div>
 
-			{view === "new" ? (
-				<section className="shelf">
-					<div className="shelf__head">
-						<h1 className="shelf__heading">New project</h1>
-					</div>
-
-					{stage === "format" ? (
-						<>
-							<p className="welcome__subtitle">
-								Choose a format and create a new writing
-								project.
-							</p>
-
-							<fieldset className="formats">
-								<legend className="visually-hidden">
-									Format
-								</legend>
-								{formats.map((format) => (
-									<label key={format.id} className="format">
-										<input
-											type="radio"
-											name="format"
-											className="visually-hidden"
-											value={format.id}
-											checked={format.id === selectedId}
-											disabled={!format.available}
-											onChange={() =>
-												setSelectedId(format.id)
-											}
-										/>
-										<span className="format__name">
-											{format.name}
-											{!format.available && (
-												<span className="format__soon">
-													Soon
-												</span>
-											)}
-										</span>
-										<span className="format__description">
-											{format.description}
-										</span>
-										{format.folders.length > 0 && (
-											<span className="format__files">
-												{format.folders.join(" · ")}
-											</span>
-										)}
-									</label>
-								))}
-							</fieldset>
-
-							<div className="setup__actions">
-								<button
-									type="button"
-									className="welcome__create"
-									disabled={chosen === null || busy}
-									onClick={() => setStage("details")}
-								>
-									Continue
-								</button>
-								<button
-									type="button"
-									className="welcome__back"
-									disabled={busy}
-									onClick={() => {
-										setView("shelf");
-										setStatus({ kind: "idle" });
-									}}
-								>
-									Back
-								</button>
-							</div>
-						</>
-					) : (
-						chosen && (
-							<>
-								<p className="welcome__subtitle">
-									Name your {chosen.name.toLowerCase()} and
-									choose where it should live.
-								</p>
-
-								<form
-									className="setup"
-									onSubmit={(event) => {
-										event.preventDefault();
-										void createProject();
-									}}
-								>
-									<label
-										className="setup__label"
-										htmlFor="project-name"
-									>
-										Project name
-									</label>
-									<input
-										id="project-name"
-										className="setup__input"
-										value={name}
-										placeholder="Ithaca"
-										autoComplete="off"
-										autoFocus
-										spellCheck={false}
-										onChange={(event) => {
-											setName(event.target.value);
-											setStatus({ kind: "idle" });
-										}}
-									/>
-
-									<span className="setup__label">
-										Location
-									</span>
-									<button
-										type="button"
-										className="setup__folder"
-										onClick={() => void chooseFolder()}
-									>
-										{parent ?? "Choose a folder…"}
-									</button>
-
-									<p className="setup__note">
-										Aurora will create{" "}
-										{chosen.folders.join(", ")}.
-									</p>
-
-									<div className="setup__actions">
-										<button
-											type="submit"
-											className="welcome__create"
-											disabled={!ready}
-										>
-											{busy
-												? "Creating…"
-												: "Create project"}
-										</button>
-										<button
-											type="button"
-											className="welcome__back"
-											disabled={busy}
-											onClick={() => {
-												setStage("format");
-												setStatus({ kind: "idle" });
-											}}
-										>
-											Back
-										</button>
-									</div>
-								</form>
-							</>
-						)
-					)}
-				</section>
-			) : (
-				<section className="shelf">
-					<div className="shelf__head">
-						<div>
-							<h1 className="shelf__heading">Your shelf</h1>
-							{recents !== null && recents.length > 0 && (
-								<p className="shelf__count">
-									{recents.length === 1
-										? "1 book"
-										: `${recents.length.toLocaleString()} books`}
-								</p>
-							)}
-						</div>
-						<div className="shelf__actions">
-							<button
-								type="button"
-								className="shelf__folder"
-								disabled={busy}
-								onClick={() => void browseForProject()}
-							>
-								Open another folder…
-							</button>
-							<button
-								type="button"
-								className="welcome__create"
-								disabled={busy}
-								onClick={startNew}
-							>
-								New project
-							</button>
-						</div>
-					</div>
-
-					{recents !== null && recents.length === 0 && (
-						<div className="shelf__empty">
-							<button
-								type="button"
-								className="shelf__ghost"
-								aria-label="New project"
-								disabled={busy}
-								onClick={startNew}
-							>
-								<Icon name="plus" />
-							</button>
-							<p>
-								Nothing here yet. Start a book, or open a folder
-								you already write in.
-							</p>
-						</div>
-					)}
-
-					{recents !== null && recents.length > 0 && (
-						<ul className="shelf__books">
-							{recents.map((project) => (
-								<Book
-									key={project.root}
-									project={project}
-									busy={busy}
-									asking={asking === project.root}
-									onOpen={() =>
-										void openProject(project.root)
-									}
-									onShow={() =>
-										void showInFiles(project.root)
-									}
-									onForget={() =>
-										void drop(
-											"forget_project",
-											project.root,
-										)
-									}
-									onAsk={() => setAsking(project.root)}
-									onCancel={() => setAsking(null)}
-									onDelete={() =>
-										void drop("trash_project", project.root)
-									}
-								/>
-							))}
-						</ul>
-					)}
-				</section>
+			{creating && (
+				<NewProject
+					formats={formats}
+					busy={busy}
+					onCancel={() => {
+						setCreating(false);
+						setStatus({ kind: "idle" });
+					}}
+					onChange={() => setStatus({ kind: "idle" })}
+					onCreate={(parent, name, format) =>
+						void createProject(parent, name, format)
+					}
+				/>
 			)}
+
+			<section className="shelf">
+				<div className="shelf__head">
+					<div>
+						<h1 className="shelf__heading">Your shelf</h1>
+						{recents !== null && recents.length > 0 && (
+							<p className="shelf__count">
+								{recents.length === 1
+									? "1 book"
+									: `${recents.length.toLocaleString()} books`}
+							</p>
+						)}
+					</div>
+					<div className="shelf__actions">
+						<button
+							type="button"
+							className="shelf__folder"
+							disabled={busy}
+							onClick={() => void browseForProject()}
+						>
+							Open another folder…
+						</button>
+						<button
+							type="button"
+							className="welcome__create"
+							disabled={busy}
+							onClick={startNew}
+						>
+							New project
+						</button>
+					</div>
+				</div>
+
+				{recents !== null && recents.length === 0 && (
+					<div className="shelf__empty">
+						<button
+							type="button"
+							className="shelf__ghost"
+							aria-label="New project"
+							disabled={busy}
+							onClick={startNew}
+						>
+							<Icon name="plus" />
+						</button>
+						<p>
+							Nothing here yet. Start a book, or open a folder you
+							already write in.
+						</p>
+					</div>
+				)}
+
+				{recents !== null && recents.length > 0 && (
+					<ul className="shelf__books">
+						{recents.map((project) => (
+							<Book
+								key={project.root}
+								project={project}
+								busy={busy}
+								asking={asking === project.root}
+								onOpen={() => void openProject(project.root)}
+								onShow={() => void showInFiles(project.root)}
+								onForget={() =>
+									void drop("forget_project", project.root)
+								}
+								onAsk={() => setAsking(project.root)}
+								onCancel={() => setAsking(null)}
+								onDelete={() =>
+									void drop("trash_project", project.root)
+								}
+							/>
+						))}
+					</ul>
+				)}
+			</section>
 
 			<p
 				className={

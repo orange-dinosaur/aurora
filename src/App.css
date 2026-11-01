@@ -813,13 +813,14 @@ body,
 	gap: var(--space-xs);
 }
 
-.shelf__actions .welcome__create {
+.welcome__create {
 	padding: 6px var(--space-md);
 	font: var(--text-ui-strong);
 }
 
 .shelf__folder,
-.shelf__cancel {
+.shelf__cancel,
+.welcome__back {
 	padding: 5px var(--space-xs);
 	font: var(--text-ui);
 	color: var(--text-dim);
@@ -830,14 +831,17 @@ body,
 }
 
 .shelf__folder:hover:not(:disabled),
-.shelf__cancel:hover:not(:disabled) {
+.shelf__cancel:hover:not(:disabled),
+.welcome__back:hover:not(:disabled) {
 	color: var(--text);
 	background: var(--bg-hover);
 }
 
 .shelf__folder:focus-visible,
 .shelf__cancel:focus-visible,
-.shelf__sure:focus-visible {
+.shelf__sure:focus-visible,
+.welcome__back:focus-visible,
+.welcome__create:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
@@ -1125,9 +1129,85 @@ body,
 	}
 }
 
-.welcome__subtitle {
-	margin: 0 0 2rem;
+/* The surface a dialog over the Shelf stands on. A short window scrolls it
+   rather than pushing its buttons off the foot. */
+.dialog {
+	width: 100%;
+	max-width: 440px;
+	max-height: 100%;
+	padding: var(--space-lg);
+	overflow-y: auto;
+	text-align: left;
+	color: var(--text);
+	background: var(--bg-card);
+	border: var(--hairline);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-float);
+}
+
+/* Focused when it opens so a key has somewhere to land, with nothing drawn. */
+.dialog:focus {
+	outline: none;
+}
+
+.dialog__title {
+	margin: 0 0 var(--space-xxs);
+	font: var(--text-heading);
+	letter-spacing: var(--tracking-heading);
+}
+
+.dialog__lead {
+	margin: 0 0 var(--space-md);
 	color: var(--text-dim);
+}
+
+.dialog__label {
+	display: block;
+	margin-bottom: var(--space-sm);
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+/* Lines to write on, like the sprint field and a new version's name. */
+.dialog__input,
+.dialog__folder {
+	display: block;
+	width: 100%;
+	margin-top: var(--space-xxs);
+	padding: 4px 0;
+	font: var(--text-ui);
+	color: var(--text);
+	text-align: left;
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--graphic-faint);
+	border-radius: 0;
+}
+
+.dialog__input:focus,
+.dialog__folder:focus-visible {
+	outline: none;
+	border-bottom-color: var(--accent-text);
+	box-shadow: 0 1px 0 var(--accent-text);
+}
+
+.dialog__folder {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.dialog__folder:hover {
+	border-bottom-color: var(--accent-text);
+}
+
+.dialog__foot {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-xs);
+	margin-top: var(--space-md);
 }
 
 /* Kept out of sight but still focusable, so the card shows the focus ring. */
@@ -1146,43 +1226,35 @@ body,
 }
 
 .formats {
-	display: grid;
-	/* Two across the left column, one when the panel has dropped below. */
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 1rem;
-	margin: 0 0 2rem;
+	margin: 0;
 	padding: 0;
-	text-align: left;
 	border: 0;
-	/* A fieldset defaults to min-content, which would stop the grid shrinking. */
+	/* A fieldset defaults to min-content, which would stop it shrinking. */
 	min-inline-size: 0;
 }
 
 .format {
 	position: relative;
-	display: flex;
-	flex-direction: column;
-	gap: 0.35rem;
-	width: 100%;
-	height: 100%;
-	padding: 1rem;
+	display: block;
+	margin-bottom: var(--space-xs);
+	padding: var(--space-sm);
 	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
+	border: var(--hairline);
+	border-radius: var(--radius-sm);
 	cursor: pointer;
-	transition:
-		border-color 0.15s,
-		background 0.15s;
+}
+
+.format:last-child {
+	margin-bottom: 0;
 }
 
 .format:hover:not(:has(:disabled)) {
-	border-color: var(--accent);
+	background: var(--bg-hover);
 }
 
 .format:has(:checked) {
 	border-color: var(--accent);
-	background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+	background: var(--accent-wash);
 }
 
 .format:has(:focus-visible) {
@@ -1191,116 +1263,44 @@ body,
 }
 
 .format:has(:disabled) {
-	opacity: 0.45;
-	cursor: not-allowed;
+	color: var(--text-faint);
+	cursor: default;
 }
 
 .format__name {
 	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	font-weight: 600;
+	justify-content: space-between;
+	font: var(--text-ui-strong);
 }
 
 .format__soon {
-	padding: 0.05rem 0.4rem;
-	font-size: 0.7rem;
-	font-weight: 500;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	color: var(--text-dim);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-pill);
+	font: var(--text-caption);
+	color: var(--text-faint);
 }
 
 .format__description {
-	font-size: 0.9rem;
+	display: block;
+	font: var(--text-caption);
 	color: var(--text-dim);
 }
 
 /* The folders a format makes, named in mono: this is a list of names on disk,
    not a sentence about the format. */
 .format__files {
-	margin-top: 0.35rem;
-	font-family: var(--font-mono);
-	font-size: 0.6875rem;
-	color: var(--text-faint);
-}
-
-.welcome__create {
-	padding: 0.6rem 1.5rem;
-	font: inherit;
-}
-
-.setup {
-	display: grid;
-	grid-template-columns: max-content 1fr;
-	align-items: center;
-	gap: 0.75rem 1rem;
-	max-width: 520px;
-	margin: 0;
-	text-align: left;
-}
-
-.setup__label {
-	font-size: 0.9rem;
+	display: block;
+	margin-top: var(--space-xxs);
+	font: 400 11px/1.4 var(--font-mono);
 	color: var(--text-dim);
-}
-
-.setup__input,
-.setup__folder {
-	width: 100%;
-	padding: 0.55rem 0.75rem;
-	font: inherit;
-	color: var(--text);
-}
-
-.setup__input:focus-visible,
-.setup__folder:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 1px;
-}
-
-.setup__folder {
-	overflow: hidden;
-	text-align: left;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	cursor: pointer;
-}
-
-.setup__folder:hover {
-	border-color: var(--accent);
-}
-
-.setup__note {
-	grid-column: 2;
-	margin: 0;
-	font-size: 0.8rem;
-	color: var(--text-dim);
-}
-
-.setup__actions {
-	display: flex;
-	grid-column: 2;
-	align-items: center;
-	gap: 0.75rem;
-	margin-top: 0.5rem;
-}
-
-.welcome__back {
-	padding: 0.6rem 1.25rem;
-	font: inherit;
-	color: var(--text);
 }
 
 /* Floats at the foot of the window, so a message appearing cannot move the
-   books, and a long Shelf cannot leave it out of sight below the last one. */
+   books, and a long Shelf cannot leave it out of sight below the last one.
+   Over the scrim as well, or a failed New project would say so unread. */
 .welcome__message {
 	position: fixed;
 	bottom: var(--space-sm);
 	left: var(--space-md);
-	z-index: 6;
+	z-index: 61;
 	max-width: calc(100% - 2 * var(--space-md));
 	margin: 0;
 	padding: var(--space-xs) var(--space-sm);
@@ -8281,7 +8281,6 @@ button.compare__pick:focus-visible {
 	cursor: default;
 }
 
-.welcome__back,
 .profile__quiet,
 .profile__out-of,
 .retag__do,
@@ -8302,7 +8301,6 @@ button.compare__pick:focus-visible {
 	transition: transform 120ms ease;
 }
 
-.welcome__back:hover:not(:disabled),
 .profile__quiet:hover:not(:disabled),
 .profile__out-of:hover:not(:disabled),
 .retag__do:hover:not(:disabled),
@@ -8319,7 +8317,6 @@ button.compare__pick:focus-visible {
 	background: var(--bg-hover);
 }
 
-.welcome__back:disabled,
 .profile__quiet:disabled,
 .profile__out-of:disabled,
 .retag__do:disabled,
@@ -8346,7 +8343,6 @@ button.compare__pick:focus-visible {
 .overwrite__go:active:not(:disabled),
 .overview__new:active:not(:disabled),
 .update__action:active:not(:disabled),
-.welcome__back:active:not(:disabled),
 .profile__quiet:active:not(:disabled),
 .profile__out-of:active:not(:disabled),
 .retag__do:active:not(:disabled),
@@ -8363,8 +8359,6 @@ button.compare__pick:focus-visible {
 	transform: var(--press);
 }
 
-.setup__input,
-.setup__folder,
 .login__input,
 .profile__input,
 .changes__message,
