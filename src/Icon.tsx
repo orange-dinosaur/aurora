@@ -22,6 +22,7 @@ export type IconName =
 	| "sun"
 	| "moon"
 	| "more-vertical"
+	| "more-horizontal"
 	| "card"
 	| "quote"
 	| "bars"
@@ -132,6 +133,13 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<circle cx="12" cy="5" r="1" />
 			<circle cx="12" cy="12" r="1" />
 			<circle cx="12" cy="19" r="1" />
+		</>
+	),
+	"more-horizontal": (
+		<>
+			<circle cx="5" cy="12" r="1" />
+			<circle cx="12" cy="12" r="1" />
+			<circle cx="19" cy="12" r="1" />
 		</>
 	),
 	// The rail's, with `tag` for Info. The bars are the mock's own.

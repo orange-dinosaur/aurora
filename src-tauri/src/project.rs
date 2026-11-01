@@ -1089,12 +1089,36 @@ pub fn forget_project(app: AppHandle, root: PathBuf) -> Result<()> {
 #[tauri::command]
 pub fn trash_project(app: AppHandle, root: PathBuf) -> Result<()> {
 	let store = store_path(&app)?;
-	// Only a folder Aurora can read as a project. A path that arrives from
-	// anywhere else must not be able to bin a folder on the strength of being
-	// asked to.
-	read_manifest(&root)?;
-	trash::delete(&root).map_err(Error::Trash)?;
+	require_remembered(&store, &root)?;
+	move_to_trash(&root)?;
 	forget(&store, &root)
+}
+
+/// Only a folder on the recent list. A path that arrives from anywhere else
+/// must not be able to bin a folder on the strength of being asked to. This
+/// asks the list rather than the manifest, because a project that cannot be
+/// read still has to be deletable.
+fn require_remembered(store_path: &Path, root: &Path) -> Result<()> {
+	let store = store::load(store_path)?;
+	if store.recent.iter().any(|project| project.root == root) {
+		Ok(())
+	} else {
+		Err(Error::NotAProject)
+	}
+}
+
+fn move_to_trash(root: &Path) -> Result<()> {
+	#[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+	let mut context = trash::TrashContext::new();
+	// The crate's default is an AppleScript to Finder, which refuses a folder
+	// holding anything it thinks has to be downloaded first, and can stop to
+	// ask for permission to control Finder.
+	#[cfg(target_os = "macos")]
+	{
+		use trash::macos::{DeleteMethod, TrashContextExtMacos};
+		context.set_delete_method(DeleteMethod::NsFileManager);
+	}
+	context.delete(root).map_err(Error::Trash)
 }
 
 /// The writer is done with the open project for now. It stays in the recent
@@ -2565,6 +2589,33 @@ mod tests {
 		write_manifest(&root, &mut manifest).unwrap();
 
 		assert_eq!(summarise_recents(&store).unwrap()[0].words, Some(0));
+	}
+
+	#[test]
+	fn a_project_on_the_list_can_go_to_the_trash_even_if_it_cannot_be_read() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		fs::write(root.join(MANIFEST_FILE), "not a manifest").unwrap();
+
+		assert!(require_remembered(&store, &root).is_ok());
+	}
+
+	#[test]
+	fn a_project_off_the_list_cannot_go_to_the_trash() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		forget(&store, &root).unwrap();
+
+		assert!(matches!(
+			require_remembered(&store, &root),
+			Err(Error::NotAProject)
+		));
 	}
 
 	#[test]

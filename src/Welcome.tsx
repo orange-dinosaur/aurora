@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -13,9 +13,9 @@ import type {
 import { AccountChip } from "./Account";
 import { useCoverImage } from "./Cover";
 import Icon from "./Icon";
-import Menu, { MenuItem } from "./Menu";
+import Menu, { MenuItem, useDismissal } from "./Menu";
 import { coverFor } from "./lib/covers";
-import { contents } from "./recents";
+import { folderName, going } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
 
@@ -78,45 +78,69 @@ type Props = {
 function Book({
 	project,
 	busy,
+	asking,
 	onOpen,
 	onShow,
 	onForget,
 	onAsk,
+	onCancel,
+	onDelete,
 }: {
 	project: RecentSummary;
 	busy: boolean;
+	/** Whether the book is asking if it should be deleted. */
+	asking: boolean;
 	onOpen: () => void;
 	onShow: () => void;
 	onForget: () => void;
 	onAsk: () => void;
+	onCancel: () => void;
+	onDelete: () => void;
 }) {
+	const ask = useRef<HTMLDivElement>(null);
+	useDismissal(asking, ask, onCancel);
+
 	const { src } = useCoverImage(project.root, project.cover ?? "", 0);
-	// A book nobody has named yet goes by its project's name, and so does one
-	// whose manifest could not be read.
-	const title = project.title?.trim() || project.name;
+	const unread = project.words === null;
+	// A book nobody has named yet goes by its project's name. One that cannot
+	// be read has only its folder to go by: the name may be as stale as the
+	// file that could not be read.
+	const title = unread
+		? folderName(project.root)
+		: project.title?.trim() || project.name;
 
 	return (
 		<li className="shelf__book">
+			{/* Still a button when it cannot be read: opening it is how the
+			    writer finds out why, at the foot of the window. */}
 			<button
 				type="button"
 				className="shelf__open"
 				disabled={busy}
 				onClick={onOpen}
 			>
-				{/* A wash of the title stands behind an image too, so the cover
-				    is never blank while one loads or if it cannot be read. */}
-				<span
-					className={
-						src === ""
-							? "shelf__cover"
-							: "shelf__cover shelf__cover--image"
-					}
-					style={{ background: coverFor(title) }}
-				>
-					{src !== "" && <img src={src} alt="" />}
-					<span className="shelf__title">{title}</span>
-					<span className="shelf__author">{project.author}</span>
-				</span>
+				{unread ? (
+					<span className="shelf__cover shelf__cover--unread">
+						<strong>{title}</strong>
+						<span>Aurora can't read this project.</span>
+					</span>
+				) : (
+					/* A wash of the title stands behind an image too, so the
+					   cover is never blank while one loads or if it cannot be
+					   read. */
+					<span
+						className={
+							src === ""
+								? "shelf__cover"
+								: "shelf__cover shelf__cover--image"
+						}
+						style={{ background: coverFor(title) }}
+					>
+						{src !== "" && <img src={src} alt="" />}
+						<span className="shelf__title">{title}</span>
+						<span className="shelf__author">{project.author}</span>
+					</span>
+				)}
 				{project.format !== null && (
 					<span className="shelf__format">
 						{COPY[project.format].name}
@@ -125,7 +149,34 @@ function Book({
 				<span className="shelf__meta">{size(project)}</span>
 			</button>
 
-			<Menu label={`Actions for ${title}`} icon="more-vertical">
+			{asking && (
+				<div ref={ask} className="shelf__ask" role="alertdialog">
+					<p className="shelf__question">Delete {title}?</p>
+					<p className="shelf__going">{going(project.documents)}</p>
+					<div className="shelf__answers">
+						{/* Focused rather than Delete, so Enter cannot lose work. */}
+						<button
+							type="button"
+							className="shelf__cancel"
+							autoFocus
+							disabled={busy}
+							onClick={onCancel}
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							className="shelf__sure"
+							disabled={busy}
+							onClick={onDelete}
+						>
+							Delete project
+						</button>
+					</div>
+				</div>
+			)}
+
+			<Menu label={`Actions for ${title}`} icon="more-horizontal">
 				{(close) => (
 					<>
 						{/* What tells two books of the same title apart. */}
@@ -194,8 +245,8 @@ export default function Welcome({
 	// Null until the list arrives. Counting every project's words takes a
 	// moment, and the empty Shelf must not flash up in front of a full one.
 	const [recents, setRecents] = useState<RecentSummary[] | null>(null);
-	// The project whose book has turned into a question. One at a time: the
-	// question stands where the book was, so two of them could not both.
+	// The project whose book is asking to be deleted. One at a time, since a
+	// click anywhere else answers Cancel.
 	const [asking, setAsking] = useState<string | null>(null);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 
@@ -517,65 +568,31 @@ export default function Welcome({
 
 					{recents !== null && recents.length > 0 && (
 						<ul className="shelf__books">
-							{recents.map((project) =>
-								asking === project.root ? (
-									// The question stands where the book was, so
-									// nothing else on the screen moves while it
-									// is being answered.
-									<li
-										key={project.root}
-										className="recents__ask"
-									>
-										<p className="recents__question">
-											Move <strong>{project.name}</strong>{" "}
-											{contents(project.documents)} to the
-											system trash?
-										</p>
-										<div className="recents__answers">
-											<button
-												type="button"
-												className="recents__keep"
-												disabled={busy}
-												onClick={() => setAsking(null)}
-											>
-												Cancel
-											</button>
-											<button
-												type="button"
-												className="recents__bin"
-												disabled={busy}
-												onClick={() =>
-													void drop(
-														"trash_project",
-														project.root,
-													)
-												}
-											>
-												Delete project
-											</button>
-										</div>
-									</li>
-								) : (
-									<Book
-										key={project.root}
-										project={project}
-										busy={busy}
-										onOpen={() =>
-											void openProject(project.root)
-										}
-										onShow={() =>
-											void showInFiles(project.root)
-										}
-										onForget={() =>
-											void drop(
-												"forget_project",
-												project.root,
-											)
-										}
-										onAsk={() => setAsking(project.root)}
-									/>
-								),
-							)}
+							{recents.map((project) => (
+								<Book
+									key={project.root}
+									project={project}
+									busy={busy}
+									asking={asking === project.root}
+									onOpen={() =>
+										void openProject(project.root)
+									}
+									onShow={() =>
+										void showInFiles(project.root)
+									}
+									onForget={() =>
+										void drop(
+											"forget_project",
+											project.root,
+										)
+									}
+									onAsk={() => setAsking(project.root)}
+									onCancel={() => setAsking(null)}
+									onDelete={() =>
+										void drop("trash_project", project.root)
+									}
+								/>
+							))}
 						</ul>
 					)}
 				</section>

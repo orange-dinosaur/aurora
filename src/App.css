@@ -818,7 +818,8 @@ body,
 	font: var(--text-ui-strong);
 }
 
-.shelf__folder {
+.shelf__folder,
+.shelf__cancel {
 	padding: 5px var(--space-xs);
 	font: var(--text-ui);
 	color: var(--text-dim);
@@ -828,12 +829,15 @@ body,
 	cursor: pointer;
 }
 
-.shelf__folder:hover:not(:disabled) {
+.shelf__folder:hover:not(:disabled),
+.shelf__cancel:hover:not(:disabled) {
 	color: var(--text);
 	background: var(--bg-hover);
 }
 
-.shelf__folder:focus-visible {
+.shelf__folder:focus-visible,
+.shelf__cancel:focus-visible,
+.shelf__sure:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: 2px;
 }
@@ -847,8 +851,8 @@ body,
 	list-style: none;
 }
 
-/* What the menu's list hangs from, since the list is wider than a narrow book
-   and centred on it. That keeps it inside the window in every column. */
+/* What the menu's list and the question hang from. Both are wider than a narrow
+   book and centred on it, which keeps them inside the window in every column. */
 .shelf__book {
 	position: relative;
 	min-width: 0;
@@ -868,14 +872,95 @@ body,
 	color: #2b1b16;
 	background: rgb(255 255 255 / 0.72);
 	border-radius: var(--radius-pill);
+	opacity: 0;
+	transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.shelf__book:hover .menu__trigger,
+.shelf__book:focus-within .menu__trigger,
+.shelf__book .menu__trigger[aria-expanded="true"] {
+	opacity: 1;
+}
+
+.shelf__book .menu__trigger:hover,
+.shelf__book .menu__trigger[aria-expanded="true"] {
+	color: #2b1b16;
+	background: rgb(255 255 255 / 0.9);
+}
+
+.shelf__book .menu__trigger:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* The … lifts with the cover, or moving onto it would drop the book. */
+.shelf__book:hover .shelf__cover,
+.shelf__book:hover .menu__trigger {
+	transform: var(--lift);
+}
+
+.shelf__book .menu__items,
+.shelf__ask {
+	top: 38px;
+	left: 50%;
+	width: 190px;
+	transform: translateX(-50%);
 }
 
 .shelf__book .menu__items {
-	top: 38px;
 	right: auto;
-	left: 50%;
-	width: 176px;
-	transform: translateX(-50%);
+}
+
+.shelf__ask {
+	position: absolute;
+	z-index: 5;
+	padding: var(--space-sm);
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
+}
+
+.shelf__question {
+	margin: 0 0 var(--space-xxs);
+	font: var(--text-ui-strong);
+	overflow-wrap: anywhere;
+}
+
+.shelf__going {
+	margin: 0 0 var(--space-sm);
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.shelf__answers {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--space-xxs);
+}
+
+.shelf__cancel,
+.shelf__sure {
+	padding: 3px var(--space-xs);
+	font: var(--text-ui);
+	font-size: 0.75rem;
+}
+
+.shelf__sure {
+	font-weight: 600;
+	color: var(--bg);
+	background: var(--danger);
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.shelf__sure:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 .shelf__book .menu__item {
@@ -919,6 +1004,25 @@ body,
 	box-shadow:
 		var(--shadow-cover),
 		inset 5px 0 0 rgb(0 0 0 / 0.05);
+	transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* A project that cannot be read has no book to show, only its folder. */
+.shelf__cover--unread {
+	justify-content: center;
+	color: var(--text-dim);
+	border: 1px dashed var(--border-strong);
+	box-shadow: none;
+}
+
+.shelf__cover--unread strong {
+	font: 400 12px/1.4 var(--font-mono);
+	overflow-wrap: anywhere;
+}
+
+.shelf__cover--unread span {
+	margin-top: var(--space-xxs);
+	font: var(--text-caption);
 }
 
 .shelf__cover img {
@@ -989,10 +1093,12 @@ body,
 	border: 1px dashed var(--border-strong);
 	border-radius: 3px 6px 6px 3px;
 	cursor: pointer;
+	transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .shelf__ghost:hover:not(:disabled) {
 	background: var(--bg-hover);
+	transform: var(--lift);
 }
 
 .shelf__ghost:focus-visible {
@@ -7227,72 +7333,6 @@ button.compare__pick:focus-visible {
 	overflow-wrap: anywhere;
 }
 
-/* The question a delete asks, standing where the book it is about was. */
-.recents__ask {
-	display: flex;
-	flex-direction: column;
-	gap: 0.7rem;
-	padding: 0.9rem;
-	background: color-mix(in srgb, var(--danger) 8%, var(--bg-card));
-	border: 1px solid var(--danger);
-	border-radius: var(--radius-md);
-}
-
-.recents__question {
-	margin: 0;
-	font-size: 0.8125rem;
-	line-height: 1.5;
-	color: var(--text);
-	overflow-wrap: anywhere;
-}
-
-.recents__question strong {
-	font-weight: 600;
-}
-
-.recents__answers {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.5rem;
-}
-
-/* The two answers share a width, so neither is the one the eye lands on. The
-   colour is what separates them. */
-.recents__keep,
-.recents__bin {
-	flex: 1;
-	height: 30px;
-	font: inherit;
-	font-size: 0.8125rem;
-	letter-spacing: normal;
-	line-height: normal;
-	text-transform: none;
-	border-radius: var(--radius-sm);
-	cursor: pointer;
-}
-
-.recents__keep {
-	color: var(--text);
-}
-
-.recents__bin {
-	font-weight: 500;
-	color: var(--bg);
-	background: var(--danger);
-	border: 0;
-}
-
-.recents__bin:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-.recents__keep:focus-visible,
-.recents__bin:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 2px;
-}
-
 /* The dim over the app while a dialog is open, and the thing that catches a
    click aimed at nothing in particular. */
 .scrim {
@@ -8253,7 +8293,6 @@ button.compare__pick:focus-visible {
 .subject__draft,
 .trashed__action,
 .editor__find-do,
-.recents__keep,
 .cover__button,
 .export__button {
 	background: var(--bg-card);
@@ -8275,7 +8314,6 @@ button.compare__pick:focus-visible {
 .subject__draft:hover:not(:disabled),
 .trashed__action:hover:not(:disabled),
 .editor__find-do:hover:not(:disabled),
-.recents__keep:hover:not(:disabled),
 .cover__button:hover:not(:disabled),
 .export__button:hover:not(:disabled) {
 	background: var(--bg-hover);
@@ -8293,7 +8331,6 @@ button.compare__pick:focus-visible {
 .subject__draft:disabled,
 .trashed__action:disabled,
 .editor__find-do:disabled,
-.recents__keep:disabled,
 .cover__button:disabled,
 .export__button:disabled {
 	color: var(--text-faint);
@@ -8321,7 +8358,6 @@ button.compare__pick:focus-visible {
 .subject__draft:active:not(:disabled),
 .trashed__action:active:not(:disabled),
 .editor__find-do:active:not(:disabled),
-.recents__keep:active:not(:disabled),
 .cover__button:active:not(:disabled),
 .export__button:active:not(:disabled) {
 	transform: var(--press);
