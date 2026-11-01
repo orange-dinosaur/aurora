@@ -1357,6 +1357,35 @@ pub fn put_back_removes(root: PathBuf, version: String, id: Uuid) -> Result<Vec<
 		.collect())
 }
 
+/// The takes that putting the whole project back would remove for good, in
+/// binder order and ready to show, as "Take 3 of Low water". Here a document
+/// the version lacks goes with its takes rather than to the Trash, so they count.
+#[tauri::command]
+pub fn put_back_everything_removes(root: PathBuf, version: String) -> Result<Vec<String>> {
+	let repo = open_for_putting_back(&root)?;
+	let (_, then) = side(&repo, Some(&version))?;
+	let now = read_manifest(&root)?;
+
+	let mut gone = Vec::new();
+	for document in now.documents() {
+		let Some(Node::Document { takes, .. }) = tree::find(&now.nodes, document.id) else {
+			continue;
+		};
+		let kept = match tree::find(&then.nodes, document.id) {
+			Some(Node::Document { takes, .. }) => Some(takes),
+			_ => None,
+		};
+		let name = document.title();
+		gone.extend(
+			in_order(takes)
+				.into_iter()
+				.filter(|(take, _)| !kept.is_some_and(|kept| kept.contains_key(take)))
+				.map(|(_, details)| format!("{} of {name}", details.name)),
+		);
+	}
+	Ok(gone)
+}
+
 /// Puts back the book's details and its cover as a version had them.
 #[tauri::command]
 pub fn put_back_book(root: PathBuf, version: String) -> Result<()> {
@@ -3848,6 +3877,37 @@ mod tests {
 				.unwrap()
 				.is_empty()
 		);
+	}
+
+	#[test]
+	fn put_back_everything_removes_names_the_takes_across_the_project() {
+		let (_parent, root, seeded, ..) = novel();
+		let first = kept(&root);
+		try_something(root.clone(), seeded).unwrap();
+		let two = kept(&root);
+
+		let manifest = read_manifest(&root).unwrap();
+		let name = manifest
+			.documents()
+			.into_iter()
+			.find(|document| document.id == seeded)
+			.unwrap()
+			.title();
+		let folder = tree::parent(&manifest.nodes, seeded).unwrap().id();
+		let newer = create_document(root.clone(), folder, "Newer".to_owned())
+			.unwrap()
+			.id;
+		try_something(root.clone(), newer).unwrap();
+		let removes =
+			|version: &str| put_back_everything_removes(root.clone(), version.to_owned()).unwrap();
+
+		// The document the version lacks counts, because it does not go to the Trash.
+		assert_eq!(removes(&two), ["Take 1 of Newer", "Take 2 of Newer"]);
+
+		let all = removes(&first);
+		assert_eq!(all.len(), 4);
+		assert!(all.contains(&format!("Take 1 of {name}")));
+		assert!(all.contains(&format!("Take 2 of {name}")));
 	}
 
 	#[test]

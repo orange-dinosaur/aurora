@@ -202,6 +202,7 @@ pub fn run() {
 			versions::version_text,
 			versions::put_back_document,
 			versions::put_back_removes,
+			versions::put_back_everything_removes,
 			versions::put_back_book,
 			versions::put_back_everything,
 			takes::list_takes,

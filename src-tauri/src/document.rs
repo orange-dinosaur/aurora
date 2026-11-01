@@ -45,7 +45,7 @@ impl Document {
 	}
 
 	/// The file name without its extension. The file name is the title.
-	fn title(&self) -> String {
+	pub(crate) fn title(&self) -> String {
 		Path::new(&self.path)
 			.file_stem()
 			.and_then(|stem| stem.to_str())
