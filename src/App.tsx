@@ -10,7 +10,7 @@ import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
 import { flushBeforeQuitting } from "./quitting";
-import { pressed, SETTINGS } from "./formatting";
+import { inAField, pressed, SETTINGS } from "./formatting";
 import { face } from "./lib/typography";
 
 // What Aurora looks like before the store has answered, and what it falls back
@@ -37,18 +37,6 @@ const DEFAULTS: Preferences = {
 	fontSize: 16,
 	lineHeight: 1.7,
 };
-
-/** Whether the key that was pressed was pressed into a field. The manuscript
- * is left out on purpose: it is editable too, but it is what the writer is
- * looking at, and settings should open from it like anywhere else. A name
- * being typed is the case that matters, since opening the dialog takes the
- * focus and a half-typed name is abandoned when it goes. */
-function inAField(target: EventTarget | null): boolean {
-	return (
-		target instanceof HTMLElement &&
-		(target.tagName === "INPUT" || target.tagName === "TEXTAREA")
-	);
-}
 
 type Boot =
 	| { kind: "loading" }

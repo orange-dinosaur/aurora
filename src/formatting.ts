@@ -81,7 +81,7 @@ export const MARKS: Mark[] = [
 		key: "s",
 		shift: true,
 	}),
-	mark("highlight", "Highlight", "▨", "highlight", {
+	mark("highlight", "Highlight", "H", "highlight", {
 		key: "h",
 		shift: true,
 	}),
@@ -214,6 +214,17 @@ export const INSERTS: Action[] = [
 export const ACTIONS: Action[] = [...MARKS, ...BLOCKS, ...INSERTS];
 
 /** Whether a key press is asking for this shortcut, and nothing else. */
+/** Whether the key that was pressed was pressed into a field. The manuscript
+ * is left out on purpose: it is editable too, but it is what the writer is
+ * looking at, and a key that works anywhere should work from it. A name being
+ * typed is the case that matters. */
+export function inAField(target: EventTarget | null): boolean {
+	return (
+		target instanceof HTMLElement &&
+		(target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+	);
+}
+
 export function pressed(event: KeyboardEvent, keys: Keys): boolean {
 	const command = IS_APPLE ? event.metaKey : event.ctrlKey;
 	const wrong = IS_APPLE ? event.ctrlKey : event.metaKey;

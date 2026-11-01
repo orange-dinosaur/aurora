@@ -982,6 +982,17 @@ body,
 	min-height: 0;
 }
 
+/* Focus leaves only the page and its dock. */
+.project--focus {
+	grid-template-rows: 0 minmax(0, 1fr);
+}
+
+.project--focus .titlebar,
+.project--focus .sidebar,
+.project--focus .right-sidebar {
+	display: none;
+}
+
 /* Aurora's own row, directly beneath the window frame the desktop draws. */
 .titlebar {
 	grid-area: 1 / 2 / 2 / 4;
@@ -5552,6 +5563,7 @@ button.compare__pick:focus-visible {
    the manuscript. */
 .menu__items,
 .bubble,
+.toolbar,
 .slash,
 .controls__list,
 .controls__address,
@@ -5567,9 +5579,6 @@ button.compare__pick:focus-visible {
 	box-shadow: var(--shadow-float);
 }
 
-/* And every square control inside one is the same button: the glyph changes,
-   the box does not. */
-.controls__mark,
 .editor__find-step {
 	display: inline-flex;
 	align-items: center;
@@ -5792,7 +5801,6 @@ button.compare__pick:focus-visible {
 	font-size: var(--font-size);
 }
 
-.editor__bar,
 .editor__head,
 .editor__surface,
 .editor__find,
@@ -5809,11 +5817,7 @@ button.compare__pick:focus-visible {
 	padding-inline: var(--gutter);
 }
 
-.editor__bar[inert] {
-	opacity: 0.55;
-}
-
-/* What Find floats over. */
+/* What Find and the dock float over. */
 .editor__view {
 	position: relative;
 	flex: 1;
@@ -6363,29 +6367,82 @@ button.compare__pick:focus-visible {
    different things. */
 .controls {
 	display: flex;
+	gap: 2px;
 	align-items: center;
-	gap: 0.1rem;
 	white-space: nowrap;
 }
 
-/* Under the title, always there. No box of its own — a hairline is enough to
-   separate it from the writing. */
+/* Floats at the foot of the page, over the writing but outside its scroll. */
 .toolbar {
-	flex: none;
+	position: absolute;
+	bottom: var(--space-md);
+	left: 50%;
+	z-index: 4;
 	display: flex;
 	align-items: center;
-	padding-block: var(--space-xs);
-	border-bottom: 1px solid var(--border);
+	padding: var(--space-xxs) var(--space-xs);
+	font-family: var(--font-ui);
+	white-space: nowrap;
+	border-radius: var(--radius-pill);
+	transform: translateX(-50%);
 }
 
-/* The bar that floats over a selection. Out of flow, so it can never move the
-   writing it is sitting on top of, and placed from JavaScript because it
-   follows the words rather than the layout. */
+.toolbar__marks[inert] {
+	opacity: 0.55;
+}
+
+.toolbar__modes {
+	display: flex;
+	gap: 2px;
+	align-items: center;
+}
+
+.toolbar__mode {
+	display: inline-flex;
+	gap: var(--space-xxs);
+	align-items: center;
+	height: 28px;
+	padding: 0 var(--space-xs);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.toolbar__mode:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.toolbar__mode[aria-pressed="true"] {
+	color: var(--accent-text);
+	background: var(--accent-wash);
+}
+
+.toolbar__mode svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* The dock stands at the foot, so what it opens goes up. */
+.toolbar .controls__list,
+.toolbar .controls__address {
+	top: auto;
+	bottom: 100%;
+	margin: 0 0 var(--space-xs);
+}
+
+/* Follows the words rather than the layout, so it is placed from JavaScript, and
+   out of flow so it can never move the writing it sits on. */
 .bubble {
 	position: absolute;
 	top: 0;
 	left: 0;
 	z-index: 5;
+	padding: 2px var(--space-xxs);
+	border-radius: var(--radius-pill);
 }
 
 /* Hidden rather than removed: the bar has to be measured to be centred, and
@@ -6402,11 +6459,11 @@ button.compare__pick:focus-visible {
 .controls__turn {
 	display: flex;
 	align-items: center;
-	gap: 0.3rem;
-	padding: 0.25rem 0.4rem;
-	font: inherit;
-	font-size: 0.85rem;
-	color: var(--text);
+	gap: var(--space-xxs);
+	height: 28px;
+	padding: 0 var(--space-xs);
+	font: var(--text-ui);
+	color: var(--text-dim);
 	background: none;
 	border: 0;
 	border-radius: var(--radius-xs);
@@ -6415,12 +6472,17 @@ button.compare__pick:focus-visible {
 
 .controls__turn:hover,
 .controls__turn[aria-expanded="true"] {
-	background: var(--accent-wash);
+	color: var(--text);
+	background: var(--bg-hover);
 }
 
 .controls__caret {
 	display: flex;
-	color: var(--text-dim);
+}
+
+.controls__caret svg {
+	width: 14px;
+	height: 14px;
 }
 
 .controls__list {
@@ -6432,6 +6494,15 @@ button.compare__pick:focus-visible {
 	flex-direction: column;
 	min-width: 9rem;
 	margin-top: 0.25rem;
+}
+
+/* Solid, because they sit inside a bar that already blurs, where a second blur
+   has nothing behind it to read. */
+.controls__list,
+.controls__address {
+	background: var(--bg-card);
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
 }
 
 .controls__option,
@@ -6466,19 +6537,26 @@ button.compare__pick:focus-visible {
 }
 
 .controls__divider {
-	align-self: stretch;
+	flex: none;
 	width: 1px;
-	margin: 0.15rem 0.25rem;
-	background: var(--border);
+	height: 16px;
+	margin: 0 var(--space-xxs);
+	background: var(--border-strong);
 }
 
 /* Each button is drawn in the style it applies, so it needs no label. */
 .controls__mark {
-	font: inherit;
-	font-size: 0.85rem;
-	color: var(--text-dim);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	font: 400 15px/1 var(--font-page);
+	color: var(--text);
 	background: none;
 	border: 0;
+	border-radius: var(--radius-pill);
 	cursor: pointer;
 }
 
@@ -6497,7 +6575,6 @@ button.compare__pick:focus-visible {
 }
 
 .controls__mark--italic {
-	font-family: Georgia, "Times New Roman", serif;
 	font-style: italic;
 }
 
@@ -6506,7 +6583,13 @@ button.compare__pick:focus-visible {
 }
 
 .controls__mark--highlight {
-	font-size: 0.95rem;
+	background: var(--accent-wash);
+}
+
+/* Solid when on, because it wears the wash when off. */
+.controls__mark--highlight[aria-pressed="true"] {
+	color: var(--on-accent);
+	background: var(--accent);
 }
 
 /* Holds the address field under the button that opens it. */
@@ -6536,7 +6619,7 @@ button.compare__pick:focus-visible {
 
 .controls__mark--code {
 	font-family: var(--font-mono);
-	font-size: 0.75rem;
+	font-size: 11px;
 }
 
 /* The menu a slash raises. The plugin hangs an anchor off the caret and gives

@@ -194,6 +194,10 @@ export default function Editor({
 		() => onPreferences({ ...preferences, toolbar: !preferences.toolbar }),
 		[preferences, onPreferences],
 	);
+	const leaveFocus = useCallback(
+		() => onPreferences({ ...preferences, focus: false }),
+		[preferences, onPreferences],
+	);
 	// The headings live in the right sidebar now, so the button and its
 	// shortcut bring that panel round to them instead of opening a column.
 	const showing =
@@ -316,12 +320,6 @@ export default function Editor({
 			}
 		>
 			<LexicalComposer initialConfig={config}>
-				{/* Its buttons act on the text even with the surface hidden. */}
-				{preferences.toolbar && (
-					<div className="editor__column editor__bar" inert={marking}>
-						<Toolbar />
-					</div>
-				)}
 				<div className="editor__view">
 					<div className="editor__scroll">
 						<div className="editor__column editor__page">
@@ -365,43 +363,8 @@ export default function Editor({
 									>
 										<Icon name="list" />
 									</button>
-									{/* Turned on and off while writing rather
-									    than set once, so it stays in reach
-									    instead of going in the panel beside it. */}
-									<button
-										type="button"
-										className="editor__toggle"
-										aria-pressed={preferences.focus}
-										aria-label="Focus mode"
-										title="Dim other paragraphs"
-										onClick={() =>
-											onPreferences({
-												...preferences,
-												focus: !preferences.focus,
-											})
-										}
-									>
-										<Icon name="contrast" />
-									</button>
-									<button
-										type="button"
-										className="editor__toggle"
-										aria-pressed={preferences.typewriter}
-										aria-label="Typewriter scrolling"
-										title="Hold the line being written on"
-										onClick={() =>
-											onPreferences({
-												...preferences,
-												typewriter:
-													!preferences.typewriter,
-											})
-										}
-									>
-										<Icon name="arrows-vertical" />
-									</button>
-									{/* The one way back once the bar is gone, so
-									    it stays on screen whichever way round
-									    it is. */}
+									{/* The one way back once the dock is gone,
+									    so it stays off the dock. */}
 									<button
 										type="button"
 										className="editor__toggle"
@@ -507,12 +470,36 @@ export default function Editor({
 									onFind={find}
 									onReplace={replace}
 								/>
-								<Focus on={preferences.focus} />
+								<Focus
+									on={preferences.focus}
+									active={active}
+									onLeave={leaveFocus}
+								/>
 								<Typewriter on={preferences.typewriter} />
 								<SlashMenu />
 							</div>
 						</div>
 					</div>
+					{/* Its buttons act on the text even with the surface hidden. */}
+					{preferences.toolbar && (
+						<Toolbar
+							marking={marking}
+							focus={preferences.focus}
+							typewriter={preferences.typewriter}
+							onFocus={() =>
+								onPreferences({
+									...preferences,
+									focus: !preferences.focus,
+								})
+							}
+							onTypewriter={() =>
+								onPreferences({
+									...preferences,
+									typewriter: !preferences.typewriter,
+								})
+							}
+						/>
+					)}
 					{/* Outside the scroll, so it stays put as the page moves
 					    from one match to the next. */}
 					{finding && (

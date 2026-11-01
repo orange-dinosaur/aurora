@@ -1448,9 +1448,13 @@ export default function Project({
 
 	// Compare and Merge stand where the writing stands.
 	const covered = comparing !== null || (merge !== null && settling !== null);
+	// Only over a document, whose dock and Escape are the ways out. Anywhere else
+	// the frame is the only way around, so a saved Focus cannot strand the writer.
+	const focused =
+		preferences.focus && active?.kind === "document" && !covered;
 
 	return (
-		<section className="project">
+		<section className={focused ? "project project--focus" : "project"}>
 			<Titlebar
 				root={root}
 				session={deliberate}
