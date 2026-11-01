@@ -715,15 +715,35 @@ body,
 }
 
 /* The same 44px row the project wears, holding the two controls that mean
-   anything with no project open. */
+   anything with no project open. It stays while the Shelf scrolls under it. */
 .welcome__bar {
+	position: sticky;
+	top: 0;
+	z-index: 6;
 	flex: none;
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
-	gap: 0.35rem;
+	gap: var(--space-xs);
 	height: 44px;
-	padding: 0 1rem;
+	padding: 0 var(--space-sm) 0 var(--space-md);
+}
+
+/* A layer of its own: a blur on the bar itself would stop the account menu's
+   blur from reaching the books behind it. */
+.welcome__bar::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+}
+
+.welcome__name {
+	flex: 1;
+	font: 400 21px/1 var(--font-title);
+	letter-spacing: var(--tracking-heading);
 }
 
 /* The square button the three headerless screens use. The project header has
@@ -759,40 +779,248 @@ body,
 	outline-offset: 1px;
 }
 
-/* Auto margins rather than align-items: overflow past the top of a centred
-   flex item cannot be scrolled to. */
-.welcome__columns {
-	display: grid;
-	grid-template-columns: 1.3fr 1fr;
-	align-items: start;
-	gap: 4rem;
+.shelf {
 	width: 100%;
-	/* The padding is inside the box, so the two columns still have 1000px. */
-	max-width: calc(1000px + 4rem);
-	padding: 1rem 2rem 3rem;
-	margin: auto;
+	max-width: 1040px;
+	margin: 0 auto;
+	padding: var(--space-xl) var(--space-lg) var(--space-section);
 }
 
-/* One column under a window too narrow to hold both. The panel goes below the
-   create flow rather than above it: what is on screen first should be the
-   thing this screen exists to do. */
-@media (max-width: 60rem) {
-	.welcome__columns {
-		grid-template-columns: 1fr;
-		gap: 2rem;
+.shelf__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: var(--space-sm);
+	margin-bottom: var(--space-xl);
+}
+
+.shelf__heading {
+	margin: 0;
+	font: var(--text-display);
+	letter-spacing: var(--tracking-display);
+}
+
+.shelf__count {
+	margin: 2px 0 0;
+	color: var(--text-dim);
+}
+
+.shelf__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+.shelf__actions .welcome__create {
+	padding: 6px var(--space-md);
+	font: var(--text-ui-strong);
+}
+
+.shelf__folder {
+	padding: 5px var(--space-xs);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.shelf__folder:hover:not(:disabled) {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.shelf__folder:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.shelf__books {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+	gap: var(--space-xl) var(--space-lg);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* What the menu's list hangs from, since the list is wider than a narrow book
+   and centred on it. That keeps it inside the window in every column. */
+.shelf__book {
+	position: relative;
+	min-width: 0;
+}
+
+.shelf__book .menu {
+	position: static;
+}
+
+.shelf__book .menu__trigger {
+	position: absolute;
+	top: var(--space-xs);
+	right: var(--space-xs);
+	z-index: 1;
+	width: 26px;
+	height: 26px;
+	color: #2b1b16;
+	background: rgb(255 255 255 / 0.72);
+	border-radius: var(--radius-pill);
+}
+
+.shelf__book .menu__items {
+	top: 38px;
+	right: auto;
+	left: 50%;
+	width: 176px;
+	transform: translateX(-50%);
+}
+
+.shelf__book .menu__item {
+	white-space: normal;
+}
+
+/* The path is the one long thing in the menu, and it has no spaces to break on. */
+.shelf__path {
+	font-family: var(--font-mono);
+	overflow-wrap: anywhere;
+}
+
+.shelf__open {
+	display: block;
+	width: 100%;
+	padding: 0;
+	font: var(--text-ui);
+	text-align: left;
+	color: inherit;
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.shelf__open:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 4px;
+	border-radius: var(--radius-xs);
+}
+
+.shelf__cover {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	aspect-ratio: 2 / 3;
+	padding: var(--space-md) var(--space-sm) var(--space-sm) var(--space-md);
+	overflow: hidden;
+	color: #2b1b16;
+	border-radius: 3px 6px 6px 3px;
+	box-shadow:
+		var(--shadow-cover),
+		inset 5px 0 0 rgb(0 0 0 / 0.05);
+}
+
+.shelf__cover img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* Cream with a soft shadow, so the words read on any picture. */
+.shelf__cover--image {
+	color: #f4efe6;
+	text-shadow: 0 1px 6px rgb(0 0 0 / 0.55);
+}
+
+/* Five lines is as many as a narrow book holds above its author. */
+.shelf__title {
+	position: relative;
+	display: -webkit-box;
+	font: 400 26px/1.05 var(--font-title);
+	letter-spacing: var(--tracking-heading);
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 5;
+}
+
+.shelf__author {
+	position: relative;
+	font: var(--text-caption);
+	overflow-wrap: anywhere;
+}
+
+.shelf__format {
+	display: block;
+	margin-top: var(--space-sm);
+	font: 600 11px/1.35 var(--font-ui);
+}
+
+.shelf__meta {
+	display: block;
+	margin-top: 2px;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.shelf__cover + .shelf__meta {
+	margin-top: var(--space-sm);
+}
+
+.shelf__empty {
+	max-width: 180px;
+}
+
+.shelf__empty p {
+	margin: var(--space-sm) 0 0;
+	color: var(--text-dim);
+}
+
+.shelf__ghost {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	aspect-ratio: 2 / 3;
+	color: var(--accent-text);
+	background: none;
+	border: 1px dashed var(--border-strong);
+	border-radius: 3px 6px 6px 3px;
+	cursor: pointer;
+}
+
+.shelf__ghost:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.shelf__ghost:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.shelf__ghost svg {
+	width: 22px;
+	height: 22px;
+}
+
+@media (max-width: 620px) {
+	.shelf {
+		padding: var(--space-md) var(--space-md) var(--space-xxl);
+	}
+
+	.shelf__books {
+		gap: var(--space-lg) var(--space-md);
+	}
+
+	.shelf__title {
+		font-size: 22px;
 	}
 }
 
-.welcome__title {
-	margin: 0;
-	font-family: var(--font-page);
-	font-size: 2.5rem;
-	font-weight: 600;
-	letter-spacing: -0.02em;
-}
-
 .welcome__subtitle {
-	margin: 0.5rem 0 2rem;
+	margin: 0 0 2rem;
 	color: var(--text-dim);
 }
 
@@ -960,18 +1188,29 @@ body,
 	color: var(--text);
 }
 
-/* Out of flow at the foot of the screen, so a message appearing cannot move
-   either column. Anchored by its bottom edge, it grows upward into the inset
-   rather than pushing the page taller. */
+/* Floats at the foot of the window, so a message appearing cannot move the
+   books, and a long Shelf cannot leave it out of sight below the last one. */
 .welcome__message {
-	position: absolute;
-	bottom: 0.5rem;
-	right: 2rem;
-	left: 2rem;
+	position: fixed;
+	bottom: var(--space-sm);
+	left: var(--space-md);
+	z-index: 6;
+	max-width: calc(100% - 2 * var(--space-md));
 	margin: 0;
-	font-size: 0.9rem;
+	padding: var(--space-xs) var(--space-sm);
+	font: var(--text-ui);
 	color: var(--text-dim);
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
 	overflow-wrap: anywhere;
+}
+
+.welcome__message:empty {
+	display: none;
 }
 
 .welcome__message--error {
@@ -6988,105 +7227,7 @@ button.compare__pick:focus-visible {
 	overflow-wrap: anywhere;
 }
 
-/* Chrome rather than paper: the panel is a way back into work that already
-   exists, not part of the decision being made beside it. */
-.opening {
-	padding: 1.25rem;
-	background: var(--bg-chrome);
-	border: 1px solid var(--border);
-	border-radius: 14px;
-}
-
-.opening__title {
-	margin: 0 0 1rem;
-	padding: 0 0.25rem;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	color: var(--text-faint);
-}
-
-.opening__none {
-	margin: 0 0 1rem;
-	font-size: 0.85rem;
-	color: var(--text-dim);
-}
-
-.recents {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-	margin: 0 0 1rem;
-	padding: 0;
-	list-style: none;
-	text-align: left;
-}
-
-/* The menu sits over the row rather than inside it: the row is a button, and a
-   button cannot hold another one. */
-.recents__item {
-	position: relative;
-}
-
-.recents__item .menu {
-	top: 0.4rem;
-	right: 0.4rem;
-}
-
-.recent {
-	display: flex;
-	flex-direction: column;
-	gap: 0.2rem;
-	width: 100%;
-	/* Room at the right end for the ⋮, so a long project name cannot run
-	   under it. */
-	padding: 0.7rem 2.4rem 0.7rem 0.85rem;
-	font: inherit;
-	color: var(--text);
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	cursor: pointer;
-}
-
-.recent:hover:not(:disabled) {
-	border-color: var(--accent);
-}
-
-.recent:disabled {
-	opacity: 0.45;
-	cursor: not-allowed;
-}
-
-/* Sans, unlike the card and trash titles it is otherwise built like. Those
-   name a piece of writing; this names a folder on disk, and it sits among the
-   sans of the formats beside it. */
-.recent__name {
-	font-size: 0.9375rem;
-	line-height: 1.3;
-	font-weight: 500;
-	overflow-wrap: anywhere;
-}
-
-.recent__size {
-	font-size: 0.75rem;
-	font-variant-numeric: tabular-nums;
-	color: var(--text-dim);
-}
-
-/* The quietest line of the three: it is there to tell two projects of the same
-   name apart, not to be read every time. Mono, because it is a path and reads
-   as one. */
-.recent__path {
-	font-family: var(--font-mono);
-	font-size: 0.6875rem;
-	color: var(--text-faint);
-	overflow-wrap: anywhere;
-}
-
-/* The question a delete asks, standing where the row it is about was. Nothing
-   above or below it moves while it is on screen. */
+/* The question a delete asks, standing where the book it is about was. */
 .recents__ask {
 	display: flex;
 	flex-direction: column;
@@ -7111,6 +7252,7 @@ button.compare__pick:focus-visible {
 
 .recents__answers {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 0.5rem;
 }
 

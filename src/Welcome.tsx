@@ -11,7 +11,10 @@ import type {
 	Theme,
 } from "./types";
 import { AccountChip } from "./Account";
+import { useCoverImage } from "./Cover";
+import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
+import { coverFor } from "./lib/covers";
 import { contents } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
@@ -71,6 +74,106 @@ type Props = {
 	onTheme: (theme: Theme) => void;
 };
 
+/** One project standing on the Shelf. */
+function Book({
+	project,
+	busy,
+	onOpen,
+	onShow,
+	onForget,
+	onAsk,
+}: {
+	project: RecentSummary;
+	busy: boolean;
+	onOpen: () => void;
+	onShow: () => void;
+	onForget: () => void;
+	onAsk: () => void;
+}) {
+	const { src } = useCoverImage(project.root, project.cover ?? "", 0);
+	// A book nobody has named yet goes by its project's name, and so does one
+	// whose manifest could not be read.
+	const title = project.title?.trim() || project.name;
+
+	return (
+		<li className="shelf__book">
+			<button
+				type="button"
+				className="shelf__open"
+				disabled={busy}
+				onClick={onOpen}
+			>
+				{/* A wash of the title stands behind an image too, so the cover
+				    is never blank while one loads or if it cannot be read. */}
+				<span
+					className={
+						src === ""
+							? "shelf__cover"
+							: "shelf__cover shelf__cover--image"
+					}
+					style={{ background: coverFor(title) }}
+				>
+					{src !== "" && <img src={src} alt="" />}
+					<span className="shelf__title">{title}</span>
+					<span className="shelf__author">{project.author}</span>
+				</span>
+				{project.format !== null && (
+					<span className="shelf__format">
+						{COPY[project.format].name}
+					</span>
+				)}
+				<span className="shelf__meta">{size(project)}</span>
+			</button>
+
+			<Menu label={`Actions for ${title}`} icon="more-vertical">
+				{(close) => (
+					<>
+						{/* What tells two books of the same title apart. */}
+						<p className="menu__note shelf__path">{project.root}</p>
+
+						<span className="menu__rule" />
+
+						<MenuItem
+							onSelect={() => {
+								close();
+								onShow();
+							}}
+						>
+							Show in Files
+						</MenuItem>
+						<MenuItem
+							onSelect={() => {
+								close();
+								onForget();
+							}}
+						>
+							Remove from Aurora
+							<span className="menu__hint">
+								Leaves the files where they are
+							</span>
+						</MenuItem>
+
+						<span className="menu__rule" />
+
+						<MenuItem
+							danger
+							onSelect={() => {
+								close();
+								onAsk();
+							}}
+						>
+							Delete project…
+							<span className="menu__hint">
+								Moves the whole folder to the trash
+							</span>
+						</MenuItem>
+					</>
+				)}
+			</Menu>
+		</li>
+	);
+}
+
 export default function Welcome({
 	notice,
 	onOpened,
@@ -82,14 +185,17 @@ export default function Welcome({
 }: Props) {
 	// Seeded once; the notice describes how this screen was reached.
 	const [reason, setReason] = useState(notice);
+	const [view, setView] = useState<"shelf" | "new">("shelf");
 	const [stage, setStage] = useState<"format" | "details">("format");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [formats, setFormats] = useState<FormatOption[]>([]);
 	const [name, setName] = useState("");
 	const [parent, setParent] = useState<string | null>(null);
-	const [recents, setRecents] = useState<RecentSummary[]>([]);
-	// The project whose row has turned into a question. One at a time: the
-	// question stands where the row was, so two of them could not both.
+	// Null until the list arrives. Counting every project's words takes a
+	// moment, and the empty Shelf must not flash up in front of a full one.
+	const [recents, setRecents] = useState<RecentSummary[] | null>(null);
+	// The project whose book has turned into a question. One at a time: the
+	// question stands where the book was, so two of them could not both.
 	const [asking, setAsking] = useState<string | null>(null);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 
@@ -110,6 +216,13 @@ export default function Welcome({
 			.then(setRecents)
 			.catch(() => setRecents([]));
 	}, []);
+
+	function startNew() {
+		setStage("format");
+		setView("new");
+		setReason(null);
+		setStatus({ kind: "idle" });
+	}
 
 	async function chooseFolder() {
 		const picked = await open({
@@ -176,7 +289,7 @@ export default function Welcome({
 		try {
 			await invoke(command, { root });
 			setRecents((list) =>
-				list.filter((project) => project.root !== root),
+				(list ?? []).filter((project) => project.root !== root),
 			);
 			setAsking(null);
 			setStatus({ kind: "idle" });
@@ -188,6 +301,7 @@ export default function Welcome({
 	return (
 		<div className="welcome">
 			<div className="welcome__bar">
+				<span className="welcome__name">Aurora</span>
 				<ThemeToggle
 					theme={theme}
 					onTheme={onTheme}
@@ -200,9 +314,11 @@ export default function Welcome({
 				/>
 			</div>
 
-			<section className="welcome__columns">
-				<div className="welcome__main">
-					<h1 className="welcome__title">Aurora</h1>
+			{view === "new" ? (
+				<section className="shelf">
+					<div className="shelf__head">
+						<h1 className="shelf__heading">New project</h1>
+					</div>
 
 					{stage === "format" ? (
 						<>
@@ -248,17 +364,27 @@ export default function Welcome({
 								))}
 							</fieldset>
 
-							<button
-								type="button"
-								className="welcome__create"
-								disabled={chosen === null || busy}
-								onClick={() => {
-									setStage("details");
-									setReason(null);
-								}}
-							>
-								Continue
-							</button>
+							<div className="setup__actions">
+								<button
+									type="button"
+									className="welcome__create"
+									disabled={chosen === null || busy}
+									onClick={() => setStage("details")}
+								>
+									Continue
+								</button>
+								<button
+									type="button"
+									className="welcome__back"
+									disabled={busy}
+									onClick={() => {
+										setView("shelf");
+										setStatus({ kind: "idle" });
+									}}
+								>
+									Back
+								</button>
+							</div>
 						</>
 					) : (
 						chosen && (
@@ -337,22 +463,63 @@ export default function Welcome({
 							</>
 						)
 					)}
-				</div>
+				</section>
+			) : (
+				<section className="shelf">
+					<div className="shelf__head">
+						<div>
+							<h1 className="shelf__heading">Your shelf</h1>
+							{recents !== null && recents.length > 0 && (
+								<p className="shelf__count">
+									{recents.length === 1
+										? "1 book"
+										: `${recents.length.toLocaleString()} books`}
+								</p>
+							)}
+						</div>
+						<div className="shelf__actions">
+							<button
+								type="button"
+								className="shelf__folder"
+								disabled={busy}
+								onClick={() => void browseForProject()}
+							>
+								Open another folder…
+							</button>
+							<button
+								type="button"
+								className="welcome__create"
+								disabled={busy}
+								onClick={startNew}
+							>
+								New project
+							</button>
+						</div>
+					</div>
 
-				{/* Outside the stage, so choosing a format never takes the
-				    writer's own projects off the screen. */}
-				<aside className="opening">
-					<h2 className="opening__title">Your projects</h2>
+					{recents !== null && recents.length === 0 && (
+						<div className="shelf__empty">
+							<button
+								type="button"
+								className="shelf__ghost"
+								aria-label="New project"
+								disabled={busy}
+								onClick={startNew}
+							>
+								<Icon name="plus" />
+							</button>
+							<p>
+								Nothing here yet. Start a book, or open a folder
+								you already write in.
+							</p>
+						</div>
+					)}
 
-					{recents.length === 0 ? (
-						<p className="opening__none">
-							Nothing has been opened yet.
-						</p>
-					) : (
-						<ul className="recents">
+					{recents !== null && recents.length > 0 && (
+						<ul className="shelf__books">
 							{recents.map((project) =>
 								asking === project.root ? (
-									// The question stands where the row was, so
+									// The question stands where the book was, so
 									// nothing else on the screen moves while it
 									// is being answered.
 									<li
@@ -389,97 +556,30 @@ export default function Welcome({
 										</div>
 									</li>
 								) : (
-									<li
+									<Book
 										key={project.root}
-										className="recents__item"
-									>
-										<button
-											type="button"
-											className="recent"
-											disabled={busy}
-											onClick={() =>
-												void openProject(project.root)
-											}
-										>
-											<span className="recent__name">
-												{project.name}
-											</span>
-											<span className="recent__size">
-												{size(project)}
-											</span>
-											<span className="recent__path">
-												{project.root}
-											</span>
-										</button>
-
-										<Menu
-											label={`Actions for ${project.name}`}
-											icon="more-vertical"
-										>
-											{(close) => (
-												<>
-													<MenuItem
-														onSelect={() => {
-															close();
-															void showInFiles(
-																project.root,
-															);
-														}}
-													>
-														Show in Files
-													</MenuItem>
-													<MenuItem
-														onSelect={() => {
-															close();
-															void drop(
-																"forget_project",
-																project.root,
-															);
-														}}
-													>
-														Remove from Aurora
-														<span className="menu__hint">
-															Leaves the files
-															where they are
-														</span>
-													</MenuItem>
-
-													<span className="menu__rule" />
-
-													<MenuItem
-														danger
-														onSelect={() => {
-															close();
-															setAsking(
-																project.root,
-															);
-														}}
-													>
-														Delete project…
-														<span className="menu__hint">
-															Moves the whole
-															folder to the trash
-														</span>
-													</MenuItem>
-												</>
-											)}
-										</Menu>
-									</li>
+										project={project}
+										busy={busy}
+										onOpen={() =>
+											void openProject(project.root)
+										}
+										onShow={() =>
+											void showInFiles(project.root)
+										}
+										onForget={() =>
+											void drop(
+												"forget_project",
+												project.root,
+											)
+										}
+										onAsk={() => setAsking(project.root)}
+									/>
 								),
 							)}
 						</ul>
 					)}
-
-					<button
-						type="button"
-						className="welcome__back"
-						disabled={busy}
-						onClick={() => void browseForProject()}
-					>
-						Open another folder…
-					</button>
-				</aside>
-			</section>
+				</section>
+			)}
 
 			<p
 				className={
