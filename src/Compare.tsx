@@ -579,7 +579,7 @@ export default function Compare({
 				</div>
 			</nav>
 
-			<div className="compare__main">
+			<div className="compare__work">
 				{whole && changes !== null && (
 					<ul className="compare__changes" aria-label="What changed">
 						{/* One command puts back both, as they share the manifest. */}
@@ -642,7 +642,7 @@ export default function Compare({
 						detail={
 							a === undefined
 								? ""
-								: `${byDay([a], today)[0].heading} ${timeOfDay(a.at)} · ${words(prose(before)).toLocaleString()} words`
+								: `${byDay([a], today)[0].heading} ${timeOfDay(a.at)}, ${words(prose(before)).toLocaleString()} words`
 						}
 						side="then"
 						fields={fieldsOf(before, "then")}
@@ -662,12 +662,12 @@ export default function Compare({
 						letter="B"
 						title="Now"
 						detail={[
-							"unsaved",
+							"Not in a checkpoint yet",
 							`${words(prose(now)).toLocaleString()} words`,
 							counts(added, removed),
 						]
 							.filter((part) => part !== "")
-							.join(" · ")}
+							.join(", ")}
 						side="now"
 						fields={fieldsOf(now, "now")}
 						body={sides.b}
@@ -725,79 +725,84 @@ export default function Compare({
 					</Column>
 				</div>
 
-				<div className="compare__foot">
-					<span className="compare__count">
-						{found.length === 1
-							? "1 difference"
-							: `${found.length.toLocaleString()} differences`}
-					</span>
-					<span aria-hidden="true">·</span>
-					<button
-						type="button"
-						className="compare__step"
-						disabled={found.length === 0}
-						onClick={() => go(0)}
-					>
-						first
-					</button>
-					<span aria-hidden="true">·</span>
-					<button
-						type="button"
-						className="compare__step"
-						disabled={found.length === 0}
-						onClick={() =>
-							go(
-								current === null
-									? 0
-									: (current + 1) % found.length,
-							)
-						}
-					>
-						next
-					</button>
-					<span aria-hidden="true">·</span>
-					<button
-						type="button"
-						className="compare__step"
-						disabled={asked === null || current === null}
-						onClick={() => {
-							if (current !== null) {
-								backOne(current);
+				<div className="compare__end">
+					<div className="compare__steps">
+						<span className="compare__count">
+							{current !== null
+								? `${(current + 1).toLocaleString()} of ${found.length.toLocaleString()} differences`
+								: found.length === 1
+									? "1 difference"
+									: `${found.length.toLocaleString()} differences`}
+						</span>
+						<button
+							type="button"
+							className="quiet"
+							disabled={found.length === 0}
+							onClick={() => go(0)}
+						>
+							First
+						</button>
+						<button
+							type="button"
+							className="quiet"
+							disabled={found.length === 0}
+							onClick={() =>
+								go(
+									current === null
+										? 0
+										: (current + 1) % found.length,
+								)
 							}
-						}}
-					>
-						put this one back
-					</button>
-					{open !== null &&
-						texts !== null &&
-						texts.then !== null &&
-						canTry(open.trail) && (
-							<button
-								type="button"
-								className="compare__put"
-								disabled={asked === null || merging}
-								onClick={() => void openTake(open.id)}
-							>
-								Open as a take
-							</button>
-						)}
-					<PutBack
-						className="compare__put"
-						disabled={asked === null}
-						removes={
-							open === null ? removesEverything : removes(open.id)
-						}
-						onPutBack={
-							open === null
-								? backEverything
-								: () => backDocument(open.id)
-						}
-						onRefused={refuse}
-					>
-						{open === null
-							? "Put back everything"
-							: "Put back this document"}
-					</PutBack>
+						>
+							Next
+						</button>
+						<button
+							type="button"
+							className="quiet"
+							disabled={asked === null || current === null}
+							onClick={() => {
+								if (current !== null) {
+									backOne(current);
+								}
+							}}
+						>
+							Put this one back
+						</button>
+					</div>
+					<div className="compare__acts">
+						{open !== null &&
+							texts !== null &&
+							texts.then !== null &&
+							canTry(open.trail) && (
+								<button
+									type="button"
+									className="compare__take"
+									disabled={asked === null || merging}
+									onClick={() => void openTake(open.id)}
+								>
+									Open as a take
+								</button>
+							)}
+						<PutBack
+							className="compare__put-back"
+							disabled={asked === null}
+							removes={
+								open === null
+									? removesEverything
+									: removes(open.id)
+							}
+							onPutBack={
+								open === null
+									? backEverything
+									: () => backDocument(open.id)
+							}
+							onRefused={refuse}
+						>
+							{open === null
+								? "Put back everything"
+								: "Put back this document"}
+						</PutBack>
+					</div>
 					{/* A message takes the note's line, so it moves nothing. */}
 					<p
 						className={
@@ -888,20 +893,21 @@ function Change({
 }) {
 	const body = (
 		<>
-			{name !== undefined && (
-				<span className="compare__change-name">{name}</span>
-			)}
+			{name}
 			<span className="compare__what">{what}</span>
 		</>
 	);
 	return (
 		<li className="compare__change">
 			{picked === null ? (
-				<div className="compare__pick">{body}</div>
+				<div className="compare__pick" title={what}>
+					{body}
+				</div>
 			) : (
 				<button
 					type="button"
 					className="compare__pick"
+					title={what}
 					aria-pressed={picked}
 					onClick={onPick}
 				>
@@ -910,7 +916,7 @@ function Change({
 			)}
 			{onPutBack !== undefined && (
 				<PutBack
-					className="compare__step compare__change-back"
+					className="quiet compare__change-back"
 					removes={removes}
 					onPutBack={onPutBack}
 					onRefused={onRefused}

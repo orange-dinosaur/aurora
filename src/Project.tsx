@@ -1508,7 +1508,7 @@ export default function Project({
 						<>
 							<button
 								type="button"
-								className="titlebar__quiet"
+								className="quiet"
 								onClick={leaveCompare}
 							>
 								<Icon name="chevron-left" />
@@ -1518,7 +1518,7 @@ export default function Project({
 								<button
 									ref={checkpointsButton}
 									type="button"
-									className="titlebar__quiet"
+									className="quiet"
 									aria-expanded={checkpoints}
 									onClick={() =>
 										setCheckpoints((open) => !open)
