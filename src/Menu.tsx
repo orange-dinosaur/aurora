@@ -160,6 +160,7 @@ export default function Menu({
 export function MenuItem({
 	danger,
 	disabled,
+	autoFocus,
 	checked,
 	depth,
 	onSelect,
@@ -167,6 +168,7 @@ export function MenuItem({
 }: {
 	danger?: boolean;
 	disabled?: boolean;
+	autoFocus?: boolean;
 	/** Given only in a menu that picks one of several. */
 	checked?: boolean;
 	/** How far in to set it, for a menu that lists a tree. */
@@ -188,6 +190,7 @@ export function MenuItem({
 					: ({ "--depth": depth } as CSSProperties)
 			}
 			disabled={disabled}
+			autoFocus={autoFocus}
 			onClick={onSelect}
 		>
 			{children}

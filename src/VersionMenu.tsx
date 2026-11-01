@@ -121,30 +121,22 @@ export default function VersionMenu({
 	if (doing.kind === "deleting") {
 		return (
 			<div className="version__ask">
-				<p className="version__ask-text">
+				<p className="menu__note">
 					{unmergedQuestion(
 						doing.version.name,
 						doing.version.unmerged,
 					)}
 				</p>
-				<span className="version__ask-buttons">
-					{/* Focused rather than Delete, so Enter cannot lose work. */}
-					<button
-						type="button"
-						className="sprint__stop"
-						autoFocus
-						onClick={back}
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						className="sprint__stop version__danger"
-						onClick={() => void remove(doing.version.slug)}
-					>
-						Delete
-					</button>
-				</span>
+				{/* Focused rather than Delete, so Enter cannot lose work. */}
+				<MenuItem autoFocus onSelect={back}>
+					Cancel
+				</MenuItem>
+				<MenuItem
+					danger
+					onSelect={() => void remove(doing.version.slug)}
+				>
+					Delete
+				</MenuItem>
 			</div>
 		);
 	}
@@ -161,7 +153,7 @@ export default function VersionMenu({
 					}
 				}}
 			>
-				<p className="version__ask-text">
+				<p className="menu__note">
 					{current.name} has changes that aren't in a checkpoint.
 				</p>
 				<input
@@ -172,24 +164,17 @@ export default function VersionMenu({
 					placeholder="What changed"
 					onChange={(event) => setWords(event.target.value)}
 				/>
-				<span className="version__ask-buttons">
-					<button
-						type="button"
-						className="sprint__stop"
-						onClick={close}
-					>
-						Cancel
-					</button>
-					<button
-						type="submit"
-						className="sprint__go"
-						disabled={words.trim() === ""}
-					>
-						{doing.merge
-							? "Add checkpoint and merge"
-							: "Add checkpoint and switch"}
-					</button>
-				</span>
+				<MenuItem onSelect={close}>Cancel</MenuItem>
+				<button
+					type="submit"
+					role="menuitem"
+					className="menu__item menu__go"
+					disabled={words.trim() === ""}
+				>
+					{doing.merge
+						? "Add checkpoint and merge"
+						: "Add checkpoint and switch"}
+				</button>
 			</form>
 		);
 	}
@@ -205,7 +190,7 @@ export default function VersionMenu({
 	if (doing.kind === "picking") {
 		return (
 			<>
-				<p className="version__note">
+				<p className="menu__note">
 					Which version goes into {current.name}?
 				</p>
 				{others.map((version) => (
@@ -213,7 +198,6 @@ export default function VersionMenu({
 						key={version.slug}
 						onSelect={() => pick(version.slug, true)}
 					>
-						<span className="menu__tick" />
 						{version.name}
 					</MenuItem>
 				))}
@@ -259,9 +243,6 @@ export default function VersionMenu({
 								pick(version.slug, false);
 							}}
 						>
-							<span className="menu__tick">
-								{version.current && <Icon name="check" />}
-							</span>
 							{version.name}
 						</MenuItem>
 						{(!version.fixed || !version.current) && (
@@ -345,7 +326,7 @@ export default function VersionMenu({
 						New version…
 					</MenuItem>
 					{kept === false && (
-						<p className="version__note">
+						<p className="menu__note">
 							Add a first checkpoint to start another version.
 						</p>
 					)}
@@ -356,7 +337,7 @@ export default function VersionMenu({
 						Merge into {current.name}…
 					</MenuItem>
 					{merging && (
-						<p className="version__note">
+						<p className="menu__note">
 							Settle or abort the merge under way first.
 						</p>
 					)}

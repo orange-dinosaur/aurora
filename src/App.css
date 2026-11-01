@@ -1035,24 +1035,10 @@ body,
 .version__ask {
 	display: flex;
 	flex-direction: column;
-	gap: 0.5rem;
-	width: 17rem;
 }
 
-.version__ask-text {
-	margin: 0;
-	white-space: normal;
-}
-
-.version__ask-buttons {
-	display: flex;
-	justify-content: flex-end;
-	gap: 0.4rem;
-}
-
-/* Two classes, to outrank the sprint's button it borrows its shape from. */
-.version__ask .version__danger {
-	color: var(--danger);
+.version__ask .namefield__input {
+	margin-block: var(--space-xxs);
 }
 
 /* The rename and delete buttons sit over the end of a version's row and show
@@ -1063,8 +1049,9 @@ body,
 	flex-direction: column;
 }
 
+/* Room for all three buttons, so a long name stops short of them. */
 .version__row .menu__item {
-	padding-right: 3.5rem;
+	padding-right: 64px;
 }
 
 .version__row-actions {
@@ -1083,6 +1070,22 @@ body,
 	opacity: 1;
 }
 
+.version__row-actions .menu__trigger {
+	width: 18px;
+	height: 18px;
+}
+
+/* No larger than the words beside them, so the names carry the row. */
+.version__row-actions svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* Weight rather than a tick, so every row in the menu starts at one edge. */
+.version__row .menu__item[aria-checked="true"] {
+	font-weight: 600;
+}
+
 /* A menu row's size rather than the sidebar's, with room kept beneath for
    what Rust says about the name, so a refusal does not cover the next row. */
 .version__field {
@@ -1096,16 +1099,26 @@ body,
 	bottom: 0.1rem;
 }
 
+/* A line to write on rather than a box, level with the words in the rows. */
 .binder__menu--version .namefield__input {
+	width: calc(100% - 2 * var(--space-xs));
 	height: 24px;
-	padding: 0 0.5rem;
-	font-size: inherit;
+	margin-inline: var(--space-xs);
+	padding: 0;
+	font: inherit;
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--graphic-faint);
+	border-radius: 0;
 }
 
-.version__note {
-	max-width: 14rem;
-	margin: 0.2rem 0.5rem 0;
-	color: var(--text-dim);
+.binder__menu--version .namefield__input:focus {
+	outline: none;
+	border-bottom-color: var(--accent-text);
+	box-shadow: 0 1px 0 var(--accent-text);
+}
+
+.binder__menu--version .menu__note {
 	white-space: normal;
 }
 
@@ -2008,6 +2021,16 @@ body,
 	width: fit-content;
 	max-width: calc(100% - var(--space-xxs));
 	margin: var(--space-xs) 0 0 var(--space-xxs);
+}
+
+/* In scale with the small chip that opens it, and inside the binder's edge. */
+.menu.binder__menu--version .menu__items {
+	min-width: 190px;
+	font-size: 12px;
+}
+
+.binder__menu--version .menu__item {
+	padding-block: 3px;
 }
 
 .binder__version {
@@ -5696,12 +5719,17 @@ button.compare__pick:focus-visible {
 	height: 13px;
 }
 
-/* What the menu says while it has nothing to list yet. */
+/* What the menu says or asks, rather than what it offers. */
 .menu__note {
 	margin: 0;
 	padding: 0.3rem 0.5rem;
 	font: var(--text-caption);
 	color: var(--text-dim);
+}
+
+/* The row a question ends on. */
+.menu__go {
+	font-weight: 600;
 }
 
 .menu__item:hover:not(:disabled) {
