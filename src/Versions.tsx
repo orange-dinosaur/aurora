@@ -471,7 +471,13 @@ export default function Versions({
 									key={checkpoint.id}
 									checkpoint={checkpoint}
 									selected={selected === checkpoint.id}
-									onSelect={() => setSelected(checkpoint.id)}
+									onSelect={() =>
+										setSelected(
+											selected === checkpoint.id
+												? null
+												: checkpoint.id,
+										)
+									}
 									onCompare={
 										noDocument
 											? null
@@ -668,10 +674,9 @@ function Row({
 			<button
 				type="button"
 				className="versions__pick"
-				aria-pressed={selected}
+				aria-expanded={selected}
 				onClick={onSelect}
 			>
-				<span className="versions__mark" aria-hidden="true" />
 				<span className="versions__text">
 					<span className="versions__name">{checkpoint.message}</span>
 					<span className="versions__detail">
