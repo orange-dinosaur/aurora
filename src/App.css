@@ -1550,6 +1550,15 @@ body,
 	width: 240px;
 }
 
+.titlebar__menu--session > .quiet {
+	font-size: 12px;
+}
+
+.titlebar__menu--session > .quiet svg {
+	width: 12px;
+	height: 12px;
+}
+
 .titlebar__right {
 	flex: none;
 	display: flex;
@@ -1584,6 +1593,11 @@ body,
 		background-color 120ms var(--ease-open);
 }
 
+.titlebar__button .icon {
+	width: 14px;
+	height: 14px;
+}
+
 .titlebar__button:hover:not(:disabled) {
 	color: var(--text);
 	background: var(--bg-hover);
@@ -1598,8 +1612,8 @@ body,
 .account__chip {
 	display: grid;
 	place-items: center;
-	width: 26px;
-	height: 26px;
+	width: 24px;
+	height: 24px;
 	margin-left: var(--space-xxs);
 	padding: 0;
 	color: var(--accent-text);
@@ -1621,8 +1635,8 @@ body,
 }
 
 .account__chip svg {
-	width: 15px;
-	height: 15px;
+	width: 13px;
+	height: 13px;
 }
 
 /* A person in a coral circle, signed in or not. */
