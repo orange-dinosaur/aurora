@@ -1590,26 +1590,19 @@ body,
 	cursor: default;
 }
 
-/* There is nobody signed in and no way to sign in yet, so the chip is drawn as
-   an invitation rather than as a name. */
+/* A person in a coral circle, signed in or not. The menu says the rest. */
 .account__chip {
-	display: flex;
-	align-items: center;
-	gap: 0.45rem;
-	height: 30px;
-	padding: 0 0.5rem 0 0.2rem;
-	font: inherit;
-	font-size: 0.8125rem;
-	font-weight: 500;
-	letter-spacing: normal;
-	line-height: normal;
-	text-transform: none;
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	margin-left: var(--space-xxs);
+	padding: 0;
 	color: var(--accent-text);
 	background: var(--accent-wash);
 	border: 0;
-	border-radius: var(--radius-pill);
+	border-radius: 50%;
 	cursor: pointer;
-	white-space: nowrap;
 }
 
 .account__chip:hover,
@@ -1623,10 +1616,9 @@ body,
 	outline-offset: 2px;
 }
 
-/* The chevron, and not the icon inside the ring. */
-.account__chip > svg {
-	width: 14px;
-	height: 14px;
+.account__chip svg {
+	width: 15px;
+	height: 15px;
 }
 
 /* A person in a coral circle, signed in or not. */
@@ -1653,13 +1645,8 @@ body,
    there. */
 @media (max-width: 620px) {
 	.titlebar__label,
-	.titlebar__today,
-	.account__chip > svg {
+	.titlebar__today {
 		display: none;
-	}
-
-	.account__chip {
-		padding: 0 0.2rem;
 	}
 }
 
@@ -1843,40 +1830,10 @@ body,
 	z-index: 1;
 	display: flex;
 	align-items: center;
-	gap: 0.35rem;
-	height: 44px;
-	padding: 0 1rem;
-	background: var(--bg-chrome);
-	border-bottom: 1px solid var(--border);
-}
-
-.profile__out {
-	display: flex;
-	align-items: center;
-	gap: 0.35rem;
-	height: 26px;
-	padding: 0 0.5rem 0 0.35rem;
-	margin-left: -0.35rem;
-	font: inherit;
-	font-size: 0.8125rem;
-	letter-spacing: normal;
-	line-height: normal;
-	text-transform: none;
-	color: var(--text-dim);
-	background: none;
-	border: 0;
-	border-radius: var(--radius-xs);
-	cursor: pointer;
-}
-
-.profile__out:hover {
-	color: var(--text);
-	background: var(--bg-hover);
-}
-
-.profile__out:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 1px;
+	gap: var(--space-xs);
+	min-height: 44px;
+	padding: 0 var(--space-sm);
+	background: var(--bg);
 }
 
 /* Pushed to the far end, away from the way back. */
@@ -1886,18 +1843,20 @@ body,
 
 .profile__panel {
 	width: 100%;
-	max-width: 720px;
+	max-width: 660px;
 	margin: 0 auto;
-	padding: 2.5rem 1.5rem 4rem;
+	padding: var(--space-md) var(--space-lg) 64px;
 }
 
 .profile__who {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 1.5rem;
+	gap: var(--space-md);
+	margin-bottom: var(--space-lg);
 }
 
-/* The same dashed ring the chip wears, at the size the page gives it. */
+/* The coral circle the chip wears, at the size the page gives it. */
 .profile__avatar {
 	flex: none;
 	display: flex;
@@ -1905,33 +1864,30 @@ body,
 	justify-content: center;
 	width: 72px;
 	height: 72px;
-	color: var(--text-faint);
-	background: var(--bg-card);
-	border: 1px dashed var(--border-strong);
+	color: var(--accent-text);
+	background: var(--accent-wash);
 	border-radius: 50%;
 }
 
 .profile__avatar svg {
-	width: 28px;
-	height: 28px;
+	width: 34px;
+	height: 34px;
 }
 
 .profile__names {
+	flex: 1 1 220px;
 	min-width: 0;
 }
 
 .profile__name {
 	margin: 0;
-	font-family: var(--font-page);
-	font-size: 2rem;
-	font-weight: 500;
-	letter-spacing: -0.02em;
-	line-height: 1.15;
+	font: var(--text-display);
+	letter-spacing: var(--tracking-display);
 }
 
 .profile__where {
-	margin: 0.4rem 0 0;
-	font-size: 0.875rem;
+	margin: 2px 0 0;
+	font: var(--text-ui);
 	color: var(--text-dim);
 }
 
@@ -1939,15 +1895,15 @@ body,
    window, and a column of them reads better than four slivers. */
 .profile__figures {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-	gap: 0.75rem;
-	margin: 2.5rem 0 0;
+	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+	gap: var(--space-xs);
+	margin-bottom: var(--space-xl);
 }
 
 .profile__figure {
-	padding: 0.9rem 1rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
+	padding: var(--space-sm);
+	background: var(--bg-chrome);
+	border: var(--hairline);
 	border-radius: var(--radius-md);
 }
 
@@ -1955,96 +1911,63 @@ body,
    claim to be a number. */
 .profile__number {
 	margin: 0;
-	font-size: 1.25rem;
-	font-weight: 500;
-	font-variant-numeric: tabular-nums;
+	font: var(--text-heading);
+	letter-spacing: var(--tracking-heading);
 	color: var(--text-faint);
 }
 
 .profile__legend {
-	margin: 0.15rem 0 0;
-	font-size: 0.75rem;
-	color: var(--text-faint);
-}
-
-.profile__heading {
-	margin: 2.75rem 0 0.875rem;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	color: var(--text-faint);
-}
-
-.profile__card {
-	display: grid;
-	gap: 1rem;
-	padding: 1.25rem 1.25rem 1.4rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-}
-
-.profile__field {
-	display: grid;
-	gap: 0.35rem;
-}
-
-.profile__label {
-	font-size: 0.8125rem;
+	margin: 2px 0 0;
+	font: var(--text-caption);
 	color: var(--text-dim);
 }
 
-.profile__input {
-	width: 100%;
-	height: 34px;
-	padding: 0 0.6rem;
-	font: inherit;
-	font-size: 0.875rem;
-	color: var(--text);
-}
-
-.profile__input:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 1px;
-}
-
-.profile__input:disabled {
-	color: var(--text-faint);
-	cursor: default;
+.profile__heading {
+	margin: 0 0 var(--space-xxs);
+	font: var(--text-title);
 }
 
 .profile__row {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
-	gap: 1.5rem;
-	padding-top: 0.35rem;
+	gap: var(--space-xs) var(--space-lg);
+	padding: var(--space-xs) 0;
 }
 
-/* The outlined button the card and the header both carry. */
+.profile__label {
+	flex: 1 1 140px;
+	font: var(--text-ui);
+}
+
+.profile__input {
+	flex: 1 1 260px;
+	padding: 4px 0;
+	font: var(--text-ui);
+	color: var(--text);
+}
+
+.profile__input:disabled {
+	color: var(--text-faint);
+	border-bottom-color: var(--border);
+	cursor: default;
+}
+
+/* The outlined button the row and the header both carry. */
 .profile__quiet {
 	flex: none;
-	height: 30px;
-	padding: 0 0.75rem;
-	font: inherit;
-	font-size: 0.8125rem;
+	padding: 5px var(--space-sm);
+	font: var(--text-ui);
 	letter-spacing: normal;
-	line-height: normal;
 	text-transform: none;
 	color: var(--text);
 }
 
-.profile__who .profile__quiet {
-	align-self: flex-start;
-	margin-left: auto;
-}
-
 .profile__note {
-	margin: 1.25rem 0 0;
-	font-size: 0.8125rem;
-	line-height: 1.6;
-	color: var(--text-faint);
+	margin: var(--space-md) 0 0;
+	font: var(--text-caption);
+	color: var(--text-dim);
 }
 
 .profile__foot {
@@ -2052,26 +1975,17 @@ body,
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
-	gap: 1.5rem;
-	margin-top: 1.75rem;
-	padding-top: 1.5rem;
-	border-top: 1px solid var(--border);
+	gap: var(--space-xs) var(--space-md);
+	margin-top: var(--space-md);
 }
 
 .profile__foot .profile__note {
 	margin: 0;
 }
 
-.profile__out-of {
-	flex: none;
-	height: 32px;
-	padding: 0 0.85rem;
-	font: inherit;
-	font-size: 0.8125rem;
-	letter-spacing: normal;
-	line-height: normal;
-	text-transform: none;
-	color: var(--danger);
+/* Out by its own padding, so its words stand on the column's right edge. */
+.profile__foot .quiet {
+	margin-right: calc(var(--space-xs) * -1);
 }
 
 /* Only there to be hidden as one: its children stand on the project's grid. */
@@ -2181,6 +2095,7 @@ body,
 
 .project__empty {
 	margin: 3rem 0 0;
+	font: var(--text-ui);
 	color: var(--text-dim);
 	text-align: center;
 }
@@ -8490,7 +8405,6 @@ button.compare__pick:focus-visible {
 }
 
 .profile__quiet,
-.profile__out-of,
 .retag__do,
 .merge-banner__abort,
 .merge-spot__choice,
@@ -8509,7 +8423,6 @@ button.compare__pick:focus-visible {
 }
 
 .profile__quiet:hover:not(:disabled),
-.profile__out-of:hover:not(:disabled),
 .retag__do:hover:not(:disabled),
 .merge-banner__abort:hover:not(:disabled),
 .merge-spot__choice:hover:not(:disabled),
@@ -8524,7 +8437,6 @@ button.compare__pick:focus-visible {
 }
 
 .profile__quiet:disabled,
-.profile__out-of:disabled,
 .retag__do:disabled,
 .merge-banner__abort:disabled,
 .merge-spot__choice:disabled,
@@ -8552,7 +8464,6 @@ button.compare__pick:focus-visible {
 .overview__new:active:not(:disabled),
 .update__action:active:not(:disabled),
 .profile__quiet:active:not(:disabled),
-.profile__out-of:active:not(:disabled),
 .retag__do:active:not(:disabled),
 .merge-banner__abort:active:not(:disabled),
 .merge-spot__choice:active:not(:disabled),
@@ -8566,7 +8477,6 @@ button.compare__pick:focus-visible {
 	transform: var(--press);
 }
 
-.profile__input,
 .changes__message,
 .field__box,
 .field__line,
@@ -8584,7 +8494,8 @@ button.compare__pick:focus-visible {
 .editor__find-input,
 .editor__aim-input,
 .settings__field,
-.login__input {
+.login__input,
+.profile__input {
 	background: none;
 	border: 0;
 	border-bottom: 1px solid var(--graphic-faint);

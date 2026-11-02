@@ -28,17 +28,7 @@ export function AccountChip({
 			label={SIGNED_IN ? "Account" : "Not signed in"}
 			wrapper="titlebar__menu titlebar__menu--account"
 			className="account__chip"
-			trigger={
-				<>
-					<span className="account__avatar">
-						<Icon name="user" />
-					</span>
-					<span className="titlebar__label">
-						{SIGNED_IN ? "Account" : "Sign in"}
-					</span>
-					<Icon name="chevron-down" />
-				</>
-			}
+			trigger={<Icon name="user" />}
 		>
 			{(close) => (
 				<>

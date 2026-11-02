@@ -184,6 +184,11 @@ function App() {
 			)}
 			{profile && (
 				<Profile
+					back={
+						boot.kind === "project"
+							? "Back to writing"
+							: "Back to the Shelf"
+					}
 					onBack={() => setProfile(false)}
 					theme={preferences.theme}
 					onTheme={(theme) => save({ ...preferences, theme })}
