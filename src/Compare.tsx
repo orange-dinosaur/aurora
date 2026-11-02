@@ -462,18 +462,16 @@ export default function Compare({
 		<>
 			<nav
 				ref={list}
-				className={
-					floating ? "checkpoints checkpoints--open" : "checkpoints"
-				}
+				className={floating ? "sidelist sidelist--open" : "sidelist"}
 				aria-label="Checkpoints"
 			>
-				<div className="checkpoints__head">
-					<p className="checkpoints__of">Checkpoints of</p>
-					<h1 className="checkpoints__title">
+				<div className="sidelist__head">
+					<p className="sidelist__of">Checkpoints of</p>
+					<h1 className="sidelist__title">
 						{open === null ? "The whole project" : open.title}
 					</h1>
 					{open !== null && (
-						<p className="checkpoints__trail">
+						<p className="sidelist__trail">
 							{open.trail.join(" · ")}
 						</p>
 					)}
@@ -542,7 +540,7 @@ export default function Compare({
 					)}
 				</div>
 
-				<div className="checkpoints__list">
+				<div className="sidelist__list">
 					{days.map((day, index) => (
 						<section key={day.heading} className="versions__day">
 							<h2 className="versions__date">{day.heading}</h2>

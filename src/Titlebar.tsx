@@ -33,9 +33,9 @@ type Props = {
 	onSidebar: (open: boolean) => void;
 	/** The sidebar's button, which a floating sidebar treats as part of itself. */
 	sidebarButton: RefObject<HTMLButtonElement | null>;
-	/** Off during Compare, whose checkpoints stand where the sidebar stands. */
+	/** Off during Compare and Merge, whose lists stand where the sidebar stands. */
 	sidebarToggle: boolean;
-	/** The open tabs, Compare's way back, or nothing while Merge covers them. */
+	/** The open tabs, or the way back from Compare or Merge. */
 	tabs: ReactNode;
 	onSearch: () => void;
 	/** The writer's theme preference, which the header can move between two of. */

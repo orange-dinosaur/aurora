@@ -341,16 +341,16 @@ export default function Project({
 	const [floating, setFloating] = useState(false);
 	const sidebarButton = useRef<HTMLButtonElement>(null);
 	const sidebar = narrow ? floating : preferences.sidebar;
-	// Compare's list floats the same way, from its own button in the bar.
-	const [checkpoints, setCheckpoints] = useState(false);
-	const checkpointsButton = useRef<HTMLButtonElement>(null);
+	// Compare's and Merge's lists float the same way, from a button in the bar.
+	const [listOpen, setListOpen] = useState(false);
+	const listButton = useRef<HTMLButtonElement>(null);
 
 	useEffect(() => {
 		const query = window.matchMedia(NARROW);
 		function changed(event: MediaQueryListEvent) {
 			setNarrow(event.matches);
 			setFloating(false);
-			setCheckpoints(false);
+			setListOpen(false);
 		}
 
 		query.addEventListener("change", changed);
@@ -367,10 +367,6 @@ export default function Project({
 		pick: string | null;
 		slug: string | null;
 	} | null>(null);
-	function leaveCompare() {
-		setComparing(null);
-		setCheckpoints(false);
-	}
 	// The put back question while it waits for an answer.
 	const [asking, setAsking] = useState<{
 		names: string[];
@@ -385,6 +381,9 @@ export default function Project({
 	const [settling, setSettling] = useState<string | null>(null);
 	const [choices, setChoices] = useState<Record<string, Choices>>({});
 	const [sides, setSides] = useState<Sides>({});
+
+	// A floating list closes on any way in or out, and on a pick in Merge.
+	useEffect(() => setListOpen(false), [comparing, settling]);
 
 	async function readMerge() {
 		try {
@@ -1502,41 +1501,43 @@ export default function Project({
 					}
 				}}
 				sidebarButton={sidebarButton}
-				sidebarToggle={comparing === null}
+				sidebarToggle={!covered}
 				tabs={
-					comparing !== null ? (
+					covered ? (
 						<>
 							<button
 								type="button"
 								className="quiet"
-								onClick={leaveCompare}
+								onClick={() =>
+									comparing !== null
+										? setComparing(null)
+										: setSettling(null)
+								}
 							>
 								<Icon name="chevron-left" />
 								Back to writing
 							</button>
 							{narrow && (
 								<button
-									ref={checkpointsButton}
+									ref={listButton}
 									type="button"
 									className="quiet"
-									aria-expanded={checkpoints}
-									onClick={() =>
-										setCheckpoints((open) => !open)
-									}
+									aria-expanded={listOpen}
+									onClick={() => setListOpen((open) => !open)}
 								>
-									Checkpoints
+									{comparing !== null
+										? "Checkpoints"
+										: "To settle"}
 								</button>
 							)}
 						</>
 					) : (
-						!covered && (
-							<Tabs
-								tabs={tabs.map(strip)}
-								activeKey={activeKey}
-								onActivate={setActiveKey}
-								onClose={closeTab}
-							/>
-						)
+						<Tabs
+							tabs={tabs.map(strip)}
+							activeKey={activeKey}
+							onActivate={setActiveKey}
+							onClose={closeTab}
+						/>
 					)
 				}
 				onSearch={openSearch}
@@ -1545,7 +1546,12 @@ export default function Project({
 				onSettings={onSettings}
 				onLogin={onLogin}
 				onProfile={onProfile}
-				merging={merge?.merging ?? null}
+				// Merge's own list says this.
+				merging={
+					comparing === null && settling !== null
+						? null
+						: (merge?.merging ?? null)
+				}
 			/>
 
 			{comparing !== null && (
@@ -1561,13 +1567,13 @@ export default function Project({
 					fontSize={preferences.fontSize}
 					lineHeight={preferences.lineHeight}
 					merging={merge !== null}
-					floating={checkpoints}
-					onDismiss={() => setCheckpoints(false)}
-					opener={checkpointsButton}
+					floating={listOpen}
+					onDismiss={() => setListOpen(false)}
+					opener={listButton}
 					onScope={(versionsScope) =>
 						onPreferences({ ...preferences, versionsScope })
 					}
-					onBack={leaveCompare}
+					onBack={() => setComparing(null)}
 					onPutBack={putBack}
 				/>
 			)}
@@ -1584,6 +1590,9 @@ export default function Project({
 					}
 					sides={sides}
 					onSides={setSides}
+					floating={listOpen}
+					onDismiss={() => setListOpen(false)}
+					opener={listButton}
 					onBack={() => setSettling(null)}
 					onSettle={putBack}
 					onMergeChanged={readMerge}
