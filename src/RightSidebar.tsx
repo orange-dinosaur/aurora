@@ -158,6 +158,10 @@ export default function RightSidebar({
 	}, []);
 	useDismissal(open && overlay, panel, onClose, rail);
 
+	// Only a tile clicked with the mouse fades the panel in. It also mounts on
+	// launch, on leaving focus mode and on arriving at a document.
+	const [fading, setFading] = useState(false);
+
 	return (
 		<>
 			{open && (
@@ -166,6 +170,8 @@ export default function RightSidebar({
 					className="right-sidebar"
 					aria-label="About what is open"
 					style={{ width }}
+					data-fading={fading ? "" : undefined}
+					onTransitionEnd={() => setFading(false)}
 				>
 					<h2 className="right-sidebar__title">
 						{TABS.find(({ name }) => name === tab)?.label}
@@ -268,7 +274,14 @@ export default function RightSidebar({
 							aria-label={label}
 							aria-pressed={on}
 							title={label}
-							onClick={() => (on ? onClose() : onTab(name))}
+							onClick={(event) => {
+								setFading(!open && event.detail !== 0);
+								if (on) {
+									onClose();
+								} else {
+									onTab(name);
+								}
+							}}
 						>
 							<Icon name={icon} />
 						</button>

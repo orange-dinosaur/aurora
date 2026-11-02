@@ -111,10 +111,7 @@ export default function FolderRow({
 					aria-label={`${row.expanded ? "Collapse" : "Expand"} ${row.name}`}
 					onClick={onToggle}
 				>
-					<Icon
-						name={row.expanded ? "chevron-down" : "chevron-right"}
-						className="disclosure__glyph"
-					/>
+					<Icon name="chevron-down" className="disclosure__glyph" />
 				</button>
 			)}
 
