@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TrashEntry } from "./types";
 import { listTrash, purgeTrashEntry, restoreFromTrash } from "./documents";
-import { trashed } from "./cards";
+import { deliberate, trashed } from "./cards";
 import { when } from "./dates";
 import { failure } from "./errors";
 
@@ -53,7 +53,7 @@ export default function Trash({ root, reload, onChanged }: Props) {
 
 	if (status.kind === "busy" && entries.length === 0) {
 		return (
-			<div className="overview">
+			<div className="overview overview--sheet">
 				<header className="overview__header">
 					<h2 className="overview__title">Trash</h2>
 				</header>
@@ -63,13 +63,13 @@ export default function Trash({ root, reload, onChanged }: Props) {
 	}
 
 	return (
-		<div className="overview">
+		<div className="overview overview--sheet">
 			<header className="overview__header">
 				<div className="overview__heading">
 					<h2 className="overview__title">Trash</h2>
 					<p className="overview__count">
-						Deleted documents stay here until you empty them.
-						Nothing is removed from disk on its own.
+						Deleted documents stay here until you delete them for
+						good. Nothing is removed from disk on its own.
 					</p>
 				</div>
 			</header>
@@ -77,7 +77,7 @@ export default function Trash({ root, reload, onChanged }: Props) {
 			{entries.length === 0 ? (
 				<p className="overview__note">Nothing has been deleted.</p>
 			) : (
-				<ul className="trash">
+				<ul className="overview__rows">
 					{entries.map((entry) => (
 						<li key={entry.path} className="trashed">
 							<span className="trashed__what">
@@ -105,34 +105,36 @@ export default function Trash({ root, reload, onChanged }: Props) {
 									<>
 										<button
 											type="button"
-											className="trashed__action trashed__action--danger"
-											disabled={status.kind === "busy"}
-											onClick={() =>
-												void act(
-													purgeTrashEntry(
-														root,
-														entry.path,
-													),
-												)
-											}
-										>
-											Delete for good
-										</button>
-										<button
-											type="button"
-											className="trashed__action"
+											className="quiet"
 											onClick={() =>
 												setAsking({ kind: "no" })
 											}
 										>
 											Keep
 										</button>
+										<button
+											type="button"
+											className="quiet trashed__danger"
+											disabled={status.kind === "busy"}
+											onClick={(event) => {
+												if (deliberate(event.detail)) {
+													void act(
+														purgeTrashEntry(
+															root,
+															entry.path,
+														),
+													);
+												}
+											}}
+										>
+											Delete for good
+										</button>
 									</>
 								) : (
 									<>
 										<button
 											type="button"
-											className="trashed__action"
+											className="quiet"
 											disabled={status.kind === "busy"}
 											onClick={() =>
 												void act(
@@ -147,7 +149,7 @@ export default function Trash({ root, reload, onChanged }: Props) {
 										</button>
 										<button
 											type="button"
-											className="trashed__action trashed__action--danger"
+											className="quiet trashed__danger"
 											onClick={() =>
 												setAsking({
 													kind: "yes",

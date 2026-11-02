@@ -1,19 +1,45 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getSelection, $isRangeSelection } from "lexical";
 import { useEffect, useRef } from "react";
+import { inAField } from "./formatting";
 
 const MARK = "editor__focused";
 
 type Props = {
 	on: boolean;
+	/** Whether this is the tab being looked at, and so the one Escape answers. */
+	active: boolean;
+	onLeave: () => void;
 };
 
 // Marks the block the caret is in, so the stylesheet can dim the others. The
 // mark goes on the DOM element rather than into the document: which paragraph
 // is being written in right now is not part of what gets saved.
-export default function Focus({ on }: Props) {
+export default function Focus({ on, active, onLeave }: Props) {
 	const [editor] = useLexicalComposerContext();
 	const marked = useRef<HTMLElement | null>(null);
+
+	// Focus takes the frame away, so Escape is the way out with the dock hidden.
+	// Left to anything that had a use for the key first, such as the slash menu
+	// or Find, so closing those does not leave Focus as well.
+	useEffect(() => {
+		if (!on || !active) {
+			return;
+		}
+
+		function leave(event: KeyboardEvent) {
+			if (
+				event.key === "Escape" &&
+				!event.defaultPrevented &&
+				!inAField(event.target)
+			) {
+				onLeave();
+			}
+		}
+
+		window.addEventListener("keydown", leave);
+		return () => window.removeEventListener("keydown", leave);
+	}, [on, active, onLeave]);
 
 	useEffect(() => {
 		function mark(element: HTMLElement | null) {

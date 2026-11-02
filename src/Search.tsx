@@ -109,11 +109,13 @@ export default function Search({
 
 	// Asking again puts the caret back in the field with the last query
 	// selected, so a second Ctrl+Shift+F types over what is there rather than
-	// leaving the writer to clear it.
+	// leaving the writer to clear it. Coming back to the tab does the same.
 	useEffect(() => {
-		field.current?.focus();
-		field.current?.select();
-	}, [asked]);
+		if (active) {
+			field.current?.focus();
+			field.current?.select();
+		}
+	}, [asked, active]);
 
 	const results = useMemo(
 		() => (corpus.kind === "ready" ? search(documents, query) : null),
@@ -142,16 +144,19 @@ export default function Search({
 	}
 
 	return (
-		<section className="search">
-			<input
-				ref={field}
-				type="search"
-				className="search__field"
-				placeholder="Search this project"
-				aria-label="Search this project"
-				value={query}
-				onChange={(event) => setQuery(event.target.value)}
-			/>
+		<section className="overview overview--sheet search--page">
+			<label className="search__box">
+				<Icon name="search" />
+				<input
+					ref={field}
+					type="search"
+					className="search__field"
+					placeholder="Search this project"
+					aria-label="Search this project"
+					value={query}
+					onChange={(event) => setQuery(event.target.value)}
+				/>
+			</label>
 
 			{query.length < MIN_QUERY ? (
 				<p className="search__note">
@@ -169,7 +174,7 @@ export default function Search({
 			  results.unreadable.length === 0 ? (
 				<p className="search__note">Nothing found.</p>
 			) : (
-				<div className="search__results">
+				<div>
 					<ul className="search__groups">
 						{results.groups.map((group) => {
 							const open = !view.collapsed.has(group.id);
@@ -185,13 +190,7 @@ export default function Search({
 										aria-expanded={open}
 										onClick={() => collapse(group.id)}
 									>
-										<Icon
-											name={
-												open
-													? "chevron-down"
-													: "chevron-right"
-											}
-										/>
+										<Icon name="chevron-down" />
 										<span className="search__title">
 											{group.title}
 										</span>

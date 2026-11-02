@@ -132,6 +132,7 @@ export default function Find({
 	// anything else, and only until the writer types over what it put here.
 	const [reading, setReading] = useState<Reading>({});
 	const input = useRef<HTMLInputElement>(null);
+	const panel = useRef<HTMLDivElement>(null);
 
 	// Whether the panel is opening or was already open, the field takes the
 	// caret and offers up the last query to be typed over.
@@ -235,8 +236,36 @@ export default function Find({
 		onClose();
 	}
 
+	// On the document, since a click on the page or on a button here leaves the
+	// fields without focus. Left to anything that had a use for the key first,
+	// and marked as used so that Focus stays on. A caret already in the page
+	// stays where the writer put it.
+	useEffect(() => {
+		function escape(event: KeyboardEvent) {
+			const at = event.target;
+			if (
+				event.key !== "Escape" ||
+				event.defaultPrevented ||
+				!(at instanceof Node)
+			) {
+				return;
+			}
+
+			if (editor.getRootElement()?.contains(at)) {
+				event.preventDefault();
+				onClose();
+			} else if (at === document.body || panel.current?.contains(at)) {
+				event.preventDefault();
+				close();
+			}
+		}
+
+		document.addEventListener("keydown", escape);
+		return () => document.removeEventListener("keydown", escape);
+	});
+
 	return (
-		<div className="editor__find">
+		<div ref={panel} className="editor__find">
 			<div className="editor__find-row">
 				<input
 					ref={input}
@@ -250,10 +279,6 @@ export default function Find({
 						setReading({});
 					}}
 					onKeyDown={(event) => {
-						if (event.key === "Escape") {
-							event.preventDefault();
-							close();
-						}
 						if (event.key === "Enter") {
 							event.preventDefault();
 							step(event.shiftKey ? -1 : 1);
@@ -321,10 +346,6 @@ export default function Find({
 						placeholder="Replace with"
 						onChange={(event) => setInto(event.target.value)}
 						onKeyDown={(event) => {
-							if (event.key === "Escape") {
-								event.preventDefault();
-								close();
-							}
 							if (event.key === "Enter") {
 								event.preventDefault();
 								replace(event.shiftKey);

@@ -48,7 +48,7 @@ export function filled(book: Book, key: GroupKey): number {
 				book.copyright,
 			]);
 		case "export":
-			return said([book.cover]) + book.exportFormats.length;
+			return book.exportFormats.length;
 	}
 }
 

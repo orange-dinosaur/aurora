@@ -7,10 +7,8 @@ import type { ManuscriptFont, Preferences } from "../types";
 /** A preference the writer nudges rather than types. */
 export type Setting = {
 	id: "measure" | "fontSize" | "lineHeight";
-	/** In the popover, where one word has to do. */
+	/** The one name it goes by, in the Aa panel and in Settings. */
 	label: string;
-	/** In Settings, which has room for what the thing is actually called. */
-	full: string;
 	/** A second line under that name, where the name alone is not enough. */
 	hint?: string;
 	min: number;
@@ -24,8 +22,7 @@ export type Setting = {
 export const SETTINGS: Setting[] = [
 	{
 		id: "measure",
-		label: "Width",
-		full: "Measure",
+		label: "Line width",
 		hint: "Characters per line",
 		min: 40,
 		max: 100,
@@ -35,7 +32,6 @@ export const SETTINGS: Setting[] = [
 	{
 		id: "fontSize",
 		label: "Size",
-		full: "Size",
 		min: 12,
 		max: 24,
 		step: 1,
@@ -43,8 +39,7 @@ export const SETTINGS: Setting[] = [
 	},
 	{
 		id: "lineHeight",
-		label: "Spacing",
-		full: "Line spacing",
+		label: "Line spacing",
 		min: 1.2,
 		max: 2.4,
 		step: 0.1,
@@ -75,7 +70,7 @@ export const FACES: { id: ManuscriptFont; family: string }[] = [
 	{ id: "system", family: "System UI" },
 ];
 
-/** What to set `--serif` to for the face the writer chose. */
+/** What to set `--font-page` to for the face the writer chose. */
 export function face(font: ManuscriptFont): string {
 	return STACKS[font];
 }

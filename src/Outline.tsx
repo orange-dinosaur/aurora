@@ -8,6 +8,7 @@ import type { OutlineHandle } from "./lib/outline";
 export default function Outline({ entries, here, go }: OutlineHandle) {
 	return (
 		<nav className="outline" aria-label="Outline">
+			<h3 className="panel__heading">Outline</h3>
 			{entries.length === 0 ? (
 				<p className="outline__none">No headings yet</p>
 			) : (

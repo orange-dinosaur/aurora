@@ -24,11 +24,13 @@ export default function Typewriter({ on }: Props) {
 
 		function hold() {
 			const root = editor.getRootElement();
+			const page = root?.closest(".editor__scroll") ?? null;
 			const native = window.getSelection();
 			// Every open document has a mounted editor, so only the one the
 			// browser's own selection is inside may scroll itself.
 			if (
 				root === null ||
+				page === null ||
 				native === null ||
 				native.rangeCount === 0 ||
 				!root.contains(native.anchorNode)
@@ -43,10 +45,10 @@ export default function Typewriter({ on }: Props) {
 				return;
 			}
 
-			const frame = root.getBoundingClientRect();
+			const frame = page.getBoundingClientRect();
 			const drift = caret.top - (frame.top + frame.height * LINE);
 			if (Math.abs(drift) >= SETTLED) {
-				root.scrollTop += drift;
+				page.scrollTop += drift;
 			}
 		}
 

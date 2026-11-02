@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { nudged, SETTINGS, type Setting } from "./lib/typography";
+import { MENU_FADE, useLingering } from "./Menu";
 import type { Preferences } from "./types";
 
 type Props = {
@@ -12,6 +13,9 @@ type Props = {
 // text — and because the bar can be hidden.
 export default function Typography({ preferences, onPreferences }: Props) {
 	const [open, setOpen] = useState(false);
+	// The keyboard reports a click with no count, and skips the motion.
+	const [instant, setInstant] = useState(false);
+	const drawn = useLingering(open, MENU_FADE);
 	const panel = useRef<HTMLDivElement>(null);
 
 	// Watched on the document rather than through the button losing focus:
@@ -50,50 +54,58 @@ export default function Typography({ preferences, onPreferences }: Props) {
 		<div ref={panel} className="typography">
 			<button
 				type="button"
-				className="editor__toggle"
+				className="editor__toggle typography__toggle"
 				aria-expanded={open}
 				aria-label="Typography"
 				title="Typography"
-				onClick={() => setOpen((was) => !was)}
+				onClick={(event) => {
+					setInstant(event.detail === 0);
+					setOpen((was) => !was);
+				}}
 			>
 				Aa
 			</button>
 
-			{open && (
-				<div className="typography__panel">
+			{drawn && (
+				<div
+					className="typography__panel"
+					data-closing={open ? undefined : ""}
+					data-instant={instant ? "" : undefined}
+					inert={!open}
+				>
 					{SETTINGS.map((setting) => (
 						<Fragment key={setting.id}>
-							<span className="typography__label">
-								{setting.label}
+							<span>{setting.label}</span>
+							<span className="typography__stepper">
+								<button
+									type="button"
+									className="typography__step"
+									aria-label={`${setting.label} down`}
+									disabled={
+										preferences[setting.id] <= setting.min
+									}
+									onClick={() => press(setting, -1)}
+								>
+									&minus;
+								</button>
+								<span
+									className="typography__value"
+									aria-live="polite"
+								>
+									{setting.show(preferences[setting.id])}
+								</span>
+								<button
+									type="button"
+									className="typography__step"
+									aria-label={`${setting.label} up`}
+									disabled={
+										preferences[setting.id] >= setting.max
+									}
+									onClick={() => press(setting, 1)}
+								>
+									+
+								</button>
 							</span>
-							<button
-								type="button"
-								className="typography__step"
-								aria-label={`${setting.label} down`}
-								disabled={
-									preferences[setting.id] <= setting.min
-								}
-								onClick={() => press(setting, -1)}
-							>
-								&minus;
-							</button>
-							<span
-								className="typography__value"
-								aria-live="polite"
-							>
-								{setting.show(preferences[setting.id])}
-							</span>
-							<button
-								type="button"
-								className="typography__step"
-								aria-label={`${setting.label} up`}
-								disabled={
-									preferences[setting.id] >= setting.max
-								}
-								onClick={() => press(setting, 1)}
-							>
-								+
-							</button>
 						</Fragment>
 					))}
 				</div>

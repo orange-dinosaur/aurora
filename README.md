@@ -32,4 +32,4 @@ pnpm tauri dev
 
 Aurora is licensed under the GPL-3.0-or-later, see [LICENSE](LICENSE). Copyright © 2026 orange-dinosaur.
 
-The fonts in `src/assets/fonts` (Newsreader, Spectral, Source Serif 4, IBM Plex Sans and IBM Plex Mono) are under the SIL Open Font License.
+The fonts in `src/assets/fonts` (Instrument Sans, Instrument Serif, Newsreader, Spectral, Source Serif 4, IBM Plex Sans and IBM Plex Mono) are under the SIL Open Font License.

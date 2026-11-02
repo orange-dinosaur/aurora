@@ -1,9 +1,9 @@
-// The deliberate layer, as the writer touches it: the readout in the titlebar
-// that says a session is running and ends it, and the form in the Stats tab
-// that gives one a limit.
+// The deliberate layer, as the writer touches it: Session in the bar, and the
+// menu it opens to start one, give one a limit, or end one.
 
 import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
+import Menu, { MenuItem } from "./Menu";
 import { sessionReading } from "./lib/stats";
 import type { Limit, Running } from "./sessions";
 import type { SprintUnit } from "./types";
@@ -13,27 +13,36 @@ import type { SprintUnit } from "./types";
  * different orders. */
 export const UNITS: SprintUnit[] = ["words", "minutes"];
 
+/** What an empty sprint field stands for, and what it shows in grey. */
+const USUAL_SPRINT = 500;
+
 type Props = {
 	/** The deliberate session running now, or null when there is none. */
 	session: Running | null;
-	/** Whether the readout is drawn. The beat below runs either way. */
+	/** Whether the clock is drawn. The menu and the beat below run either way. */
 	shown: boolean;
-	onStart: () => void;
+	/** What the sprint field starts on, from the writer's preferences. */
+	defaultAmount: number | null;
+	defaultUnit: SprintUnit;
+	/** Opens a session. A limit makes it a sprint. */
+	onStart: (limit?: Limit) => void;
 	onStop: () => void;
 	/** Asks the model what the clock alone has closed, once a second. */
 	onTick: () => void;
-	/** The shortcut written out, for the tooltip. */
+	/** The shortcut written out, for the menu. */
 	shortcut: string;
 };
 
 /**
- * The session in the titlebar. It lives here because the toolbar and both
- * sidebars can be hidden and this row cannot, and a writer who opened a session
- * needs to see that it is still running without going looking for it.
+ * The session in the bar. It lives here because the rail and the binder can be
+ * hidden and this row cannot, and a writer who opened a session needs to see
+ * that it is still running without going looking for it.
  */
 export default function Session({
 	session,
 	shown,
+	defaultAmount,
+	defaultUnit,
 	onStart,
 	onStop,
 	onTick,
@@ -52,7 +61,7 @@ export default function Session({
 	// A sprint on the clock has to close at its deadline rather than whenever
 	// anyone next looked, and the readout counts in seconds either way. The
 	// minute heartbeat elsewhere is too coarse for both, and this one exists
-	// only while a session does.
+	// only while a session does. It runs with the clock turned off too.
 	useEffect(() => {
 		if (!running) {
 			return;
@@ -67,73 +76,103 @@ export default function Session({
 		return () => window.clearInterval(timer);
 	}, [running]);
 
-	// The writer can turn the readout off, but not the beat above it: a sprint
-	// counted in minutes has to close at its deadline whether or not anyone is
-	// watching the clock.
-	if (!shown) {
-		return null;
-	}
+	const clock =
+		session !== null && shown ? sessionReading(session, now) : null;
 
-	// The readout is the control, the way the word count is: no box of its own,
-	// and pressing it ends what it is describing.
-	return session === null ? (
-		<button
-			type="button"
-			className="titlebar__session titlebar__session--idle"
-			aria-label="Start session"
-			title={`Start a writing session (${shortcut})`}
-			onClick={onStart}
+	return (
+		<Menu
+			label={clock === null ? "Session" : `Session, ${clock}`}
+			wrapper="titlebar__menu titlebar__menu--session"
+			className="quiet"
+			trigger={
+				<>
+					<Icon name="play" />
+					{clock === null ? (
+						<span className="titlebar__label">Session</span>
+					) : (
+						<span className="titlebar__clock">{clock}</span>
+					)}
+				</>
+			}
 		>
-			<Icon name="timer" />
-			<span className="titlebar__label">Start session</span>
-		</button>
-	) : (
-		<button
-			type="button"
-			className="titlebar__session titlebar__session--running"
-			title={`Stop this session (${shortcut})`}
-			onClick={onStop}
-		>
-			{sessionReading(session, now)}
-		</button>
+			{(close) =>
+				session === null ? (
+					<>
+						<MenuItem
+							onSelect={() => {
+								close();
+								onStart();
+							}}
+						>
+							Start session
+							<span className="menu__chord">{shortcut}</span>
+						</MenuItem>
+						<Sprint
+							defaultAmount={defaultAmount}
+							defaultUnit={defaultUnit}
+							onStart={(limit) => {
+								close();
+								onStart(limit);
+							}}
+						/>
+					</>
+				) : (
+					<>
+						<p className="menu__note">
+							{session.limit === undefined ? "Session" : "Sprint"}
+							: {sessionReading(session, now)}
+						</p>
+						<MenuItem
+							onSelect={() => {
+								close();
+								onStop();
+							}}
+						>
+							Stop session
+							<span className="menu__chord">{shortcut}</span>
+						</MenuItem>
+					</>
+				)
+			}
+		</Menu>
 	);
 }
 
 /**
- * Starting a sprint, which is a session with something to reach. It is in the
- * Stats tab rather than the titlebar because a limit has to be typed, and this
- * is where the numbers it will move are already shown.
+ * Starting a sprint, which is a session with something to reach. The menu
+ * builds this each time it opens, so a default set in the settings dialog is
+ * here the next time and the form starts folded away.
  */
-export function Sprint({
-	session,
+function Sprint({
 	defaultAmount,
 	defaultUnit,
 	onStart,
-	onStop,
 }: {
-	session: Running | null;
-	/** What the field starts on, and returns to after a sprint is started. */
+	/** What the field starts on. */
 	defaultAmount: number | null;
 	defaultUnit: SprintUnit;
 	onStart: (limit: Limit) => void;
-	onStop: () => void;
 }) {
-	const start = defaultAmount === null ? "" : String(defaultAmount);
-	const [amount, setAmount] = useState(start);
+	const [asked, setAsked] = useState(false);
+	const [amount, setAmount] = useState(
+		defaultAmount === null ? "" : String(defaultAmount),
+	);
 	const [unit, setUnit] = useState<SprintUnit>(defaultUnit);
+	const usual = (defaultAmount ?? USUAL_SPRINT).toLocaleString();
+	const limit = amount === "" ? USUAL_SPRINT : Number(amount);
 
-	if (session !== null) {
+	// The form takes the row's place rather than opening under it, so the menu
+	// stays the size it was.
+	if (!asked) {
 		return (
-			<p className="stats__line">
-				<span className="stats__layer">
-					{session.limit === undefined
-						? "Running"
-						: `${session.limit.amount.toLocaleString()} ${session.limit.unit}`}
+			<MenuItem onSelect={() => setAsked(true)}>
+				Start a sprint
+				<span className="menu__hint">
+					{defaultUnit === "words"
+						? `${usual} words, or a time limit`
+						: `${usual} minutes, or a word count`}
 				</span>
-				<button type="button" className="sprint__stop" onClick={onStop}>
-					Stop
-				</button>
-			</p>
+			</MenuItem>
 		);
 	}
 
@@ -142,8 +181,7 @@ export function Sprint({
 			className="sprint"
 			onSubmit={(event) => {
 				event.preventDefault();
-				onStart({ unit, amount: Number(amount) });
-				setAmount(start);
+				onStart({ unit, amount: limit });
 			}}
 		>
 			<input
@@ -151,7 +189,9 @@ export function Sprint({
 				value={amount}
 				inputMode="numeric"
 				aria-label="Sprint limit"
-				placeholder="500"
+				placeholder={String(USUAL_SPRINT)}
+				autoFocus
+				onFocus={(event) => event.target.select()}
 				// Digits only: a limit is a count either way, and refusing the
 				// rest here saves explaining it afterwards.
 				onChange={(event) =>
@@ -178,11 +218,7 @@ export function Sprint({
 					</button>
 				))}
 			</span>
-			<button
-				type="submit"
-				className="sprint__go"
-				disabled={amount === "" || Number(amount) === 0}
-			>
+			<button type="submit" className="sprint__go" disabled={limit === 0}>
 				Start
 			</button>
 		</form>

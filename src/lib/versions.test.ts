@@ -1,18 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { timeOfDay, when } from "../dates";
-import type { Change, Checkpoint, Merging } from "../types";
+import type { Change, Checkpoint, Merging, Status } from "../types";
 import {
+	behind,
 	byDay,
+	changeList,
 	counts,
 	detail,
 	lineKey,
 	lines,
 	overwriteQuestion,
 	overwritten,
+	removesNote,
 	settleBanner,
 	settleFirst,
 	settleLines,
 	summary,
+	ticksLine,
 } from "./versions";
 
 function checkpoint(at: Date, rest: Partial<Checkpoint> = {}): Checkpoint {
@@ -175,6 +179,74 @@ describe("lines", () => {
 			change: scene,
 		});
 		expect(lines({ nodes: [], book: false, cover: false })).toEqual([]);
+	});
+});
+
+describe("removesNote", () => {
+	it("names up to five takes and counts the rest", () => {
+		const takes = ["A", "B", "C", "D", "E", "F", "G"];
+
+		expect(removesNote(takes.slice(0, 5))).toBe(
+			"Also removes A, B, C, D, E",
+		);
+		expect(removesNote(takes)).toBe(
+			"Also removes A, B, C, D, E and 2 more",
+		);
+	});
+});
+
+describe("the ticked list", () => {
+	const change = (id: string, after: string): Change => ({
+		id,
+		folder: false,
+		before: after,
+		after,
+		renamed: false,
+		moved: false,
+		edited: true,
+		takes: false,
+		reordered: [],
+	});
+	const none = { nodes: [], book: false, cover: false };
+	const ledger = change("ledger", "Manuscript/Ledger.md");
+	const harbour = change("harbour", "Manuscript/Harbour.md");
+
+	it("keeps its order whichever rows are ticked", () => {
+		const order = (status: Status) => changeList(status).map(lineKey);
+		const expected = ["book", "harbour", "ledger"];
+
+		expect(
+			order({
+				staged: { ...none, nodes: [ledger] },
+				unstaged: { ...none, nodes: [harbour], book: true },
+			}),
+		).toEqual(expected);
+		expect(
+			order({
+				staged: { ...none, nodes: [harbour], book: true },
+				unstaged: { ...none, nodes: [ledger] },
+			}),
+		).toEqual(expected);
+	});
+
+	it("shows a row written to since its tick once, ticked", () => {
+		const status = {
+			staged: { ...none, nodes: [ledger] },
+			unstaged: { ...none, nodes: [ledger, harbour] },
+		};
+
+		expect(
+			changeList(status).map((row) => [lineKey(row), row.ticked]),
+		).toEqual([
+			["harbour", false],
+			["ledger", true],
+		]);
+		expect(behind(status)).toEqual([{ kind: "node", id: "ledger" }]);
+	});
+
+	it("says all changes go in when nothing is ticked", () => {
+		expect(ticksLine(0, 4)).toBe("All changes go in the next checkpoint");
+		expect(ticksLine(1, 4)).toBe("1 of 4 in the next checkpoint");
 	});
 });
 

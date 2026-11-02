@@ -5,10 +5,16 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { diffWordsWithSpace } from "diff";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+	useEffect,
+	useRef,
+	useState,
+	type ReactNode,
+	type RefObject,
+} from "react";
 import { failure } from "./errors";
 import { split } from "./frontmatter";
-import Icon from "./Icon";
+import { MenuItem, useDismissal } from "./Menu";
 import {
 	BINDER,
 	cardKey,
@@ -46,6 +52,11 @@ type Props = {
 	/** What the writer has chosen so far on the binder's cards. */
 	sides: Sides;
 	onSides: (sides: Sides) => void;
+	/** Set while the list floats over the page in a narrow window. */
+	floating: boolean;
+	onDismiss: () => void;
+	/** The bar's button, which a floating list treats as part of itself. */
+	opener: RefObject<HTMLButtonElement | null>;
 	onBack: () => void;
 	/** Writes everything down, runs the task, and catches the tabs up. */
 	onSettle: (task: () => Promise<unknown>) => Promise<void>;
@@ -67,10 +78,15 @@ export default function Merge({
 	onChoices,
 	sides,
 	onSides,
+	floating,
+	onDismiss,
+	opener,
 	onBack,
 	onSettle,
 	onMergeChanged,
 }: Props) {
+	const list = useRef<HTMLElement>(null);
+	useDismissal(floating, list, onDismiss, opener);
 	const { merging, into } = merge;
 	const theirs = merging.name ?? "the other version";
 	const [pieces, setPieces] = useState<Record<string, Piece[]>>({});
@@ -190,6 +206,16 @@ export default function Merge({
 		}
 	}
 
+	// Everything goes back to the last checkpoint, so the tabs catch up after.
+	async function abort() {
+		try {
+			await onSettle(() => invoke("abort_merge", { root }));
+			await onMergeChanged();
+		} catch (reason) {
+			setError(failure(reason).message);
+		}
+	}
+
 	// Once something is settled, on to the next thing left, or back to
 	// writing when nothing is.
 	function finished() {
@@ -218,26 +244,23 @@ export default function Merge({
 	);
 
 	return (
-		<div className="compare">
-			<div className="compare__bar">
-				<button
-					type="button"
-					className="compare__back"
-					onClick={onBack}
-				>
-					<Icon name="chevron-left" />
-					Back to writing
-				</button>
-			</div>
-
-			<div className="compare__body">
-				<nav className="compare__history" aria-label="To settle">
-					<h2 className="compare__title">
-						Merging {merging.name ?? "another version"}
+		<>
+			<nav
+				ref={list}
+				className={floating ? "sidelist sidelist--open" : "sidelist"}
+				aria-label="To settle"
+			>
+				<div className="sidelist__head">
+					<p className="sidelist__of">Merging</p>
+					<h2 className="sidelist__title">
+						{merging.name ?? "another version"}
 					</h2>
-					<p className="compare__trail merge__trail">
+					<p className="sidelist__trail">
 						into {into} · {lines.length.toLocaleString()} to settle
 					</p>
+				</div>
+
+				<div className="sidelist__list">
 					{documents.map((document) => {
 						const found =
 							document.id === null
@@ -285,177 +308,224 @@ export default function Merge({
 						);
 					})}
 					{binder !== undefined && (
-						<>
-							<div className="merge__rule" />
-							<button
-								type="button"
-								className="merge__pick"
-								aria-current={open === BINDER}
-								onClick={() => onOpen(BINDER)}
-							>
-								<span className="merge__pick-text">
-									<span className="merge__pick-name">
-										{binder.name}
-									</span>
-									<span className="merge__pick-where">
-										Names, places, order, fields, cover
-									</span>
+						<button
+							type="button"
+							className="merge__pick merge__pick--binder"
+							aria-current={open === BINDER}
+							onClick={() => onOpen(BINDER)}
+						>
+							<span className="merge__pick-text">
+								<span className="merge__pick-name">
+									{binder.name}
 								</span>
-								<span
-									className={
-										cardsOpen === 0
-											? "merge__pick-left merge__pick-left--done"
-											: "merge__pick-left"
-									}
-								>
-									{leftLabel(cardsOpen, binderCards.length)}
+								<span className="merge__pick-where">
+									Names, places, order, fields, cover
 								</span>
-							</button>
-						</>
-					)}
-				</nav>
-
-				<div className="compare__main">
-					{open === BINDER && (
-						<Binder
-							root={root}
-							cards={binderCards}
-							sides={sides}
-							onSides={onSides}
-							into={into}
-							theirs={theirs}
-							onSettle={onSettle}
-							onMergeChanged={onMergeChanged}
-							onFinished={finished}
-						/>
-					)}
-
-					{line !== undefined && (
-						<>
-							<div className="merge__head">
-								<span className="merge__name">{line.name}</span>
-								<span className="merge__detail">
-									{[
-										where(line.path),
-										spotsLeft(remaining, total),
-									]
-										.filter((part) => part !== "")
-										.join(" · ")}
-								</span>
-								<span className="merge__all">
-									<button
-										type="button"
-										className="compare__step"
-										disabled={remaining === 0}
-										onClick={() => everywhere("ours")}
-									>
-										Keep mine everywhere
-									</button>
-									<button
-										type="button"
-										className="compare__step"
-										disabled={remaining === 0}
-										onClick={() => everywhere("theirs")}
-									>
-										Take {theirs}'s everywhere
-									</button>
-								</span>
-							</div>
-
-							<div className="merge__scroll">
-								<div className="merge__prose">
-									{numbered.map(({ piece, at }, index) => {
-										if (piece.kind === "clean") {
-											// The file's own fields are not prose.
-											const text =
-												index === 0
-													? split(piece.text).body
-													: piece.text;
-											return paragraphs(text).map(
-												(paragraph, n) => (
-													<p key={`${index}-${n}`}>
-														{paragraph}
-													</p>
-												),
-											);
-										}
-										const choice = chosen[at] ?? null;
-										return choice === null ? (
-											<Spot
-												key={index}
-												spot={piece}
-												at={at}
-												total={total}
-												current={at === current}
-												into={into}
-												theirs={theirs}
-												onChoose={(choice) =>
-													choose(at, choice)
-												}
-												place={(element) => {
-													spots.current[at] = element;
-												}}
-											/>
-										) : (
-											<Settled
-												key={index}
-												text={settled(piece, choice)}
-												note={`Spot ${at + 1} · ${took(choice)} · `}
-												onChange={() => change(at)}
-											/>
-										);
-									})}
-								</div>
-							</div>
-						</>
-					)}
-
-					{open !== BINDER && (
-						<div className="compare__foot">
-							{line !== undefined && total > 0 && (
-								<>
-									<span className="compare__count">
-										Spot {current + 1} of {total}
-									</span>
-									<button
-										type="button"
-										className="compare__step"
-										disabled={current === 0}
-										onClick={() => setCurrent(current - 1)}
-									>
-										‹ Previous
-									</button>
-									<button
-										type="button"
-										className="compare__step"
-										disabled={current >= total - 1}
-										onClick={() => setCurrent(current + 1)}
-									>
-										Next ›
-									</button>
-								</>
-							)}
-							<button
-								type="button"
-								className="compare__put"
-								disabled={
-									busy ||
-									line === undefined ||
-									total === 0 ||
-									remaining > 0
+							</span>
+							<span
+								className={
+									cardsOpen === 0
+										? "merge__pick-left merge__pick-left--done"
+										: "merge__pick-left"
 								}
-								onClick={() => void done()}
 							>
-								Done with {line?.name ?? "this document"}
-							</button>
-							{/* A message takes the note's line, so it moves nothing. */}
-							<p className="compare__note" role="alert">
-								{error ?? ""}
-							</p>
-						</div>
+								{leftLabel(cardsOpen, binderCards.length)}
+							</span>
+						</button>
 					)}
 				</div>
+
+				<div className="sidelist__foot">
+					<Abort into={into} onAbort={() => void abort()} />
+				</div>
+			</nav>
+
+			<div className="merge__work">
+				{open === BINDER && (
+					<Binder
+						root={root}
+						cards={binderCards}
+						sides={sides}
+						onSides={onSides}
+						into={into}
+						theirs={theirs}
+						trouble={error}
+						onSettle={onSettle}
+						onMergeChanged={onMergeChanged}
+						onFinished={finished}
+					/>
+				)}
+
+				{line !== undefined && (
+					<>
+						<div className="merge__head">
+							<h1 className="merge__name">{line.name}</h1>
+							<span className="merge__detail">
+								{[where(line.path), spotsLeft(remaining, total)]
+									.filter((part) => part !== "")
+									.join(" · ")}
+							</span>
+							<span className="merge__all">
+								<button
+									type="button"
+									className="quiet"
+									disabled={remaining === 0}
+									onClick={() => everywhere("ours")}
+								>
+									Keep mine everywhere
+								</button>
+								<button
+									type="button"
+									className="quiet"
+									disabled={remaining === 0}
+									onClick={() => everywhere("theirs")}
+								>
+									Take {theirs}'s everywhere
+								</button>
+							</span>
+						</div>
+
+						<div className="merge__scroll">
+							<div className="merge__prose">
+								{numbered.map(({ piece, at }, index) => {
+									if (piece.kind === "clean") {
+										// The file's own fields are not prose.
+										const text =
+											index === 0
+												? split(piece.text).body
+												: piece.text;
+										return paragraphs(text).map(
+											(paragraph, n) => (
+												<p key={`${index}-${n}`}>
+													{paragraph}
+												</p>
+											),
+										);
+									}
+									const choice = chosen[at] ?? null;
+									return choice === null ? (
+										<Spot
+											key={index}
+											spot={piece}
+											at={at}
+											total={total}
+											current={at === current}
+											into={into}
+											theirs={theirs}
+											onChoose={(choice) =>
+												choose(at, choice)
+											}
+											place={(element) => {
+												spots.current[at] = element;
+											}}
+										/>
+									) : (
+										<Settled
+											key={index}
+											text={settled(piece, choice)}
+											note={`Spot ${at + 1} · ${took(choice)} · `}
+											onChange={() => change(at)}
+										/>
+									);
+								})}
+							</div>
+						</div>
+					</>
+				)}
+
+				{open !== BINDER && (
+					<div className="merge__foot">
+						{line !== undefined && total > 0 && (
+							<>
+								<span className="merge__count">
+									Spot {current + 1} of {total}
+								</span>
+								<button
+									type="button"
+									className="quiet"
+									disabled={current === 0}
+									onClick={() => setCurrent(current - 1)}
+								>
+									‹ Previous
+								</button>
+								<button
+									type="button"
+									className="quiet"
+									disabled={current >= total - 1}
+									onClick={() => setCurrent(current + 1)}
+								>
+									Next ›
+								</button>
+							</>
+						)}
+						<button
+							type="button"
+							className="merge__done"
+							disabled={
+								busy ||
+								line === undefined ||
+								total === 0 ||
+								remaining > 0
+							}
+							onClick={() => void done()}
+						>
+							Done with {line?.name ?? "this document"}
+						</button>
+						{/* A message takes the note's line, so it moves nothing. */}
+						<p className="merge__note" role="alert">
+							{error ?? ""}
+						</p>
+					</div>
+				)}
 			</div>
+		</>
+	);
+}
+
+// Asks first, as it loses every choice made here. The note takes the keyboard
+// rather than a button, so Enter aborts nothing.
+function Abort({ into, onAbort }: { into: string; onAbort: () => void }) {
+	const [asking, setAsking] = useState(false);
+	const wrapper = useRef<HTMLDivElement>(null);
+	const note = useRef<HTMLParagraphElement>(null);
+	useDismissal(asking, wrapper, () => setAsking(false));
+
+	useEffect(() => {
+		if (asking) {
+			note.current?.focus();
+		}
+	}, [asking]);
+
+	return (
+		<div ref={wrapper} className="putback">
+			<button
+				type="button"
+				className="quiet merge__abort"
+				aria-expanded={asking}
+				onClick={() => setAsking((was) => !was)}
+			>
+				Abort merge
+			</button>
+			{asking && (
+				<div className="menu__items" role="menu">
+					<p ref={note} className="takes__note" tabIndex={-1}>
+						Everything you chose here is lost, and {into} goes back
+						to how it was.
+					</p>
+					<MenuItem
+						danger
+						onSelect={() => {
+							setAsking(false);
+							onAbort();
+						}}
+					>
+						Abort merge
+					</MenuItem>
+					<MenuItem onSelect={() => setAsking(false)}>
+						Keep merging
+					</MenuItem>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -469,6 +539,7 @@ function Binder({
 	onSides,
 	into,
 	theirs,
+	trouble,
 	onSettle,
 	onMergeChanged,
 	onFinished,
@@ -479,6 +550,8 @@ function Binder({
 	onSides: (sides: Sides) => void;
 	into: string;
 	theirs: string;
+	/** What went wrong outside these cards, such as an abort. */
+	trouble: string | null;
 	onSettle: (task: () => Promise<unknown>) => Promise<void>;
 	onMergeChanged: () => Promise<void>;
 	onFinished: () => void;
@@ -538,14 +611,14 @@ function Binder({
 	return (
 		<>
 			<div className="merge__head">
-				<span className="merge__name">Binder and details</span>
+				<h1 className="merge__name">Binder and details</h1>
 				<span className="merge__detail">
 					{leftLabel(remaining, cards.length)}
 				</span>
 				<span className="merge__all">
 					<button
 						type="button"
-						className="compare__step"
+						className="quiet"
 						disabled={remaining === 0}
 						onClick={() => everywhere("ours")}
 					>
@@ -553,7 +626,7 @@ function Binder({
 					</button>
 					<button
 						type="button"
-						className="compare__step"
+						className="quiet"
 						disabled={remaining === 0}
 						onClick={() => everywhere("theirs")}
 					>
@@ -581,20 +654,20 @@ function Binder({
 				</div>
 			</div>
 
-			<div className="compare__foot">
-				<span className="compare__count">
+			<div className="merge__foot">
+				<span className="merge__count">
 					{leftLabel(remaining, cards.length)}
 				</span>
 				<button
 					type="button"
-					className="compare__put"
+					className="merge__done"
 					disabled={busy || cards.length === 0 || remaining > 0}
 					onClick={() => void done()}
 				>
 					Done with binder and details
 				</button>
-				<p className="compare__note" role="alert">
-					{error ?? ""}
+				<p className="merge__note" role="alert">
+					{error ?? trouble ?? ""}
 				</p>
 			</div>
 		</>
@@ -917,16 +990,12 @@ function Settled({
 			{paragraphs(text).map((paragraph, n) => (
 				<p key={n}>{paragraph}</p>
 			))}
-			<p className="merge__settled-note">
+			<div className="merge__settled-note">
 				{note}
-				<button
-					type="button"
-					className="compare__step"
-					onClick={onChange}
-				>
+				<button type="button" className="quiet" onClick={onChange}>
 					Change
 				</button>
-			</p>
+			</div>
 		</div>
 	);
 }

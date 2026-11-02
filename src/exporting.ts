@@ -1,13 +1,17 @@
 import { counted } from "./cards";
 import type { ExportFormat, ExportProgress, Extent } from "./types";
 
-/** Every format the Export panel offers, in the order it lists them. */
-export const FORMATS: { key: ExportFormat; name: string }[] = [
-	{ key: "markdown", name: "Markdown" },
-	{ key: "epub", name: "EPUB" },
-	{ key: "kepub", name: "KEPUB" },
-	{ key: "docx", name: "DOCX" },
-	{ key: "text", name: "Plain text" },
+/** Every format the Export dialog offers, in the order it lists them. */
+export const FORMATS: { key: ExportFormat; name: string; what: string }[] = [
+	{
+		key: "markdown",
+		name: "Markdown",
+		what: "Plain files with light formatting",
+	},
+	{ key: "epub", name: "EPUB", what: "For most e-readers and bookshops" },
+	{ key: "kepub", name: "KEPUB", what: "EPUB made for Kobo readers" },
+	{ key: "docx", name: "DOCX", what: "For Word and for editors" },
+	{ key: "text", name: "Plain text", what: "Just the words" },
 ];
 
 /**

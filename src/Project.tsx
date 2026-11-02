@@ -19,6 +19,7 @@ import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import BookView from "./Book";
 import Compare from "./Compare";
+import Icon from "./Icon";
 import Overwrite from "./Overwrite";
 import Merge from "./Merge";
 import type { Choices, Sides } from "./lib/merge";
@@ -53,6 +54,7 @@ import {
 } from "./takes";
 import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
+import type { MarksHandle } from "./TakeStrip";
 // `changed` under another name: this file already has one of its own.
 import {
 	changed as asChange,
@@ -79,7 +81,7 @@ type Props = {
 	enclosingRepository: string | null;
 	preferences: Preferences;
 	onClose: () => void;
-	onSettings: () => void;
+	onSettings: (keyboard: boolean) => void;
 	onLogin: () => void;
 	onProfile: () => void;
 	onPreferences: (next: Preferences) => void;
@@ -168,6 +170,9 @@ type Retagging =
 
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
+
+// Where the sidebar floats, which the stylesheet's own query has to match.
+const NARROW = "(max-width: 820px)";
 
 /**
  * One tab as the strip shows it. The kind travels with it: a folder called
@@ -285,6 +290,7 @@ export default function Project({
 	const [fields, setFields] = useState<FieldsHandle | null>(null);
 	// The headings of the same document, and for the same reason.
 	const [outline, setOutline] = useState<OutlineHandle | null>(null);
+	const [marks, setMarks] = useState<MarksHandle | null>(null);
 	const active = tabs.find((tab) => tab.key === activeKey) ?? null;
 
 	// A folder's fields are read on their own rather than carried on the tab:
@@ -319,8 +325,37 @@ export default function Project({
 	const [deliberate, setDeliberate] = useState<Running | null>(null);
 
 	// Bumped every time a closed session reaches the history file, so the
-	// Stats tab reads it again.
+	// bar and the Stats tab read it again.
 	const [logged, setLogged] = useState(0);
+
+	// Bumped when Book details has written the book, which the binder leads with.
+	const [bookWritten, setBookWritten] = useState(0);
+
+	// In a narrow window the sidebar floats over the writing until the next
+	// click, so it has its own open and the writer's lasting choice is left for
+	// the wider window. Watched rather than read once, so resizing across the
+	// line swaps one for the other.
+	const [narrow, setNarrow] = useState(
+		() => window.matchMedia(NARROW).matches,
+	);
+	const [floating, setFloating] = useState(false);
+	const sidebarButton = useRef<HTMLButtonElement>(null);
+	const sidebar = narrow ? floating : preferences.sidebar;
+	// Compare's and Merge's lists float the same way, from a button in the bar.
+	const [listOpen, setListOpen] = useState(false);
+	const listButton = useRef<HTMLButtonElement>(null);
+
+	useEffect(() => {
+		const query = window.matchMedia(NARROW);
+		function changed(event: MediaQueryListEvent) {
+			setNarrow(event.matches);
+			setFloating(false);
+			setListOpen(false);
+		}
+
+		query.addEventListener("change", changed);
+		return () => query.removeEventListener("change", changed);
+	}, []);
 
 	// The version the compare view opened on. It takes the whole window and
 	// reads now from disk, so every editor is written before it opens.
@@ -347,6 +382,9 @@ export default function Project({
 	const [choices, setChoices] = useState<Record<string, Choices>>({});
 	const [sides, setSides] = useState<Sides>({});
 
+	// A floating list closes on any way in or out, and on a pick in Merge.
+	useEffect(() => setListOpen(false), [comparing, settling]);
+
 	async function readMerge() {
 		try {
 			const merging = await invoke<Merging | null>("merge_state", {
@@ -370,6 +408,20 @@ export default function Project({
 	useEffect(() => {
 		void readMerge();
 	}, [root]);
+
+	// What a merge needs next is in the Versions panel, so it opens there. Once,
+	// so the writer can still close it.
+	const underway = merge !== null;
+	useEffect(() => {
+		if (underway) {
+			onPreferences({
+				...preferences,
+				rightSidebar: true,
+				rightSidebarTab: "versions",
+				versionsScope: "changes",
+			});
+		}
+	}, [underway]);
 
 	// Why a folder's target was refused, when one was.
 	const [aiming, setAiming] = useState<string | null>(null);
@@ -1370,6 +1422,7 @@ export default function Project({
 					onWrote={(delta) => record(tab.document.id, delta)}
 					onFields={setFields}
 					onOutline={setOutline}
+					onMarks={setMarks}
 					onRestore={() => void restore(tab.document.id)}
 					onPreferences={onPreferences}
 					onTarget={(target) =>
@@ -1418,23 +1471,74 @@ export default function Project({
 				? { kind: "folder", trail: active.folder.trail }
 				: null;
 
+	// Compare and Merge stand where the writing stands.
+	const covered = comparing !== null || (merge !== null && settling !== null);
+	// Only over a document, whose dock and Escape are the ways out. Anywhere else
+	// the frame is the only way around, so a saved Focus cannot strand the writer.
+	const focused =
+		preferences.focus && active?.kind === "document" && !covered;
+
 	return (
-		<section className="project">
+		<section className={focused ? "project project--focus" : "project"}>
 			<Titlebar
-				name={name}
 				root={root}
 				session={deliberate}
 				sessionClock={preferences.sessionClock}
-				onStartSession={() => startSession()}
+				defaultSprint={preferences.defaultSprint}
+				defaultSprintUnit={preferences.defaultSprintUnit}
+				onStartSession={startSession}
 				onStopSession={stopSession}
 				onTickSession={tickSession}
-				sidebar={preferences.sidebar}
-				onSidebar={(open) =>
-					onPreferences({ ...preferences, sidebar: open })
-				}
-				rightSidebar={about === null ? null : preferences.rightSidebar}
-				onRightSidebar={(open) =>
-					onPreferences({ ...preferences, rightSidebar: open })
+				sessions={sessions.current}
+				words={words.current}
+				logged={logged}
+				sidebar={sidebar}
+				onSidebar={(open) => {
+					if (narrow) {
+						setFloating(open);
+					} else {
+						onPreferences({ ...preferences, sidebar: open });
+					}
+				}}
+				sidebarButton={sidebarButton}
+				sidebarToggle={!covered}
+				tabs={
+					covered ? (
+						<>
+							<button
+								type="button"
+								className="quiet"
+								onClick={() =>
+									comparing !== null
+										? setComparing(null)
+										: setSettling(null)
+								}
+							>
+								<Icon name="chevron-left" />
+								Back to writing
+							</button>
+							{narrow && (
+								<button
+									ref={listButton}
+									type="button"
+									className="quiet"
+									aria-expanded={listOpen}
+									onClick={() => setListOpen((open) => !open)}
+								>
+									{comparing !== null
+										? "Checkpoints"
+										: "To settle"}
+								</button>
+							)}
+						</>
+					) : (
+						<Tabs
+							tabs={tabs.map(strip)}
+							activeKey={activeKey}
+							onActivate={setActiveKey}
+							onClose={closeTab}
+						/>
+					)
 				}
 				onSearch={openSearch}
 				theme={preferences.theme}
@@ -1442,17 +1546,12 @@ export default function Project({
 				onSettings={onSettings}
 				onLogin={onLogin}
 				onProfile={onProfile}
-				onCloseProject={onClose}
-				onRefreshed={() => setListing((version) => version + 1)}
-				onCompare={(checkpoint, slug) =>
-					void writeAll().then(() =>
-						setComparing({ checkpoint, pick: null, slug }),
-					)
+				// Merge's own list says this.
+				merging={
+					comparing === null && settling !== null
+						? null
+						: (merge?.merging ?? null)
 				}
-				onBeforeSwitch={writeAll}
-				onSwitch={putBack}
-				merging={merge?.merging ?? null}
-				onMergeChanged={readMerge}
 			/>
 
 			{comparing !== null && (
@@ -1468,6 +1567,9 @@ export default function Project({
 					fontSize={preferences.fontSize}
 					lineHeight={preferences.lineHeight}
 					merging={merge !== null}
+					floating={listOpen}
+					onDismiss={() => setListOpen(false)}
+					opener={listButton}
 					onScope={(versionsScope) =>
 						onPreferences({ ...preferences, versionsScope })
 					}
@@ -1488,6 +1590,9 @@ export default function Project({
 					}
 					sides={sides}
 					onSides={setSides}
+					floating={listOpen}
+					onDismiss={() => setListOpen(false)}
+					opener={listButton}
 					onBack={() => setSettling(null)}
 					onSettle={putBack}
 					onMergeChanged={readMerge}
@@ -1496,20 +1601,20 @@ export default function Project({
 
 			{/* Hidden rather than unmounted while comparing or merging, so
 			    every editor comes back with its cursor and its undo history. */}
-			<div
-				className="project__body"
-				hidden={
-					comparing !== null || (merge !== null && settling !== null)
-				}
-			>
+			<div className="project__body" hidden={covered}>
 				<Sidebar
-					hidden={!preferences.sidebar}
+					hidden={!sidebar}
+					floating={floating}
+					onDismiss={() => setFloating(false)}
+					opener={sidebarButton}
 					width={preferences.sidebarWidth}
 					onWidth={(sidebarWidth) =>
 						onPreferences({ ...preferences, sidebarWidth })
 					}
 					root={root}
+					name={name}
 					reload={listing}
+					bookWritten={bookWritten}
 					onWords={measured}
 					unsaved={tabs.flatMap((tab) =>
 						tab.kind === "document" && tab.save.kind !== "clean"
@@ -1523,8 +1628,15 @@ export default function Project({
 						active?.kind === "folder" ? active.folder.id : null
 					}
 					selectedTrash={active?.kind === "trash"}
-					selectedBook={active?.kind === "book"}
 					merging={merge !== null}
+					onCompare={(checkpoint, slug) =>
+						void writeAll().then(() =>
+							setComparing({ checkpoint, pick: null, slug }),
+						)
+					}
+					onBeforeSwitch={writeAll}
+					onSwitch={putBack}
+					onMergeChanged={readMerge}
 					onSelect={(document) => void openDocument(document)}
 					onSubject={openSubject}
 					onTry={startTake}
@@ -1541,13 +1653,6 @@ export default function Project({
 					onClose={onClose}
 				/>
 				<div className="project__main">
-					<Tabs
-						tabs={tabs.map(strip)}
-						activeKey={activeKey}
-						onActivate={setActiveKey}
-						onClose={closeTab}
-					/>
-
 					<div className="project__panes">
 						{/* Every open document stays mounted and all but one
 						    is hidden. An editor torn down on a tab switch
@@ -1632,6 +1737,9 @@ export default function Project({
 									key={active.key}
 									root={root}
 									changed={listing + written}
+									onWritten={() =>
+										setBookWritten((times) => times + 1)
+									}
 								/>
 							</div>
 						) : active.kind === "trash" ? (
@@ -1738,10 +1846,12 @@ export default function Project({
 					)}
 				</div>
 
-				{about !== null && preferences.rightSidebar && (
+				{about !== null && (
 					<RightSidebar
+						open={preferences.rightSidebar}
 						fields={about === "document" ? fields : folderFields}
 						outline={about === "document" ? outline : null}
+						marks={about === "document" ? marks : null}
 						trouble={trouble ?? aiming}
 						about={panel}
 						root={root}
@@ -1775,15 +1885,12 @@ export default function Project({
 								rightSidebarWidth,
 							})
 						}
-						defaultSprint={preferences.defaultSprint}
-						defaultSprintUnit={preferences.defaultSprintUnit}
-						onStartSprint={(limit) => startSession(limit)}
-						onStopSession={stopSession}
 						logged={logged}
 						tab={preferences.rightSidebarTab}
 						onTab={(tab) =>
 							onPreferences({
 								...preferences,
+								rightSidebar: true,
 								rightSidebarTab: tab,
 							})
 						}

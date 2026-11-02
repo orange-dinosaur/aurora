@@ -1,9 +1,12 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import BookHead from "./BookHead";
 import DocumentRow from "./DocumentRow";
 import FolderRow from "./FolderRow";
 import Grip from "./Grip";
 import Icon from "./Icon";
+import { useDismissal } from "./Menu";
 import { SIDEBAR } from "./panels";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
@@ -23,7 +26,7 @@ import { useReorder } from "./reorder";
 import type { Renaming } from "./rows";
 import { indent, retitling, spot } from "./rows";
 import { timed } from "./timing";
-import { documentsIn, folded, inside, rows, sections, wordsIn } from "./tree";
+import { folded, inside, rows, sections, wordsIn } from "./tree";
 import type { FolderRef, Row } from "./tree";
 
 /** Nothing is being dragged, so no row is inside anything. */
@@ -44,12 +47,21 @@ type Props = {
 	// Styled out rather than unmounted, so a half-typed section name and the
 	// sections already read are still there when it comes back.
 	hidden: boolean;
+	/** Whether it is open over the writing, to close on a click elsewhere. */
+	floating: boolean;
+	onDismiss: () => void;
+	/** The button in the bar that opens it. */
+	opener: RefObject<HTMLButtonElement | null>;
 	/** How wide the writer has dragged it, in pixels. */
 	width: number;
 	onWidth: (width: number) => void;
 	root: string;
+	/** The project's name, which stands in until the book has a title. */
+	name: string;
 	// Changes when the project view has altered the manifest.
 	reload: number;
+	/** Bumped when Book details has written the book. */
+	bookWritten: number;
 	// The open documents with unwritten changes. The project view already
 	// knows which those are; working it out again here would mean a second
 	// answer that could disagree with the tab strip.
@@ -58,7 +70,6 @@ type Props = {
 	/** The id of the folder whose overview is showing, if one is. */
 	selectedFolder: string | null;
 	selectedTrash: boolean;
-	selectedBook: boolean;
 	merging: boolean;
 	onSelect: (document: ProjectDocument) => void;
 	/** Opens the page about a character or a place, for the rows that are one. */
@@ -88,19 +99,31 @@ type Props = {
 	onDelete: (id: string) => Promise<void>;
 	onDeleteFolder: (id: string) => Promise<void>;
 	onClose: () => void;
+	/** Opens compare at a checkpoint, listing the given version's history. */
+	onCompare: (checkpoint: string, slug: string) => void;
+	/** Writes every open tab, so asking what is not in a checkpoint sees it. */
+	onBeforeSwitch: () => Promise<void>;
+	/** Runs a switch the way put back runs, catching the tabs up after it. */
+	onSwitch: (task: () => Promise<unknown>) => Promise<void>;
+	/** Reads the merge again after a switch or a merge from here. */
+	onMergeChanged: () => Promise<void>;
 };
 
 export default function Sidebar({
 	hidden,
+	floating,
+	onDismiss,
+	opener,
 	width,
 	onWidth,
 	root,
+	name,
 	reload,
+	bookWritten,
 	unsaved,
 	selectedId,
 	selectedFolder,
 	selectedTrash,
-	selectedBook,
 	merging,
 	onSelect,
 	onSubject,
@@ -117,10 +140,15 @@ export default function Sidebar({
 	onDelete,
 	onDeleteFolder,
 	onClose,
+	onCompare,
+	onBeforeSwitch,
+	onSwitch,
+	onMergeChanged,
 }: Props) {
 	// Held here rather than passed in, so the element the grip moves is the
 	// one this component drew.
 	const panel = useRef<HTMLElement>(null);
+	useDismissal(floating, panel, onDismiss, opener);
 	const [tree, setTree] = useState<TreeNode[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
@@ -134,7 +162,7 @@ export default function Sidebar({
 	);
 
 	// Reads the manifest as it stands. Looking at the folder again is the
-	// titlebar's refresh, which bumps `reload` once it has done so.
+	// book menu's refresh, which bumps `reload` once it has done so.
 	const load = useCallback(async () => {
 		setStatus({ kind: "busy" });
 		try {
@@ -315,6 +343,28 @@ export default function Sidebar({
 			aria-label="Documents"
 			style={{ width }}
 		>
+			<BookHead
+				root={root}
+				name={name}
+				reload={reload}
+				written={bookWritten}
+				merging={merging}
+				onOpenBook={onOpenBook}
+				onClose={onClose}
+				onChanged={onChanged}
+				onCompare={onCompare}
+				onBeforeSwitch={onBeforeSwitch}
+				onSwitch={onSwitch}
+				onMergeChanged={onMergeChanged}
+				onMessage={(message) =>
+					setStatus(
+						message === null
+							? { kind: "idle" }
+							: { kind: "error", message },
+					)
+				}
+			/>
+
 			<div className="sidebar__list">
 				<div className="sidebar__sections">
 					{sections(tree).map((section) => {
@@ -323,7 +373,6 @@ export default function Sidebar({
 						// them and a section remembers itself like the rest.
 						const shut = !open.has(section.id);
 						const verb = shut ? "Unfold" : "Fold";
-						const glyph = shut ? "chevron-right" : "chevron-down";
 						const list = shut
 							? []
 							: rows(section.children, section.id, open);
@@ -351,10 +400,7 @@ export default function Sidebar({
 										aria-label={`${verb} ${section.name}`}
 										onClick={() => void toggle(section.id)}
 									>
-										<Icon
-											name={glyph}
-											className="disclosure__glyph"
-										/>
+										<Icon name="chevron-down" />
 									</button>
 									<h3 className="section__title">
 										<button
@@ -378,9 +424,6 @@ export default function Sidebar({
 											{section.name}
 										</button>
 									</h3>
-									<span className="section__count">
-										{documentsIn(section.children)}
-									</span>
 									<NewMenu
 										label={`New in ${section.name}`}
 										kind={section.kind}
@@ -578,19 +621,6 @@ export default function Sidebar({
 				</p>
 			</div>
 
-			{/* On its own line above the foot. The book is somewhere to go
-			    rather than a way out, and a third button on that line pushed
-			    Close project off the sidebar's edge. */}
-			<button
-				type="button"
-				className="sidebar__leave sidebar__page"
-				aria-current={selectedBook ? "page" : undefined}
-				onClick={onOpenBook}
-			>
-				<Icon name="book" />
-				Book
-			</button>
-
 			<div className="sidebar__foot">
 				<button
 					type="button"
@@ -600,14 +630,6 @@ export default function Sidebar({
 				>
 					<Icon name="trash" />
 					Trash
-				</button>
-				<button
-					type="button"
-					className="sidebar__leave"
-					onClick={onClose}
-				>
-					<Icon name="log-out" />
-					Close project
 				</button>
 			</div>
 

@@ -9,8 +9,9 @@ import {
 } from "react";
 import Controls from "./Controls";
 
-// Where the selected words are, in the surface's own coordinates.
-type Anchor = { centre: number; top: number; bottom: number };
+// Where the selected words are, in the surface's own coordinates, and `roof`
+// is the highest point of the surface still in view.
+type Anchor = { centre: number; top: number; bottom: number; roof: number };
 
 // How far the bar keeps off the words it belongs to.
 const GAP = 8;
@@ -63,10 +64,12 @@ export default function Bubble() {
 
 		const words = native.getRangeAt(0).getBoundingClientRect();
 		const frame = surface.getBoundingClientRect();
+		const page = root.closest(".editor__scroll")?.getBoundingClientRect();
 		setAt({
 			centre: words.left + words.width / 2 - frame.left,
 			top: words.top - frame.top,
 			bottom: words.bottom - frame.top,
+			roof: Math.max((page?.top ?? frame.top) - frame.top, 0),
 		});
 	}, [editor]);
 
@@ -74,7 +77,7 @@ export default function Bubble() {
 		const forget = editor.registerUpdateListener(place);
 		// The bar hangs over the text, so it has to follow when the text moves
 		// underneath it. Scroll is watched in the capture phase because it is
-		// the writing surface that scrolls, not the window.
+		// the page that scrolls, not the window.
 		window.addEventListener("resize", place);
 		document.addEventListener("scroll", place, true);
 		return () => {
@@ -100,7 +103,7 @@ export default function Bubble() {
 		);
 		const above = at.top - box.offsetHeight - GAP;
 		box.style.left = `${left}px`;
-		box.style.top = `${above < 0 ? at.bottom + GAP : above}px`;
+		box.style.top = `${above < at.roof ? at.bottom + GAP : above}px`;
 	});
 
 	return (

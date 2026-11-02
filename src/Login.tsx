@@ -54,7 +54,7 @@ export default function Login({
 					every machine you write on.
 				</p>
 
-				<div className="login__form">
+				<div>
 					<label className="login__field">
 						<span className="login__legend">Email</span>
 						<input
@@ -62,6 +62,8 @@ export default function Login({
 							type="email"
 							className="login__input"
 							placeholder="you@example.com"
+							autoComplete="email"
+							spellCheck={false}
 						/>
 					</label>
 
@@ -80,6 +82,7 @@ export default function Login({
 							type="password"
 							className="login__input"
 							placeholder="••••••••••"
+							autoComplete="current-password"
 						/>
 					</label>
 
@@ -93,11 +96,7 @@ export default function Login({
 				</div>
 
 				<div className="login__foot">
-					<button
-						type="button"
-						className="login__back"
-						onClick={onBack}
-					>
+					<button type="button" className="quiet" onClick={onBack}>
 						Keep working offline
 					</button>
 					<button type="button" className="login__link" disabled>

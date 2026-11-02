@@ -18,6 +18,8 @@ type Props = {
 	root: string;
 	/** Goes up whenever a document or the manifest is written. */
 	changed: number;
+	/** The book reached the disk, so what shows it elsewhere can read it. */
+	onWritten: () => void;
 };
 
 /** How long the writer has to stop typing before the book is written. */
@@ -28,7 +30,7 @@ const AUTOSAVE_MS = 800;
  * record while it is being edited and sends the whole of it back, because that
  * is the shape `write_book` takes and there is only ever one of these open.
  */
-export default function BookView({ root, changed: moved }: Props) {
+export default function BookView({ root, changed: moved, onWritten }: Props) {
 	const [book, setBook] = useState<Book | null>(null);
 	const [shut, setShut] = useState<GroupKey[]>([]);
 	const [trouble, setTrouble] = useState("");
@@ -98,6 +100,7 @@ export default function BookView({ root, changed: moved }: Props) {
 				book: { ...next, contributors: kept(next.contributors) },
 			});
 			setTrouble("");
+			onWritten();
 		} catch (error) {
 			setTrouble(failure(error).message);
 		}
@@ -159,14 +162,15 @@ export default function BookView({ root, changed: moved }: Props) {
 
 	return (
 		<div className="book">
-			<header className="book__head">
-				<p className="book__where">Book</p>
-				<h2 className="book__name">
-					{book === null || book.title.trim() === ""
-						? "Untitled"
-						: book.title}
-				</h2>
-			</header>
+			{book !== null && (
+				<Cover
+					root={root}
+					cover={book.cover}
+					title={book.title.trim() === "" ? "Untitled" : book.title}
+					author={book.author}
+					onChange={(cover) => edit({ ...book, cover })}
+				/>
+			)}
 
 			{/* Always drawn, so a complaint about a failed write does not push
 			    the field that caused it down the page. */}
@@ -175,7 +179,7 @@ export default function BookView({ root, changed: moved }: Props) {
 			</p>
 
 			{book !== null && (
-				<div className="book__fields">
+				<>
 					{group(
 						"identity",
 						<>
@@ -305,7 +309,7 @@ export default function BookView({ root, changed: moved }: Props) {
 													icon="chevron-down"
 													text={titled(person.role)}
 													trailing
-													wrapper="book__picker book__picker--role"
+													wrapper="book__picker"
 													className="book__pick"
 												>
 													{(close) =>
@@ -352,7 +356,7 @@ export default function BookView({ root, changed: moved }: Props) {
 								)}
 								<button
 									type="button"
-									className="book__add"
+									className="quiet"
 									onClick={() =>
 										people(added(book.contributors))
 									}
@@ -372,6 +376,7 @@ export default function BookView({ root, changed: moved }: Props) {
 								value={book.blurb}
 								placeholder="What the back cover says"
 								rows={5}
+								page
 								onChange={(blurb) => edit({ ...book, blurb })}
 							/>
 							<Chips
@@ -432,25 +437,18 @@ export default function BookView({ root, changed: moved }: Props) {
 
 					{group(
 						"export",
-						<>
-							<Cover
-								root={root}
-								cover={book.cover}
-								onChange={(cover) => edit({ ...book, cover })}
-							/>
-							<Export
-								root={root}
-								changed={moved}
-								hasCover={book.cover !== ""}
-								formats={book.exportFormats}
-								onFormats={(exportFormats) =>
-									edit({ ...book, exportFormats })
-								}
-								onBeforeExport={flush}
-							/>
-						</>,
+						<Export
+							root={root}
+							changed={moved}
+							hasCover={book.cover !== ""}
+							formats={book.exportFormats}
+							onFormats={(exportFormats) =>
+								edit({ ...book, exportFormats })
+							}
+							onBeforeExport={flush}
+						/>,
 					)}
-				</div>
+				</>
 			)}
 		</div>
 	);

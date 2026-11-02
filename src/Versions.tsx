@@ -5,19 +5,23 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { failure } from "./errors";
 import { BINDER } from "./lib/merge";
+import Icon from "./Icon";
 import PutBack from "./PutBack";
 import {
+	behind,
 	byDay,
+	changeList,
 	detail,
 	lineKey,
-	lines,
 	settleBanner,
 	settleFirst,
 	settleLines,
+	ticksLine,
 	type Line,
 	type MergeUnderway,
 	type Overwrites,
 	type SettleLine,
+	type Tick,
 } from "./lib/versions";
 import type {
 	Checkpoint,
@@ -215,6 +219,8 @@ export default function Versions({
 
 	const removes = (version: string, id: string) => () =>
 		invoke<string[]>("put_back_removes", { root, version, id });
+	const removesEverything = (version: string) => () =>
+		invoke<string[]>("put_back_everything_removes", { root, version });
 	const refuse = (reason: unknown) => setError(failure(reason).message);
 
 	// A null row moves every row at once.
@@ -231,8 +237,7 @@ export default function Versions({
 	// the last checkpoint. None yet means the first is still to come.
 	const head = checkpoints?.[0] ?? null;
 	const first = checkpoints !== null && checkpoints.length === 0;
-	const staged = status === null ? [] : lines(status.staged);
-	const unstaged = status === null ? [] : lines(status.unstaged);
+	const changes = status === null ? [] : changeList(status);
 	const said =
 		message.trim() !== "" ? message : first ? "First checkpoint" : "";
 	const settle = merging === null ? [] : settleLines(merging, spots);
@@ -241,7 +246,7 @@ export default function Versions({
 		!busy &&
 		said.trim() !== "" &&
 		settle.length === 0 &&
-		(merging !== null || staged.length + unstaged.length > 0);
+		(merging !== null || changes.length > 0);
 
 	function addCheckpoint() {
 		if (!canAdd) {
@@ -249,6 +254,13 @@ export default function Versions({
 		}
 		void run(async () => {
 			await onBeforeKeep();
+			// A tick means the change as it stands, not as it stood when ticked.
+			if (merging === null) {
+				const now = await invoke<Status>("version_status", { root });
+				for (const row of behind(now)) {
+					await invoke("stage_row", { root, row });
+				}
+			}
 			await invoke("add_checkpoint", { root, message: said });
 			setMessage("");
 			if (merging !== null) {
@@ -420,27 +432,10 @@ export default function Versions({
 
 					{/* While merging, moving rows would stage over the
 					    conflicts, so the rows stay where the merge put them. */}
-					<Group
-						heading="In the next checkpoint"
-						all="Take all out"
-						lines={staged}
-						settle={[]}
-						onSettle={onSettle}
-						into={false}
-						busy={busy || merging !== null}
-						onMove={move}
-						onCompare={compareLine}
-						onPutBack={putBackLine}
-						onRemoves={removesLine}
-						onRefused={refuse}
-					/>
-					<Group
-						heading="Changes"
-						all="Add all"
-						lines={unstaged}
+					<Changes
+						rows={changes}
 						settle={settle}
 						onSettle={onSettle}
-						into={true}
 						busy={busy || merging !== null}
 						onMove={move}
 						onCompare={compareLine}
@@ -450,7 +445,7 @@ export default function Versions({
 					/>
 					{status !== null &&
 						merging === null &&
-						staged.length + unstaged.length === 0 && (
+						changes.length === 0 && (
 							<p className="right-sidebar__empty">
 								Nothing has changed since the last checkpoint.
 							</p>
@@ -478,7 +473,13 @@ export default function Versions({
 									key={checkpoint.id}
 									checkpoint={checkpoint}
 									selected={selected === checkpoint.id}
-									onSelect={() => setSelected(checkpoint.id)}
+									onSelect={() =>
+										setSelected(
+											selected === checkpoint.id
+												? null
+												: checkpoint.id,
+										)
+									}
 									onCompare={
 										noDocument
 											? null
@@ -491,7 +492,7 @@ export default function Versions({
 									}
 									removes={
 										document === null
-											? undefined
+											? removesEverything(checkpoint.id)
 											: removes(checkpoint.id, document)
 									}
 									onRefused={refuse}
@@ -504,15 +505,12 @@ export default function Versions({
 	);
 }
 
-// One group of the Changes list, hidden while it has no rows. `into` says
-// which way its rows move: into the next checkpoint, or out of it.
-function Group({
-	heading,
-	all,
-	lines,
+// The Changes list, hidden while it has no rows. A tick puts a row in the next
+// checkpoint.
+function Changes({
+	rows,
 	settle,
 	onSettle,
-	into,
 	busy,
 	onMove,
 	onCompare,
@@ -520,13 +518,10 @@ function Group({
 	onRemoves,
 	onRefused,
 }: {
-	heading: string;
-	all: string;
-	lines: Line[];
+	rows: Tick[];
 	/** What a merge left to settle, listed after the rows. */
 	settle: SettleLine[];
 	onSettle: (id: string) => void;
-	into: boolean;
 	busy: boolean;
 	onMove: (row: StatusRow | null, into: boolean) => void;
 	onCompare: (line: Line) => (() => void) | null;
@@ -534,24 +529,31 @@ function Group({
 	onRemoves: (line: Line) => (() => Promise<string[]>) | undefined;
 	onRefused: (reason: unknown) => void;
 }) {
-	if (lines.length + settle.length === 0) {
+	if (rows.length + settle.length === 0) {
 		return null;
 	}
+	const ticked = rows.filter((row) => row.ticked).length;
+	const full = ticked === rows.length;
+
 	return (
 		<section className="versions__day">
 			<div className="changes__head">
-				<h3 className="versions__date">{heading}</h3>
-				<button
-					type="button"
-					className="versions__action"
-					disabled={busy}
-					onClick={() => onMove(null, into)}
-				>
-					{all}
-				</button>
+				<p className="changes__ticks">
+					{ticksLine(ticked, rows.length)}
+				</p>
+				{rows.length > 0 && (
+					<button
+						type="button"
+						className="versions__action"
+						disabled={busy}
+						onClick={() => onMove(null, !full)}
+					>
+						{full ? "Take all out" : "Add all"}
+					</button>
+				)}
 			</div>
 			<ul className="versions__list">
-				{lines.map((line) => {
+				{rows.map((line) => {
 					const compare = onCompare(line);
 					const putBack = onPutBack(line);
 					const body = (
@@ -571,6 +573,16 @@ function Group({
 							key={lineKey(line)}
 							className="versions__item changes__row"
 						>
+							<button
+								type="button"
+								className="changes__tick"
+								aria-label={`${line.name ?? line.what} in the next checkpoint`}
+								aria-pressed={line.ticked}
+								disabled={busy}
+								onClick={() => onMove(line.row, !line.ticked)}
+							>
+								{line.ticked && <Icon name="check" />}
+							</button>
 							{compare === null ? (
 								<div className="versions__pick changes__pick">
 									{body}
@@ -595,19 +607,6 @@ function Group({
 									Put back
 								</PutBack>
 							)}
-							<button
-								type="button"
-								className="changes__move"
-								aria-label={
-									into
-										? "Add to the next checkpoint"
-										: "Take out of the next checkpoint"
-								}
-								disabled={busy}
-								onClick={() => onMove(line.row, into)}
-							>
-								{into ? "+" : "−"}
-							</button>
 						</li>
 					);
 				})}
@@ -677,10 +676,9 @@ function Row({
 			<button
 				type="button"
 				className="versions__pick"
-				aria-pressed={selected}
+				aria-expanded={selected}
 				onClick={onSelect}
 			>
-				<span className="versions__mark" aria-hidden="true" />
 				<span className="versions__text">
 					<span className="versions__name">{checkpoint.message}</span>
 					<span className="versions__detail">

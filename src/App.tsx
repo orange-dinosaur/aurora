@@ -10,8 +10,9 @@ import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
 import { failure } from "./errors";
 import { flushBeforeQuitting } from "./quitting";
-import { pressed, SETTINGS } from "./formatting";
+import { inAField, pressed, SETTINGS } from "./formatting";
 import { face } from "./lib/typography";
+import { DIALOG_FADE, useLingering } from "./Menu";
 
 // What Aurora looks like before the store has answered, and what it falls back
 // to if the store cannot be read at all.
@@ -38,18 +39,6 @@ const DEFAULTS: Preferences = {
 	lineHeight: 1.7,
 };
 
-/** Whether the key that was pressed was pressed into a field. The manuscript
- * is left out on purpose: it is editable too, but it is what the writer is
- * looking at, and settings should open from it like anywhere else. A name
- * being typed is the case that matters, since opening the dialog takes the
- * focus and a half-typed name is abandoned when it goes. */
-function inAField(target: EventTarget | null): boolean {
-	return (
-		target instanceof HTMLElement &&
-		(target.tagName === "INPUT" || target.tagName === "TEXTAREA")
-	);
-}
-
 type Boot =
 	| { kind: "loading" }
 	| { kind: "welcome"; notice: string | null }
@@ -59,6 +48,9 @@ function App() {
 	const [boot, setBoot] = useState<Boot>({ kind: "loading" });
 	const [preferences, setPreferences] = useState<Preferences>(DEFAULTS);
 	const [settings, setSettings] = useState(false);
+	// Whatever the keyboard opened skips the motion.
+	const [settingsInstant, setSettingsInstant] = useState(false);
+	const settingsDrawn = useLingering(settings, DIALOG_FADE);
 	// Over the app rather than instead of it: leaving the project to sign in
 	// would close the documents the writer had open.
 	const [login, setLogin] = useState(false);
@@ -98,13 +90,18 @@ function App() {
 			});
 	}, []);
 
+	function openSettings(keyboard: boolean) {
+		setSettingsInstant(keyboard);
+		setSettings(true);
+	}
+
 	// Bound here rather than in the project, since the welcome screen has the
 	// same preferences behind it and nothing else that answers for a key.
 	useEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
 			if (pressed(event, SETTINGS) && !inAField(event.target)) {
 				event.preventDefault();
-				setSettings(true);
+				openSettings(true);
 			}
 		}
 
@@ -123,12 +120,12 @@ function App() {
 		}
 	}, [preferences.theme]);
 
-	// The manuscript is not the only thing set in --serif: a card title and a
-	// trashed document's name are too, and they follow it on purpose. It is
+	// The manuscript is not the only thing set in --font-page: a card title and
+	// a trashed document's name are too, and they follow it on purpose. It is
 	// the one voice the writing has, wherever the writing is named.
 	useEffect(() => {
 		document.documentElement.style.setProperty(
-			"--serif",
+			"--font-page",
 			face(preferences.manuscriptFont),
 		);
 	}, [preferences.manuscriptFont]);
@@ -149,7 +146,7 @@ function App() {
 					enclosingRepository={boot.project.enclosingRepository}
 					preferences={preferences}
 					onPreferences={save}
-					onSettings={() => setSettings(true)}
+					onSettings={openSettings}
 					onLogin={() => setLogin(true)}
 					onProfile={() => setProfile(true)}
 					onClose={() => {
@@ -168,15 +165,17 @@ function App() {
 						}
 						onLogin={() => setLogin(true)}
 						onProfile={() => setProfile(true)}
-						onSettings={() => setSettings(true)}
+						onSettings={openSettings}
 						theme={preferences.theme}
 						onTheme={(theme) => save({ ...preferences, theme })}
 					/>
 				)
 			)}
 
-			{settings && (
+			{settingsDrawn && (
 				<Settings
+					closing={!settings}
+					instant={settingsInstant}
 					preferences={preferences}
 					onPreferences={save}
 					onClose={() => setSettings(false)}
@@ -196,6 +195,11 @@ function App() {
 			)}
 			{profile && (
 				<Profile
+					back={
+						boot.kind === "project"
+							? "Back to writing"
+							: "Back to the Shelf"
+					}
 					onBack={() => setProfile(false)}
 					theme={preferences.theme}
 					onTheme={(theme) => save({ ...preferences, theme })}

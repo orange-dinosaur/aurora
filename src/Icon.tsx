@@ -2,16 +2,14 @@ import type { ReactNode } from "react";
 
 export type IconName =
 	| "search"
-	| "list"
 	| "contrast"
 	| "arrows-vertical"
-	| "timer"
+	| "play"
 	| "chevron-down"
 	| "chevron-left"
 	| "chevron-right"
 	| "arrow-left-right"
 	| "panel-left"
-	| "panel-right"
 	| "folder"
 	| "book"
 	| "link"
@@ -19,17 +17,16 @@ export type IconName =
 	| "refresh"
 	| "tag"
 	| "trash"
-	| "log-out"
 	| "user"
 	| "x"
 	| "sun"
 	| "moon"
 	| "more-vertical"
-	| "file-text"
-	| "info"
-	| "at-sign"
-	| "chart-column"
-	| "history"
+	| "more-horizontal"
+	| "card"
+	| "quote"
+	| "bars"
+	| "layers"
 	| "check"
 	| "pencil";
 
@@ -41,12 +38,6 @@ const SHAPES: Record<IconName, ReactNode> = {
 		<>
 			<circle cx="11" cy="11" r="8" />
 			<path d="m21 21-4.3-4.3" />
-		</>
-	),
-	list: (
-		<>
-			<path d="M3 6h.01M3 12h.01M3 18h.01" />
-			<path d="M8 6h13M8 12h13M8 18h13" />
 		</>
 	),
 	// The one shape drawn part solid: read as an outline it is a circle beside
@@ -64,13 +55,7 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="m8 18 4 4 4-4" />
 		</>
 	),
-	timer: (
-		<>
-			<path d="M10 2h4" />
-			<path d="m12 14 3-3" />
-			<circle cx="12" cy="14" r="8" />
-		</>
-	),
+	play: <path d="M6 3l14 9-14 9Z" />,
 	"chevron-down": <path d="m6 9 6 6 6-6" />,
 	"chevron-left": <path d="m15 18-6-6 6-6" />,
 	"chevron-right": <path d="m9 18 6-6-6-6" />,
@@ -100,12 +85,6 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="M9 3v18" />
 		</>
 	),
-	"panel-right": (
-		<>
-			<rect x="3" y="3" width="18" height="18" rx="2" />
-			<path d="M15 3v18" />
-		</>
-	),
 	plus: <path d="M5 12h14M12 5v14" />,
 	refresh: (
 		<>
@@ -129,13 +108,6 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
 			<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
 			<path d="M10 11v6M14 11v6" />
-		</>
-	),
-	"log-out": (
-		<>
-			<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-			<path d="m16 17 5-5-5-5" />
-			<path d="M21 12H9" />
 		</>
 	),
 	user: (
@@ -163,37 +135,38 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<circle cx="12" cy="19" r="1" />
 		</>
 	),
-	// The right panel's tabs, when their names do not fit across it.
-	"file-text": (
+	"more-horizontal": (
 		<>
-			<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-			<path d="M14 2v4a2 2 0 0 0 2 2h4" />
-			<path d="M16 13H8M16 17H8M10 9H8" />
+			<circle cx="5" cy="12" r="1" />
+			<circle cx="12" cy="12" r="1" />
+			<circle cx="19" cy="12" r="1" />
 		</>
 	),
-	info: (
+	// The rail's, with `tag` for Info. The bars are the mock's own.
+	card: (
 		<>
-			<circle cx="12" cy="12" r="10" />
-			<path d="M12 16v-4M12 8h.01" />
+			<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z" />
+			<path d="M15 3v4a2 2 0 0 0 2 2h4" />
 		</>
 	),
-	"at-sign": (
+	quote: (
 		<>
-			<circle cx="12" cy="12" r="4" />
-			<path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+			<path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" />
+			<path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" />
 		</>
 	),
-	"chart-column": (
+	bars: (
 		<>
-			<path d="M3 3v16a2 2 0 0 0 2 2h16" />
-			<path d="M18 17V9M13 17V5M8 17v-3" />
+			<rect x="3" y="12" width="4.5" height="9" rx="1" />
+			<rect x="9.75" y="7" width="4.5" height="14" rx="1" />
+			<rect x="16.5" y="3" width="4.5" height="18" rx="1" />
 		</>
 	),
-	history: (
+	layers: (
 		<>
-			<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-			<path d="M3 3v5h5" />
-			<path d="M12 7v5l4 2" />
+			<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" />
+			<path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+			<path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
 		</>
 	),
 	check: <path d="M20 6 9 17l-5-5" />,

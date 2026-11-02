@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
 	$formattingOf,
 	BLOCKS,
+	INSERTS,
 	MARKS,
 	linkTarget,
 	sameFormatting,
@@ -48,8 +49,8 @@ type Props = {
 	onHold?: (held: boolean) => void;
 };
 
-// The row of buttons itself, shared by the bar under the title and the one that
-// floats over a selection, so the two can never offer different things.
+// The row of buttons itself, shared by the dock and the bar that floats over a
+// selection, so the two can never offer different things.
 export default function Controls({ hidden = false, onHold }: Props) {
 	const [editor] = useLexicalComposerContext();
 	const formatting = useFormatting(editor);
@@ -120,6 +121,26 @@ export default function Controls({ hidden = false, onHold }: Props) {
 	const name =
 		formatting === null ? "Text" : (formatting.block?.label ?? "Mixed");
 
+	function option(action: Action, checked?: boolean) {
+		return (
+			<button
+				key={action.id}
+				type="button"
+				role={checked === undefined ? "menuitem" : "menuitemradio"}
+				aria-checked={checked}
+				className="controls__option"
+				onClick={() => act(action)}
+			>
+				{action.label}
+				{/* The menu is where the shortcuts are learned, so they are
+				    shown rather than hidden in a tooltip. */}
+				<span className="controls__keys">
+					{shortcutLabel(action.keys)}
+				</span>
+			</button>
+		);
+	}
+
 	return (
 		<div
 			className="controls"
@@ -149,24 +170,11 @@ export default function Controls({ hidden = false, onHold }: Props) {
 
 				{open && (
 					<div className="controls__list" role="menu">
-						{BLOCKS.map((action) => (
-							<button
-								key={action.id}
-								type="button"
-								role="menuitemradio"
-								aria-checked={formatting?.block === action}
-								className="controls__option"
-								onClick={() => act(action)}
-							>
-								{action.label}
-								{/* The menu is where the shortcuts are
-								    learned, so they are shown rather than
-								    hidden in a tooltip. */}
-								<span className="controls__keys">
-									{shortcutLabel(action.keys)}
-								</span>
-							</button>
-						))}
+						{BLOCKS.map((action) =>
+							option(action, formatting?.block === action),
+						)}
+						<span className="menu__rule" />
+						{INSERTS.map((action) => option(action))}
 					</div>
 				)}
 			</div>

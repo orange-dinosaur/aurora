@@ -3,7 +3,12 @@
 // makes something new.
 
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactNode, RefObject } from "react";
+import type {
+	CSSProperties,
+	MouseEvent as ReactMouseEvent,
+	ReactNode,
+	RefObject,
+} from "react";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -49,6 +54,11 @@ export function useDismissal(
 	open: boolean,
 	within: RefObject<HTMLElement | null>,
 	close: () => void,
+	/**
+	 * The button that opens it, when that sits outside `within`. Its press
+	 * must not close what its click is about to toggle.
+	 */
+	trigger?: RefObject<HTMLElement | null>,
 ) {
 	useEffect(() => {
 		if (!open) {
@@ -57,7 +67,13 @@ export function useDismissal(
 
 		function away(event: MouseEvent) {
 			const at = event.target;
-			if (!(at instanceof Node) || !within.current?.contains(at)) {
+			if (
+				!(at instanceof Node) ||
+				!(
+					within.current?.contains(at) ||
+					trigger?.current?.contains(at)
+				)
+			) {
 				close();
 			}
 		}
@@ -74,7 +90,33 @@ export function useDismissal(
 			document.removeEventListener("mousedown", away);
 			document.removeEventListener("keydown", escape);
 		};
-	}, [open, within, close]);
+	}, [open, within, close, trigger]);
+}
+
+/** How long a closing menu takes to fade, which the stylesheet says too. */
+export const MENU_FADE = 100;
+
+/** How long a closing dialog takes to fade, which the stylesheet says too. */
+export const DIALOG_FADE = 140;
+
+/**
+ * Whether something that has been told to close should still be drawn, so it
+ * has time to fade rather than vanishing the moment it is dismissed.
+ */
+export function useLingering(open: boolean, ms: number): boolean {
+	const [lingering, setLingering] = useState(false);
+
+	useEffect(() => {
+		if (open) {
+			setLingering(true);
+			return;
+		}
+
+		const timer = setTimeout(() => setLingering(false), ms);
+		return () => clearTimeout(timer);
+	}, [open, ms]);
+
+	return open || lingering;
 }
 
 export default function Menu({
@@ -88,6 +130,9 @@ export default function Menu({
 	children,
 }: Props) {
 	const [open, setOpen] = useState(false);
+	// The keyboard reports a click with no count, and skips the motion.
+	const [instant, setInstant] = useState(false);
+	const drawn = useLingering(open, MENU_FADE);
 	const menu = useRef<HTMLDivElement>(null);
 	const items = useRef<HTMLDivElement>(null);
 
@@ -120,7 +165,10 @@ export default function Menu({
 				className={className ?? "menu__trigger"}
 				aria-label={label}
 				aria-expanded={open}
-				onClick={() => setOpen((was) => !was)}
+				onClick={(event) => {
+					setInstant(event.detail === 0);
+					setOpen((was) => !was);
+				}}
 			>
 				{trigger ??
 					(trailing === true ? (
@@ -136,8 +184,15 @@ export default function Menu({
 					))}
 			</button>
 
-			{open && (
-				<div ref={items} className="menu__items" role="menu">
+			{drawn && (
+				<div
+					ref={items}
+					className="menu__items"
+					role="menu"
+					data-closing={open ? undefined : ""}
+					data-instant={instant ? "" : undefined}
+					inert={!open}
+				>
 					{children(() => setOpen(false))}
 				</div>
 			)}
@@ -149,6 +204,7 @@ export default function Menu({
 export function MenuItem({
 	danger,
 	disabled,
+	autoFocus,
 	checked,
 	depth,
 	onSelect,
@@ -156,11 +212,12 @@ export function MenuItem({
 }: {
 	danger?: boolean;
 	disabled?: boolean;
+	autoFocus?: boolean;
 	/** Given only in a menu that picks one of several. */
 	checked?: boolean;
 	/** How far in to set it, for a menu that lists a tree. */
 	depth?: number;
-	onSelect: () => void;
+	onSelect: (event: ReactMouseEvent) => void;
 	children: ReactNode;
 }) {
 	return (
@@ -177,6 +234,7 @@ export function MenuItem({
 					: ({ "--depth": depth } as CSSProperties)
 			}
 			disabled={disabled}
+			autoFocus={autoFocus}
 			onClick={onSelect}
 		>
 			{children}

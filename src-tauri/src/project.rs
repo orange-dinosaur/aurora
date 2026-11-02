@@ -986,21 +986,42 @@ pub struct RecentSummary {
 	/// None for the same reason. The question asked before a project is
 	/// trashed counts what is about to go, so it needs this to be honest.
 	pub documents: Option<usize>,
+	/// None for the same reason, and likewise the three after it.
+	pub title: Option<String>,
+	pub author: Option<String>,
+	/// Relative to the project, for `read_cover` to fetch. None as well when
+	/// the book has no image, or names one `read_cover` would refuse.
+	pub cover: Option<String>,
+	pub format: Option<Format>,
 }
 
 /// Every word in a project. Nothing caches this, so it opens each document
 /// once and keeps only the count.
-/// What the welcome screen says about a project. Both numbers come out of one
-/// read of the manifest, since nothing ever wants only one of them.
+/// What the welcome screen says about a project. All of it comes out of one
+/// read of the manifest, since nothing ever wants only part of it.
 struct Measure {
 	words: usize,
 	documents: usize,
+	title: String,
+	author: String,
+	cover: Option<String>,
+	format: Format,
+}
+
+/// Whether a cover's name in the manifest is one file in the project. The
+/// manifest is a file the writer can edit, so a path out of it has to be caught.
+fn cover_stays_inside(name: &str) -> bool {
+	Path::new(name).file_name() == Some(std::ffi::OsStr::new(name))
 }
 
 fn measure(root: &Path) -> Option<Measure> {
 	let manifest = read_manifest(root).ok()?;
 	let documents = manifest.documents();
 	Some(Measure {
+		title: manifest.book.title,
+		author: manifest.book.author,
+		cover: Some(manifest.book.cover).filter(|name| cover_stays_inside(name)),
+		format: manifest.format,
 		words: documents
 			.iter()
 			.map(|document| {
@@ -1032,6 +1053,10 @@ fn summarise_recents(store_path: &Path) -> Result<Vec<RecentSummary>> {
 			RecentSummary {
 				words: measured.as_ref().map(|m| m.words),
 				documents: measured.as_ref().map(|m| m.documents),
+				title: measured.as_ref().map(|m| m.title.clone()),
+				author: measured.as_ref().map(|m| m.author.clone()),
+				cover: measured.as_ref().and_then(|m| m.cover.clone()),
+				format: measured.as_ref().map(|m| m.format),
 				project,
 			}
 		})
@@ -1064,12 +1089,36 @@ pub fn forget_project(app: AppHandle, root: PathBuf) -> Result<()> {
 #[tauri::command]
 pub fn trash_project(app: AppHandle, root: PathBuf) -> Result<()> {
 	let store = store_path(&app)?;
-	// Only a folder Aurora can read as a project. A path that arrives from
-	// anywhere else must not be able to bin a folder on the strength of being
-	// asked to.
-	read_manifest(&root)?;
-	trash::delete(&root).map_err(Error::Trash)?;
+	require_remembered(&store, &root)?;
+	move_to_trash(&root)?;
 	forget(&store, &root)
+}
+
+/// Only a folder on the recent list. A path that arrives from anywhere else
+/// must not be able to bin a folder on the strength of being asked to. This
+/// asks the list rather than the manifest, because a project that cannot be
+/// read still has to be deletable.
+fn require_remembered(store_path: &Path, root: &Path) -> Result<()> {
+	let store = store::load(store_path)?;
+	if store.recent.iter().any(|project| project.root == root) {
+		Ok(())
+	} else {
+		Err(Error::NotAProject)
+	}
+}
+
+fn move_to_trash(root: &Path) -> Result<()> {
+	#[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+	let mut context = trash::TrashContext::new();
+	// The crate's default is an AppleScript to Finder, which refuses a folder
+	// holding anything it thinks has to be downloaded first, and can stop to
+	// ask for permission to control Finder.
+	#[cfg(target_os = "macos")]
+	{
+		use trash::macos::{DeleteMethod, TrashContextExtMacos};
+		context.set_delete_method(DeleteMethod::NsFileManager);
+	}
+	context.delete(root).map_err(Error::Trash)
 }
 
 /// The writer is done with the open project for now. It stays in the recent
@@ -1171,9 +1220,7 @@ pub fn cover_bytes(root: &Path) -> Result<Vec<u8>> {
 	if name.is_empty() {
 		return Err(Error::CoverMissing);
 	}
-	// The manifest is a file the writer can edit, so what it names has to be
-	// checked: a cover is one file in the project, never a path out of it.
-	if Path::new(&name).file_name() != Some(std::ffi::OsStr::new(&name)) {
+	if !cover_stays_inside(&name) {
 		return Err(Error::OutsideProject);
 	}
 
@@ -2542,5 +2589,93 @@ mod tests {
 		write_manifest(&root, &mut manifest).unwrap();
 
 		assert_eq!(summarise_recents(&store).unwrap()[0].words, Some(0));
+	}
+
+	#[test]
+	fn a_project_on_the_list_can_go_to_the_trash_even_if_it_cannot_be_read() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		fs::write(root.join(MANIFEST_FILE), "not a manifest").unwrap();
+
+		assert!(require_remembered(&store, &root).is_ok());
+	}
+
+	#[test]
+	fn a_project_off_the_list_cannot_go_to_the_trash() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		forget(&store, &root).unwrap();
+
+		assert!(matches!(
+			require_remembered(&store, &root),
+			Err(Error::NotAProject)
+		));
+	}
+
+	#[test]
+	fn the_recent_list_shows_the_book_a_project_holds() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		let mut manifest = read_manifest(&root).unwrap();
+		manifest.book.title = "The Salt Almanac".to_owned();
+		manifest.book.author = "Ines Marlowe".to_owned();
+		manifest.book.cover = "cover.png".to_owned();
+		write_manifest(&root, &mut manifest).unwrap();
+
+		let recents = summarise_recents(&store).unwrap();
+		assert_eq!(recents[0].title.as_deref(), Some("The Salt Almanac"));
+		assert_eq!(recents[0].author.as_deref(), Some("Ines Marlowe"));
+		assert_eq!(recents[0].cover.as_deref(), Some("cover.png"));
+		assert_eq!(recents[0].format, Some(Format::Novel));
+	}
+
+	#[test]
+	fn a_project_that_cannot_be_read_shows_no_book() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+		fs::write(root.join(MANIFEST_FILE), "not a manifest").unwrap();
+
+		let recents = summarise_recents(&store).unwrap();
+		assert_eq!(recents[0].title, None);
+		assert_eq!(recents[0].author, None);
+		assert_eq!(recents[0].cover, None);
+		assert_eq!(recents[0].format, None);
+	}
+
+	#[test]
+	fn a_book_with_no_image_has_no_cover_to_fetch() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		assert_eq!(summarise_recents(&store).unwrap()[0].cover, None);
+	}
+
+	#[test]
+	fn a_cover_pointing_out_of_the_project_is_passed_over() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		let mut manifest = read_manifest(&root).unwrap();
+		manifest.book.cover = "../elsewhere.png".to_owned();
+		write_manifest(&root, &mut manifest).unwrap();
+
+		assert_eq!(summarise_recents(&store).unwrap()[0].cover, None);
 	}
 }

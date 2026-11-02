@@ -13,6 +13,9 @@ import { SETTINGS as SETTINGS_KEYS, shortcutLabel } from "./formatting";
  */
 export const SIGNED_IN: boolean = false;
 
+/** Whether the sign-in screen can be reached. Both ways to it stay drawn. */
+const SIGN_IN_OPEN: boolean = false;
+
 /** The chip at the right of the header, and the menu it opens. */
 export function AccountChip({
 	onLogin,
@@ -21,29 +24,19 @@ export function AccountChip({
 }: {
 	onLogin: () => void;
 	onProfile: () => void;
-	onSettings: () => void;
+	onSettings: (keyboard: boolean) => void;
 }) {
 	return (
 		<Menu
 			label={SIGNED_IN ? "Account" : "Not signed in"}
 			wrapper="titlebar__menu titlebar__menu--account"
 			className="account__chip"
-			trigger={
-				<>
-					<span className="account__avatar">
-						<Icon name="user" />
-					</span>
-					<span className="titlebar__label">
-						{SIGNED_IN ? "Account" : "Sign in"}
-					</span>
-					<Icon name="chevron-down" />
-				</>
-			}
+			trigger={<Icon name="user" />}
 		>
 			{(close) => (
 				<>
 					<div className="account__who">
-						<span className="account__avatar account__avatar--big">
+						<span className="account__avatar">
 							<Icon name="user" />
 						</span>
 						<span className="account__names">
@@ -74,9 +67,9 @@ export function AccountChip({
 					{/* Settings belongs to the writer rather than to the
 					    project: the preferences follow them into every one. */}
 					<MenuItem
-						onSelect={() => {
+						onSelect={(event) => {
 							close();
-							onSettings();
+							onSettings(event.detail === 0);
 						}}
 					>
 						Settings
@@ -88,7 +81,7 @@ export function AccountChip({
 					<span className="menu__rule" />
 
 					<MenuItem
-						disabled={SIGNED_IN}
+						disabled={SIGNED_IN || !SIGN_IN_OPEN}
 						onSelect={() => {
 							close();
 							onLogin();
@@ -106,35 +99,33 @@ export function AccountChip({
 export default function Account({ onLogin }: { onLogin: () => void }) {
 	return (
 		<>
-			<div className="account__card">
-				<span className="account__avatar account__avatar--card">
+			<div className="settings__row">
+				<span className="account__avatar">
 					<Icon name="user" />
 				</span>
-				<span className="account__names">
-					<span className="account__name">
+				<div className="settings__about">
+					<p className="settings__label">
 						{SIGNED_IN ? "Signed in" : "Not signed in"}
-					</span>
-					<span className="account__where">
+					</p>
+					<p className="settings__hint">
 						Preferences are saved on this machine only.
-					</span>
-				</span>
+					</p>
+				</div>
 				<button
 					type="button"
 					className="account__in"
-					disabled={SIGNED_IN}
+					disabled={SIGNED_IN || !SIGN_IN_OPEN}
 					onClick={onLogin}
 				>
 					Sign in
 				</button>
 			</div>
 
-			<p className="account__blurb">
+			<p className="settings__line">
 				An account will sync your manuscripts, session targets,
 				typography and theme between machines. Accounts are not ready
 				yet, and everything else in Aurora works without one.
 			</p>
-
-			<span className="settings__rule" />
 
 			{/* The switch is drawn where it will live and cannot be moved:
 			    there is nothing behind it to turn on. */}
@@ -146,28 +137,16 @@ export default function Account({ onLogin }: { onLogin: () => void }) {
 						account behind it.
 					</p>
 				</div>
-				<span
-					className="settings__choices"
-					role="group"
+				<button
+					type="button"
+					className="settings__switch"
+					role="switch"
+					aria-checked={false}
 					aria-label="Sync manuscripts"
+					disabled
 				>
-					<button
-						type="button"
-						className="settings__choice"
-						aria-pressed={false}
-						disabled
-					>
-						On
-					</button>
-					<button
-						type="button"
-						className="settings__choice"
-						aria-pressed={true}
-						disabled
-					>
-						Off
-					</button>
-				</span>
+					<span className="settings__knob" />
+				</button>
 			</div>
 		</>
 	);

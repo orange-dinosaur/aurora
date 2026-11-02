@@ -37,7 +37,7 @@ type Place = {
 	depth: number;
 	/**
 	 * Its position among the nodes beside it. That is the index
-	 * `reorder_document` takes, and the number the sidebar shows.
+	 * `reorder_document` takes.
 	 */
 	index: number;
 	/** How many nodes share its level, so the menu knows where it can go. */
@@ -169,11 +169,6 @@ export function inside(list: Row[], id: string): ReadonlySet<string> {
 	}
 
 	return held;
-}
-
-/** How many documents a level holds, however deep they sit. */
-export function documentsIn(nodes: TreeNode[]): number {
-	return rows(nodes, "").filter((row) => row.kind === "document").length;
 }
 
 /** The project's sections: the folders at the top of the tree. */

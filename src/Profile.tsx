@@ -19,10 +19,13 @@ const FIGURES = [
 ];
 
 export default function Profile({
+	back,
 	onBack,
 	theme,
 	onTheme,
 }: {
+	/** Says where the way out goes, since this opens from the Shelf as well. */
+	back: string;
 	onBack: () => void;
 	theme: Theme;
 	onTheme: (theme: Theme) => void;
@@ -43,9 +46,9 @@ export default function Profile({
 	return (
 		<div className="profile">
 			<div className="profile__bar">
-				<button type="button" className="profile__out" onClick={onBack}>
+				<button type="button" className="quiet" onClick={onBack}>
 					<Icon name="chevron-left" />
-					Back to writing
+					{back}
 				</button>
 				<ThemeToggle
 					theme={theme}
@@ -80,35 +83,29 @@ export default function Profile({
 				</div>
 
 				<h2 className="profile__heading">Account</h2>
-				<div className="profile__card">
-					<label className="profile__field">
-						<span className="profile__label">Display name</span>
-						<input
-							type="text"
-							className="profile__input"
-							placeholder="Nobody yet"
-							disabled
-						/>
-					</label>
-					<label className="profile__field">
-						<span className="profile__label">Email</span>
-						<input
-							type="email"
-							className="profile__input"
-							placeholder="you@example.com"
-							disabled
-						/>
-					</label>
-					<div className="profile__row">
-						<span className="profile__label">Password</span>
-						<button
-							type="button"
-							className="profile__quiet"
-							disabled
-						>
-							Change password
-						</button>
-					</div>
+				<label className="profile__row">
+					<span className="profile__label">Display name</span>
+					<input
+						type="text"
+						className="profile__input"
+						placeholder="Nobody yet"
+						disabled
+					/>
+				</label>
+				<label className="profile__row">
+					<span className="profile__label">Email</span>
+					<input
+						type="email"
+						className="profile__input"
+						placeholder="you@example.com"
+						disabled
+					/>
+				</label>
+				<div className="profile__row">
+					<span className="profile__label">Password</span>
+					<button type="button" className="profile__quiet" disabled>
+						Change password
+					</button>
 				</div>
 
 				<p className="profile__note">
@@ -121,7 +118,7 @@ export default function Profile({
 					<p className="profile__note">
 						Preferences and targets are kept on this machine.
 					</p>
-					<button type="button" className="profile__out-of" disabled>
+					<button type="button" className="quiet" disabled>
 						Sign out
 					</button>
 				</div>

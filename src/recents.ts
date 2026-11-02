@@ -1,21 +1,25 @@
-// The wording the welcome screen uses about a project it is about to move to
-// the trash. Here rather than in the screen because the count has more cases
-// than it looks like it has, and each of them is worth pinning down.
+// The wording the Shelf uses about a project. Here rather than in the screen
+// because each of these has more cases than it looks like it has, and each of
+// them is worth pinning down.
 
 /**
- * What to call the writing inside a project in the question asked before it is
- * trashed, as the tail of "Move <name> …to the system trash?".
+ * What goes when a project is deleted, as the line under the question.
  *
  * A project whose manifest could not be read has no count to give, and one
- * whose documents have all been deleted would otherwise be offered as "all 0
- * of its documents". Both say the vaguer thing, which is still true.
+ * whose documents have all been deleted would otherwise be offered as "0
+ * documents". Both say the vaguer thing, which is still true.
  */
-export function contents(documents: number | null): string {
+export function going(documents: number | null): string {
 	if (documents === null || documents === 0) {
-		return "and everything in it";
+		return "The folder goes to the system trash.";
 	}
 	if (documents === 1) {
-		return "and its one document";
+		return "One document goes to the system trash.";
 	}
-	return `and all ${documents.toLocaleString()} of its documents`;
+	return `${documents.toLocaleString()} documents go to the system trash.`;
+}
+
+/** The last part of a project's path, on either kind of system. */
+export function folderName(root: string): string {
+	return root.split(/[\\/]/).filter(Boolean).pop() ?? root;
 }

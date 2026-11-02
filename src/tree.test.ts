@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
 	destinations,
-	documentsIn,
 	documentsOf,
 	folded,
 	folderOf,
@@ -226,20 +225,6 @@ describe("reading the top of the tree", () => {
 			"Manuscript",
 			"Notes",
 		]);
-	});
-
-	test("a section counts the documents below it, however deep they sit", () => {
-		const section = [
-			folder("Part One", [
-				document("Manuscript/Part One/Chapter 1.md"),
-				folder("Chapter Two", [
-					document("Manuscript/Part One/Chapter Two/Scene.md"),
-				]),
-			]),
-			document("Manuscript/Epilogue.md"),
-		];
-
-		expect(documentsIn(section)).toBe(3);
 	});
 });
 

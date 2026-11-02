@@ -41,56 +41,51 @@ export default function TagView({ root, tag, changed, live, onOpen }: Props) {
 		}
 	}
 
-	if (corpus.kind === "failed") {
-		return (
-			<section className="search">
-				<p className="search__note search__note--error">
-					{corpus.message}
-				</p>
-			</section>
-		);
-	}
-
-	if (corpus.kind !== "ready") {
-		return (
-			<section className="search">
-				<p className="search__note">Reading the project…</p>
-			</section>
-		);
-	}
-
 	return (
-		<section className="search">
-			<p className="search__note">
-				{wearing.length === 0
-					? "Nothing is tagged"
-					: wearing.length === 1
-						? "One document tagged"
-						: `${wearing.length} documents tagged`}{" "}
-				<span className="search__tag">{tag}</span>
-			</p>
+		<section className="overview overview--sheet">
+			<header className="overview__header">
+				<div className="overview__heading">
+					<h2 className="overview__title">{tag}</h2>
+					{corpus.kind === "ready" ? (
+						<p className="overview__count overview__count--chip">
+							{wearing.length === 0
+								? "Nothing is tagged"
+								: wearing.length === 1
+									? "One document tagged"
+									: `${wearing.length} documents tagged`}
+							<span className="overview__tag">{tag}</span>
+						</p>
+					) : corpus.kind !== "failed" ? (
+						<p className="overview__count">Reading the project…</p>
+					) : null}
+				</div>
+			</header>
 
-			{wearing.length > 0 && (
-				<div className="search__results">
-					<ul className="search__groups">
-						{wearing.map((document) => (
-							<li key={document.id}>
-								<button
-									type="button"
-									className="search__document"
-									onClick={() => open(document.id)}
-								>
-									<span className="search__title">
+			{corpus.kind === "failed" && (
+				<p className="overview__message">{corpus.message}</p>
+			)}
+
+			{corpus.kind === "ready" && wearing.length > 0 && (
+				<ul className="overview__rows">
+					{wearing.map((document) => (
+						<li key={document.id}>
+							<button
+								type="button"
+								className="overview__row"
+								onClick={() => open(document.id)}
+							>
+								<span className="overview__row-text">
+									<span className="overview__row-title">
 										{document.title}
 									</span>
-									<span className="search__folder">
+									<span className="overview__row-where">
 										{document.trail.join(" / ")}
 									</span>
-								</button>
-							</li>
-						))}
-					</ul>
-				</div>
+								</span>
+							</button>
+						</li>
+					))}
+				</ul>
 			)}
 		</section>
 	);
