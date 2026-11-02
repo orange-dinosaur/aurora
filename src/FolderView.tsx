@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
 import FolderMenu from "./FolderMenu";
@@ -22,6 +22,27 @@ import type { Spot } from "./reorder";
 import { useReorder } from "./reorder";
 import { failure } from "./errors";
 import { canTry } from "./takes";
+
+/** A card being named: the name goes straight onto it, with no box. */
+function NamingCard({
+	at,
+	hint,
+	children,
+}: {
+	at: number;
+	hint: string;
+	children: ReactNode;
+}) {
+	return (
+		<div className="card card--naming">
+			<span className="card__ordinal">
+				{String(at + 1).padStart(2, "0")}
+			</span>
+			{children}
+			<p className="card__hint">{hint}</p>
+		</div>
+	);
+}
 
 type Status =
 	{ kind: "busy" } | { kind: "idle" } | { kind: "error"; message: string };
@@ -204,7 +225,7 @@ export default function FolderView({
 
 	if (status.kind === "busy" && cards.length === 0) {
 		return (
-			<div className="overview">
+			<div className="overview overview--folder">
 				<header className="overview__header">
 					<h2 className="overview__title">{folder.name}</h2>
 				</header>
@@ -214,7 +235,7 @@ export default function FolderView({
 	}
 
 	return (
-		<div className="overview">
+		<div className="overview overview--folder">
 			<header className="overview__header">
 				<div className="overview__heading">
 					{/* The folders above this one, which is what tells two
@@ -248,7 +269,10 @@ export default function FolderView({
 						return renaming.kind !== "closed" &&
 							renaming.id === card.id ? (
 							<li key={card.id} className="cards__item">
-								<div className="card card--naming">
+								<NamingCard
+									at={at}
+									hint="Enter to rename, Esc to cancel"
+								>
 									<NameField
 										label={`New name for ${card.name}`}
 										placeholder={folderPlaceholder(
@@ -268,7 +292,7 @@ export default function FolderView({
 											setRenaming({ kind: "closed" })
 										}
 									/>
-								</div>
+								</NamingCard>
 							</li>
 						) : (
 							<li
@@ -333,7 +357,10 @@ export default function FolderView({
 					return renaming.kind !== "closed" &&
 						renaming.id === document.id ? (
 						<li key={document.id} className="cards__item">
-							<div className="card card--naming">
+							<NamingCard
+								at={at}
+								hint="Enter to rename, Esc to cancel"
+							>
 								<NameField
 									label={`New name for ${document.title}`}
 									placeholder="Chapter 2"
@@ -356,7 +383,7 @@ export default function FolderView({
 										setRenaming({ kind: "closed" })
 									}
 								/>
-							</div>
+							</NamingCard>
 						</li>
 					) : (
 						<li
@@ -450,7 +477,10 @@ export default function FolderView({
 							}
 						/>
 					) : (
-						<div className="card card--naming">
+						<NamingCard
+							at={cards.length}
+							hint="Enter to add, Esc to cancel"
+						>
 							<NameField
 								label={`Name of the new ${naming.making.noun} in ${folder.name}`}
 								placeholder={naming.making.placeholder}
@@ -465,7 +495,7 @@ export default function FolderView({
 								}
 								onCancel={() => setNaming({ kind: "closed" })}
 							/>
-						</div>
+						</NamingCard>
 					)}
 				</li>
 			</ul>
