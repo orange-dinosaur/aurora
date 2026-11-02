@@ -106,18 +106,18 @@ export function AccountChip({
 export default function Account({ onLogin }: { onLogin: () => void }) {
 	return (
 		<>
-			<div className="account__card">
-				<span className="account__avatar account__avatar--card">
+			<div className="settings__row">
+				<span className="account__avatar">
 					<Icon name="user" />
 				</span>
-				<span className="account__names">
-					<span className="account__name">
+				<div className="settings__about">
+					<p className="settings__label">
 						{SIGNED_IN ? "Signed in" : "Not signed in"}
-					</span>
-					<span className="account__where">
+					</p>
+					<p className="settings__hint">
 						Preferences are saved on this machine only.
-					</span>
-				</span>
+					</p>
+				</div>
 				<button
 					type="button"
 					className="account__in"
@@ -128,13 +128,11 @@ export default function Account({ onLogin }: { onLogin: () => void }) {
 				</button>
 			</div>
 
-			<p className="account__blurb">
+			<p className="settings__line">
 				An account will sync your manuscripts, session targets,
 				typography and theme between machines. Accounts are not ready
 				yet, and everything else in Aurora works without one.
 			</p>
-
-			<span className="settings__rule" />
 
 			{/* The switch is drawn where it will live and cannot be moved:
 			    there is nothing behind it to turn on. */}
@@ -146,28 +144,16 @@ export default function Account({ onLogin }: { onLogin: () => void }) {
 						account behind it.
 					</p>
 				</div>
-				<span
-					className="settings__choices"
-					role="group"
+				<button
+					type="button"
+					className="settings__switch"
+					role="switch"
+					aria-checked={false}
 					aria-label="Sync manuscripts"
+					disabled
 				>
-					<button
-						type="button"
-						className="settings__choice"
-						aria-pressed={false}
-						disabled
-					>
-						On
-					</button>
-					<button
-						type="button"
-						className="settings__choice"
-						aria-pressed={true}
-						disabled
-					>
-						Off
-					</button>
-				</span>
+					<span className="settings__knob" />
+				</button>
 			</div>
 		</>
 	);

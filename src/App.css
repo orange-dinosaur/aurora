@@ -1673,16 +1673,6 @@ body,
 	height: 16px;
 }
 
-.account__avatar--card {
-	width: 44px;
-	height: 44px;
-}
-
-.account__avatar--card svg {
-	width: 20px;
-	height: 20px;
-}
-
 /* Who is signed in, at the top of the menu the chip opens. */
 .account__who {
 	display: flex;
@@ -1714,43 +1704,14 @@ body,
 }
 
 /* The same two lines again in Settings, where there is room to breathe. */
-.account__card {
-	display: flex;
-	align-items: center;
-	gap: 1rem;
-	padding: 1.25rem;
-	background: var(--bg-card);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-}
-
-.account__card .account__name {
-	font-size: 0.9375rem;
-}
-
-.account__card .account__where {
-	font-size: 0.8125rem;
-	color: var(--text-dim);
-	white-space: normal;
-}
-
 .account__in {
 	flex: none;
 	margin-left: auto;
-	height: 32px;
-	padding: 0 0.85rem;
-	font: inherit;
-	font-size: 0.8125rem;
+	height: 30px;
+	padding: 0 var(--space-sm);
+	font: var(--text-ui);
 	letter-spacing: normal;
-	line-height: normal;
 	text-transform: none;
-}
-
-.account__blurb {
-	margin: 1.25rem 0 0;
-	font-size: 0.8125rem;
-	line-height: 1.6;
-	color: var(--text-dim);
 }
 
 /* The login screen covers the window rather than replacing what is under it:
@@ -7566,18 +7527,22 @@ button.compare__pick:focus-visible {
 	backdrop-filter: blur(2px);
 }
 
-/* Sized to the window until it reaches its own bounds, so a short window
-   shrinks it rather than pushing the pane off the bottom. */
+.scrim:has(> .settings) {
+	padding: var(--space-md);
+}
+
+/* One size, so nothing jumps between sections, until a short window shrinks it
+   rather than pushing the pane off the bottom. */
 .settings {
 	display: flex;
 	width: 100%;
-	max-width: 780px;
+	max-width: 760px;
 	height: 100%;
-	max-height: 540px;
+	max-height: 560px;
 	overflow: hidden;
-	background: var(--bg);
-	border: 1px solid var(--border-strong);
-	border-radius: 14px;
+	background: var(--bg-card);
+	border: var(--hairline);
+	border-radius: var(--radius-lg);
 	box-shadow: var(--shadow-float);
 }
 
@@ -7591,26 +7556,23 @@ button.compare__pick:focus-visible {
 	flex: none;
 	display: flex;
 	flex-direction: column;
-	width: 186px;
-	padding: 1.25rem 0.75rem;
+	width: 196px;
+	padding: var(--space-md) var(--space-sm);
 	background: var(--bg-chrome);
-	border-right: 1px solid var(--border);
 }
 
 .settings__eyebrow {
-	margin: 0 0 1.25rem;
-	padding: 0 0.5rem;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
+	margin: 0 0 var(--space-xs);
+	padding: 0 var(--space-xs);
+	font: var(--text-caption);
 	color: var(--text-faint);
 }
 
 .settings__list {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
-	gap: 1px;
+	gap: 2px;
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -7619,15 +7581,14 @@ button.compare__pick:focus-visible {
 .settings__section {
 	display: block;
 	width: 100%;
-	height: 32px;
-	padding: 0 0.6rem;
-	font: inherit;
-	font-size: 0.8125rem;
+	padding: 5px var(--space-xs);
+	font: var(--text-ui);
 	text-align: left;
+	white-space: nowrap;
 	color: var(--text-dim);
 	background: none;
 	border: 0;
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-xs);
 	cursor: pointer;
 }
 
@@ -7649,10 +7610,9 @@ button.compare__pick:focus-visible {
 /* Held at the foot of the rail, which is the one place in the dialog where a
    line about all of the sections belongs to none of them. */
 .settings__note {
-	margin: auto 0 0;
-	padding: 0 0.6rem;
-	font-size: 0.6875rem;
-	line-height: 1.5;
+	margin: 0;
+	padding: 0 var(--space-xs);
+	font: var(--text-caption);
 	color: var(--text-faint);
 }
 
@@ -7668,15 +7628,14 @@ button.compare__pick:focus-visible {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 1rem;
-	padding: 1rem 1.5rem;
-	border-bottom: 1px solid var(--border);
+	gap: var(--space-md);
+	padding: var(--space-md) var(--space-md) var(--space-sm) var(--space-lg);
 }
 
 .settings__heading {
 	margin: 0;
-	font-size: 0.9375rem;
-	font-weight: 600;
+	font: var(--text-heading);
+	letter-spacing: var(--tracking-heading);
 }
 
 .settings__close {
@@ -7707,32 +7666,39 @@ button.compare__pick:focus-visible {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: 1.5rem;
+	padding: 0 var(--space-lg) var(--space-lg);
 }
 
 /* What one preference looks like: what it is on the left, what it is set to on
-   the right. Every section is built out of these. */
+   the right. Every section is built out of these, and space alone parts them. */
 .settings__row {
 	display: flex;
-	align-items: flex-start;
+	flex-wrap: wrap;
+	align-items: center;
 	justify-content: space-between;
-	gap: 2rem;
+	gap: var(--space-xs) var(--space-lg);
+	padding: var(--space-sm) 0;
 }
 
 .settings__about {
+	flex: 1 1 220px;
 	min-width: 0;
 }
 
 .settings__label {
 	margin: 0;
-	font-size: 0.875rem;
-	font-weight: 500;
+	font: var(--text-ui);
 }
 
 .settings__hint {
-	margin: 0.2rem 0 0;
-	font-size: 0.8125rem;
-	line-height: 1.5;
+	margin: 2px 0 0;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.settings__line {
+	margin: 0;
+	font: var(--text-ui);
 	color: var(--text-dim);
 }
 
@@ -7762,11 +7728,6 @@ button.compare__pick:focus-visible {
 	cursor: pointer;
 }
 
-.settings__choice:disabled {
-	opacity: 0.55;
-	cursor: default;
-}
-
 .settings__choice:hover {
 	color: var(--text);
 }
@@ -7781,39 +7742,23 @@ button.compare__pick:focus-visible {
 	outline-offset: -2px;
 }
 
-/* Between two things a section has to say. The only rule in Aurora drawn as an
-   element rather than as a border, because it separates groups rather than
-   bounding either of them. */
-.settings__rule {
-	height: 1px;
-	margin: 1.5rem 0;
-	background: var(--border);
-}
-
 .settings__faces {
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	margin-top: 0.75rem;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: var(--space-xs);
+	margin: var(--space-xs) 0 var(--space-sm);
 }
 
-/* The specimen and the name sit on one baseline, so the six names line up down
-   the right however tall the faces are. */
 .settings__face {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 1rem;
-	padding: 0.6rem 0.75rem;
-	font: inherit;
+	padding: var(--space-sm);
+	font: var(--text-ui);
 	letter-spacing: normal;
-	line-height: normal;
 	text-transform: none;
 	text-align: left;
 	color: var(--text);
 	background: none;
-	border: 0;
-	border-radius: var(--radius-sm);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
 	cursor: pointer;
 }
 
@@ -7823,6 +7768,7 @@ button.compare__pick:focus-visible {
 
 .settings__face[aria-pressed="true"] {
 	background: var(--accent-wash);
+	border-color: var(--accent);
 }
 
 .settings__face:focus-visible {
@@ -7831,33 +7777,16 @@ button.compare__pick:focus-visible {
 }
 
 .settings__sample {
-	font-size: 1.0625rem;
-}
-
-/* The sans and the typewriter run larger than a serif at the same size, so
-   they are set down to sit level with the three above them. */
-.settings__face[data-face="plexMono"] .settings__sample {
-	font-size: 0.9375rem;
-}
-
-.settings__face[data-face="plexSans"] .settings__sample,
-.settings__face[data-face="system"] .settings__sample {
-	font-size: 1rem;
+	display: block;
+	font-size: 18px;
+	line-height: 1.3;
 }
 
 .settings__family {
-	flex: none;
-	font-size: 0.75rem;
+	display: block;
+	margin-top: 2px;
+	font: var(--text-caption);
 	color: var(--text-dim);
-}
-
-/* Several preferences at once: what each one is down the left, what it is set
-   to down the right, so the controls line up however wide their labels run. */
-.settings__grid {
-	display: grid;
-	grid-template-columns: 1fr auto;
-	align-items: center;
-	gap: 1rem 1.5rem;
 }
 
 /* The keyboard: what a key does down the left, the key itself down the right,
@@ -7865,57 +7794,45 @@ button.compare__pick:focus-visible {
    run and whichever group they are under. */
 .settings__keys {
 	display: grid;
-	grid-template-columns: 1fr auto;
-	gap: 0.55rem 1.5rem;
-	font-size: 0.8125rem;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 6px var(--space-md);
+	font: var(--text-ui);
 }
 
 .settings__group {
 	grid-column: 1 / -1;
-	margin: 0;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--text-faint);
+	margin: var(--space-md) 0 2px;
+	font: var(--text-ui-strong);
 }
 
 /* Not the first, which has the section's own space above it already. */
-.settings__group:not(:first-child) {
-	margin-top: 0.75rem;
+.settings__group:first-child {
+	margin-top: 0;
 }
 
 .settings__chord {
-	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
 	color: var(--text-dim);
 }
 
 /* A control that is two things, a number and what the number counts. */
 .settings__pair {
 	display: flex;
+	flex: none;
 	align-items: center;
-	gap: 0.4rem;
+	gap: var(--space-xs);
+	color: var(--text-dim);
 }
 
 .settings__field {
-	width: 5rem;
-	height: 30px;
-	padding: 0 0.6rem;
-	font: inherit;
-	font-size: 0.8125rem;
+	flex: none;
+	width: 76px;
+	padding: 4px 0;
+	font: var(--text-ui);
 	font-variant-numeric: tabular-nums;
 	text-align: right;
 	color: var(--text);
-}
-
-.settings__field:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: -1px;
-}
-
-.settings__suffix {
-	font-size: 0.8125rem;
-	color: var(--text-dim);
 }
 
 /* The one switch in Aurora. A preference that is on or off and has no third
@@ -7938,6 +7855,11 @@ button.compare__pick:focus-visible {
 .settings__switch[aria-checked="true"],
 .info__toggle[aria-checked="true"] {
 	background: var(--accent);
+}
+
+.settings__switch:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 .settings__switch:focus-visible,
@@ -7965,7 +7887,6 @@ button.compare__pick:focus-visible {
 	display: inline-flex;
 	flex: none;
 	align-items: center;
-	gap: 0.25rem;
 }
 
 .settings__step {
@@ -8002,10 +7923,52 @@ button.compare__pick:focus-visible {
 }
 
 .settings__number {
-	min-width: 3.25rem;
-	font-size: 0.8125rem;
+	min-width: 44px;
+	font: var(--text-ui);
 	font-variant-numeric: tabular-nums;
 	text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings__switch,
+	.settings__knob {
+		transition: none;
+	}
+}
+
+/* The rail becomes a row across the top that scrolls sideways. */
+@media (max-width: 620px) {
+	.settings {
+		flex-direction: column;
+	}
+
+	.settings__rail {
+		width: auto;
+		padding: var(--space-xs) var(--space-sm);
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+
+	.settings__rail::-webkit-scrollbar {
+		display: none;
+	}
+
+	.settings__eyebrow,
+	.settings__note {
+		display: none;
+	}
+
+	.settings__list {
+		flex-direction: row;
+	}
+
+	.settings__head {
+		padding: var(--space-sm) var(--space-sm) var(--space-xs) var(--space-md);
+	}
+
+	.settings__body {
+		padding: 0 var(--space-md) var(--space-md);
+	}
 }
 
 /* The page about the book the project adds up to: a 660px column, held in by
@@ -8660,8 +8623,7 @@ button.compare__pick:focus-visible {
 .field__box,
 .field__line,
 .chips,
-.subject__remarks,
-.settings__field {
+.subject__remarks {
 	background: var(--bg);
 	border: 1px solid var(--graphic-faint);
 	border-radius: var(--radius-sm);
@@ -8672,7 +8634,8 @@ button.compare__pick:focus-visible {
 .namefield__input,
 .controls__url,
 .editor__find-input,
-.editor__aim-input {
+.editor__aim-input,
+.settings__field {
 	background: none;
 	border: 0;
 	border-bottom: 1px solid var(--graphic-faint);
@@ -8682,7 +8645,8 @@ button.compare__pick:focus-visible {
 .namefield__input:focus,
 .controls__url:focus,
 .editor__find-input:focus,
-.editor__aim-input:focus {
+.editor__aim-input:focus,
+.settings__field:focus {
 	outline: none;
 	border-bottom-color: var(--accent-text);
 	box-shadow: 0 1px 0 var(--accent-text);

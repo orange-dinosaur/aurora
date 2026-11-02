@@ -293,14 +293,13 @@ function Typography({
 
 	return (
 		<>
-			<p className="settings__label">Manuscript face</p>
+			<p className="settings__label">Manuscript font</p>
 			<div className="settings__faces">
 				{FACES.map((each) => (
 					<button
 						key={each.id}
 						type="button"
 						className="settings__face"
-						data-face={each.id}
 						aria-pressed={preferences.manuscriptFont === each.id}
 						onClick={() =>
 							onPreferences({
@@ -322,50 +321,39 @@ function Typography({
 				))}
 			</div>
 
-			<div className="settings__rule" />
-
-			<div className="settings__grid">
-				{SETTINGS.map((setting) => (
-					<Fragment key={setting.id}>
-						<div className="settings__about">
-							<p className="settings__label">{setting.full}</p>
-							{setting.hint !== undefined && (
-								<p className="settings__hint">{setting.hint}</p>
-							)}
-						</div>
-						<span className="settings__stepper">
-							<button
-								type="button"
-								className="settings__step"
-								aria-label={`${setting.full} down`}
-								disabled={
-									preferences[setting.id] <= setting.min
-								}
-								onClick={() => press(setting, -1)}
-							>
-								&minus;
-							</button>
-							<span
-								className="settings__number"
-								aria-live="polite"
-							>
-								{setting.show(preferences[setting.id])}
-							</span>
-							<button
-								type="button"
-								className="settings__step"
-								aria-label={`${setting.full} up`}
-								disabled={
-									preferences[setting.id] >= setting.max
-								}
-								onClick={() => press(setting, 1)}
-							>
-								+
-							</button>
+			{SETTINGS.map((setting) => (
+				<div className="settings__row" key={setting.id}>
+					<div className="settings__about">
+						<p className="settings__label">{setting.label}</p>
+						{setting.hint !== undefined && (
+							<p className="settings__hint">{setting.hint}</p>
+						)}
+					</div>
+					<span className="settings__stepper">
+						<button
+							type="button"
+							className="settings__step"
+							aria-label={`${setting.label} down`}
+							disabled={preferences[setting.id] <= setting.min}
+							onClick={() => press(setting, -1)}
+						>
+							&minus;
+						</button>
+						<span className="settings__number" aria-live="polite">
+							{setting.show(preferences[setting.id])}
 						</span>
-					</Fragment>
-				))}
-			</div>
+						<button
+							type="button"
+							className="settings__step"
+							aria-label={`${setting.label} up`}
+							disabled={preferences[setting.id] >= setting.max}
+							onClick={() => press(setting, 1)}
+						>
+							+
+						</button>
+					</span>
+				</div>
+			))}
 		</>
 	);
 }
@@ -379,7 +367,7 @@ function Sessions({
 }) {
 	return (
 		<>
-			<div className="settings__grid">
+			<div className="settings__row">
 				<div className="settings__about">
 					<p className="settings__label">Default sprint</p>
 					<p className="settings__hint">
@@ -420,7 +408,9 @@ function Sessions({
 						))}
 					</span>
 				</span>
+			</div>
 
+			<div className="settings__row">
 				<div className="settings__about">
 					<p className="settings__label">Target for new documents</p>
 					<p className="settings__hint">Leave empty for none.</p>
@@ -433,7 +423,9 @@ function Sessions({
 						onPreferences({ ...preferences, defaultTarget })
 					}
 				/>
+			</div>
 
+			<div className="settings__row">
 				<div className="settings__about">
 					<p className="settings__label">
 						Count a session closed after
@@ -454,20 +446,18 @@ function Sessions({
 							})
 						}
 					/>
-					<span className="settings__suffix">minutes</span>
+					minutes
 				</span>
 			</div>
-
-			<div className="settings__rule" />
 
 			<div className="settings__row">
 				<div className="settings__about">
 					<p className="settings__label">
-						Show the session clock in the title bar
+						Show the session clock in the bar
 					</p>
 					<p className="settings__hint">
-						The only place a running session is visible with both
-						sidebars hidden.
+						With this off a session still counts, and Session in the
+						bar can stop it.
 					</p>
 				</div>
 				<button
@@ -475,7 +465,7 @@ function Sessions({
 					className="settings__switch"
 					role="switch"
 					aria-checked={preferences.sessionClock}
-					aria-label="Show the session clock in the title bar"
+					aria-label="Show the session clock in the bar"
 					onClick={() =>
 						onPreferences({
 							...preferences,
