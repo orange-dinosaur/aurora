@@ -43,7 +43,7 @@ export function AccountChip({
 			{(close) => (
 				<>
 					<div className="account__who">
-						<span className="account__avatar account__avatar--big">
+						<span className="account__avatar">
 							<Icon name="user" />
 						</span>
 						<span className="account__names">

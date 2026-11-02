@@ -1629,27 +1629,22 @@ body,
 	height: 14px;
 }
 
-/* A dashed ring where a face or a pair of initials will go. */
+/* A person in a coral circle, signed in or not. */
 .account__avatar {
 	flex: none;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 24px;
-	height: 24px;
-	color: var(--text-faint);
-	border: 1px dashed var(--border-strong);
+	width: 26px;
+	height: 26px;
+	color: var(--accent-text);
+	background: var(--accent-wash);
 	border-radius: 50%;
 }
 
 .account__avatar svg {
-	width: 13px;
-	height: 13px;
-}
-
-.account__avatar--big {
-	width: 32px;
-	height: 32px;
+	width: 15px;
+	height: 15px;
 }
 
 /* Under this width the header cannot hold its words as well as its controls,
@@ -1668,17 +1663,12 @@ body,
 	}
 }
 
-.account__avatar--big svg {
-	width: 16px;
-	height: 16px;
-}
-
 /* Who is signed in, at the top of the menu the chip opens. */
 .account__who {
 	display: flex;
 	align-items: center;
-	gap: 0.6rem;
-	padding: 0.45rem 0.5rem 0.6rem;
+	gap: var(--space-xs);
+	padding: var(--space-xs);
 }
 
 .account__names {
@@ -1687,8 +1677,7 @@ body,
 
 .account__name {
 	display: block;
-	font-size: 0.8125rem;
-	font-weight: 600;
+	font: var(--text-ui-strong);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1696,14 +1685,13 @@ body,
 
 .account__where {
 	display: block;
-	font-size: 0.75rem;
-	color: var(--text-faint);
+	font: var(--text-caption);
+	color: var(--text-dim);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-/* The same two lines again in Settings, where there is room to breathe. */
 .account__in {
 	flex: none;
 	margin-left: auto;
@@ -1716,135 +1704,104 @@ body,
 
 /* The login screen covers the window rather than replacing what is under it:
    signing in from inside a project must not close the documents that are open.
-   Under the settings dialog, so the shortcut still opens that over this. The
-   mock centres the panel in the window; it sits at the top here, because a
-   panel centred in a scrolling box is unreachable at the top once it is taller
-   than the window. */
+   Under the settings dialog, so the shortcut still opens that over this. */
 .login {
 	position: fixed;
 	inset: 0;
 	z-index: 50;
+	display: flex;
+	flex-direction: column;
 	overflow-y: auto;
-	background: var(--bg-chrome);
+	background: var(--bg);
 }
 
 /* The login screen has no header of its own, so its own row carries the one
    control it needs. */
 .login__bar {
+	position: sticky;
+	top: 0;
+	flex: none;
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	height: 44px;
-	padding: 0 1rem;
+	min-height: 44px;
+	padding: 0 var(--space-sm);
+	background: var(--bg);
 }
 
+/* Centred by auto margins, which fall to nothing rather than going negative, so
+   a window shorter than the panel can still scroll to the top of it. */
 .login__panel {
 	width: 100%;
-	max-width: 392px;
-	margin: 0 auto;
-	padding: 1rem 1.5rem 4rem;
+	max-width: 320px;
+	margin: auto;
+	padding: 0 var(--space-md) 64px;
 }
 
 .login__title {
 	margin: 0;
-	font-family: var(--font-page);
-	font-size: 2.25rem;
-	font-weight: 500;
-	letter-spacing: -0.025em;
-	line-height: 1.1;
+	font: var(--text-display);
+	letter-spacing: var(--tracking-display);
+	text-align: center;
 }
 
 .login__blurb {
-	margin: 0.5rem 0 2rem;
-	font-size: 0.9375rem;
-	line-height: 1.5;
+	margin: var(--space-xs) 0 var(--space-lg);
+	font: var(--text-ui);
 	color: var(--text-dim);
-}
-
-.login__form {
-	display: grid;
-	gap: 0.75rem;
+	text-align: center;
 }
 
 .login__field {
-	display: grid;
-	gap: 0.35rem;
+	display: block;
+	margin-bottom: var(--space-sm);
 }
 
 .login__legend {
 	display: flex;
-	align-items: baseline;
 	justify-content: space-between;
-	gap: 1rem;
-	font-size: 0.8125rem;
+	gap: var(--space-md);
+	margin-bottom: var(--space-xxs);
+	font: var(--text-caption);
 	color: var(--text-dim);
 }
 
 .login__input {
 	width: 100%;
-	height: 38px;
-	padding: 0 0.7rem;
-	font: inherit;
-	font-size: 0.9375rem;
+	padding: 4px 0;
+	font: var(--text-ui);
 	color: var(--text);
 }
 
-.login__input:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 1px;
-}
-
 .login__go {
+	display: block;
 	width: 100%;
-	height: 40px;
-	margin-top: 0.5rem;
-	font: inherit;
-	font-size: 0.9375rem;
+	margin-top: var(--space-md);
+	padding: 6px var(--space-md);
+	font: var(--text-ui-strong);
 	letter-spacing: normal;
-	line-height: normal;
 	text-transform: none;
 }
 
 .login__note {
-	margin: 0;
-	font-size: 0.75rem;
-	line-height: 1.5;
-	color: var(--text-faint);
+	margin: var(--space-xs) 0 0;
+	font: var(--text-caption);
+	color: var(--text-dim);
+	text-align: center;
 }
 
 .login__foot {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 1rem;
-	margin-top: 2rem;
-	padding-top: 1.25rem;
-	border-top: 1px solid var(--border);
+	gap: var(--space-md);
+	margin-top: var(--space-lg);
+	font: var(--text-ui);
 }
 
-.login__back {
-	padding: 0;
-	font: inherit;
-	font-size: 0.8125rem;
-	letter-spacing: normal;
-	line-height: normal;
-	text-transform: none;
-	color: var(--text-dim);
-	background: none;
-	border: 0;
-	text-decoration: underline;
-	text-underline-offset: 3px;
-	cursor: pointer;
-}
-
-.login__back:hover {
-	color: var(--text);
-}
-
-.login__back:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 2px;
-	border-radius: 3px;
+/* Out by its own padding, so its words stand on the fields' left edge. */
+.login__foot .quiet {
+	margin-left: calc(var(--space-xs) * -1);
 }
 
 /* The two ways on that have nowhere to go yet. Drawn as the links they will be
@@ -1853,25 +1810,17 @@ body,
 .login__link {
 	padding: 0;
 	font: inherit;
-	font-size: 0.75rem;
 	letter-spacing: normal;
-	line-height: normal;
 	text-transform: none;
 	color: var(--accent-text);
 	background: none;
 	border: 0;
-	text-decoration: underline;
-	text-underline-offset: 3px;
 	cursor: pointer;
 }
 
 .login__link:disabled {
-	opacity: 0.55;
+	color: var(--text-faint);
 	cursor: default;
-}
-
-.login__foot .login__link {
-	font-size: 0.8125rem;
 }
 
 /* The profile screen, on the same terms as the login screen: over the window at
@@ -8617,7 +8566,6 @@ button.compare__pick:focus-visible {
 	transform: var(--press);
 }
 
-.login__input,
 .profile__input,
 .changes__message,
 .field__box,
@@ -8635,7 +8583,8 @@ button.compare__pick:focus-visible {
 .controls__url,
 .editor__find-input,
 .editor__aim-input,
-.settings__field {
+.settings__field,
+.login__input {
 	background: none;
 	border: 0;
 	border-bottom: 1px solid var(--graphic-faint);
@@ -8646,7 +8595,8 @@ button.compare__pick:focus-visible {
 .controls__url:focus,
 .editor__find-input:focus,
 .editor__aim-input:focus,
-.settings__field:focus {
+.settings__field:focus,
+.login__input:focus {
 	outline: none;
 	border-bottom-color: var(--accent-text);
 	box-shadow: 0 1px 0 var(--accent-text);
