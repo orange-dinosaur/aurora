@@ -55,7 +55,7 @@ type Row = {
 
 function Cast({ rows, onOpen }: { rows: Row[]; onOpen: (id: string) => void }) {
 	return (
-		<div className="search search--panel">
+		<div className="search--panel">
 			<ul className="search__groups">
 				{rows.map((row) => (
 					<li key={row.id}>
@@ -226,8 +226,8 @@ export default function Mentions({
 	}
 
 	return (
-		<div className="search search--panel">
-			<div className="search__results">
+		<div className="search--panel">
+			<div>
 				<ul className="search__groups">
 					{results.groups.map((group) => {
 						const open = !collapsed.has(group.id);
