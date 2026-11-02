@@ -8,32 +8,12 @@ import { abbreviated } from "./cards";
 import Icon from "./Icon";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
-import type { FolderKind } from "./types";
 import type { Making } from "./kinds";
 import { folderPlaceholder } from "./kinds";
 import type { Draggable } from "./reorder";
 import type { Row } from "./tree";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
-
-// What stands in a folder's left-hand slot, where a document carries its
-// number. Without one the name starts at the edge of the column and reads as
-// the smaller thing, which a folder is not. The Manuscript's folders say which
-// they are; a folder anywhere else is only a folder, so it wears the glyph.
-function mark(kind: FolderKind | null) {
-	switch (kind) {
-		case "part":
-			return "PT";
-		case "chapter":
-			return "CH";
-		case "front-matter":
-			return "FM";
-		case "back-matter":
-			return "BM";
-		case null:
-			return <Icon name="folder" className="folder__glyph" />;
-	}
-}
 
 type Props = {
 	root: string;
@@ -118,13 +98,13 @@ export default function FolderRow({
 			<button
 				type="button"
 				className="folder"
+				data-kind={row.folderKind ?? undefined}
 				aria-current={current ? "page" : undefined}
 				onClick={onOpen}
 			>
-				<span className="folder__at">{mark(row.folderKind)}</span>
 				<span className="folder__name">{row.name}</span>
-				{/* Left of the menus' slot rather than in it, so the count is
-				    still there when the row is hovered and they appear. */}
+				{/* Left of the menus' slot rather than in it, so the two can
+				    appear together when the row is hovered. */}
 				<span className="folder__words">{abbreviated(row.words)}</span>
 			</button>
 

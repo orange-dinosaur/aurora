@@ -1,6 +1,6 @@
-// One document in the sidebar: its number, its title, whether it is waiting to
-// be written, and what may be done to it. It draws the field instead when it is
-// the row being retitled, and is not draggable while it does.
+// One document in the sidebar: its title, whether it is waiting to be written,
+// and what may be done to it. It draws the field instead when it is the row
+// being retitled, and is not draggable while it does.
 
 import DocumentMenu from "./DocumentMenu";
 import NameField from "./NameField";
@@ -86,9 +86,6 @@ export default function DocumentRow({
 				aria-current={current ? "page" : undefined}
 				onClick={onOpen}
 			>
-				<span className="document__at">
-					{String(row.index + 1).padStart(2, "0")}
-				</span>
 				<span className="document__title">{document.title}</span>
 				{/* Always in the row and faded when there is nothing to say, so
 				    the title never shifts as the writer types. */}

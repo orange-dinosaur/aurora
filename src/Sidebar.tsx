@@ -26,7 +26,7 @@ import { useReorder } from "./reorder";
 import type { Renaming } from "./rows";
 import { indent, retitling, spot } from "./rows";
 import { timed } from "./timing";
-import { documentsIn, folded, inside, rows, sections, wordsIn } from "./tree";
+import { folded, inside, rows, sections, wordsIn } from "./tree";
 import type { FolderRef, Row } from "./tree";
 
 /** Nothing is being dragged, so no row is inside anything. */
@@ -424,9 +424,6 @@ export default function Sidebar({
 											{section.name}
 										</button>
 									</h3>
-									<span className="section__count">
-										{documentsIn(section.children)}
-									</span>
 									<NewMenu
 										label={`New in ${section.name}`}
 										kind={section.kind}
