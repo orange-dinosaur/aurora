@@ -8215,7 +8215,8 @@ button.compare__pick:focus-visible {
 	border-bottom-color: var(--text-dim);
 }
 
-.cover__button {
+.cover__button,
+.export__button {
 	padding: 5px var(--space-sm);
 	font: var(--text-ui);
 	color: var(--text);
@@ -8223,11 +8224,7 @@ button.compare__pick:focus-visible {
 }
 
 .export__button {
-	height: 28px;
-	padding: 0 0.625rem;
-	font: inherit;
-	font-size: 0.75rem;
-	color: var(--text);
+	align-self: flex-start;
 }
 
 .cover__button:focus-visible,
@@ -8236,37 +8233,58 @@ button.compare__pick:focus-visible {
 	outline-offset: 2px;
 }
 
-/* The formats to write and the button that writes them. */
-.export {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
+.export__dialog {
+	max-width: 380px;
+	padding: var(--space-md);
 }
 
-.export__formats {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.25rem 1rem;
+.export__dialog .dialog__lead {
+	margin-bottom: var(--space-xs);
+}
+
+.export__dialog .dialog__foot {
+	margin-top: var(--space-xs);
 }
 
 .export__format {
 	display: flex;
 	align-items: center;
-	gap: 0.5rem;
-	height: 28px;
-	padding: 0 0.25rem;
-	font: inherit;
-	font-size: 0.8125rem;
+	gap: var(--space-xs);
+	width: 100%;
+	padding: 3px var(--space-xs);
+	font: var(--text-ui);
 	color: var(--text);
+	text-align: left;
 	background: none;
-	border: none;
-	border-radius: var(--radius-xs);
+	border: 0;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
+}
+
+.export__format:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.export__format:disabled {
+	cursor: default;
 }
 
 .export__format:focus-visible {
 	outline: 2px solid var(--accent-text);
-	outline-offset: 2px;
+	outline-offset: -2px;
+}
+
+.export__label {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--space-xs);
+	min-width: 0;
+}
+
+.export__what {
+	font: var(--text-caption);
+	color: var(--text-dim);
 }
 
 .export__tick {
@@ -8300,22 +8318,21 @@ button.compare__pick:focus-visible {
 	transform: rotate(45deg);
 }
 
-.export__action {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
+.export__run {
+	padding: 6px var(--space-md);
+	font: inherit;
+	white-space: nowrap;
 }
 
-.export__size {
-	margin: 0;
-	font-size: 0.75rem;
-	color: var(--text-dim);
-	font-variant-numeric: tabular-nums;
+.export__run:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
 }
 
 /* Always drawn and only hidden, so the bar coming and going moves nothing. */
 .export__track {
 	height: 4px;
+	margin: var(--space-xs) 0 var(--space-xxs);
 	overflow: hidden;
 	background: var(--bg-hover);
 	border-radius: var(--radius-pill);
@@ -8330,12 +8347,11 @@ button.compare__pick:focus-visible {
 	background: var(--accent);
 }
 
-/* Always drawn and a line tall, so what an export says moves nothing. */
+/* Always drawn and two lines tall, so what an export says moves nothing. */
 .export__said {
-	min-height: 1.5em;
+	min-height: 30px;
 	margin: 0;
-	font-size: 0.6875rem;
-	line-height: 1.5;
+	font: var(--text-caption);
 	color: var(--text-dim);
 	overflow-wrap: anywhere;
 }
@@ -8410,6 +8426,7 @@ button.compare__pick:focus-visible {
 .versions__keep,
 .compare__put-back,
 .merge__done,
+.export__run,
 .sprint__go,
 .overwrite__go,
 .overview__new,
@@ -8429,6 +8446,7 @@ button.compare__pick:focus-visible {
 .versions__keep:disabled,
 .compare__put-back:disabled,
 .merge__done:disabled,
+.export__run:disabled,
 .sprint__go:disabled,
 .overwrite__go:disabled,
 .overview__new:disabled,
@@ -8498,6 +8516,7 @@ button.compare__pick:focus-visible {
 .versions__keep:active:not(:disabled),
 .compare__put-back:active:not(:disabled),
 .merge__done:active:not(:disabled),
+.export__run:active:not(:disabled),
 .sprint__go:active:not(:disabled),
 .overwrite__go:active:not(:disabled),
 .overview__new:active:not(:disabled),
