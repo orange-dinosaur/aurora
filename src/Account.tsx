@@ -13,6 +13,9 @@ import { SETTINGS as SETTINGS_KEYS, shortcutLabel } from "./formatting";
  */
 export const SIGNED_IN: boolean = false;
 
+/** Whether the sign-in screen can be reached. Both ways to it stay drawn. */
+const SIGN_IN_OPEN: boolean = false;
+
 /** The chip at the right of the header, and the menu it opens. */
 export function AccountChip({
 	onLogin,
@@ -78,7 +81,7 @@ export function AccountChip({
 					<span className="menu__rule" />
 
 					<MenuItem
-						disabled={SIGNED_IN}
+						disabled={SIGNED_IN || !SIGN_IN_OPEN}
 						onSelect={() => {
 							close();
 							onLogin();
@@ -111,7 +114,7 @@ export default function Account({ onLogin }: { onLogin: () => void }) {
 				<button
 					type="button"
 					className="account__in"
-					disabled={SIGNED_IN}
+					disabled={SIGNED_IN || !SIGN_IN_OPEN}
 					onClick={onLogin}
 				>
 					Sign in
