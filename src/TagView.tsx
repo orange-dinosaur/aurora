@@ -74,11 +74,13 @@ export default function TagView({ root, tag, changed, live, onOpen }: Props) {
 								className="overview__row"
 								onClick={() => open(document.id)}
 							>
-								<span className="overview__row-title">
-									{document.title}
-								</span>
-								<span className="overview__row-where">
-									{document.trail.join(" / ")}
+								<span className="overview__row-text">
+									<span className="overview__row-title">
+										{document.title}
+									</span>
+									<span className="overview__row-where">
+										{document.trail.join(" / ")}
+									</span>
 								</span>
 							</button>
 						</li>

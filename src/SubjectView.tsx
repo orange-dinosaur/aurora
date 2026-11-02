@@ -192,7 +192,7 @@ export default function SubjectView({
 
 	if (held.kind === "failed") {
 		return (
-			<section className="subject">
+			<section className="overview overview--sheet">
 				<p className="subject__note subject__note--error">
 					{held.message}
 				</p>
@@ -219,13 +219,13 @@ export default function SubjectView({
 	const connected = place ? "Who is here" : "Connected to";
 
 	return (
-		<section className="subject">
-			<header className="subject__head">
-				<div className="subject__who">
-					<p className="subject__where">
+		<section className="overview overview--sheet">
+			<header className="overview__header">
+				<div className="overview__heading">
+					<p className="overview__where">
 						{subject.trail.join(" · ")}
 					</p>
-					<h2 className="subject__name">{subject.title}</h2>
+					<h2 className="overview__title">{subject.title}</h2>
 					{facts.subtitle !== "" && (
 						<p className="subject__lead">{facts.subtitle}</p>
 					)}
@@ -251,7 +251,7 @@ export default function SubjectView({
 			<h3 className="subject__heading">Remarks</h3>
 			<textarea
 				className="subject__remarks"
-				rows={7}
+				rows={5}
 				value={draft ?? remarks}
 				placeholder="Notes to yourself."
 				disabled={held.kind !== "ready"}
@@ -276,21 +276,23 @@ export default function SubjectView({
 					Nothing names {subject.title} yet.
 				</p>
 			) : (
-				<ul className="subject__appearances">
+				<ul className="overview__rows">
 					{appearances.map((group) => (
 						<li key={group.id}>
 							<button
 								type="button"
-								className="subject__appearance"
+								className="overview__row"
 								onClick={() => show(group.id)}
 							>
-								<span className="subject__title">
-									{group.title}
+								<span className="overview__row-text">
+									<span className="overview__row-title">
+										{group.title}
+									</span>
+									<span className="overview__row-where">
+										{group.trail.join(" / ")}
+									</span>
 								</span>
-								<span className="subject__folder">
-									{group.trail.join(" / ")}
-								</span>
-								<span className="subject__count">
+								<span className="overview__row-count">
 									{group.count}
 								</span>
 							</button>
