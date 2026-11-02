@@ -2266,7 +2266,12 @@ body,
 }
 
 /* The page scrolls from edge to edge and keeps its own gutters. */
-.project__pane:has(> .editor, > .book, > .overview--folder) {
+.project__pane:has(
+	> .editor,
+	> .book,
+	> .overview--folder,
+	> .overview--sheet
+) {
 	padding: 0;
 }
 
@@ -4415,10 +4420,34 @@ button.compare__pick:focus-visible {
 .chips {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: 0.25rem;
 	margin: 0;
-	padding: 0;
+	padding: 0.25rem 0.5rem;
+	font-size: 0.8125rem;
+	line-height: 1.5;
 	list-style: none;
+}
+
+.chips:has(.chips__input:focus-visible) {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -1px;
+}
+
+/* Follows the last chip and only wraps once the line has no room left for it. */
+.chips__entry {
+	flex: 1 1 7rem;
+	min-width: 7rem;
+}
+
+.chips__input {
+	width: 100%;
+	padding: 0;
+	font: inherit;
+	color: var(--text);
+	background: none;
+	border: 0;
+	outline: none;
 }
 
 .chip {
@@ -5148,15 +5177,21 @@ button.compare__pick:focus-visible {
 	padding-bottom: 1.5rem;
 }
 
-/* A folder's heading scrolls with its cards: a 980px column, held in by padding
-   so the scrollbar stays at the window's edge. */
-.overview--folder {
+/* The heading scrolls with what is under it: a column held in by padding so the
+   scrollbar stays at the window's edge. */
+.overview--folder,
+.overview--sheet {
 	--gutter: var(--space-lg);
+	--column: 980px;
 	display: block;
 	padding: var(--space-xl)
-		max(var(--gutter), calc((100% - 980px) / 2 + var(--gutter)))
+		max(var(--gutter), calc((100% - var(--column)) / 2 + var(--gutter)))
 		var(--space-xxl);
 	overflow-y: auto;
+}
+
+.overview--sheet {
+	--column: 720px;
 }
 
 .overview__header {
@@ -5189,11 +5224,80 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 }
 
+.overview__count--chip {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+/* The writer's own label, so it takes a pastel rather than the accent. */
+.overview__tag {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	padding: 2px var(--space-xs);
+	font: var(--text-caption);
+	color: var(--text);
+	background: var(--accent-2-wash);
+	border-radius: var(--radius-pill);
+	overflow-wrap: anywhere;
+}
+
+.overview__tag::before {
+	content: "";
+	flex: none;
+	width: 8px;
+	height: 8px;
+	background: var(--accent-2);
+	border-radius: var(--radius-pill);
+}
+
 /* The folders above this one, said before its name. */
 .overview__where {
 	margin: 0;
 	font: var(--text-caption);
 	color: var(--text-faint);
+}
+
+.overview__rows {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.overview__row {
+	display: block;
+	width: 100%;
+	margin: 0;
+	padding: var(--space-xs) var(--space-sm);
+	color: var(--text);
+	font: var(--text-ui);
+	text-align: left;
+	background: none;
+	border: none;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.overview__row:hover {
+	background: var(--bg-hover);
+}
+
+.overview__row:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+.overview__row-title,
+.overview__row-where {
+	display: block;
+	overflow-wrap: anywhere;
+}
+
+.overview__row-where {
+	font: var(--text-caption);
+	color: var(--text-dim);
 }
 
 /* The + is a menu trigger wearing this shape instead of the plain one. Its
@@ -5239,7 +5343,8 @@ button.compare__pick:focus-visible {
 }
 
 /* Under the cards here, which scroll with the page, and with its line kept. */
-.overview--folder .overview__message {
+.overview--folder .overview__message,
+.overview--sheet .overview__message {
 	position: static;
 	min-height: 15px;
 	margin-top: var(--space-sm);
@@ -5477,7 +5582,8 @@ button.compare__pick:focus-visible {
 }
 
 @media (max-width: 820px) {
-	.overview--folder {
+	.overview--folder,
+	.overview--sheet {
 		--gutter: var(--space-md);
 		padding-top: var(--space-md);
 		padding-bottom: var(--space-xl);
@@ -5605,15 +5711,6 @@ button.compare__pick:focus-visible {
 .search__folder {
 	color: var(--text-dim);
 	font-size: 0.85rem;
-}
-
-/* The tag a tag tab is about, named in the line above the list. It wears the
-   chip's own background so it reads as the thing that was clicked. */
-.search__tag {
-	padding: 0.0625rem 0.4375rem;
-	color: var(--text);
-	background: var(--accent-wash);
-	border-radius: var(--radius-pill);
 }
 
 /* Pushed to the far edge and lined up, so a column of counts can be read down
@@ -8157,6 +8254,7 @@ button.compare__pick:focus-visible {
 /* A line of its own is underlined. Only what runs to several lines needs edges
    to type inside. */
 .book .field__line,
+.book .chips,
 .book__pick {
 	padding: 4px 0;
 	font: var(--text-ui);
@@ -8167,6 +8265,7 @@ button.compare__pick:focus-visible {
 }
 
 .book .field__line:focus,
+.book .chips:has(.chips__input:focus),
 .book__pick:focus-visible {
 	outline: none;
 	border-bottom-color: var(--accent-text);
@@ -8602,6 +8701,7 @@ button.compare__pick:focus-visible {
 .changes__message,
 .field__box,
 .field__line,
+.chips,
 .namefield__input,
 .search__field,
 .subject__remarks,

@@ -132,58 +132,58 @@ export function Chips({
 		<div className="field">
 			<span className="field__label">{label}</span>
 			{hint !== undefined && <span className="field__hint">{hint}</span>}
-			{values.length > 0 && (
-				<ul className="chips">
-					{values.map((value) => (
-						<li key={value} className="chip">
-							{onOpen === undefined ? (
-								value
-							) : (
-								<button
-									type="button"
-									className="chip__open"
-									onClick={() => onOpen(value)}
-								>
-									{value}
-								</button>
-							)}
+			<ul className="chips">
+				{values.map((value) => (
+					<li key={value} className="chip">
+						{onOpen === undefined ? (
+							value
+						) : (
 							<button
 								type="button"
-								className="chip__remove"
-								aria-label={`Remove ${value}`}
-								onClick={() => remove(value)}
+								className="chip__open"
+								onClick={() => onOpen(value)}
 							>
-								<Icon name="x" />
+								{value}
 							</button>
-						</li>
-					))}
-				</ul>
-			)}
-			<input
-				className="field__line"
-				type="text"
-				value={draft}
-				placeholder={placeholder}
-				aria-label={placeholder}
-				onChange={(event) => setDraft(event.target.value)}
-				onKeyDown={(event) => {
-					if (event.key === "Enter") {
-						event.preventDefault();
-						add();
-					} else if (event.key === "Escape") {
-						setDraft("");
-					} else if (
-						event.key === "Backspace" &&
-						draft === "" &&
-						values.length > 0
-					) {
-						remove(values[values.length - 1]);
-					}
-				}}
-				// Clicking away abandons what was half typed, the way every
-				// other field that appears in place behaves.
-				onBlur={() => setDraft("")}
-			/>
+						)}
+						<button
+							type="button"
+							className="chip__remove"
+							aria-label={`Remove ${value}`}
+							onClick={() => remove(value)}
+						>
+							<Icon name="x" />
+						</button>
+					</li>
+				))}
+				<li className="chips__entry">
+					<input
+						className="chips__input"
+						type="text"
+						value={draft}
+						placeholder={placeholder}
+						aria-label={placeholder}
+						onChange={(event) => setDraft(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key === "Enter") {
+								event.preventDefault();
+								add();
+							} else if (event.key === "Escape") {
+								setDraft("");
+							} else if (
+								event.key === "Backspace" &&
+								draft === "" &&
+								values.length > 0
+							) {
+								remove(values[values.length - 1]);
+							}
+						}}
+						// Clicking away abandons what was half typed, the way
+						// every other field that appears in place behaves.
+						onBlur={() => setDraft("")}
+					/>
+				</li>
+			</ul>
 		</div>
 	);
 }
