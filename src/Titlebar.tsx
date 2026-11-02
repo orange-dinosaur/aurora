@@ -41,7 +41,7 @@ type Props = {
 	/** The writer's theme preference, which the header can move between two of. */
 	theme: Theme;
 	onTheme: (theme: Theme) => void;
-	onSettings: () => void;
+	onSettings: (keyboard: boolean) => void;
 	onLogin: () => void;
 	onProfile: () => void;
 	/** The merge waiting to be settled, if there is one. */

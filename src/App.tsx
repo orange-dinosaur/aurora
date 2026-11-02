@@ -12,6 +12,7 @@ import { failure } from "./errors";
 import { flushBeforeQuitting } from "./quitting";
 import { inAField, pressed, SETTINGS } from "./formatting";
 import { face } from "./lib/typography";
+import { DIALOG_FADE, useLingering } from "./Menu";
 
 // What Aurora looks like before the store has answered, and what it falls back
 // to if the store cannot be read at all.
@@ -47,6 +48,9 @@ function App() {
 	const [boot, setBoot] = useState<Boot>({ kind: "loading" });
 	const [preferences, setPreferences] = useState<Preferences>(DEFAULTS);
 	const [settings, setSettings] = useState(false);
+	// Whatever the keyboard opened skips the motion.
+	const [settingsInstant, setSettingsInstant] = useState(false);
+	const settingsDrawn = useLingering(settings, DIALOG_FADE);
 	// Over the app rather than instead of it: leaving the project to sign in
 	// would close the documents the writer had open.
 	const [login, setLogin] = useState(false);
@@ -86,13 +90,18 @@ function App() {
 			});
 	}, []);
 
+	function openSettings(keyboard: boolean) {
+		setSettingsInstant(keyboard);
+		setSettings(true);
+	}
+
 	// Bound here rather than in the project, since the welcome screen has the
 	// same preferences behind it and nothing else that answers for a key.
 	useEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
 			if (pressed(event, SETTINGS) && !inAField(event.target)) {
 				event.preventDefault();
-				setSettings(true);
+				openSettings(true);
 			}
 		}
 
@@ -137,7 +146,7 @@ function App() {
 					enclosingRepository={boot.project.enclosingRepository}
 					preferences={preferences}
 					onPreferences={save}
-					onSettings={() => setSettings(true)}
+					onSettings={openSettings}
 					onLogin={() => setLogin(true)}
 					onProfile={() => setProfile(true)}
 					onClose={() => {
@@ -156,15 +165,17 @@ function App() {
 						}
 						onLogin={() => setLogin(true)}
 						onProfile={() => setProfile(true)}
-						onSettings={() => setSettings(true)}
+						onSettings={openSettings}
 						theme={preferences.theme}
 						onTheme={(theme) => save({ ...preferences, theme })}
 					/>
 				)
 			)}
 
-			{settings && (
+			{settingsDrawn && (
 				<Settings
+					closing={!settings}
+					instant={settingsInstant}
 					preferences={preferences}
 					onPreferences={save}
 					onClose={() => setSettings(false)}

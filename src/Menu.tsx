@@ -3,7 +3,12 @@
 // makes something new.
 
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactNode, RefObject } from "react";
+import type {
+	CSSProperties,
+	MouseEvent as ReactMouseEvent,
+	ReactNode,
+	RefObject,
+} from "react";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -90,6 +95,9 @@ export function useDismissal(
 
 /** How long a closing menu takes to fade, which the stylesheet says too. */
 export const MENU_FADE = 100;
+
+/** How long a closing dialog takes to fade, which the stylesheet says too. */
+export const DIALOG_FADE = 140;
 
 /**
  * Whether something that has been told to close should still be drawn, so it
@@ -209,7 +217,7 @@ export function MenuItem({
 	checked?: boolean;
 	/** How far in to set it, for a menu that lists a tree. */
 	depth?: number;
-	onSelect: () => void;
+	onSelect: (event: ReactMouseEvent) => void;
 	children: ReactNode;
 }) {
 	return (

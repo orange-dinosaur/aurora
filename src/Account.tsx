@@ -21,7 +21,7 @@ export function AccountChip({
 }: {
 	onLogin: () => void;
 	onProfile: () => void;
-	onSettings: () => void;
+	onSettings: (keyboard: boolean) => void;
 }) {
 	return (
 		<Menu
@@ -64,9 +64,9 @@ export function AccountChip({
 					{/* Settings belongs to the writer rather than to the
 					    project: the preferences follow them into every one. */}
 					<MenuItem
-						onSelect={() => {
+						onSelect={(event) => {
 							close();
-							onSettings();
+							onSettings(event.detail === 0);
 						}}
 					>
 						Settings

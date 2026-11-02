@@ -7446,6 +7446,37 @@ button.compare__pick:focus-visible {
 	padding: var(--space-md);
 }
 
+/* The opacity sits on the scrim, so the blur fades with it and the dialog
+   needs only its scale. */
+.scrim {
+	transition: opacity 200ms var(--ease-open);
+}
+
+.scrim > * {
+	transition: transform 200ms var(--ease-open);
+}
+
+@starting-style {
+	.scrim {
+		opacity: 0;
+	}
+
+	.scrim > * {
+		transform: var(--open-from);
+	}
+}
+
+/* 140ms is DIALOG_FADE. Fade only, as a menu closes. */
+.scrim[data-closing] {
+	opacity: 0;
+	transition: opacity 140ms ease;
+}
+
+.scrim[data-instant],
+.scrim[data-instant] > * {
+	transition: none;
+}
+
 /* One size, so nothing jumps between sections, until a short window shrinks it
    rather than pushing the pane off the bottom. */
 .settings {

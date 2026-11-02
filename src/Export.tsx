@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { failure } from "./errors";
+import { DIALOG_FADE, useLingering } from "./Menu";
 import {
 	FORMATS,
 	doing,
@@ -52,6 +53,9 @@ export default function Export({
 	const [progress, setProgress] = useState<ExportProgress | null>(null);
 	const [said, setSaid] = useState("");
 	const [asking, setAsking] = useState(false);
+	// The keyboard reports a click with no count, and skips the motion.
+	const [instant, setInstant] = useState(false);
+	const drawn = useLingering(asking, DIALOG_FADE);
 	const opener = useRef<HTMLButtonElement>(null);
 	const dialog = useRef<HTMLDivElement>(null);
 
@@ -98,7 +102,6 @@ export default function Export({
 	function leave() {
 		if (!busy) {
 			setAsking(false);
-			setSaid("");
 			opener.current?.focus();
 		}
 	}
@@ -160,15 +163,23 @@ export default function Export({
 				ref={opener}
 				type="button"
 				className="export__button"
-				onClick={() => setAsking(true)}
+				onClick={(event) => {
+					setInstant(event.detail === 0);
+					// Cleared here, so the last result stays put while it fades.
+					setSaid("");
+					setAsking(true);
+				}}
 			>
 				Export the book…
 			</button>
 
-			{asking &&
+			{drawn &&
 				createPortal(
 					<div
 						className="scrim"
+						data-closing={asking ? undefined : ""}
+						data-instant={instant ? "" : undefined}
+						inert={!asking}
 						// On the press, as in Settings, so a selection dragged
 						// out of the dialog and released here does not shut it.
 						onMouseDown={(event) => {

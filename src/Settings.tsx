@@ -49,6 +49,10 @@ const IDLE = { min: 1, max: 1440 };
 const IDLE_DEFAULT = 30;
 
 type Props = {
+	/** Told to close and fading, so it no longer takes anything. */
+	closing: boolean;
+	/** Opened from the keyboard, so it does not move. */
+	instant: boolean;
 	preferences: Preferences;
 	onPreferences: (next: Preferences) => void;
 	onClose: () => void;
@@ -60,6 +64,8 @@ type Props = {
  * app. The sections are empty for now; each one arrives with the step that
  * fills it. */
 export default function Settings({
+	closing,
+	instant,
 	preferences,
 	onPreferences,
 	onClose,
@@ -70,7 +76,11 @@ export default function Settings({
 
 	// So Escape and the rail's arrows have somewhere to land: what had focus
 	// is behind the dialog now, and a key pressed there would reach the app.
-	useEffect(() => dialog.current?.focus(), []);
+	useEffect(() => {
+		if (!closing) {
+			dialog.current?.focus();
+		}
+	}, [closing]);
 
 	useEffect(() => {
 		function escape(event: KeyboardEvent) {
@@ -88,6 +98,9 @@ export default function Settings({
 	return (
 		<div
 			className="scrim"
+			data-closing={closing ? "" : undefined}
+			data-instant={instant ? "" : undefined}
+			inert={closing}
 			// Clicking away closes it, as Escape does. On the press rather
 			// than the click, so a selection dragged out of the dialog and
 			// released on the scrim does not shut it.

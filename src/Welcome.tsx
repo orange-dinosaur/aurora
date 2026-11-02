@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -13,7 +14,12 @@ import type {
 import { AccountChip } from "./Account";
 import { useCoverImage } from "./Cover";
 import Icon from "./Icon";
-import Menu, { MenuItem, useDismissal } from "./Menu";
+import Menu, {
+	DIALOG_FADE,
+	MenuItem,
+	useDismissal,
+	useLingering,
+} from "./Menu";
 import { coverFor } from "./lib/covers";
 import { folderName, going } from "./recents";
 import { when } from "./dates";
@@ -78,7 +84,7 @@ type Props = {
 	onOpened: (project: OpenProject) => void;
 	onLogin: () => void;
 	onProfile: () => void;
-	onSettings: () => void;
+	onSettings: (keyboard: boolean) => void;
 	theme: Theme;
 	onTheme: (theme: Theme) => void;
 };
@@ -244,9 +250,15 @@ function NewProject({
 	onCancel,
 	onChange,
 	onCreate,
+	closing,
+	instant,
 }: {
 	formats: FormatOption[];
 	busy: boolean;
+	/** Told to close and fading, so it no longer takes anything. */
+	closing: boolean;
+	/** Opened from the keyboard, so it does not move. */
+	instant: boolean;
 	onCancel: () => void;
 	/** Something was edited, so an earlier failure no longer applies. */
 	onChange: () => void;
@@ -271,7 +283,11 @@ function NewProject({
 	}
 
 	// So a key has somewhere to land: what had focus is behind the dialog now.
-	useEffect(() => dialog.current?.focus(), []);
+	useEffect(() => {
+		if (!closing) {
+			dialog.current?.focus();
+		}
+	}, [closing]);
 
 	useEffect(() => {
 		function escape(event: KeyboardEvent) {
@@ -299,6 +315,9 @@ function NewProject({
 	return (
 		<div
 			className="scrim"
+			data-closing={closing ? "" : undefined}
+			data-instant={instant ? "" : undefined}
+			inert={closing}
 			// On the press rather than the click, as in Settings, so a selection
 			// dragged out of the dialog and released here does not shut it.
 			onMouseDown={(event) => {
@@ -456,6 +475,9 @@ export default function Welcome({
 	// Seeded once; the notice describes how this screen was reached.
 	const [reason, setReason] = useState(notice);
 	const [creating, setCreating] = useState(false);
+	// The keyboard reports a click with no count, and skips the motion.
+	const [instant, setInstant] = useState(false);
+	const drawn = useLingering(creating, DIALOG_FADE);
 	const [formats, setFormats] = useState<FormatOption[]>([]);
 	// Null until the list arrives. Counting every project's words takes a
 	// moment, and the empty Shelf must not flash up in front of a full one.
@@ -481,7 +503,8 @@ export default function Welcome({
 			.catch(() => setRecents([]));
 	}, []);
 
-	function startNew() {
+	function startNew(event: MouseEvent) {
+		setInstant(event.detail === 0);
 		setCreating(true);
 		setReason(null);
 		setStatus({ kind: "idle" });
@@ -561,8 +584,10 @@ export default function Welcome({
 				/>
 			</div>
 
-			{creating && (
+			{drawn && (
 				<NewProject
+					closing={!creating}
+					instant={instant}
 					formats={formats}
 					busy={busy}
 					onCancel={() => {

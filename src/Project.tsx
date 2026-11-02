@@ -81,7 +81,7 @@ type Props = {
 	enclosingRepository: string | null;
 	preferences: Preferences;
 	onClose: () => void;
-	onSettings: () => void;
+	onSettings: (keyboard: boolean) => void;
 	onLogin: () => void;
 	onProfile: () => void;
 	onPreferences: (next: Preferences) => void;
