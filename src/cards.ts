@@ -82,6 +82,15 @@ export function trashed(inside: number) {
 }
 
 /**
+ * Whether a click is not the second of a double click, which is what lets a
+ * button appear under the pointer without being pressed by it. The keyboard
+ * reports 0.
+ */
+export function deliberate(detail: number) {
+	return detail < 2;
+}
+
+/**
  * What the folder amounts to, for the line under its name. The documents are
  * the ones sitting in it, since a folder below it is not one; the words are
  * the whole of what is written under it, which every card now carries. Front

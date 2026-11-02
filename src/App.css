@@ -5250,8 +5250,9 @@ button.compare__pick:focus-visible {
 	color: var(--text-faint);
 }
 
+/* Out by a row's own padding, so its words stand on the heading's left edge. */
 .overview__rows {
-	margin: 0;
+	margin: 0 calc(var(--space-sm) * -1);
 	padding: 0;
 	list-style: none;
 }
@@ -5329,7 +5330,12 @@ button.compare__pick:focus-visible {
 
 .overview__note {
 	margin: 0;
+	font: var(--text-ui);
 	color: var(--text-dim);
+}
+
+.overview--sheet .overview__note {
+	color: var(--text-faint);
 }
 
 /* Always in the DOM and out of flow, so an error appears without moving the
@@ -6122,73 +6128,46 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 }
 
-.trash {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-	flex: 1;
-	min-height: 0;
-	margin: 0;
-	padding: 0 0 0.5rem;
-	list-style: none;
-	overflow-y: auto;
-}
-
 .trashed {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	max-width: 40rem;
-	padding: 0.6rem 0.85rem;
-	/* The same object as a card on the overview, in the colour the chrome uses
-	   rather than the one the writing sits on. Nothing else has to say that
-	   these documents are no longer part of the project. */
-	background: var(--bg-chrome);
-	border: 1px solid var(--border);
+	gap: var(--space-xxs) var(--space-md);
+	padding: var(--space-xs) var(--space-sm);
 	border-radius: var(--radius-sm);
+}
+
+.trashed:hover {
+	background: var(--bg-hover);
 }
 
 .trashed__what {
 	display: flex;
+	flex: 1 1 220px;
 	flex-direction: column;
-	gap: 0.15rem;
 	min-width: 0;
 }
 
 .trashed__title {
-	font-family: var(--font-page);
-	font-size: 1.0625rem;
-	line-height: 1.3;
-	font-weight: 400;
+	font: var(--text-ui);
 	overflow-wrap: anywhere;
 }
 
 .trashed__meta {
-	font-size: 0.75rem;
+	font: var(--text-caption);
 	color: var(--text-dim);
 }
 
+/* Held to the right edge, so asking swaps the words and not the sides. */
 .trashed__actions {
 	display: flex;
 	flex: none;
-	gap: 0.35rem;
+	gap: 2px;
+	margin-left: auto;
 }
 
-.trashed__action {
-	padding: 0.25rem 0.5rem;
-	font: inherit;
-	font-size: 0.8rem;
-	color: var(--text);
-}
-
-.trashed__action--danger {
+.quiet.trashed__danger:not(:disabled) {
 	color: var(--danger);
-}
-
-.trashed__action--danger:hover:not(:disabled) {
-	color: var(--danger);
-	border-color: var(--danger);
 }
 
 /* Every surface that floats over the page is the same box, wherever it is
@@ -8607,7 +8586,6 @@ button.compare__pick:focus-visible {
 .overwrite__cancel,
 .info__page,
 .subject__draft,
-.trashed__action,
 .editor__find-do,
 .cover__button,
 .export__button {
@@ -8627,7 +8605,6 @@ button.compare__pick:focus-visible {
 .overwrite__cancel:hover:not(:disabled),
 .info__page:hover:not(:disabled),
 .subject__draft:hover:not(:disabled),
-.trashed__action:hover:not(:disabled),
 .editor__find-do:hover:not(:disabled),
 .cover__button:hover:not(:disabled),
 .export__button:hover:not(:disabled) {
@@ -8643,7 +8620,6 @@ button.compare__pick:focus-visible {
 .overwrite__cancel:disabled,
 .info__page:disabled,
 .subject__draft:disabled,
-.trashed__action:disabled,
 .editor__find-do:disabled,
 .cover__button:disabled,
 .export__button:disabled {
@@ -8672,7 +8648,6 @@ button.compare__pick:focus-visible {
 .overwrite__cancel:active:not(:disabled),
 .info__page:active:not(:disabled),
 .subject__draft:active:not(:disabled),
-.trashed__action:active:not(:disabled),
 .editor__find-do:active:not(:disabled),
 .cover__button:active:not(:disabled),
 .export__button:active:not(:disabled) {

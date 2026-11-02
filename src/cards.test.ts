@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
 	abbreviated,
 	counted,
+	deliberate,
 	described,
 	previewed,
 	summarised,
@@ -162,5 +163,16 @@ describe("what a folder in the trash took with it", () => {
 
 	test("a chapter of fourteen scenes counts every one of them", () => {
 		expect(trashed(14)).toBe("a folder of 14 documents");
+	});
+});
+
+describe("deliberate", () => {
+	test("a single click and the keyboard count", () => {
+		expect(deliberate(1)).toBe(true);
+		expect(deliberate(0)).toBe(true);
+	});
+
+	test("the second click of a double click does not", () => {
+		expect(deliberate(2)).toBe(false);
 	});
 });
