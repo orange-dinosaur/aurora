@@ -73,14 +73,14 @@ describe("filled", () => {
 		expect(filled(book, "publication")).toBe(4);
 	});
 
-	test("counts the cover and each format ticked", () => {
+	test("counts each format ticked, not the cover", () => {
 		const book: Book = {
 			...empty,
 			cover: "cover.png",
 			exportFormats: ["markdown"],
 		};
 
-		expect(filled(book, "export")).toBe(2);
+		expect(filled(book, "export")).toBe(1);
 	});
 });
 

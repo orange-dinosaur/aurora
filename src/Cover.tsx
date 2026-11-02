@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { failure } from "./errors";
+import { coverFor } from "./lib/covers";
 
 type Props = {
 	root: string;
 	/** The name of the project's copy, or nothing if there is no cover yet. */
 	cover: string;
+	title: string;
+	author: string;
 	onChange: (cover: string) => void;
 };
 
@@ -59,12 +62,12 @@ export function useCoverImage(root: string, cover: string, stamp: number) {
 }
 
 /**
- * The book's cover. What the writer picks is copied into the project, so the
- * book names a file beside `aurora.json` rather than a path into their home
- * directory: the project folder carries its own cover wherever it goes, and
- * moving or deleting the original breaks nothing.
+ * The book's face: its cover, large, beside its name. What the writer picks is
+ * copied into the project, so the book names a file beside `aurora.json` rather
+ * than a path into their home directory: the project folder carries its own
+ * cover wherever it goes, and moving or deleting the original breaks nothing.
  */
-export default function Cover({ root, cover, onChange }: Props) {
+export default function Cover({ root, cover, title, author, onChange }: Props) {
 	// Bumped when a cover is chosen, so that replacing a PNG with another PNG
 	// reloads the image even though the name it is filed under has not changed.
 	const [stamp, setStamp] = useState(0);
@@ -107,45 +110,55 @@ export default function Cover({ root, cover, onChange }: Props) {
 	}
 
 	return (
-		<div className="cover">
-			{/* The frame keeps its size whether it is holding the image or a
-			    complaint about it, so nothing below moves. */}
-			<div className="cover__frame">
-				{src === "" ? (
-					<p className="cover__empty">
-						{cover === ""
-							? "No cover yet"
-							: trouble === ""
-								? "Loading"
-								: trouble}
-					</p>
-				) : (
-					<img className="cover__image" src={src} alt="" />
-				)}
+		<header className="face">
+			{/* A wash of the title stands behind an image too, so the cover is
+			    never blank while one loads or if it cannot be read. */}
+			<div
+				className={
+					src === ""
+						? "face__jacket"
+						: "face__jacket face__jacket--image"
+				}
+				style={{ background: coverFor(title) }}
+				aria-hidden="true"
+			>
+				{src !== "" && <img src={src} alt="" />}
+				<span className="face__jacket-title">{title}</span>
+				<span className="face__jacket-by">{author}</span>
 			</div>
 
-			<div className="cover__buttons">
-				<button
-					type="button"
-					className="cover__button"
-					onClick={() => void choose()}
-				>
-					{cover === "" ? "Choose an image" : "Choose another"}
-				</button>
-				{cover !== "" && (
+			<div className="face__text">
+				<p className="face__where">Book</p>
+				<h1 className="face__title">{title}</h1>
+				<p className="face__by">{author}</p>
+				<div className="face__buttons">
 					<button
 						type="button"
 						className="cover__button"
-						onClick={() => void remove()}
+						onClick={() => void choose()}
 					>
-						Remove
+						{cover === "" ? "Choose an image" : "Choose another"}
 					</button>
-				)}
+					{cover !== "" && (
+						<button
+							type="button"
+							className="cover__button"
+							onClick={() => void remove()}
+						>
+							Remove
+						</button>
+					)}
+					<span className="face__state">
+						{trouble === "" && cover === ""
+							? "No cover yet"
+							: trouble}
+					</span>
+				</div>
+				<p className="face__note">
+					PNG or JPEG. Aurora keeps its own copy in the project
+					folder.
+				</p>
 			</div>
-
-			<p className="cover__note">
-				PNG or JPEG. Aurora keeps its own copy in the project folder.
-			</p>
-		</div>
+		</header>
 	);
 }

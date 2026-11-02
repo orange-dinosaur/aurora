@@ -162,14 +162,15 @@ export default function BookView({ root, changed: moved, onWritten }: Props) {
 
 	return (
 		<div className="book">
-			<header className="book__head">
-				<p className="book__where">Book</p>
-				<h2 className="book__name">
-					{book === null || book.title.trim() === ""
-						? "Untitled"
-						: book.title}
-				</h2>
-			</header>
+			{book !== null && (
+				<Cover
+					root={root}
+					cover={book.cover}
+					title={book.title.trim() === "" ? "Untitled" : book.title}
+					author={book.author}
+					onChange={(cover) => edit({ ...book, cover })}
+				/>
+			)}
 
 			{/* Always drawn, so a complaint about a failed write does not push
 			    the field that caused it down the page. */}
@@ -178,7 +179,7 @@ export default function BookView({ root, changed: moved, onWritten }: Props) {
 			</p>
 
 			{book !== null && (
-				<div className="book__fields">
+				<>
 					{group(
 						"identity",
 						<>
@@ -435,25 +436,18 @@ export default function BookView({ root, changed: moved, onWritten }: Props) {
 
 					{group(
 						"export",
-						<>
-							<Cover
-								root={root}
-								cover={book.cover}
-								onChange={(cover) => edit({ ...book, cover })}
-							/>
-							<Export
-								root={root}
-								changed={moved}
-								hasCover={book.cover !== ""}
-								formats={book.exportFormats}
-								onFormats={(exportFormats) =>
-									edit({ ...book, exportFormats })
-								}
-								onBeforeExport={flush}
-							/>
-						</>,
+						<Export
+							root={root}
+							changed={moved}
+							hasCover={book.cover !== ""}
+							formats={book.exportFormats}
+							onFormats={(exportFormats) =>
+								edit({ ...book, exportFormats })
+							}
+							onBeforeExport={flush}
+						/>,
 					)}
-				</div>
+				</>
 			)}
 		</div>
 	);

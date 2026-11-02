@@ -1029,7 +1029,8 @@ body,
 	font: var(--text-caption);
 }
 
-.shelf__cover img {
+.shelf__cover img,
+.face__jacket img {
 	position: absolute;
 	inset: 0;
 	width: 100%;
@@ -1038,7 +1039,8 @@ body,
 }
 
 /* Cream with a soft shadow, so the words read on any picture. */
-.shelf__cover--image {
+.shelf__cover--image,
+.face__jacket--image {
 	color: #f4efe6;
 	text-shadow: 0 1px 6px rgb(0 0 0 / 0.55);
 }
@@ -7887,46 +7889,133 @@ button.compare__pick:focus-visible {
 	text-align: center;
 }
 
-/* The page about the book the project adds up to. A column the same width as a
-   subject page, so the two read as the same kind of thing. */
+/* The page about the book the project adds up to: a 660px column, held in by
+   padding so the scrollbar stays at the window's edge. */
 .book {
+	--gutter: var(--space-lg);
 	flex: 1;
 	min-height: 0;
 	width: 100%;
-	max-width: 46rem;
-	padding: 2rem 1.5rem 4rem;
-	margin: 0 auto;
+	padding: var(--space-xl)
+		max(var(--gutter), calc((100% - 660px) / 2 + var(--gutter))) 120px;
 	overflow-y: auto;
 }
 
-.book__where {
-	margin: 0;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	color: var(--text-faint);
+/* The Shelf's book, large, beside its name. */
+.face {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--space-lg);
+	margin-bottom: var(--space-lg);
 }
 
-.book__name {
-	margin: 0.3rem 0 0;
-	font-family: var(--font-page);
-	font-size: 1.75rem;
-	font-weight: 500;
-	letter-spacing: -0.02em;
-	line-height: 1.15;
+.face__jacket {
+	position: relative;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	width: 132px;
+	aspect-ratio: 2 / 3;
+	padding: var(--space-sm);
+	overflow: hidden;
+	color: #2b1b16;
+	border-radius: 3px 6px 6px 3px;
+	box-shadow: var(--shadow-cover);
+}
+
+/* Six lines is as many as the cover holds above its author. */
+.face__jacket-title {
+	position: relative;
+	display: -webkit-box;
+	font: 400 21px/1.1 var(--font-title);
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 6;
+}
+
+.face__jacket-by {
+	position: relative;
+	font: var(--text-caption);
 	overflow-wrap: anywhere;
 }
 
+.face__text {
+	flex: 1;
+	min-width: 0;
+}
+
+.face__where {
+	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.face__title {
+	margin: var(--space-xxs) 0 0;
+	font: var(--text-display);
+	letter-spacing: var(--tracking-display);
+	overflow-wrap: anywhere;
+}
+
+.face__by {
+	margin: 2px 0 var(--space-sm);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}
+
+.face__buttons {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+.face__state {
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.face__note {
+	margin: var(--space-xs) 0 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
 .book__trouble {
-	min-height: 1.25rem;
-	margin: 0.35rem 0 0;
-	font-size: 0.8125rem;
+	min-height: 15px;
+	margin: 0 0 var(--space-sm);
+	font: var(--text-caption);
 	color: var(--danger);
 }
 
-.book__fields {
-	margin-top: 1rem;
+@media (max-width: 820px) {
+	.book {
+		--gutter: var(--space-md);
+		padding-top: var(--space-md);
+	}
+}
+
+@media (max-width: 620px) {
+	.face {
+		align-items: flex-start;
+		gap: var(--space-md);
+	}
+
+	.face__jacket {
+		width: 96px;
+		padding: var(--space-xs);
+	}
+
+	.face__jacket-title {
+		font-size: 16px;
+	}
+
+	.face__title {
+		font: var(--text-heading);
+	}
 }
 
 /* One heading's worth of the Book page, folding on its own chevron. */
@@ -8119,46 +8208,13 @@ button.compare__pick:focus-visible {
 	outline-offset: -1px;
 }
 
-.cover {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
+.cover__button {
+	padding: 5px var(--space-sm);
+	font: var(--text-ui);
+	color: var(--text);
+	white-space: nowrap;
 }
 
-/* The frame holds its height whether it has an image in it, a line saying
-   there is none yet, or a complaint that the file has gone, so the buttons
-   under it never move. */
-.cover__frame {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	height: 180px;
-	padding: 0.5rem;
-	background: var(--bg-card);
-	border: 1px dashed var(--border);
-	border-radius: var(--radius-xs);
-}
-
-.cover__image {
-	max-width: 100%;
-	max-height: 100%;
-	border-radius: 3px;
-}
-
-.cover__empty {
-	margin: 0;
-	font-size: 0.75rem;
-	line-height: 1.5;
-	color: var(--text-dim);
-	text-align: center;
-}
-
-.cover__buttons {
-	display: flex;
-	gap: 0.5rem;
-}
-
-.cover__button,
 .export__button {
 	height: 28px;
 	padding: 0 0.625rem;
@@ -8173,19 +8229,11 @@ button.compare__pick:focus-visible {
 	outline-offset: 2px;
 }
 
-.cover__note {
-	margin: 0;
-	font-size: 0.6875rem;
-	line-height: 1.5;
-	color: var(--text-dim);
-}
-
-/* The formats to write and the button that writes them, under the cover. */
+/* The formats to write and the button that writes them. */
 .export {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
-	margin-top: 1.25rem;
 }
 
 .export__formats {
