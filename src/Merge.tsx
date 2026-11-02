@@ -252,9 +252,9 @@ export default function Merge({
 			>
 				<div className="sidelist__head">
 					<p className="sidelist__of">Merging</p>
-					<h1 className="sidelist__title">
+					<h2 className="sidelist__title">
 						{merging.name ?? "another version"}
-					</h1>
+					</h2>
 					<p className="sidelist__trail">
 						into {into} · {lines.length.toLocaleString()} to settle
 					</p>
@@ -359,7 +359,7 @@ export default function Merge({
 				{line !== undefined && (
 					<>
 						<div className="merge__head">
-							<span className="merge__name">{line.name}</span>
+							<h1 className="merge__name">{line.name}</h1>
 							<span className="merge__detail">
 								{[where(line.path), spotsLeft(remaining, total)]
 									.filter((part) => part !== "")
@@ -368,7 +368,7 @@ export default function Merge({
 							<span className="merge__all">
 								<button
 									type="button"
-									className="compare__step"
+									className="quiet"
 									disabled={remaining === 0}
 									onClick={() => everywhere("ours")}
 								>
@@ -376,7 +376,7 @@ export default function Merge({
 								</button>
 								<button
 									type="button"
-									className="compare__step"
+									className="quiet"
 									disabled={remaining === 0}
 									onClick={() => everywhere("theirs")}
 								>
@@ -434,15 +434,15 @@ export default function Merge({
 				)}
 
 				{open !== BINDER && (
-					<div className="compare__foot">
+					<div className="merge__foot">
 						{line !== undefined && total > 0 && (
 							<>
-								<span className="compare__count">
+								<span className="merge__count">
 									Spot {current + 1} of {total}
 								</span>
 								<button
 									type="button"
-									className="compare__step"
+									className="quiet"
 									disabled={current === 0}
 									onClick={() => setCurrent(current - 1)}
 								>
@@ -450,7 +450,7 @@ export default function Merge({
 								</button>
 								<button
 									type="button"
-									className="compare__step"
+									className="quiet"
 									disabled={current >= total - 1}
 									onClick={() => setCurrent(current + 1)}
 								>
@@ -460,7 +460,7 @@ export default function Merge({
 						)}
 						<button
 							type="button"
-							className="compare__put"
+							className="merge__done"
 							disabled={
 								busy ||
 								line === undefined ||
@@ -472,7 +472,7 @@ export default function Merge({
 							Done with {line?.name ?? "this document"}
 						</button>
 						{/* A message takes the note's line, so it moves nothing. */}
-						<p className="compare__note" role="alert">
+						<p className="merge__note" role="alert">
 							{error ?? ""}
 						</p>
 					</div>
@@ -611,14 +611,14 @@ function Binder({
 	return (
 		<>
 			<div className="merge__head">
-				<span className="merge__name">Binder and details</span>
+				<h1 className="merge__name">Binder and details</h1>
 				<span className="merge__detail">
 					{leftLabel(remaining, cards.length)}
 				</span>
 				<span className="merge__all">
 					<button
 						type="button"
-						className="compare__step"
+						className="quiet"
 						disabled={remaining === 0}
 						onClick={() => everywhere("ours")}
 					>
@@ -626,7 +626,7 @@ function Binder({
 					</button>
 					<button
 						type="button"
-						className="compare__step"
+						className="quiet"
 						disabled={remaining === 0}
 						onClick={() => everywhere("theirs")}
 					>
@@ -654,19 +654,19 @@ function Binder({
 				</div>
 			</div>
 
-			<div className="compare__foot">
-				<span className="compare__count">
+			<div className="merge__foot">
+				<span className="merge__count">
 					{leftLabel(remaining, cards.length)}
 				</span>
 				<button
 					type="button"
-					className="compare__put"
+					className="merge__done"
 					disabled={busy || cards.length === 0 || remaining > 0}
 					onClick={() => void done()}
 				>
 					Done with binder and details
 				</button>
-				<p className="compare__note" role="alert">
+				<p className="merge__note" role="alert">
 					{error ?? trouble ?? ""}
 				</p>
 			</div>
@@ -990,16 +990,12 @@ function Settled({
 			{paragraphs(text).map((paragraph, n) => (
 				<p key={n}>{paragraph}</p>
 			))}
-			<p className="merge__settled-note">
+			<div className="merge__settled-note">
 				{note}
-				<button
-					type="button"
-					className="compare__step"
-					onClick={onChange}
-				>
+				<button type="button" className="quiet" onClick={onChange}>
 					Change
 				</button>
-			</p>
+			</div>
 		</div>
 	);
 }
