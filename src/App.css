@@ -587,6 +587,9 @@
 	--shadow-cover: 3px 5px 30px rgb(0 0 0 / 0.22);
 	--material: saturate(180%) blur(20px);
 	--press: scale(0.95);
+	/* Every opening starts from this, and eases on this curve. */
+	--open-from: scale(0.97);
+	--ease-open: cubic-bezier(0.23, 1, 0.32, 1);
 	--lift: translateY(-3px);
 
 	font-family: var(--font-ui);
@@ -671,6 +674,7 @@
 @media (prefers-reduced-motion: reduce) {
 	:root {
 		--press: none;
+		--open-from: none;
 		--lift: none;
 	}
 }
@@ -6129,6 +6133,53 @@ button.compare__pick:focus-visible {
 	font: var(--text-ui);
 	overflow-y: auto;
 	scrollbar-width: none;
+}
+
+/* Transitions rather than keyframes, so a menu closed mid-opening goes back
+   from where it is. A webview without @starting-style simply opens at once. */
+.menu__items,
+.typography__panel {
+	transform-origin: top right;
+	transition:
+		opacity 150ms var(--ease-open),
+		transform 150ms var(--ease-open);
+}
+
+@starting-style {
+	.menu__items,
+	.typography__panel {
+		opacity: 0;
+		transform: var(--open-from);
+	}
+}
+
+/* 100ms is MENU_FADE. Fade only: the writer has already moved on. */
+.menu__items[data-closing],
+.typography__panel[data-closing] {
+	opacity: 0;
+	transition: opacity 100ms ease;
+}
+
+.menu__items[data-instant],
+.typography__panel[data-instant] {
+	transition: none;
+}
+
+.shelf__book .menu__items,
+.binder__menu .menu__items,
+.versions__actions .menu__items,
+.takes__menu .menu__items,
+.book__picker .menu__items {
+	transform-origin: top left;
+}
+
+.sidelist__foot .menu__items,
+.takes__compare .menu__items {
+	transform-origin: bottom left;
+}
+
+.compare__acts .menu__items {
+	transform-origin: bottom right;
 }
 
 .menu__item {

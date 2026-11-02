@@ -88,6 +88,29 @@ export function useDismissal(
 	}, [open, within, close, trigger]);
 }
 
+/** How long a closing menu takes to fade, which the stylesheet says too. */
+export const MENU_FADE = 100;
+
+/**
+ * Whether something that has been told to close should still be drawn, so it
+ * has time to fade rather than vanishing the moment it is dismissed.
+ */
+export function useLingering(open: boolean, ms: number): boolean {
+	const [lingering, setLingering] = useState(false);
+
+	useEffect(() => {
+		if (open) {
+			setLingering(true);
+			return;
+		}
+
+		const timer = setTimeout(() => setLingering(false), ms);
+		return () => clearTimeout(timer);
+	}, [open, ms]);
+
+	return open || lingering;
+}
+
 export default function Menu({
 	label,
 	icon,
@@ -99,6 +122,9 @@ export default function Menu({
 	children,
 }: Props) {
 	const [open, setOpen] = useState(false);
+	// The keyboard reports a click with no count, and skips the motion.
+	const [instant, setInstant] = useState(false);
+	const drawn = useLingering(open, MENU_FADE);
 	const menu = useRef<HTMLDivElement>(null);
 	const items = useRef<HTMLDivElement>(null);
 
@@ -131,7 +157,10 @@ export default function Menu({
 				className={className ?? "menu__trigger"}
 				aria-label={label}
 				aria-expanded={open}
-				onClick={() => setOpen((was) => !was)}
+				onClick={(event) => {
+					setInstant(event.detail === 0);
+					setOpen((was) => !was);
+				}}
 			>
 				{trigger ??
 					(trailing === true ? (
@@ -147,8 +176,15 @@ export default function Menu({
 					))}
 			</button>
 
-			{open && (
-				<div ref={items} className="menu__items" role="menu">
+			{drawn && (
+				<div
+					ref={items}
+					className="menu__items"
+					role="menu"
+					data-closing={open ? undefined : ""}
+					data-instant={instant ? "" : undefined}
+					inert={!open}
+				>
 					{children(() => setOpen(false))}
 				</div>
 			)}
