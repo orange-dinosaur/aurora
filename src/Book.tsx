@@ -309,7 +309,7 @@ export default function BookView({ root, changed: moved, onWritten }: Props) {
 													icon="chevron-down"
 													text={titled(person.role)}
 													trailing
-													wrapper="book__picker book__picker--role"
+													wrapper="book__picker"
 													className="book__pick"
 												>
 													{(close) =>
@@ -356,7 +356,7 @@ export default function BookView({ root, changed: moved, onWritten }: Props) {
 								)}
 								<button
 									type="button"
-									className="book__add"
+									className="quiet"
 									onClick={() =>
 										people(added(book.contributors))
 									}
@@ -376,6 +376,7 @@ export default function BookView({ root, changed: moved, onWritten }: Props) {
 								value={book.blurb}
 								placeholder="What the back cover says"
 								rows={5}
+								page
 								onChange={(blurb) => edit({ ...book, blurb })}
 							/>
 							<Chips

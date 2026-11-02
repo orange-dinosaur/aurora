@@ -13,6 +13,8 @@ type BoxProps = {
 	placeholder: string;
 	/** One row makes it a single line rather than a box. */
 	rows: number;
+	/** Set in the page font, for prose rather than a detail. */
+	page?: boolean;
 	onChange: (value: string) => void;
 	/** Given only for a field the writer added, which they can take away. */
 	onRemove?: () => void;
@@ -23,6 +25,7 @@ export function TextBox({
 	value,
 	placeholder,
 	rows,
+	page = false,
 	onChange,
 	onRemove,
 }: BoxProps) {
@@ -73,7 +76,9 @@ export function TextBox({
 			) : (
 				<textarea
 					id={id}
-					className="field__box"
+					className={
+						page ? "field__box field__box--page" : "field__box"
+					}
 					rows={rows}
 					value={draft}
 					placeholder={placeholder}
