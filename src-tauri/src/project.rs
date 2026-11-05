@@ -795,6 +795,9 @@ fn fill(
 		let folder = root.join(section.folder);
 		fs::create_dir(&folder)?;
 		lay_down(&folder, &children)?;
+		if let (Some(start), Some(seed @ "Outline.md")) = (start, section.seed) {
+			fs::write(folder.join(seed), structure::outline(start))?;
+		}
 		nodes.push(Node::folder(section.folder, children));
 	}
 
@@ -1514,6 +1517,43 @@ mod tests {
 		);
 		assert!(!root.join(MANUSCRIPT).join(FRONT_MATTER).exists());
 		assert!(!root.join(MANUSCRIPT).join(BACK_MATTER).exists());
+	}
+
+	fn outline_of(structure: Structure, parts: u32) -> String {
+		let parent = tempfile::tempdir().unwrap();
+		let chosen = Start {
+			parts,
+			..start(structure, 20, 2)
+		};
+		let root = create_from(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			Some(&chosen),
+			fixed_time(),
+		)
+		.unwrap();
+		fs::read_to_string(root.join("Outline").join("Outline.md")).unwrap()
+	}
+
+	#[test]
+	fn save_the_cat_writes_its_beats_into_the_outline() {
+		let outline = outline_of(Structure::SaveTheCat, 0);
+		let headings: Vec<&str> = outline.lines().filter(|l| l.starts_with("## ")).collect();
+		assert_eq!(headings, ["## Act One", "## Act Two", "## Act Three"]);
+		assert_eq!(
+			outline.lines().filter(|l| l.starts_with("- **")).count(),
+			15
+		);
+		assert!(outline.starts_with(
+			"## Act One\n\n- **Opening image.** A picture of the hero's life before anything \
+			 changes.\n"
+		));
+	}
+
+	#[test]
+	fn your_own_leaves_the_outline_empty() {
+		assert_eq!(outline_of(Structure::YourOwn, 3), "");
 	}
 
 	#[test]

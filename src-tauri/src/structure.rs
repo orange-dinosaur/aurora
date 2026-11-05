@@ -41,21 +41,207 @@ const ORDINALS: [&str; MAX_PARTS as usize] = [
 	"One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
 ];
 
+/// A part a structure names for itself: its weight when chapters are shared
+/// out, and its beats as a name and a line on what happens there.
+struct Part {
+	name: &'static str,
+	weight: u32,
+	beats: &'static [(&'static str, &'static str)],
+}
+
+const THREE_ACTS: &[Part] = &[
+	Part {
+		name: "Act One",
+		weight: 1,
+		beats: &[
+			("Setup", "We meet the hero, their world and what they want."),
+			("Inciting incident", "Something upsets that world."),
+			(
+				"First turning point",
+				"The hero commits, and there is no going back.",
+			),
+		],
+	},
+	Part {
+		name: "Act Two",
+		weight: 2,
+		beats: &[
+			("Rising action", "Obstacles grow and the stakes climb."),
+			(
+				"Midpoint",
+				"A reveal or reversal changes what the hero is fighting for.",
+			),
+			("Crisis", "Everything falls apart and the hero must choose."),
+		],
+	},
+	Part {
+		name: "Act Three",
+		weight: 1,
+		beats: &[
+			("Climax", "The hero faces the central conflict head on."),
+			("Resolution", "We see the world after, and what it cost."),
+		],
+	},
+];
+
+const FOUR_PARTS: &[Part] = &[
+	Part {
+		name: "Part One",
+		weight: 1,
+		beats: &[
+			("Hook", "An opening that makes the reader ask a question."),
+			("Setup", "The hero's life, wants and stakes."),
+			(
+				"First plot point",
+				"The hero is pulled into the story's real conflict.",
+			),
+		],
+	},
+	Part {
+		name: "Part Two",
+		weight: 1,
+		beats: &[
+			("Reaction", "The hero runs, hides or flails."),
+			("Pinch point", "The opposing force shows its strength."),
+			(
+				"Midpoint",
+				"New knowledge turns the hero from reacting to acting.",
+			),
+		],
+	},
+	Part {
+		name: "Part Three",
+		weight: 1,
+		beats: &[
+			("Attack", "The hero takes the fight to the problem."),
+			("Second pinch point", "The opposition strikes back harder."),
+			("Second plot point", "The last piece falls into place."),
+		],
+	},
+	Part {
+		name: "Part Four",
+		weight: 1,
+		beats: &[
+			(
+				"Climax",
+				"The hero confronts the opposition and wins or loses.",
+			),
+			("Resolution", "The story's question is answered."),
+		],
+	},
+];
+
+const SAVE_THE_CAT: &[Part] = &[
+	Part {
+		name: "Act One",
+		weight: 1,
+		beats: &[
+			(
+				"Opening image",
+				"A picture of the hero's life before anything changes.",
+			),
+			(
+				"Theme stated",
+				"Someone hints at what the story is really about.",
+			),
+			("Setup", "The hero's world, flaws and what is missing."),
+			("Catalyst", "One event knocks that world off course."),
+			("Debate", "The hero hesitates over what to do."),
+		],
+	},
+	Part {
+		name: "Act Two",
+		weight: 2,
+		beats: &[
+			(
+				"Break into two",
+				"The hero chooses and steps into a new world.",
+			),
+			("B story", "A new relationship that carries the theme."),
+			("Fun and games", "The promise of the premise, played out."),
+			(
+				"Midpoint",
+				"A false victory or false defeat raises the stakes.",
+			),
+			(
+				"Bad guys close in",
+				"Outside pressure and inner doubt tighten.",
+			),
+			("All is lost", "The lowest point, often with a loss."),
+			(
+				"Dark night of the soul",
+				"The hero sits with the loss and finds what they missed.",
+			),
+		],
+	},
+	Part {
+		name: "Act Three",
+		weight: 1,
+		beats: &[
+			(
+				"Break into three",
+				"The hero sees the answer, often through the B story.",
+			),
+			("Finale", "The hero puts the lesson to work and wins."),
+			(
+				"Final image",
+				"A mirror of the opening that shows the change.",
+			),
+		],
+	},
+];
+
+const HEROS_JOURNEY: &[Part] = &[
+	Part {
+		name: "Departure",
+		weight: 1,
+		beats: &[
+			("Ordinary world", "The hero's life as it is."),
+			("Call to adventure", "A problem or invitation arrives."),
+			("Refusal of the call", "Fear holds the hero back."),
+			(
+				"Meeting the mentor",
+				"Someone gives advice, a gift or a push.",
+			),
+			("Crossing the threshold", "The hero leaves the known world."),
+		],
+	},
+	Part {
+		name: "Initiation",
+		weight: 2,
+		beats: &[
+			(
+				"Tests, allies and enemies",
+				"The hero learns the new world's rules.",
+			),
+			("Approach", "The hero prepares for the greatest danger."),
+			("Ordeal", "A brush with death or failure."),
+			("Reward", "The hero takes what they came for."),
+		],
+	},
+	Part {
+		name: "Return",
+		weight: 1,
+		beats: &[
+			("The road back", "The hero turns for home, pursued."),
+			("Resurrection", "A final test proves the hero has changed."),
+			(
+				"Return with the elixir",
+				"The hero comes home with something that heals their world.",
+			),
+		],
+	},
+];
+
 impl Structure {
-	/// Each part's name and its weight when chapters are shared out. Your own
-	/// has no parts of its own; `Start::parts` gives them.
-	fn parts(self) -> &'static [(&'static str, u32)] {
+	/// The parts this structure names for itself. Your own has none;
+	/// `Start::parts` gives them.
+	fn parts(self) -> &'static [Part] {
 		match self {
-			Structure::ThreeActs | Structure::SaveTheCat => {
-				&[("Act One", 1), ("Act Two", 2), ("Act Three", 1)]
-			}
-			Structure::FourParts => &[
-				("Part One", 1),
-				("Part Two", 1),
-				("Part Three", 1),
-				("Part Four", 1),
-			],
-			Structure::HerosJourney => &[("Departure", 1), ("Initiation", 2), ("Return", 1)],
+			Structure::ThreeActs => THREE_ACTS,
+			Structure::FourParts => FOUR_PARTS,
+			Structure::SaveTheCat => SAVE_THE_CAT,
+			Structure::HerosJourney => HEROS_JOURNEY,
 			Structure::YourOwn => &[],
 		}
 	}
@@ -73,7 +259,7 @@ impl Start {
 			fixed => fixed
 				.parts()
 				.iter()
-				.map(|&(name, weight)| (name.to_owned(), weight))
+				.map(|part| (part.name.to_owned(), part.weight))
 				.collect(),
 		}
 	}
@@ -130,6 +316,25 @@ pub fn manuscript(start: &Start) -> Vec<Node> {
 		));
 	}
 	nodes
+}
+
+/// The project's `Outline.md` for this start: each part's name as a heading
+/// with its beats under it. Your own has no beats, so its outline is empty.
+pub fn outline(start: &Start) -> String {
+	start
+		.structure
+		.parts()
+		.iter()
+		.map(|part| {
+			let beats: String = part
+				.beats
+				.iter()
+				.map(|(name, line)| format!("- **{name}.** {line}\n"))
+				.collect();
+			format!("## {}\n\n{beats}", part.name)
+		})
+		.collect::<Vec<_>>()
+		.join("\n")
 }
 
 fn matter(kind: FolderKind, name: &str, documents: &[&str]) -> Node {
