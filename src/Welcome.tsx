@@ -9,6 +9,9 @@ import type {
 	FormatLayout,
 	OpenProject,
 	RecentSummary,
+	Start,
+	Structure,
+	StructureLayout,
 	Theme,
 } from "./types";
 import { AccountChip } from "./Account";
@@ -65,6 +68,44 @@ const COPY: Record<
 
 function describe({ format, folders, available }: FormatLayout): FormatOption {
 	return { id: format, ...COPY[format], folders, available };
+}
+
+// As with formats: Rust owns the structures and their numbers, the words live
+// here.
+const STRUCTURE_COPY: Record<Structure, { name: string; description: string }> =
+	{
+		"three-acts": {
+			name: "Three acts",
+			description: "Setup, confrontation, resolution.",
+		},
+		"four-parts": {
+			name: "Four parts",
+			description: "Four equal parts, each with a turn.",
+		},
+		"save-the-cat": {
+			name: "Save the Cat",
+			description: "Fifteen beats across three acts.",
+		},
+		"heros-journey": {
+			name: "Hero's journey",
+			description: "A hero leaves, is tested and returns.",
+		},
+		"your-own": {
+			name: "Your own",
+			description: "Numbered parts, as many as you ask for.",
+		},
+	};
+
+/** What Create sends for a structure left at the numbers Rust suggests. */
+function startFrom(layout: StructureLayout): Start {
+	return {
+		structure: layout.structure,
+		parts: layout.parts,
+		chapters: layout.chapters,
+		scenes: layout.scenes,
+		frontMatter: false,
+		backMatter: false,
+	};
 }
 
 // How big a project is and when it was last open. A project whose manifest
@@ -241,11 +282,13 @@ function Book({
 }
 
 /**
- * The two stages of starting a project. Built when it opens, so a cancelled
- * attempt leaves nothing behind for the next one.
+ * The stages of starting a project: format, then for a novel the shape it
+ * starts from, then its name. Built when it opens, so a cancelled attempt
+ * leaves nothing behind for the next one.
  */
 function NewProject({
 	formats,
+	structures,
 	busy,
 	onCancel,
 	onChange,
@@ -254,6 +297,7 @@ function NewProject({
 	instant,
 }: {
 	formats: FormatOption[];
+	structures: StructureLayout[];
 	busy: boolean;
 	/** Told to close and fading, so it no longer takes anything. */
 	closing: boolean;
@@ -262,17 +306,31 @@ function NewProject({
 	onCancel: () => void;
 	/** Something was edited, so an earlier failure no longer applies. */
 	onChange: () => void;
-	onCreate: (parent: string, name: string, format: Format) => void;
+	onCreate: (
+		parent: string,
+		name: string,
+		format: Format,
+		start: Start | null,
+	) => void;
 }) {
-	const [stage, setStage] = useState<"format" | "details">("format");
+	const [stage, setStage] = useState<"format" | "start" | "details">(
+		"format",
+	);
 	const [selectedId, setSelectedId] = useState(
 		formats.find((format) => format.available)?.id ?? null,
 	);
+	// Null is a single scene, the project as it has always started.
+	const [structureId, setStructureId] = useState<Structure | null>(null);
 	const [name, setName] = useState("");
 	const [parent, setParent] = useState<string | null>(null);
 	const dialog = useRef<HTMLDivElement>(null);
 
 	const chosen = formats.find((format) => format.id === selectedId) ?? null;
+	// Only a novel has parts and chapters to lay out.
+	const shaped = chosen?.id === "novel" && structures.length > 0;
+	const layout =
+		structures.find((structure) => structure.structure === structureId) ??
+		null;
 	const ready = parent !== null && name.trim() !== "" && !busy;
 
 	// Leaving while a project is being made would hide its failure.
@@ -389,6 +447,81 @@ function NewProject({
 								type="button"
 								className="welcome__create"
 								disabled={chosen === null || busy}
+								onClick={() =>
+									setStage(shaped ? "start" : "details")
+								}
+							>
+								Continue
+							</button>
+						</div>
+					</>
+				) : stage === "start" ? (
+					<>
+						<h2 className="dialog__title">Start from</h2>
+						<p className="dialog__lead">
+							Choose a shape for the Manuscript.
+						</p>
+
+						<fieldset className="formats">
+							<legend className="visually-hidden">
+								Start from
+							</legend>
+							<label className="format">
+								<input
+									type="radio"
+									name="structure"
+									className="visually-hidden"
+									value="single-scene"
+									checked={structureId === null}
+									onChange={() => setStructureId(null)}
+								/>
+								<span className="format__name">
+									A single scene
+								</span>
+								<span className="format__description">
+									One empty scene, as today.
+								</span>
+							</label>
+							{structures.map(({ structure, partNames }) => (
+								<label key={structure} className="format">
+									<input
+										type="radio"
+										name="structure"
+										className="visually-hidden"
+										value={structure}
+										checked={structure === structureId}
+										onChange={() =>
+											setStructureId(structure)
+										}
+									/>
+									<span className="format__name">
+										{STRUCTURE_COPY[structure].name}
+									</span>
+									<span className="format__description">
+										{STRUCTURE_COPY[structure].description}
+									</span>
+									{partNames.length > 0 && (
+										<span className="format__files">
+											{partNames.join(" · ")}
+										</span>
+									)}
+								</label>
+							))}
+						</fieldset>
+
+						<div className="dialog__foot">
+							<button
+								type="button"
+								className="welcome__back"
+								disabled={busy}
+								onClick={() => setStage("format")}
+							>
+								Back
+							</button>
+							<button
+								type="button"
+								className="welcome__create"
+								disabled={busy}
 								onClick={() => setStage("details")}
 							>
 								Continue
@@ -400,7 +533,14 @@ function NewProject({
 						onSubmit={(event) => {
 							event.preventDefault();
 							if (ready) {
-								onCreate(parent, name, chosen.id);
+								onCreate(
+									parent,
+									name,
+									chosen.id,
+									shaped && layout !== null
+										? startFrom(layout)
+										: null,
+								);
 							}
 						}}
 					>
@@ -442,7 +582,7 @@ function NewProject({
 								className="welcome__back"
 								disabled={busy}
 								onClick={() => {
-									setStage("format");
+									setStage(shaped ? "start" : "format");
 									onChange();
 								}}
 							>
@@ -479,6 +619,7 @@ export default function Welcome({
 	const [instant, setInstant] = useState(false);
 	const drawn = useLingering(creating, DIALOG_FADE);
 	const [formats, setFormats] = useState<FormatOption[]>([]);
+	const [structures, setStructures] = useState<StructureLayout[]>([]);
 	// Null until the list arrives. Counting every project's words takes a
 	// moment, and the empty Shelf must not flash up in front of a full one.
 	const [recents, setRecents] = useState<RecentSummary[] | null>(null);
@@ -495,6 +636,10 @@ export default function Welcome({
 			.catch((error) =>
 				setStatus({ kind: "error", message: failure(error).message }),
 			);
+		// Without the list a novel starts as a single scene, as it always has.
+		invoke<StructureLayout[]>("structure_layouts")
+			.then(setStructures)
+			.catch(() => setStructures([]));
 	}, []);
 
 	useEffect(() => {
@@ -510,13 +655,19 @@ export default function Welcome({
 		setStatus({ kind: "idle" });
 	}
 
-	async function createProject(parent: string, name: string, format: Format) {
+	async function createProject(
+		parent: string,
+		name: string,
+		format: Format,
+		start: Start | null,
+	) {
 		setStatus({ kind: "busy" });
 		try {
 			const root = await invoke<string>("create_project", {
 				parent,
 				name,
 				format,
+				start,
 			});
 			onOpened(await invoke<OpenProject>("open_project", { root }));
 		} catch (error) {
@@ -589,14 +740,15 @@ export default function Welcome({
 					closing={!creating}
 					instant={instant}
 					formats={formats}
+					structures={structures}
 					busy={busy}
 					onCancel={() => {
 						setCreating(false);
 						setStatus({ kind: "idle" });
 					}}
 					onChange={() => setStatus({ kind: "idle" })}
-					onCreate={(parent, name, format) =>
-						void createProject(parent, name, format)
+					onCreate={(parent, name, format, start) =>
+						void createProject(parent, name, format, start)
 					}
 				/>
 			)}
