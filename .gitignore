@@ -27,3 +27,4 @@ dist-ssr
 
 # Working notes, not part of the project
 .notes/
+.notes
