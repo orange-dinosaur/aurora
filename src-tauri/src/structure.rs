@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::project::{BACK_MATTER, FRONT_MATTER};
 use crate::tree::{FolderKind, Node};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
@@ -108,9 +109,35 @@ pub fn split(chapters: u32, weights: &[u32]) -> Vec<u32> {
 	counts
 }
 
-/// The Manuscript's children for this start. Chapters number straight through
-/// the book and scenes restart in each chapter. Assumes `in_range`.
+/// The Manuscript's children for this start: front matter if asked, the parts,
+/// then back matter if asked. Chapters number straight through the book and
+/// scenes restart in each chapter. Assumes `in_range`.
 pub fn manuscript(start: &Start) -> Vec<Node> {
+	let mut nodes = Vec::new();
+	if start.front_matter {
+		nodes.push(matter(
+			FolderKind::FrontMatter,
+			FRONT_MATTER,
+			&["Dedication.md", "Epigraph.md"],
+		));
+	}
+	nodes.extend(parts(start));
+	if start.back_matter {
+		nodes.push(matter(
+			FolderKind::BackMatter,
+			BACK_MATTER,
+			&["Acknowledgements.md", "About the author.md"],
+		));
+	}
+	nodes
+}
+
+fn matter(kind: FolderKind, name: &str, documents: &[&str]) -> Node {
+	let documents = documents.iter().map(|name| Node::document(name)).collect();
+	Node::folder_of(Some(kind), name, documents)
+}
+
+fn parts(start: &Start) -> Vec<Node> {
 	let parts = start.parts();
 	let weights: Vec<u32> = parts.iter().map(|&(_, w)| w).collect();
 	let mut number = 0;

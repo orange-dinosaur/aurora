@@ -1416,6 +1416,106 @@ mod tests {
 		assert!(root.join("Manuscript/Act One/Chapter 1.md").is_file());
 	}
 
+	/// The Manuscript's direct children as the manifest records them: each
+	/// one's name, kind and, for a folder, its children's names.
+	fn manuscript_top(root: &Path) -> Vec<(String, Option<FolderKind>, Vec<String>)> {
+		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
+		let manifest: Manifest = serde_json::from_str(&json).unwrap();
+		let Some(Node::Folder { children, .. }) =
+			manifest.nodes.iter().find(|node| node.name() == MANUSCRIPT)
+		else {
+			panic!("no Manuscript");
+		};
+		children
+			.iter()
+			.map(|node| match node {
+				Node::Folder {
+					name,
+					kind,
+					children,
+					..
+				} => (
+					name.clone(),
+					*kind,
+					children.iter().map(|c| c.name().to_owned()).collect(),
+				),
+				Node::Document { name, .. } => (name.clone(), None, Vec::new()),
+			})
+			.collect()
+	}
+
+	#[test]
+	fn matter_comes_first_and_last_when_asked() {
+		let parent = tempfile::tempdir().unwrap();
+		let both = Start {
+			front_matter: true,
+			back_matter: true,
+			..start(Structure::FourParts, 8, 1)
+		};
+		let root = create_from(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			Some(&both),
+			fixed_time(),
+		)
+		.unwrap();
+
+		let top = manuscript_top(&root);
+		assert_eq!(top.len(), 6);
+		assert_eq!(
+			top[0],
+			(
+				FRONT_MATTER.to_owned(),
+				Some(FolderKind::FrontMatter),
+				vec!["Dedication.md".to_owned(), "Epigraph.md".to_owned()]
+			)
+		);
+		assert_eq!(
+			top[5],
+			(
+				BACK_MATTER.to_owned(),
+				Some(FolderKind::BackMatter),
+				vec![
+					"Acknowledgements.md".to_owned(),
+					"About the author.md".to_owned()
+				]
+			)
+		);
+		for document in [
+			"Front Matter/Dedication.md",
+			"Front Matter/Epigraph.md",
+			"Back Matter/Acknowledgements.md",
+			"Back Matter/About the author.md",
+		] {
+			assert!(root.join(MANUSCRIPT).join(document).is_file());
+			validate_name(document.rsplit('/').next().unwrap()).unwrap();
+		}
+	}
+
+	#[test]
+	fn no_matter_unless_asked() {
+		let parent = tempfile::tempdir().unwrap();
+		let four_parts = start(Structure::FourParts, 8, 1);
+		let root = create_from(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			Some(&four_parts),
+			fixed_time(),
+		)
+		.unwrap();
+
+		let top = manuscript_top(&root);
+		assert_eq!(top.len(), 4);
+		assert!(
+			top.iter()
+				.all(|(_, kind, _)| *kind == Some(FolderKind::Part))
+		);
+		assert!(!root.join(MANUSCRIPT).join(FRONT_MATTER).exists());
+		assert!(!root.join(MANUSCRIPT).join(BACK_MATTER).exists());
+	}
+
 	#[test]
 	fn a_start_out_of_range_writes_nothing() {
 		let parent = tempfile::tempdir().unwrap();
