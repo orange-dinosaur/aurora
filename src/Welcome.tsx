@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -27,6 +27,8 @@ import { coverFor } from "./lib/covers";
 import { folderName, going } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
+import { counts, draftOf, read } from "./lib/start";
+import type { Draft } from "./lib/start";
 
 type FormatOption = {
 	id: Format;
@@ -96,16 +98,116 @@ const STRUCTURE_COPY: Record<Structure, { name: string; description: string }> =
 		},
 	};
 
-/** What Create sends for a structure left at the numbers Rust suggests. */
-function startFrom(layout: StructureLayout): Start {
-	return {
-		structure: layout.structure,
-		parts: layout.parts,
-		chapters: layout.chapters,
-		scenes: layout.scenes,
-		frontMatter: false,
-		backMatter: false,
-	};
+/** A number the writer types on the Start from screen. */
+function CountField({
+	label,
+	value,
+	invalid,
+	onChange,
+}: {
+	label: string;
+	value: string;
+	invalid: boolean;
+	onChange: (value: string) => void;
+}) {
+	return (
+		<label className="dialog__label">
+			{label}
+			<input
+				className="dialog__input"
+				value={value}
+				inputMode="numeric"
+				autoComplete="off"
+				spellCheck={false}
+				aria-invalid={invalid}
+				onChange={(event) => onChange(event.target.value)}
+			/>
+		</label>
+	);
+}
+
+/** The numbers and ticks under the structure the writer picked. */
+function StartFields({
+	layout,
+	draft,
+	onDraft,
+	frontMatter,
+	backMatter,
+	onFrontMatter,
+	onBackMatter,
+}: {
+	layout: StructureLayout;
+	draft: Draft;
+	onDraft: (draft: Draft) => void;
+	frontMatter: boolean;
+	backMatter: boolean;
+	onFrontMatter: (on: boolean) => void;
+	onBackMatter: (on: boolean) => void;
+}) {
+	const fields = read(draft, layout);
+	return (
+		<div className="start">
+			<div className="start__counts">
+				{layout.structure === "your-own" && (
+					<CountField
+						label="Parts"
+						value={draft.parts}
+						invalid={fields.parts === null}
+						onChange={(parts) => onDraft({ ...draft, parts })}
+					/>
+				)}
+				<CountField
+					label="Chapters"
+					value={draft.chapters}
+					invalid={fields.chapters === null}
+					onChange={(chapters) => onDraft({ ...draft, chapters })}
+				/>
+				<CountField
+					label="Scenes per chapter"
+					value={draft.scenes}
+					invalid={fields.scenes === null}
+					onChange={(scenes) => onDraft({ ...draft, scenes })}
+				/>
+			</div>
+			<div className="start__matter">
+				<Tick
+					label="Front matter"
+					on={frontMatter}
+					onFlip={() => onFrontMatter(!frontMatter)}
+				/>
+				<Tick
+					label="Back matter"
+					on={backMatter}
+					onFlip={() => onBackMatter(!backMatter)}
+				/>
+			</div>
+		</div>
+	);
+}
+
+/** A tick drawn as Export draws its formats, since a native box will not
+ * take the app's colours. */
+function Tick({
+	label,
+	on,
+	onFlip,
+}: {
+	label: string;
+	on: boolean;
+	onFlip: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			className="export__format"
+			role="checkbox"
+			aria-checked={on}
+			onClick={onFlip}
+		>
+			<span className="export__tick" />
+			{label}
+		</button>
+	);
 }
 
 // How big a project is and when it was last open. A project whose manifest
@@ -321,6 +423,13 @@ function NewProject({
 	);
 	// Null is a single scene, the project as it has always started.
 	const [structureId, setStructureId] = useState<Structure | null>(null);
+	const [draft, setDraft] = useState<Draft>({
+		parts: "",
+		chapters: "",
+		scenes: "",
+	});
+	const [frontMatter, setFrontMatter] = useState(false);
+	const [backMatter, setBackMatter] = useState(false);
 	const [name, setName] = useState("");
 	const [parent, setParent] = useState<string | null>(null);
 	const dialog = useRef<HTMLDivElement>(null);
@@ -331,7 +440,28 @@ function NewProject({
 	const layout =
 		structures.find((structure) => structure.structure === structureId) ??
 		null;
+	const numbers = layout === null ? null : counts(draft, layout);
+	// A structure whose fields are out of range has nothing to send yet.
+	const start: Start | null =
+		layout === null || numbers === null
+			? null
+			: {
+					structure: layout.structure,
+					...numbers,
+					frontMatter,
+					backMatter,
+				};
+	const startReady = layout === null || start !== null;
 	const ready = parent !== null && name.trim() !== "" && !busy;
+
+	// Another structure starts from its own numbers. The ticks are not about
+	// any one structure, so they stay as they are.
+	function chooseStructure(next: StructureLayout | null) {
+		setStructureId(next?.structure ?? null);
+		if (next !== null) {
+			setDraft(draftOf(next));
+		}
+	}
 
 	// Leaving while a project is being made would hide its failure.
 	function leave() {
@@ -473,7 +603,7 @@ function NewProject({
 									className="visually-hidden"
 									value="single-scene"
 									checked={structureId === null}
-									onChange={() => setStructureId(null)}
+									onChange={() => chooseStructure(null)}
 								/>
 								<span className="format__name">
 									A single scene
@@ -482,30 +612,51 @@ function NewProject({
 									One empty scene, as today.
 								</span>
 							</label>
-							{structures.map(({ structure, partNames }) => (
-								<label key={structure} className="format">
-									<input
-										type="radio"
-										name="structure"
-										className="visually-hidden"
-										value={structure}
-										checked={structure === structureId}
-										onChange={() =>
-											setStructureId(structure)
-										}
-									/>
-									<span className="format__name">
-										{STRUCTURE_COPY[structure].name}
-									</span>
-									<span className="format__description">
-										{STRUCTURE_COPY[structure].description}
-									</span>
-									{partNames.length > 0 && (
-										<span className="format__files">
-											{partNames.join(" · ")}
+							{structures.map((option) => (
+								<Fragment key={option.structure}>
+									<label className="format">
+										<input
+											type="radio"
+											name="structure"
+											className="visually-hidden"
+											value={option.structure}
+											checked={
+												option.structure === structureId
+											}
+											onChange={() =>
+												chooseStructure(option)
+											}
+										/>
+										<span className="format__name">
+											{
+												STRUCTURE_COPY[option.structure]
+													.name
+											}
 										</span>
+										<span className="format__description">
+											{
+												STRUCTURE_COPY[option.structure]
+													.description
+											}
+										</span>
+										{option.partNames.length > 0 && (
+											<span className="format__files">
+												{option.partNames.join(" · ")}
+											</span>
+										)}
+									</label>
+									{option === layout && (
+										<StartFields
+											layout={option}
+											draft={draft}
+											onDraft={setDraft}
+											frontMatter={frontMatter}
+											backMatter={backMatter}
+											onFrontMatter={setFrontMatter}
+											onBackMatter={setBackMatter}
+										/>
 									)}
-								</label>
+								</Fragment>
 							))}
 						</fieldset>
 
@@ -521,7 +672,7 @@ function NewProject({
 							<button
 								type="button"
 								className="welcome__create"
-								disabled={busy}
+								disabled={busy || !startReady}
 								onClick={() => setStage("details")}
 							>
 								Continue
@@ -537,9 +688,7 @@ function NewProject({
 									parent,
 									name,
 									chosen.id,
-									shaped && layout !== null
-										? startFrom(layout)
-										: null,
+									shaped ? start : null,
 								);
 							}
 						}}

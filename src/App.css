@@ -1299,6 +1299,45 @@ body,
 	color: var(--text-dim);
 }
 
+/* The numbers and ticks for the structure picked above them, indented to the
+   card's text. */
+.start {
+	margin-bottom: var(--space-xs);
+	padding: 0 var(--space-sm);
+}
+
+.start__counts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+	gap: var(--space-md);
+}
+
+.start__matter {
+	display: flex;
+	gap: var(--space-md);
+}
+
+.start__matter .export__format {
+	width: auto;
+	padding-left: 0;
+}
+
+/* A 1px dark red line alone reads as black, so the label and the number turn
+   too. */
+.dialog__label:has(> .dialog__input[aria-invalid="true"]) {
+	color: var(--danger);
+}
+
+.dialog__input[aria-invalid="true"] {
+	color: var(--danger);
+	border-bottom-color: var(--danger);
+}
+
+.dialog__input[aria-invalid="true"]:focus {
+	border-bottom-color: var(--danger);
+	box-shadow: 0 1px 0 var(--danger);
+}
+
 /* Floats at the foot of the window, so a message appearing cannot move the
    books, and a long Shelf cannot leave it out of sight below the last one.
    Over the scrim as well, or a failed New project would say so unread. */
