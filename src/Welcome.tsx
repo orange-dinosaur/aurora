@@ -224,7 +224,8 @@ type Status =
 
 type Props = {
 	notice: string | null;
-	onOpened: (project: OpenProject) => void;
+	/** `created` when the project was made just now rather than reopened. */
+	onOpened: (project: OpenProject, created?: boolean) => void;
 	onLogin: () => void;
 	onProfile: () => void;
 	onSettings: (keyboard: boolean) => void;
@@ -818,7 +819,7 @@ export default function Welcome({
 				format,
 				start,
 			});
-			onOpened(await invoke<OpenProject>("open_project", { root }));
+			onOpened(await invoke<OpenProject>("open_project", { root }), true);
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
 		}

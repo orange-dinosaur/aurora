@@ -9,7 +9,7 @@ import type {
 	ProjectDocument,
 	TreeNode,
 } from "./types";
-import { MANUSCRIPT, mayHold } from "./kinds";
+import { MANUSCRIPT, isMatter, mayHold } from "./kinds";
 
 /**
  * Enough about a folder to open it and to know what may be made inside it. A
@@ -230,6 +230,41 @@ export function documentsOf(nodes: TreeNode[]): ProjectDocument[] {
 	return rows(nodes, "").flatMap((row) =>
 		row.kind === "document" ? [row.document] : [],
 	);
+}
+
+/** The ids of the folders a node sits in, outermost first. */
+export function foldersAbove(nodes: TreeNode[], id: string): string[] {
+	for (const node of nodes) {
+		if (node.node !== "folder") {
+			continue;
+		}
+		if (node.children.some((child) => child.id === id)) {
+			return [node.id];
+		}
+		const deeper = foldersAbove(node.children, id);
+		if (deeper.length > 0) {
+			return [node.id, ...deeper];
+		}
+	}
+	return [];
+}
+
+/**
+ * The first document of the story itself: the first one a walk of the
+ * Manuscript meets, passing over the front and back matter. Null when the
+ * Manuscript holds none.
+ */
+export function firstScene(nodes: TreeNode[]): ProjectDocument | null {
+	const manuscript = nodes.find(
+		(node) => node.node === "folder" && node.name === MANUSCRIPT,
+	);
+	if (manuscript?.node !== "folder") {
+		return null;
+	}
+	const story = manuscript.children.filter(
+		(node) => node.node === "document" || !isMatter(node.kind),
+	);
+	return documentsOf(story)[0] ?? null;
 }
 
 /** What is on the move, as the list of destinations needs to know it. */

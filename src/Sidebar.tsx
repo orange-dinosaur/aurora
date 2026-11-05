@@ -26,7 +26,15 @@ import { useReorder } from "./reorder";
 import type { Renaming } from "./rows";
 import { indent, retitling, spot } from "./rows";
 import { timed } from "./timing";
-import { folded, inside, rows, sections, wordsIn } from "./tree";
+import {
+	firstScene,
+	folded,
+	foldersAbove,
+	inside,
+	rows,
+	sections,
+	wordsIn,
+} from "./tree";
 import type { FolderRef, Row } from "./tree";
 
 /** Nothing is being dragged, so no row is inside anything. */
@@ -184,7 +192,8 @@ export default function Sidebar({
 
 	// Which folders were open last time, read once the tree is here so that a
 	// project nothing has ever been folded in can open on its sections rather
-	// than on five headings with nothing under them. One the writer shut
+	// than on five headings with nothing under them, and on the way down to
+	// its first scene, which a new project opens on. One the writer shut
 	// everything in comes back shut. A store that cannot be read leaves the
 	// sidebar folded rather than stopping the project opening.
 	const restored = useRef<string | null>(null);
@@ -196,9 +205,19 @@ export default function Sidebar({
 
 		restored.current = root;
 		invoke<string[] | null>("read_expanded", { root })
-			.then((ids) =>
-				setOpen(new Set(ids ?? sections(tree).map((each) => each.id))),
-			)
+			.then((ids) => {
+				const first = firstScene(tree);
+				setOpen(
+					new Set(
+						ids ?? [
+							...sections(tree).map((each) => each.id),
+							...(first === null
+								? []
+								: foldersAbove(tree, first.id)),
+						],
+					),
+				);
+			})
 			.catch(() => setOpen(new Set()));
 	}, [root, tree]);
 

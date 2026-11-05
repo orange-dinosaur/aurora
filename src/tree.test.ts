@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import {
 	destinations,
 	documentsOf,
+	firstScene,
 	folded,
+	foldersAbove,
 	folderOf,
 	inside,
 	rows,
@@ -374,6 +376,106 @@ describe("every document in the tree", () => {
 			"Manuscript/Part One/Landfall.md",
 			"Notes/Ideas.md",
 		]);
+	});
+});
+
+describe("the first scene of a new project", () => {
+	test("a single scene opens on it", () => {
+		const tree = [
+			folder("Manuscript", [document("Manuscript/Scene 1.md")]),
+			folder("Notes", [document("Notes/Notes.md")]),
+		];
+		expect(firstScene(tree)?.path).toBe("Manuscript/Scene 1.md");
+	});
+
+	test("a structure opens on its first chapter's first scene", () => {
+		const tree = [
+			folder("Manuscript", [
+				folder(
+					"Act One",
+					[
+						folder(
+							"Chapter 1",
+							[
+								document(
+									"Manuscript/Act One/Chapter 1/Scene 1.md",
+								),
+								document(
+									"Manuscript/Act One/Chapter 1/Scene 2.md",
+								),
+							],
+							"chapter",
+						),
+					],
+					"part",
+				),
+			]),
+		];
+		expect(firstScene(tree)?.path).toBe(
+			"Manuscript/Act One/Chapter 1/Scene 1.md",
+		);
+	});
+
+	test("chapters without scenes open on the first chapter", () => {
+		const tree = [
+			folder("Manuscript", [
+				folder(
+					"Part One",
+					[document("Manuscript/Part One/Chapter 1.md")],
+					"part",
+				),
+			]),
+		];
+		expect(firstScene(tree)?.path).toBe("Manuscript/Part One/Chapter 1.md");
+	});
+
+	test("front matter is passed over", () => {
+		const tree = [
+			folder("Manuscript", [
+				folder(
+					"Front Matter",
+					[document("Manuscript/Front Matter/Dedication.md")],
+					"front-matter",
+				),
+				folder(
+					"Act One",
+					[document("Manuscript/Act One/Chapter 1.md")],
+					"part",
+				),
+			]),
+		];
+		expect(firstScene(tree)?.path).toBe("Manuscript/Act One/Chapter 1.md");
+	});
+
+	test("the folders above it are named outermost first", () => {
+		const tree = [
+			folder("Manuscript", [
+				folder(
+					"Act One",
+					[
+						folder(
+							"Chapter 1",
+							[
+								document(
+									"Manuscript/Act One/Chapter 1/Scene 1.md",
+								),
+							],
+							"chapter",
+						),
+					],
+					"part",
+				),
+			]),
+		];
+		expect(
+			foldersAbove(tree, "id-Manuscript/Act One/Chapter 1/Scene 1.md"),
+		).toEqual(["id-Manuscript", "id-Act One", "id-Chapter 1"]);
+		expect(foldersAbove(tree, "id-nowhere")).toEqual([]);
+	});
+
+	test("an empty Manuscript has nothing to open", () => {
+		expect(firstScene([folder("Manuscript")])).toBeNull();
+		expect(firstScene([])).toBeNull();
 	});
 });
 

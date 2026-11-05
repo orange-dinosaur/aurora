@@ -41,7 +41,7 @@ import type {
 import { retag, tagged } from "./tags";
 import { timed } from "./timing";
 import type { FolderRef } from "./tree";
-import { documentsOf, folderOf, rows } from "./tree";
+import { documentsOf, firstScene, folderOf, rows } from "./tree";
 import { deleteDocument, deleteFolder } from "./documents";
 import type { TakeView } from "./bindings/TakeView";
 import {
@@ -79,6 +79,8 @@ type Props = {
 	root: string;
 	/** A repository the project sits inside, while the writer has not been told. */
 	enclosingRepository: string | null;
+	/** Made just now, so it opens on its first scene instead of on nothing. */
+	justCreated: boolean;
 	preferences: Preferences;
 	onClose: () => void;
 	onSettings: (keyboard: boolean) => void;
@@ -256,6 +258,7 @@ export default function Project({
 	name,
 	root,
 	enclosingRepository,
+	justCreated,
 	preferences,
 	onClose,
 	onSettings,
@@ -264,6 +267,25 @@ export default function Project({
 	onPreferences,
 }: Props) {
 	const [tabs, setTabs] = useState<Tab[]>([]);
+
+	// Once only: the dev build runs an effect twice, and a second pass would
+	// not yet see the first one's tab and open another.
+	const openedFirst = useRef(false);
+	useEffect(() => {
+		if (!justCreated || openedFirst.current) {
+			return;
+		}
+		openedFirst.current = true;
+		invoke<TreeNode[]>("document_tree", { root })
+			.then((tree) => {
+				const first = firstScene(tree);
+				if (first !== null) {
+					void openDocument(first);
+				}
+			})
+			// The binder reads the same tree and says what went wrong with it.
+			.catch(() => {});
+	}, []);
 	const [activeKey, setActiveKey] = useState<string | null>(null);
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.

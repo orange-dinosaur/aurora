@@ -42,7 +42,7 @@ const DEFAULTS: Preferences = {
 type Boot =
 	| { kind: "loading" }
 	| { kind: "welcome"; notice: string | null }
-	| { kind: "project"; project: OpenProject };
+	| { kind: "project"; project: OpenProject; created?: boolean };
 
 function App() {
 	const [boot, setBoot] = useState<Boot>({ kind: "loading" });
@@ -144,6 +144,7 @@ function App() {
 					name={boot.project.name}
 					root={boot.project.root}
 					enclosingRepository={boot.project.enclosingRepository}
+					justCreated={boot.created ?? false}
 					preferences={preferences}
 					onPreferences={save}
 					onSettings={openSettings}
@@ -160,8 +161,8 @@ function App() {
 				boot.kind === "welcome" && (
 					<Welcome
 						notice={boot.notice}
-						onOpened={(project) =>
-							setBoot({ kind: "project", project })
+						onOpened={(project, created) =>
+							setBoot({ kind: "project", project, created })
 						}
 						onLogin={() => setLogin(true)}
 						onProfile={() => setProfile(true)}
