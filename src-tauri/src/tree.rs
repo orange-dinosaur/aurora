@@ -146,10 +146,15 @@ pub fn may_hold(in_manuscript: bool, parent: Option<FolderKind>, kind: Option<Fo
 impl Node {
 	/// A new folder of no particular kind, holding whatever is passed.
 	pub(crate) fn folder(name: &str, children: Vec<Node>) -> Self {
+		Node::folder_of(None, name, children)
+	}
+
+	/// A new folder of the given kind.
+	pub(crate) fn folder_of(kind: Option<FolderKind>, name: &str, children: Vec<Node>) -> Self {
 		Node::Folder {
 			id: Uuid::new_v4(),
 			name: name.to_owned(),
-			kind: None,
+			kind,
 			target: None,
 			fields: Fields::new(),
 			children,

@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::document::{Document, refresh};
 use crate::store;
+use crate::structure::{self, MAX_CHAPTERS, MAX_PARTS, MAX_SCENES, Start};
 use crate::tree::{self, FolderKind, Node, tree_from_flat};
 use crate::versions;
 
@@ -411,6 +412,7 @@ pub enum Error {
 	NotInManuscript,
 	TakeExists,
 	UnsupportedFormat(Format),
+	StartOutOfRange,
 	Trash(trash::Error),
 	Git(git2::Error),
 	Io(io::Error),
@@ -492,6 +494,11 @@ impl fmt::Display for Error {
 			Error::UnsupportedFormat(format) => {
 				write!(f, "{format:?} projects cannot be created yet")
 			}
+			Error::StartOutOfRange => write!(
+				f,
+				"a structure takes 1 to {MAX_PARTS} parts, at least one chapter a part and at \
+				 most {MAX_CHAPTERS} in all, and 0 to {MAX_SCENES} scenes a chapter"
+			),
 			Error::Trash(e) => write!(f, "the desktop's trash would not take the folder: {e}"),
 			Error::Git(e) => write!(f, "Aurora could not keep this project's versions: {e}"),
 			Error::Io(e) => write!(f, "{e}"),
@@ -537,6 +544,7 @@ impl Error {
 			Error::NotInManuscript => "notInManuscript",
 			Error::TakeExists => "takeExists",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
+			Error::StartOutOfRange => "startOutOfRange",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",
 			Error::Io(_) => "io",
@@ -590,7 +598,8 @@ impl std::error::Error for Error {
 			| Error::MergeUnderway
 			| Error::NotInManuscript
 			| Error::TakeExists
-			| Error::UnsupportedFormat(_) => None,
+			| Error::UnsupportedFormat(_)
+			| Error::StartOutOfRange => None,
 			Error::Trash(e) => Some(e),
 			Error::Git(e) => Some(e),
 			Error::Io(e) => Some(e),
@@ -706,11 +715,26 @@ pub fn create(
 	format: Format,
 	created_at: OffsetDateTime,
 ) -> Result<PathBuf> {
+	create_from(parent, name, format, None, created_at)
+}
+
+/// As `create`, but a start lays out the Manuscript's parts, chapters and
+/// scenes in place of its single seed.
+pub fn create_from(
+	parent: &Path,
+	name: &str,
+	format: Format,
+	start: Option<&Start>,
+	created_at: OffsetDateTime,
+) -> Result<PathBuf> {
 	validate_name(name)?;
 
 	let sections = format.layout();
 	if sections.is_empty() {
 		return Err(Error::UnsupportedFormat(format));
+	}
+	if start.is_some_and(|start| !start.in_range()) {
+		return Err(Error::StartOutOfRange);
 	}
 
 	let root = parent.join(name);
@@ -721,7 +745,7 @@ pub fn create(
 	}
 
 	// The folder did not exist a moment ago, so undoing our own work is safe.
-	match fill(&root, name, format, sections, created_at) {
+	match fill(&root, name, format, sections, start, created_at) {
 		Ok(()) => Ok(root),
 		Err(e) => {
 			let _ = fs::remove_dir_all(&root);
@@ -759,23 +783,40 @@ fn fill(
 	name: &str,
 	format: Format,
 	sections: &[Section],
+	start: Option<&Start>,
 	created_at: OffsetDateTime,
 ) -> Result<()> {
 	let mut nodes = Vec::new();
 	for section in sections {
+		let children = match start {
+			Some(start) if section.folder == MANUSCRIPT => structure::manuscript(start),
+			_ => section.seed.map(Node::document).into_iter().collect(),
+		};
 		let folder = root.join(section.folder);
 		fs::create_dir(&folder)?;
-		let mut children = Vec::new();
-		if let Some(seed) = section.seed {
-			fs::write(folder.join(seed), "")?;
-			children.push(Node::document(seed));
-		}
+		lay_down(&folder, &children)?;
 		nodes.push(Node::folder(section.folder, children));
 	}
 
 	let mut manifest = Manifest::new(name, format, created_at);
 	manifest.nodes = nodes;
 	fs::write(root.join(MANIFEST_FILE), to_json(&manifest)?)?;
+	Ok(())
+}
+
+/// Makes on disk what the nodes describe: a folder for each folder and an
+/// empty file for each document.
+fn lay_down(dir: &Path, nodes: &[Node]) -> Result<()> {
+	for node in nodes {
+		let path = dir.join(node.name());
+		match node {
+			Node::Folder { children, .. } => {
+				fs::create_dir(&path)?;
+				lay_down(&path, children)?;
+			}
+			Node::Document { .. } => fs::write(&path, "")?,
+		}
+	}
 	Ok(())
 }
 
@@ -841,6 +882,7 @@ fn create_and_remember(
 	parent: &Path,
 	name: &str,
 	format: Format,
+	start: Option<&Start>,
 	at: OffsetDateTime,
 ) -> Result<PathBuf> {
 	// The path arrives from the frontend, so it is not trusted to be sensible.
@@ -848,7 +890,7 @@ fn create_and_remember(
 		return Err(Error::RelativePath);
 	}
 
-	let root = create(parent, name, format, at)?;
+	let root = create_from(parent, name, format, start, at)?;
 	let mut store = store::load(store_path)?;
 	store.remember(name, root.clone(), at);
 	store::save(store_path, &store)?;
@@ -890,12 +932,14 @@ pub fn create_project(
 	parent: PathBuf,
 	name: String,
 	format: Format,
+	start: Option<Start>,
 ) -> Result<PathBuf> {
 	create_and_remember(
 		&store_path(&app)?,
 		&parent,
 		&name,
 		format,
+		start.as_ref(),
 		OffsetDateTime::now_utc(),
 	)
 }
@@ -1285,8 +1329,109 @@ pub(crate) fn remove_if_there(path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::structure::Structure;
 	use std::collections::HashSet;
 	use uuid::Uuid;
+
+	/// Every test but the structure ones makes today's single-scene project.
+	fn create_and_remember(
+		store_path: &Path,
+		parent: &Path,
+		name: &str,
+		format: Format,
+		at: OffsetDateTime,
+	) -> Result<PathBuf> {
+		super::create_and_remember(store_path, parent, name, format, None, at)
+	}
+
+	fn start(structure: Structure, chapters: u32, scenes: u32) -> Start {
+		Start {
+			structure,
+			parts: 0,
+			chapters,
+			scenes,
+			front_matter: false,
+			back_matter: false,
+		}
+	}
+
+	fn manuscript_paths(root: &Path) -> Vec<String> {
+		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
+		let manifest: Manifest = serde_json::from_str(&json).unwrap();
+		paths_of(&manifest)
+			.into_iter()
+			.filter(|path| path.starts_with("Manuscript/"))
+			.collect()
+	}
+
+	#[test]
+	fn three_acts_lay_out_parts_chapters_and_scenes_in_order() {
+		let parent = tempfile::tempdir().unwrap();
+		let three_acts = start(Structure::ThreeActs, 25, 2);
+		let root = create_from(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			Some(&three_acts),
+			fixed_time(),
+		)
+		.unwrap();
+
+		let mut expected = Vec::new();
+		let mut chapter = 0;
+		for (part, count) in [("Act One", 6), ("Act Two", 13), ("Act Three", 6)] {
+			for _ in 0..count {
+				chapter += 1;
+				for scene in 1..=2 {
+					expected.push(format!(
+						"Manuscript/{part}/Chapter {chapter}/Scene {scene}.md"
+					));
+				}
+			}
+		}
+		assert_eq!(manuscript_paths(&root), expected);
+		assert!(expected.contains(&"Manuscript/Act Two/Chapter 13/Scene 2.md".to_owned()));
+		for path in &expected {
+			assert!(root.join(path).is_file(), "{path} is missing on disk");
+		}
+		assert!(!root.join("Manuscript/Scene 1.md").exists());
+	}
+
+	#[test]
+	fn no_scenes_make_each_chapter_one_document() {
+		let parent = tempfile::tempdir().unwrap();
+		let three_acts = start(Structure::ThreeActs, 24, 0);
+		let root = create_from(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			Some(&three_acts),
+			fixed_time(),
+		)
+		.unwrap();
+
+		let paths = manuscript_paths(&root);
+		assert_eq!(paths.len(), 24);
+		assert_eq!(paths[0], "Manuscript/Act One/Chapter 1.md");
+		assert!(root.join("Manuscript/Act One/Chapter 1.md").is_file());
+	}
+
+	#[test]
+	fn a_start_out_of_range_writes_nothing() {
+		let parent = tempfile::tempdir().unwrap();
+		let too_many = start(Structure::ThreeActs, 24, 21);
+		let err = create_from(
+			parent.path(),
+			"Ithaca",
+			Format::Novel,
+			Some(&too_many),
+			fixed_time(),
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::StartOutOfRange));
+		assert!(!parent.path().join("Ithaca").exists());
+	}
 
 	fn paths_of(manifest: &Manifest) -> Vec<String> {
 		manifest
@@ -2090,6 +2235,7 @@ mod tests {
 				"Ithaca",
 				Format::Novel,
 				Format::Novel.layout(),
+				None,
 				fixed_time()
 			)
 			.is_err()

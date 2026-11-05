@@ -7,6 +7,7 @@ pub mod history;
 pub mod merge;
 pub mod project;
 pub mod store;
+pub mod structure;
 pub mod takes;
 pub mod text;
 pub mod tree;
