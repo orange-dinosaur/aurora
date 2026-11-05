@@ -234,6 +234,26 @@ const HEROS_JOURNEY: &[Part] = &[
 ];
 
 impl Structure {
+	/// Every structure, in the order the Start from screen offers them. Keep in
+	/// step with the enum.
+	pub const ALL: &'static [Structure] = &[
+		Structure::ThreeActs,
+		Structure::FourParts,
+		Structure::SaveTheCat,
+		Structure::HerosJourney,
+		Structure::YourOwn,
+	];
+
+	/// The chapters the Start from screen suggests before the writer changes
+	/// anything.
+	fn default_chapters(self) -> u32 {
+		match self {
+			Structure::ThreeActs | Structure::FourParts => 24,
+			Structure::SaveTheCat | Structure::HerosJourney => 20,
+			Structure::YourOwn => 18,
+		}
+	}
+
 	/// The parts this structure names for itself. Your own has none;
 	/// `Start::parts` gives them.
 	fn parts(self) -> &'static [Part] {
@@ -276,6 +296,50 @@ impl Start {
 			&& (parts..=MAX_CHAPTERS).contains(&self.chapters)
 			&& self.scenes <= MAX_SCENES
 	}
+}
+
+const DEFAULT_PARTS: u32 = 3;
+const DEFAULT_SCENES: u32 = 2;
+
+/// A structure as the Start from screen needs to describe it, with the numbers
+/// its fields start at. Field names follow `Start`, so a layout seeds one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct StructureLayout {
+	pub structure: Structure,
+	/// Empty for Your own, whose parts are numbered as the writer asks.
+	pub part_names: Vec<String>,
+	pub parts: u32,
+	pub chapters: u32,
+	pub scenes: u32,
+}
+
+/// The structures and their starting numbers, so the frontend does not keep
+/// its own copy of them.
+#[tauri::command]
+pub fn structure_layouts() -> Vec<StructureLayout> {
+	Structure::ALL
+		.iter()
+		.map(|&structure| {
+			let part_names: Vec<String> = structure
+				.parts()
+				.iter()
+				.map(|part| part.name.to_owned())
+				.collect();
+			let parts = match structure {
+				Structure::YourOwn => DEFAULT_PARTS,
+				_ => part_names.len() as u32,
+			};
+			StructureLayout {
+				structure,
+				part_names,
+				parts,
+				chapters: structure.default_chapters(),
+				scenes: DEFAULT_SCENES,
+			}
+		})
+		.collect()
 }
 
 /// Shares `chapters` out across parts in proportion to their weights. Each part
@@ -384,6 +448,41 @@ mod tests {
 			scenes,
 			front_matter: false,
 			back_matter: false,
+		}
+	}
+
+	#[test]
+	fn layouts_come_in_order_with_their_defaults() {
+		let layouts = structure_layouts();
+		let order: Vec<Structure> = layouts.iter().map(|l| l.structure).collect();
+		assert_eq!(order, Structure::ALL);
+		assert_eq!(
+			layouts[0],
+			StructureLayout {
+				structure: Structure::ThreeActs,
+				part_names: vec!["Act One".into(), "Act Two".into(), "Act Three".into()],
+				parts: 3,
+				chapters: 24,
+				scenes: 2,
+			}
+		);
+		let your_own = &layouts[4];
+		assert!(your_own.part_names.is_empty());
+		assert_eq!((your_own.parts, your_own.chapters), (3, 18));
+	}
+
+	#[test]
+	fn every_default_is_in_range() {
+		for layout in structure_layouts() {
+			let start = Start {
+				structure: layout.structure,
+				parts: layout.parts,
+				chapters: layout.chapters,
+				scenes: layout.scenes,
+				front_matter: false,
+				back_matter: false,
+			};
+			assert!(start.in_range(), "{:?}", layout.structure);
 		}
 	}
 

@@ -140,6 +140,7 @@ pub fn run() {
 		})
 		.invoke_handler(tauri::generate_handler![
 			project::format_layouts,
+			structure::structure_layouts,
 			project::create_project,
 			project::last_project,
 			project::forget_project,
