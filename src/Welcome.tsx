@@ -146,8 +146,20 @@ function StartFields({
 	onBackMatter: (on: boolean) => void;
 }) {
 	const fields = read(draft, layout);
+	const start = useRef<HTMLDivElement>(null);
+
+	// Opening a structure low in the list would leave its fields under the
+	// dialog's foot. A frame later, so the scroll that brings the clicked
+	// radio into view cannot undo this one.
+	useEffect(() => {
+		const frame = requestAnimationFrame(() =>
+			start.current?.scrollIntoView({ block: "nearest" }),
+		);
+		return () => cancelAnimationFrame(frame);
+	}, []);
+
 	return (
-		<div className="start">
+		<div className="start" ref={start}>
 			<div className="start__counts">
 				{layout.structure === "your-own" && (
 					<CountField

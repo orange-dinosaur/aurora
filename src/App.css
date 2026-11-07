@@ -1163,10 +1163,11 @@ body,
 /* The surface a dialog over the Shelf stands on. A short window scrolls it
    rather than pushing its buttons off the foot. */
 .dialog {
+	--dialog-pad: var(--space-lg);
 	width: 100%;
 	max-width: 440px;
 	max-height: 100%;
-	padding: var(--space-lg);
+	padding: var(--dialog-pad);
 	overflow-y: auto;
 	text-align: left;
 	color: var(--text);
@@ -1254,12 +1255,24 @@ body,
 	font: inherit;
 }
 
+/* Pinned to the bottom of a dialog that has to scroll, so its buttons never
+   scroll away. It takes over the dialog's bottom padding to sit flush. */
 .dialog__foot {
+	position: sticky;
+	bottom: 0;
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
 	gap: var(--space-xs);
-	margin-top: var(--space-md);
+	margin: var(--space-md) 0 calc(-1 * var(--dialog-pad));
+	padding: var(--space-xs) 0 var(--dialog-pad);
+	background: var(--bg-card);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.dialog {
+		scroll-behavior: smooth;
+	}
 }
 
 /* Kept out of sight but still focusable, so the card shows the focus ring. */
@@ -1347,9 +1360,11 @@ body,
 
 /* The numbers and ticks for the structure picked above them, indented to the
    card's text. */
+/* Scrolled into view clear of the pinned foot. */
 .start {
 	margin-bottom: var(--space-xs);
 	padding: 0 var(--space-sm);
+	scroll-margin-bottom: 4.5rem;
 }
 
 .start__counts {
@@ -8367,8 +8382,8 @@ button.compare__pick:focus-visible {
 }
 
 .export__dialog {
+	--dialog-pad: var(--space-md);
 	max-width: 380px;
-	padding: var(--space-md);
 }
 
 .export__dialog .dialog__lead {
