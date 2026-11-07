@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::project::{Error, Result, store_path, write_json};
 
-pub const STORE_VERSION: u32 = 9;
+pub const STORE_VERSION: u32 = 10;
 
 /// How many projects are worth offering on the welcome screen.
 const MAX_RECENT: usize = 10;
@@ -85,6 +85,10 @@ pub struct Preferences {
 	/// update nobody hears about fixes nothing.
 	#[serde(default = "shown")]
 	pub check_for_updates: bool,
+	/// Where new projects are created, or none while the writer has never been
+	/// asked. Absent from a store written before version 10.
+	#[serde(default)]
+	pub projects_folder: Option<PathBuf>,
 	/// The width of the column of text, in characters.
 	pub measure: u32,
 	/// In pixels.
@@ -189,6 +193,7 @@ impl Default for Preferences {
 			idle_minutes: idle_minutes(),
 			session_clock: true,
 			check_for_updates: true,
+			projects_folder: None,
 			measure: 68,
 			font_size: 16,
 			line_height: 1.7,
@@ -311,9 +316,9 @@ pub fn load(path: &Path) -> Result<Store> {
 /// Version 2 had no preferences, version 3 no `sidebar`, version 4 no
 /// `expanded`, version 5 no right sidebar, version 6 neither the sidebar
 /// widths nor the theme and manuscript font, and version 7 none of the session
-/// preferences, and version 8 no folded groups on the Book page; serde's
-/// defaults are the whole migration for all seven, and each of them is the
-/// behaviour that version already had.
+/// preferences, version 8 no folded groups on the Book page, and version 9 no
+/// projects folder; serde's defaults are the whole migration for all eight, and
+/// each of them is the behaviour that version already had.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
 	if store.version < STORE_VERSION {
@@ -357,6 +362,20 @@ pub fn read_preferences(app: AppHandle) -> Result<Preferences> {
 #[tauri::command]
 pub fn write_preferences(app: AppHandle, preferences: Preferences) -> Result<()> {
 	set_preferences(&store_path(&app)?, preferences)
+}
+
+/// An Aurora folder in Documents, or in the home folder on a system that has
+/// no Documents folder.
+fn projects_folder_in(documents: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
+	documents.or(home).map(|dir| dir.join("Aurora"))
+}
+
+/// What the writer is offered the first time Aurora asks where to keep books.
+/// Nothing is created: the folder only has to exist once a project goes in it.
+#[tauri::command]
+pub fn default_projects_folder(app: AppHandle) -> Result<PathBuf> {
+	let path = app.path();
+	projects_folder_in(path.document_dir().ok(), path.home_dir().ok()).ok_or(Error::NoHomeDir)
 }
 
 /// The folders left open in one project, or `None` for a project the writer has
@@ -707,6 +726,29 @@ mod tests {
 		assert_eq!(store.preferences.idle_minutes, 30);
 		assert!(store.preferences.session_clock);
 		assert!(store.preferences.check_for_updates);
+		// Never asked, so the first New project asks.
+		assert_eq!(store.preferences.projects_folder, None);
+	}
+
+	#[test]
+	fn the_projects_folder_goes_in_documents() {
+		assert_eq!(
+			projects_folder_in(Some("/home/a/Documents".into()), Some("/home/a".into())),
+			Some(PathBuf::from("/home/a/Documents/Aurora"))
+		);
+	}
+
+	#[test]
+	fn without_documents_the_projects_folder_goes_in_home() {
+		assert_eq!(
+			projects_folder_in(None, Some("/home/a".into())),
+			Some(PathBuf::from("/home/a/Aurora"))
+		);
+	}
+
+	#[test]
+	fn without_a_home_there_is_no_projects_folder() {
+		assert_eq!(projects_folder_in(None, None), None);
 	}
 
 	#[test]
@@ -731,6 +773,7 @@ mod tests {
 			idle_minutes: 45,
 			session_clock: false,
 			check_for_updates: false,
+			projects_folder: Some("/home/a/Books".into()),
 			measure: 80,
 			font_size: 19,
 			line_height: 2.0,

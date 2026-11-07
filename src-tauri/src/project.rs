@@ -383,6 +383,7 @@ pub enum Error {
 	InvalidName(NameError),
 	RelativePath,
 	NoConfigDir,
+	NoHomeDir,
 	NotAProject,
 	UnsupportedVersion { found: u32, supported: u32 },
 	UnknownDocument,
@@ -427,6 +428,7 @@ impl fmt::Display for Error {
 			Error::NoConfigDir => {
 				write!(f, "Aurora could not find its configuration folder")
 			}
+			Error::NoHomeDir => write!(f, "Aurora could not find your home folder"),
 			Error::NotAProject => write!(f, "that folder is not an Aurora project"),
 			Error::UnsupportedVersion { found, supported } => write!(
 				f,
@@ -515,6 +517,7 @@ impl Error {
 			Error::InvalidName(_) => "invalidName",
 			Error::RelativePath => "relativePath",
 			Error::NoConfigDir => "noConfigDir",
+			Error::NoHomeDir => "noHomeDir",
 			Error::NotAProject => "notAProject",
 			Error::UnsupportedVersion { .. } => "unsupportedVersion",
 			Error::UnknownDocument => "unknownDocument",
@@ -570,6 +573,7 @@ impl std::error::Error for Error {
 			Error::InvalidName(_)
 			| Error::RelativePath
 			| Error::NoConfigDir
+			| Error::NoHomeDir
 			| Error::NotAProject
 			| Error::UnsupportedVersion { .. }
 			| Error::UnknownDocument

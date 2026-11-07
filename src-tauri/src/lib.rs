@@ -216,6 +216,7 @@ pub fn run() {
 			takes::delete_take,
 			store::read_preferences,
 			store::write_preferences,
+			store::default_projects_folder,
 			store::read_expanded,
 			store::write_expanded,
 			store::read_folded,
