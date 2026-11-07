@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { failure } from "./errors";
+import { trapTab } from "./lib/trap";
 import { DIALOG_FADE, useLingering } from "./Menu";
 import {
 	FORMATS,
@@ -195,6 +196,9 @@ export default function Export({
 							aria-modal="true"
 							aria-label="Export"
 							tabIndex={-1}
+							onKeyDown={(event) =>
+								trapTab(event.nativeEvent, dialog.current)
+							}
 						>
 							<h2 className="dialog__title">Export</h2>
 							<p className="dialog__lead">

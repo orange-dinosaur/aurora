@@ -29,6 +29,7 @@ import { folderName, going, place, tilde } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
 import { counts, draftOf, read } from "./lib/start";
+import { trapTab } from "./lib/trap";
 import type { Draft } from "./lib/start";
 
 type FormatOption = {
@@ -582,6 +583,9 @@ function NewProject({
 				aria-label="New project"
 				ref={dialog}
 				tabIndex={-1}
+				onKeyDown={(event) =>
+					trapTab(event.nativeEvent, dialog.current)
+				}
 			>
 				{stage === "folder" ? (
 					<>
