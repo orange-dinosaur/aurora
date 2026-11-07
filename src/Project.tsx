@@ -42,6 +42,8 @@ import { retag, tagged } from "./tags";
 import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import { documentsOf, firstScene, folderOf, rows } from "./tree";
+import type { Workspace } from "./bindings/Workspace";
+import { remembered, reopen } from "./workspace";
 import { deleteDocument, deleteFolder } from "./documents";
 import type { TakeView } from "./bindings/TakeView";
 import {
@@ -268,25 +270,85 @@ export default function Project({
 }: Props) {
 	const [tabs, setTabs] = useState<Tab[]>([]);
 
+	// False until the tabs the project was left with are back, so the empty
+	// strip it opens on is not written over them.
+	const [pickedUp, setPickedUp] = useState(false);
+
 	// Once only: the dev build runs an effect twice, and a second pass would
-	// not yet see the first one's tab and open another.
+	// not yet see the first one's tabs and open them again.
 	const openedFirst = useRef(false);
 	useEffect(() => {
-		if (!justCreated || openedFirst.current) {
+		if (openedFirst.current) {
 			return;
 		}
 		openedFirst.current = true;
-		invoke<TreeNode[]>("document_tree", { root })
-			.then((tree) => {
-				const first = firstScene(tree);
-				if (first !== null) {
-					void openDocument(first);
+
+		if (justCreated) {
+			setPickedUp(true);
+			invoke<TreeNode[]>("document_tree", { root })
+				.then((tree) => {
+					const first = firstScene(tree);
+					if (first !== null) {
+						void openDocument(first);
+					}
+				})
+				// The binder reads the same tree and says what went wrong with it.
+				.catch(() => {});
+			return;
+		}
+
+		Promise.all([
+			invoke<Workspace | null>("read_workspace", { root }),
+			invoke<TreeNode[]>("document_tree", { root }),
+		])
+			.then(([saved, tree]) => {
+				if (saved === null) {
+					return;
+				}
+				const back = reopen(saved, tree);
+				const opening = back.tabs.map((tab): Tab =>
+					tab.kind === "document"
+						? {
+								...tab,
+								key: freshKey(),
+								content: { kind: "loading" },
+								save: { kind: "clean" },
+								seed: null,
+								takes: [],
+							}
+						: { ...tab, key: freshKey() },
+				);
+				// Ahead of anything the writer opened while this was reading.
+				setTabs((open) => [...opening, ...open]);
+				if (back.active !== null) {
+					const front = opening[back.active].key;
+					setActiveKey((active) => active ?? front);
+				}
+				for (const tab of opening) {
+					if (tab.kind === "document") {
+						void fill(tab.document.id);
+					}
 				}
 			})
-			// The binder reads the same tree and says what went wrong with it.
-			.catch(() => {});
+			// Picking up is a convenience: without it the project opens with no
+			// tabs, as it always used to.
+			.catch(() => {})
+			.finally(() => setPickedUp(true));
 	}, []);
 	const [activeKey, setActiveKey] = useState<string | null>(null);
+
+	// Written whenever the strip changes shape, not on every keystroke that
+	// passes through the tabs.
+	const leftWith = remembered(tabs, activeKey);
+	const leftWithText = JSON.stringify(leftWith);
+	useEffect(() => {
+		if (!pickedUp) {
+			return;
+		}
+		invoke("write_workspace", { root, workspace: leftWith }).catch(
+			() => {},
+		);
+	}, [pickedUp, leftWithText]);
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
@@ -658,14 +720,17 @@ export default function Project({
 		};
 		setTabs((open) => [...open, opening]);
 		setActiveKey(opening.key);
+		await fill(document.id);
+	}
 
+	async function fill(id: string) {
 		const [content, takes] = await Promise.all([
-			read(root, document.id),
-			readTakes(root, document.id),
+			read(root, id),
+			readTakes(root, id),
 		]);
 		// Keyed by id, so a slow read can only ever fill in its own tab — and
 		// quietly does nothing if that tab was closed while it was in flight.
-		patch(document.id, (tab) => ({ ...tab, content, takes }));
+		patch(id, (tab) => ({ ...tab, content, takes }));
 	}
 
 	// The writer sees the new take, so a document that was shut opens.

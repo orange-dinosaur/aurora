@@ -225,6 +225,34 @@ export function folderOf(nodes: TreeNode[], id: string): FolderNode | null {
 	return null;
 }
 
+/** What a tab needs to open the folder with this id, as the sidebar builds it. */
+export function folderRef(
+	nodes: TreeNode[],
+	id: string,
+	above: string[] = [],
+): FolderRef | null {
+	for (const node of nodes) {
+		if (node.node !== "folder") {
+			continue;
+		}
+		const trail = [...above, node.name];
+		if (node.id === id) {
+			return {
+				id: node.id,
+				name: node.name,
+				kind: node.kind,
+				section: trail[0],
+				trail,
+			};
+		}
+		const found = folderRef(node.children, id, trail);
+		if (found !== null) {
+			return found;
+		}
+	}
+	return null;
+}
+
 /** Every document in the tree, wherever it sits. */
 export function documentsOf(nodes: TreeNode[]): ProjectDocument[] {
 	return rows(nodes, "").flatMap((row) =>
