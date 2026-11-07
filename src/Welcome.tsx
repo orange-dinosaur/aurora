@@ -938,26 +938,22 @@ export default function Welcome({
 					</div>
 				</div>
 
-				{recents !== null && recents.length === 0 && (
-					<div className="shelf__empty">
-						<button
-							type="button"
-							className="shelf__ghost"
-							aria-label="New project"
-							disabled={busy}
-							onClick={startNew}
-						>
-							<Icon name="plus" />
-						</button>
-						<p>
-							Nothing here yet. Start a book, or open a folder you
-							already write in.
-						</p>
-					</div>
-				)}
-
-				{recents !== null && recents.length > 0 && (
+				{recents !== null && (
 					<ul className="shelf__books">
+						<li>
+							<button
+								type="button"
+								className="shelf__ghost"
+								aria-label="New project"
+								disabled={busy}
+								onClick={startNew}
+							>
+								<Icon name="plus" />
+								<span className="shelf__ghost-label">
+									New project
+								</span>
+							</button>
+						</li>
 						{recents.map((project) => (
 							<Book
 								key={project.root}

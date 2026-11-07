@@ -1084,18 +1084,12 @@ body,
 	margin-top: var(--space-sm);
 }
 
-.shelf__empty {
-	max-width: 180px;
-}
-
-.shelf__empty p {
-	margin: var(--space-sm) 0 0;
-	color: var(--text-dim);
-}
-
 .shelf__ghost {
-	display: grid;
-	place-items: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-sm);
 	width: 100%;
 	aspect-ratio: 2 / 3;
 	color: var(--accent-text);
@@ -1119,6 +1113,11 @@ body,
 .shelf__ghost svg {
 	width: 22px;
 	height: 22px;
+}
+
+.shelf__ghost-label {
+	font: 400 20px/1.1 var(--font-title);
+	letter-spacing: var(--tracking-heading);
 }
 
 @media (max-width: 620px) {
