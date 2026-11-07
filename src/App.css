@@ -7728,6 +7728,12 @@ button.compare__pick:focus-visible {
 	min-width: 0;
 }
 
+/* A folder is shown whole, wrapping if it has to. */
+.settings__hint.settings__path {
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
 .settings__label {
 	margin: 0;
 	font: var(--text-ui);

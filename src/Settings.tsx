@@ -1,5 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { homeDir } from "@tauri-apps/api/path";
+import { open } from "@tauri-apps/plugin-dialog";
+import { tilde } from "./recents";
 import Account from "./Account";
 import Icon from "./Icon";
 import { UNITS } from "./Session";
@@ -234,9 +237,46 @@ function General({
 	onPreferences: (next: Preferences) => void;
 }) {
 	const version = useVersion();
+	const [home, setHome] = useState<string | null>(null);
+
+	useEffect(() => {
+		homeDir().then(setHome, () => {});
+	}, []);
+
+	async function chooseFolder() {
+		const picked = await open({
+			directory: true,
+			multiple: false,
+			title: "Where should Aurora keep your books?",
+		});
+		if (typeof picked === "string") {
+			onPreferences({ ...preferences, projectsFolder: picked });
+		}
+	}
 
 	return (
 		<>
+			<div className="settings__row">
+				<div className="settings__about">
+					<p className="settings__label">Projects folder</p>
+					<p className="settings__hint settings__path">
+						{preferences.projectsFolder === null
+							? "Not chosen yet. New project asks the first time."
+							: tilde(preferences.projectsFolder, home)}
+					</p>
+					<p className="settings__hint">
+						New projects go here. Changing it moves no books.
+					</p>
+				</div>
+				<button
+					type="button"
+					className="settings__choice"
+					onClick={() => void chooseFolder()}
+				>
+					Change…
+				</button>
+			</div>
+
 			<div className="settings__row">
 				<div className="settings__about">
 					<p className="settings__label">

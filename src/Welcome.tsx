@@ -899,11 +899,12 @@ export default function Welcome({
 			.catch(() => setStructures([]));
 	}, []);
 
+	// Again when the projects folder changes, since the shelf lists it.
 	useEffect(() => {
 		invoke<RecentSummary[]>("recent_projects")
 			.then(setRecents)
 			.catch(() => setRecents([]));
-	}, []);
+	}, [projectsFolder]);
 
 	function startNew(event: MouseEvent) {
 		setInstant(event.detail === 0);
