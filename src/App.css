@@ -785,7 +785,7 @@ body,
 
 .shelf {
 	width: 100%;
-	max-width: 1040px;
+	max-width: 1680px;
 	margin: 0 auto;
 	padding: var(--space-xl) var(--space-lg) var(--space-section);
 }
@@ -850,9 +850,14 @@ body,
 	outline-offset: 2px;
 }
 
+/* Books grow with the window: 148px wide at the default 1000px window, 200px
+   at a full HD one. */
 .shelf__books {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+	grid-template-columns: repeat(
+		auto-fill,
+		minmax(clamp(148px, 91.5px + 5.65vw, 200px), 1fr)
+	);
 	gap: var(--space-xl) var(--space-lg);
 	margin: 0;
 	padding: 0;
