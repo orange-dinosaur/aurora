@@ -34,6 +34,7 @@ const DEFAULTS: Preferences = {
 	idleMinutes: 30,
 	sessionClock: true,
 	checkForUpdates: true,
+	projectsFolder: null,
 	measure: 68,
 	fontSize: 16,
 	lineHeight: 1.7,

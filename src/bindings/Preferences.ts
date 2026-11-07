@@ -90,6 +90,11 @@ sessionClock: boolean,
  */
 checkForUpdates: boolean, 
 /**
+ * Where new projects are created, or none while the writer has never been
+ * asked. Absent from a store written before version 10.
+ */
+projectsFolder: string | null, 
+/**
  * The width of the column of text, in characters.
  */
 measure: number, 
