@@ -220,7 +220,9 @@ pub fn run() {
 			store::read_expanded,
 			store::write_expanded,
 			store::read_folded,
-			store::write_folded
+			store::write_folded,
+			store::read_workspace,
+			store::write_workspace
 		])
 		.build(tauri::generate_context!())
 		.expect("error while building tauri application")

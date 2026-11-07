@@ -209,6 +209,50 @@ pub struct RecentProject {
 	pub last_opened: OffsetDateTime,
 }
 
+/// Where the caret sat in a document: which paragraph, counting from zero, and
+/// how many characters into it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct Caret {
+	pub paragraph: u32,
+	pub offset: u32,
+}
+
+/// One open tab, by what it shows rather than by what it held: the document,
+/// folder or subject is looked up again when the project reopens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum SavedTab {
+	/// No caret for a document whose editor never took focus.
+	Document {
+		id: Uuid,
+		caret: Option<Caret>,
+		scroll: u32,
+	},
+	Folder {
+		id: Uuid,
+	},
+	Book,
+	Trash,
+	Search,
+	Tag {
+		tag: String,
+	},
+	Subject {
+		id: Uuid,
+	},
+}
+
+/// The tabs a project was left with, in order, and which of them was in front.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct Workspace {
+	pub tabs: Vec<SavedTab>,
+	/// An index into `tabs`, or `None` when no tab was open.
+	pub active: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Store {
@@ -245,6 +289,10 @@ pub struct Store {
 	/// Opening one clears it. Absent from a store written before version 10.
 	#[serde(default)]
 	pub forgotten: Vec<PathBuf>,
+	/// The tabs each project was left with, kept here for the same reason as
+	/// `expanded`. Absent from a store written before version 10.
+	#[serde(default)]
+	pub workspace: BTreeMap<PathBuf, Workspace>,
 }
 
 impl Default for Store {
@@ -257,6 +305,7 @@ impl Default for Store {
 			expanded: BTreeMap::new(),
 			folded: BTreeMap::new(),
 			forgotten: Vec::new(),
+			workspace: BTreeMap::new(),
 		}
 	}
 }
@@ -301,6 +350,7 @@ impl Store {
 		// a folder it no longer knows about could not be opened again anyway.
 		self.expanded.remove(root);
 		self.folded.remove(root);
+		self.workspace.remove(root);
 		if !self.forgotten.iter().any(|forgotten| forgotten == root) {
 			self.forgotten.push(root.to_path_buf());
 		}
@@ -323,7 +373,7 @@ pub fn load(path: &Path) -> Result<Store> {
 /// `expanded`, version 5 no right sidebar, version 6 neither the sidebar
 /// widths nor the theme and manuscript font, and version 7 none of the session
 /// preferences, version 8 no folded groups on the Book page, and version 9
-/// neither the projects folder nor forgotten books; serde's defaults are the whole migration for all eight, and
+/// neither the projects folder, forgotten books nor workspaces; serde's defaults are the whole migration for all eight, and
 /// each of them is the behaviour that version already had.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
@@ -439,6 +489,28 @@ pub fn read_folded(app: AppHandle, root: PathBuf) -> Result<Vec<String>> {
 #[tauri::command]
 pub fn write_folded(app: AppHandle, root: PathBuf, shut: Vec<String>) -> Result<()> {
 	set_folded(&store_path(&app)?, root, shut)
+}
+
+fn workspace(path: &Path, root: &Path) -> Result<Option<Workspace>> {
+	Ok(load(path)?.workspace.remove(root))
+}
+
+fn set_workspace(path: &Path, root: PathBuf, workspace: Workspace) -> Result<()> {
+	let mut store = load(path)?;
+	store.workspace.insert(root, workspace);
+	save(path, &store)
+}
+
+/// The tabs one project was left with, or `null` for a project that has never
+/// been left on this machine.
+#[tauri::command]
+pub fn read_workspace(app: AppHandle, root: PathBuf) -> Result<Option<Workspace>> {
+	workspace(&store_path(&app)?, &root)
+}
+
+#[tauri::command]
+pub fn write_workspace(app: AppHandle, root: PathBuf, workspace: Workspace) -> Result<()> {
+	set_workspace(&store_path(&app)?, root, workspace)
 }
 
 #[cfg(test)]
@@ -904,6 +976,59 @@ mod tests {
 		set_folded(&path, ithaca, Vec::new()).unwrap();
 
 		assert!(load(&path).unwrap().folded.is_empty());
+	}
+
+	fn left_open() -> Workspace {
+		Workspace {
+			tabs: vec![
+				SavedTab::Document {
+					id: Uuid::new_v4(),
+					caret: Some(Caret {
+						paragraph: 12,
+						offset: 40,
+					}),
+					scroll: 860,
+				},
+				SavedTab::Folder { id: Uuid::new_v4() },
+				SavedTab::Book,
+				SavedTab::Trash,
+				SavedTab::Search,
+				SavedTab::Tag {
+					tag: "Penelope".to_owned(),
+				},
+				SavedTab::Subject { id: Uuid::new_v4() },
+			],
+			active: Some(5),
+		}
+	}
+
+	#[test]
+	fn the_tabs_a_project_was_left_with_come_back() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		let ithaca = PathBuf::from("/writing/Ithaca");
+		let rooks = PathBuf::from("/writing/Rooks");
+		let tabs = left_open();
+
+		set_workspace(&path, ithaca.clone(), tabs.clone()).unwrap();
+
+		assert_eq!(workspace(&path, &ithaca).unwrap(), Some(tabs));
+		assert_eq!(
+			workspace(&path, &rooks).unwrap(),
+			None,
+			"one project's tabs are not another's"
+		);
+	}
+
+	#[test]
+	fn forgetting_a_project_forgets_its_tabs() {
+		let mut store = Store::default();
+		let root = PathBuf::from("/writing/Ithaca");
+		store.workspace.insert(root.clone(), left_open());
+
+		store.forget(&root);
+
+		assert!(store.workspace.is_empty());
 	}
 
 	#[test]
