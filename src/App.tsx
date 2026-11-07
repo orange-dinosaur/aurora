@@ -170,6 +170,10 @@ function App() {
 						onSettings={openSettings}
 						theme={preferences.theme}
 						onTheme={(theme) => save({ ...preferences, theme })}
+						projectsFolder={preferences.projectsFolder}
+						onProjectsFolder={(projectsFolder) =>
+							save({ ...preferences, projectsFolder })
+						}
 					/>
 				)
 			)}

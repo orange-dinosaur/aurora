@@ -1233,6 +1233,21 @@ body,
 	border-bottom-color: var(--accent-text);
 }
 
+/* A folder and the Change… beside it. A long path is cut short. */
+.dialog__saved {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-xs);
+	margin: 0;
+}
+
+.dialog__saved span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .dialog__foot {
 	display: flex;
 	align-items: center;

@@ -235,6 +235,9 @@ type Props = {
 	onSettings: (keyboard: boolean) => void;
 	theme: Theme;
 	onTheme: (theme: Theme) => void;
+	/** Where new projects go, or null while the writer has never been asked. */
+	projectsFolder: string | null;
+	onProjectsFolder: (folder: string) => void;
 };
 
 /** One project standing on the Shelf. */
@@ -411,10 +414,16 @@ function NewProject({
 	onCreate,
 	closing,
 	instant,
+	asked,
+	onFolder,
 }: {
 	formats: FormatOption[];
 	structures: StructureLayout[];
 	busy: boolean;
+	/** Whether the writer has said where to keep books. Until then the dialog
+	 * asks first. */
+	asked: boolean;
+	onFolder: (folder: string) => void;
 	/** Told to close and fading, so it no longer takes anything. */
 	closing: boolean;
 	/** Opened from the keyboard, so it does not move. */
@@ -429,9 +438,12 @@ function NewProject({
 		start: Start | null,
 	) => void;
 }) {
-	const [stage, setStage] = useState<"format" | "start" | "details">(
-		"format",
-	);
+	const [stage, setStage] = useState<
+		"folder" | "format" | "start" | "details"
+	>(asked ? "format" : "folder");
+	// The projects folder on offer. Null until the default arrives, and for
+	// good if there is none, which leaves Change… as the way on.
+	const [keep, setKeep] = useState<string | null>(null);
 	const [selectedId, setSelectedId] = useState(
 		formats.find((format) => format.available)?.id ?? null,
 	);
@@ -502,6 +514,24 @@ function NewProject({
 		return () => document.removeEventListener("keydown", escape);
 	});
 
+	useEffect(() => {
+		if (!asked) {
+			invoke<string>("default_projects_folder").then(setKeep, () => {});
+		}
+		// Asked once, when the dialog opens.
+	}, []);
+
+	async function chooseKeep() {
+		const picked = await open({
+			directory: true,
+			multiple: false,
+			title: "Where should Aurora keep your books?",
+		});
+		if (typeof picked === "string") {
+			setKeep(picked);
+		}
+	}
+
 	async function chooseFolder() {
 		const picked = await open({
 			directory: true,
@@ -536,7 +566,51 @@ function NewProject({
 				ref={dialog}
 				tabIndex={-1}
 			>
-				{stage === "format" || chosen === null ? (
+				{stage === "folder" ? (
+					<>
+						<h2 className="dialog__title">
+							Where should Aurora keep your books?
+						</h2>
+						<p className="dialog__lead">
+							Each new project gets a folder of its own in here.
+							You can change this later in Settings.
+						</p>
+
+						<p className="dialog__saved">
+							<span>{keep ?? "No folder chosen"}</span>
+							<button
+								type="button"
+								className="welcome__back"
+								onClick={() => void chooseKeep()}
+							>
+								Change…
+							</button>
+						</p>
+
+						<div className="dialog__foot">
+							<button
+								type="button"
+								className="welcome__back"
+								onClick={onCancel}
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								className="welcome__create"
+								disabled={keep === null}
+								onClick={() => {
+									if (keep !== null) {
+										onFolder(keep);
+										setStage("format");
+									}
+								}}
+							>
+								Continue
+							</button>
+						</div>
+					</>
+				) : stage === "format" || chosen === null ? (
 					<>
 						<h2 className="dialog__title">New project</h2>
 						<p className="dialog__lead">
@@ -774,6 +848,8 @@ export default function Welcome({
 	onSettings,
 	theme,
 	onTheme,
+	projectsFolder,
+	onProjectsFolder,
 }: Props) {
 	// Seeded once; the notice describes how this screen was reached.
 	const [reason, setReason] = useState(notice);
@@ -916,6 +992,8 @@ export default function Welcome({
 						setStatus({ kind: "idle" });
 					}}
 					onChange={() => setStatus({ kind: "idle" })}
+					asked={projectsFolder !== null}
+					onFolder={onProjectsFolder}
 					onCreate={(parent, name, format, start) =>
 						void createProject(parent, name, format, start)
 					}
