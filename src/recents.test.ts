@@ -1,5 +1,39 @@
 import { describe, expect, test } from "vitest";
-import { folderName, going } from "./recents";
+import { folderName, going, place } from "./recents";
+
+describe("place", () => {
+	test("writes the home folder as ~", () => {
+		expect(place("/home/ines/Writing/Ithaca", "/home/ines")).toBe(
+			"~/Writing",
+		);
+	});
+
+	test("is just ~ for a project straight in the home folder", () => {
+		expect(place("/home/ines/Ithaca", "/home/ines/")).toBe("~");
+	});
+
+	test("leaves a folder outside home alone", () => {
+		expect(place("/mnt/books/Ithaca", "/home/ines")).toBe("/mnt/books");
+	});
+
+	test("does not take a sibling of home for home", () => {
+		expect(place("/home/ines2/Ithaca", "/home/ines")).toBe("/home/ines2");
+	});
+
+	test("shortens a Windows path", () => {
+		expect(place("C:\\Users\\ines\\Books\\Ithaca", "C:\\Users\\ines")).toBe(
+			"~\\Books",
+		);
+	});
+
+	test("ignores a trailing separator on the project", () => {
+		expect(place("/mnt/books/Ithaca/", null)).toBe("/mnt/books");
+	});
+
+	test("gives the root for a project at the top of the disk", () => {
+		expect(place("/Ithaca", null)).toBe("/");
+	});
+});
 
 describe("going", () => {
 	test("counts the documents when there are several", () => {

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { homeDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import ThemeToggle from "./ThemeToggle";
@@ -24,7 +25,7 @@ import Menu, {
 	useLingering,
 } from "./Menu";
 import { coverFor } from "./lib/covers";
-import { folderName, going } from "./recents";
+import { folderName, going, place } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
 import { counts, draftOf, read } from "./lib/start";
@@ -247,9 +248,12 @@ function Book({
 	onAsk,
 	onCancel,
 	onDelete,
+	home,
 }: {
 	project: RecentSummary;
 	busy: boolean;
+	/** For writing a book from elsewhere's folder with `~`. */
+	home: string | null;
 	/** Whether the book is asking if it should be deleted. */
 	asking: boolean;
 	onOpen: () => void;
@@ -309,6 +313,12 @@ function Book({
 					</span>
 				)}
 				<span className="shelf__meta">{size(project)}</span>
+				{project.elsewhere && (
+					<span className="shelf__meta shelf__place">
+						<Icon name="link" />
+						<span>{place(project.root, home)}</span>
+					</span>
+				)}
 			</button>
 
 			{asking && (
@@ -779,6 +789,12 @@ export default function Welcome({
 	// The project whose book is asking to be deleted. One at a time, since a
 	// click anywhere else answers Cancel.
 	const [asking, setAsking] = useState<string | null>(null);
+	const [home, setHome] = useState<string | null>(null);
+
+	// Without it the place line shows the whole path, which is still right.
+	useEffect(() => {
+		homeDir().then(setHome, () => {});
+	}, []);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 
 	const busy = status.kind === "busy";
@@ -959,6 +975,7 @@ export default function Welcome({
 								key={project.root}
 								project={project}
 								busy={busy}
+								home={home}
 								asking={asking === project.root}
 								onOpen={() => void openProject(project.root)}
 								onShow={() => void showInFiles(project.root)}

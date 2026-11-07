@@ -1084,6 +1084,27 @@ body,
 	margin-top: var(--space-sm);
 }
 
+/* A long path is cut short rather than wrapping under a narrow book. */
+.shelf__place {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.shelf__place svg {
+	flex: none;
+	width: 12px;
+	height: 12px;
+	color: var(--accent-text);
+}
+
+.shelf__place span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .shelf__ghost {
 	display: flex;
 	flex-direction: column;

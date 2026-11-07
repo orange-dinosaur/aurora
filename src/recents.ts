@@ -19,6 +19,27 @@ export function going(documents: number | null): string {
 	return `${documents.toLocaleString()} documents go to the system trash.`;
 }
 
+/**
+ * The folder a project sits in, with the home folder written as `~`, for the
+ * line under a book from elsewhere. `home` is null until it is known.
+ */
+export function place(root: string, home: string | null): string {
+	const parent =
+		root.replace(/[\\/]+$/, "").replace(/[\\/][^\\/]*$/, "") || "/";
+	if (home === null) {
+		return parent;
+	}
+	const base = home.replace(/[\\/]+$/, "");
+	if (parent === base) {
+		return "~";
+	}
+	// A sibling such as /home/ines2 starts with /home/ines too.
+	if (parent.startsWith(base) && /[\\/]/.test(parent[base.length])) {
+		return "~" + parent.slice(base.length);
+	}
+	return parent;
+}
+
 /** The last part of a project's path, on either kind of system. */
 export function folderName(root: string): string {
 	return root.split(/[\\/]/).filter(Boolean).pop() ?? root;
