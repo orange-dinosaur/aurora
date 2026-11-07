@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -1023,14 +1024,21 @@ fn available_recents(store_path: &Path) -> Result<Vec<store::RecentProject>> {
 		.collect())
 }
 
-/// A remembered project as the welcome screen shows it: what the store holds,
-/// with the size of the writing counted from the files themselves.
+/// A book as the welcome screen shows it: where it is and when it was last
+/// opened, with the size of the writing counted from the files themselves.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct RecentSummary {
-	#[serde(flatten)]
-	pub project: store::RecentProject,
+	pub name: String,
+	pub root: PathBuf,
+	/// None for a book in the projects folder that has never been opened.
+	#[serde(with = "time::serde::rfc3339::option")]
+	#[ts(type = "string | null")]
+	pub last_opened: Option<OffsetDateTime>,
+	/// Whether the book lives outside the projects folder, which is every book
+	/// while no projects folder is set.
+	pub elsewhere: bool,
 	/// None when the manifest could not be read, so the screen can leave the
 	/// count off rather than report a project as empty.
 	pub words: Option<usize>,
@@ -1051,6 +1059,7 @@ pub struct RecentSummary {
 /// What the welcome screen says about a project. All of it comes out of one
 /// read of the manifest, since nothing ever wants only part of it.
 struct Measure {
+	name: String,
 	words: usize,
 	documents: usize,
 	title: String,
@@ -1069,6 +1078,7 @@ fn measure(root: &Path) -> Option<Measure> {
 	let manifest = read_manifest(root).ok()?;
 	let documents = manifest.documents();
 	Some(Measure {
+		name: manifest.name,
 		title: manifest.book.title,
 		author: manifest.book.author,
 		cover: Some(manifest.book.cover).filter(|name| cover_stays_inside(name)),
@@ -1096,22 +1106,98 @@ fn measure(root: &Path) -> Option<Measure> {
 	})
 }
 
+/// A book that has never been opened has no name in the store, so it takes the
+/// one in its manifest, or its folder's when the manifest cannot be read.
+fn summarise(
+	root: PathBuf,
+	name: Option<String>,
+	last_opened: Option<OffsetDateTime>,
+	elsewhere: bool,
+) -> RecentSummary {
+	let measured = measure(&root);
+	let name = name
+		.or_else(|| measured.as_ref().map(|m| m.name.clone()))
+		.unwrap_or_else(|| {
+			root.file_name()
+				.map(|name| name.to_string_lossy().into_owned())
+				.unwrap_or_default()
+		});
+	RecentSummary {
+		name,
+		last_opened,
+		elsewhere,
+		words: measured.as_ref().map(|m| m.words),
+		documents: measured.as_ref().map(|m| m.documents),
+		title: measured.as_ref().map(|m| m.title.clone()),
+		author: measured.as_ref().map(|m| m.author.clone()),
+		cover: measured.as_ref().and_then(|m| m.cover.clone()),
+		format: measured.as_ref().map(|m| m.format),
+		root,
+	}
+}
+
+/// Where the path leads on disk, so a book reached two ways is one book.
+fn on_disk(path: &Path) -> PathBuf {
+	fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// The projects folder as it is on disk, or None while it is unset or gone.
+fn projects_folder(store: &store::Store) -> Option<PathBuf> {
+	fs::canonicalize(store.preferences.projects_folder.as_deref()?).ok()
+}
+
+/// Every folder directly inside the projects folder that holds a project.
+fn folder_books(folder: &Path) -> Vec<PathBuf> {
+	let Ok(entries) = fs::read_dir(folder) else {
+		return Vec::new();
+	};
+	entries
+		.filter_map(|entry| Some(entry.ok()?.path()))
+		.filter(|path| path.join(MANIFEST_FILE).is_file())
+		.collect()
+}
+
+/// The shelf: books opened before, newest first, then the projects folder's
+/// books that have never been opened, by name. A forgotten book stays off it
+/// until it is opened again.
 fn summarise_recents(store_path: &Path) -> Result<Vec<RecentSummary>> {
-	Ok(available_recents(store_path)?
+	let store = store::load(store_path)?;
+	let folder = projects_folder(&store);
+	let forgotten: HashSet<PathBuf> = store.forgotten.iter().map(|root| on_disk(root)).collect();
+	let mut seen = HashSet::new();
+	let mut shelf = Vec::new();
+
+	for project in available_recents(store_path)? {
+		let real = on_disk(&project.root);
+		if !seen.insert(real.clone()) {
+			continue;
+		}
+		let elsewhere = folder
+			.as_ref()
+			.is_none_or(|folder| !real.starts_with(folder));
+		shelf.push(summarise(
+			project.root,
+			Some(project.name),
+			Some(project.last_opened),
+			elsewhere,
+		));
+	}
+
+	let mut unopened: Vec<RecentSummary> = folder
+		.as_deref()
+		.map(folder_books)
+		.unwrap_or_default()
 		.into_iter()
-		.map(|project| {
-			let measured = measure(&project.root);
-			RecentSummary {
-				words: measured.as_ref().map(|m| m.words),
-				documents: measured.as_ref().map(|m| m.documents),
-				title: measured.as_ref().map(|m| m.title.clone()),
-				author: measured.as_ref().map(|m| m.author.clone()),
-				cover: measured.as_ref().and_then(|m| m.cover.clone()),
-				format: measured.as_ref().map(|m| m.format),
-				project,
-			}
+		.filter(|root| {
+			let real = on_disk(root);
+			!forgotten.contains(&real) && seen.insert(real)
 		})
-		.collect())
+		.map(|root| summarise(root, None, None, false))
+		.collect();
+	unopened.sort_by_key(|book| book.name.to_lowercase());
+	shelf.extend(unopened);
+
+	Ok(shelf)
 }
 
 #[tauri::command]
@@ -1145,13 +1231,18 @@ pub fn trash_project(app: AppHandle, root: PathBuf) -> Result<()> {
 	forget(&store, &root)
 }
 
-/// Only a folder on the recent list. A path that arrives from anywhere else
-/// must not be able to bin a folder on the strength of being asked to. This
-/// asks the list rather than the manifest, because a project that cannot be
-/// read still has to be deletable.
+/// Only a folder on the recent list or a project in the projects folder. A
+/// path that arrives from anywhere else must not be able to bin a folder on the
+/// strength of being asked to. This asks the list rather than the manifest,
+/// because a project that cannot be read still has to be deletable.
 fn require_remembered(store_path: &Path, root: &Path) -> Result<()> {
 	let store = store::load(store_path)?;
-	if store.recent.iter().any(|project| project.root == root) {
+	let in_folder = projects_folder(&store).is_some_and(|folder| {
+		folder_books(&folder)
+			.iter()
+			.any(|book| same_file(book, root))
+	});
+	if in_folder || store.recent.iter().any(|project| project.root == root) {
 		Ok(())
 	} else {
 		Err(Error::NotAProject)
@@ -2879,6 +2970,127 @@ mod tests {
 		write_manifest(&root, &mut manifest).unwrap();
 
 		assert_eq!(summarise_recents(&store).unwrap()[0].words, Some(0));
+	}
+
+	/// A projects folder inside `parent`, set in the store.
+	fn books_folder(store: &Path, parent: &Path) -> PathBuf {
+		let folder = parent.join("Books");
+		fs::create_dir(&folder).unwrap();
+		let mut loaded = store::load(store).unwrap();
+		loaded.preferences.projects_folder = Some(folder.clone());
+		store::save(store, &loaded).unwrap();
+		folder
+	}
+
+	/// A project made in the folder without the shelf's store hearing of it,
+	/// as one copied in by hand would be.
+	fn unopened(folder: &Path, name: &str) -> PathBuf {
+		let elsewhere = folder.join(format!(".{name}-store.json"));
+		let root =
+			create_and_remember(&elsewhere, folder, name, Format::Novel, fixed_time()).unwrap();
+		fs::remove_file(elsewhere).unwrap();
+		root
+	}
+
+	fn names(shelf: &[RecentSummary]) -> Vec<&str> {
+		shelf.iter().map(|book| book.name.as_str()).collect()
+	}
+
+	#[test]
+	fn a_book_in_the_projects_folder_is_shelved_before_it_is_opened() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let folder = books_folder(&store, parent.path());
+		unopened(&folder, "Penelope");
+		fs::create_dir(folder.join("Not a book")).unwrap();
+
+		let shelf = summarise_recents(&store).unwrap();
+		assert_eq!(names(&shelf), ["Penelope"]);
+		assert_eq!(shelf[0].last_opened, None);
+		assert!(!shelf[0].elsewhere);
+		assert_eq!(shelf[0].words, Some(0));
+	}
+
+	#[test]
+	fn the_shelf_lists_opened_books_newest_first_then_the_rest_by_name() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let folder = books_folder(&store, parent.path());
+		unopened(&folder, "zeta");
+		unopened(&folder, "Alpha");
+		let at = |seconds| OffsetDateTime::from_unix_timestamp(seconds).unwrap();
+		create_and_remember(&store, &folder, "Ithaca", Format::Novel, at(1)).unwrap();
+		create_and_remember(&store, parent.path(), "Troy", Format::Novel, at(2)).unwrap();
+
+		let shelf = summarise_recents(&store).unwrap();
+		// Ithaca is both opened and in the folder, and shows once.
+		assert_eq!(names(&shelf), ["Troy", "Ithaca", "Alpha", "zeta"]);
+		assert!(shelf[0].elsewhere);
+		assert!(!shelf[1].elsewhere);
+	}
+
+	#[test]
+	fn a_forgotten_folder_book_stays_off_the_shelf_until_it_is_opened() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let folder = books_folder(&store, parent.path());
+		let root = unopened(&folder, "Penelope");
+
+		forget(&store, &root).unwrap();
+		assert!(summarise_recents(&store).unwrap().is_empty());
+
+		open_and_remember(&store, &root, fixed_time()).unwrap();
+		assert_eq!(names(&summarise_recents(&store).unwrap()), ["Penelope"]);
+	}
+
+	#[test]
+	fn every_book_is_from_elsewhere_while_no_projects_folder_is_set() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+
+		let shelf = summarise_recents(&store).unwrap();
+		assert_eq!(names(&shelf), ["Ithaca"]);
+		assert!(shelf[0].elsewhere);
+	}
+
+	#[test]
+	fn a_missing_projects_folder_leaves_the_opened_books() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let folder = books_folder(&store, parent.path());
+		create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::remove_dir(folder).unwrap();
+
+		assert_eq!(names(&summarise_recents(&store).unwrap()), ["Ithaca"]);
+	}
+
+	#[test]
+	fn the_shelf_has_no_cap() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		for n in 0..12 {
+			create_and_remember(
+				&store,
+				parent.path(),
+				&format!("Book {n}"),
+				Format::Novel,
+				fixed_time(),
+			)
+			.unwrap();
+		}
+
+		assert_eq!(summarise_recents(&store).unwrap().len(), 12);
+	}
+
+	#[test]
+	fn a_never_opened_folder_book_can_go_to_the_trash() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let folder = books_folder(&store, parent.path());
+		let root = unopened(&folder, "Penelope");
+
+		assert!(require_remembered(&store, &root).is_ok());
 	}
 
 	#[test]

@@ -2,10 +2,19 @@
 import type { Format } from "./Format";
 
 /**
- * A remembered project as the welcome screen shows it: what the store holds,
- * with the size of the writing counted from the files themselves.
+ * A book as the welcome screen shows it: where it is and when it was last
+ * opened, with the size of the writing counted from the files themselves.
  */
-export type RecentSummary = { 
+export type RecentSummary = { name: string, root: string, 
+/**
+ * None for a book in the projects folder that has never been opened.
+ */
+lastOpened: string | null, 
+/**
+ * Whether the book lives outside the projects folder, which is every book
+ * while no projects folder is set.
+ */
+elsewhere: boolean, 
 /**
  * None when the manifest could not be read, so the screen can leave the
  * count off rather than report a project as empty.
@@ -24,4 +33,4 @@ title: string | null, author: string | null,
  * Relative to the project, for `read_cover` to fetch. None as well when
  * the book has no image, or names one `read_cover` would refuse.
  */
-cover: string | null, format: Format | null, name: string, root: string, lastOpened: string, };
+cover: string | null, format: Format | null, };

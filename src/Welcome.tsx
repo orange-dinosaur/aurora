@@ -213,10 +213,13 @@ function Tick({
 // How big a project is and when it was last open. A project whose manifest
 // could not be read shows only the date, rather than a made-up count.
 function size(project: RecentSummary) {
-	const opened = when(project.lastOpened);
-	return project.words === null
-		? opened
-		: `${project.words.toLocaleString()} words · ${opened}`;
+	const words =
+		project.words === null
+			? null
+			: `${project.words.toLocaleString()} words`;
+	const opened =
+		project.lastOpened === null ? null : when(project.lastOpened);
+	return [words, opened].filter(Boolean).join(" · ");
 }
 
 type Status =

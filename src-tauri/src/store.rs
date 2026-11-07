@@ -13,9 +13,6 @@ use crate::project::{Error, Result, store_path, write_json};
 
 pub const STORE_VERSION: u32 = 10;
 
-/// How many projects are worth offering on the welcome screen.
-const MAX_RECENT: usize = 10;
-
 /// How the writer likes to write, which follows them into every project rather
 /// than belonging to any one of them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -243,6 +240,11 @@ pub struct Store {
 	/// Absent from a store written before version 9.
 	#[serde(default)]
 	pub folded: BTreeMap<PathBuf, Vec<String>>,
+	/// Projects the writer took off the shelf. A book in the projects folder
+	/// would otherwise come straight back, since the shelf lists the folder.
+	/// Opening one clears it. Absent from a store written before version 10.
+	#[serde(default)]
+	pub forgotten: Vec<PathBuf>,
 }
 
 impl Default for Store {
@@ -254,16 +256,18 @@ impl Default for Store {
 			preferences: Preferences::default(),
 			expanded: BTreeMap::new(),
 			folded: BTreeMap::new(),
+			forgotten: Vec::new(),
 		}
 	}
 }
 
 impl Store {
 	/// Moves a project to the front of the list, whether or not it was already
-	/// there, and drops the oldest once the list is full.
+	/// there, and puts it back on the shelf if it had been forgotten.
 	pub fn remember(&mut self, name: impl Into<String>, root: PathBuf, at: OffsetDateTime) {
 		self.last = Some(root.clone());
 		self.recent.retain(|project| project.root != root);
+		self.forgotten.retain(|forgotten| forgotten != &root);
 		self.recent.insert(
 			0,
 			RecentProject {
@@ -274,7 +278,6 @@ impl Store {
 					.expect("zero nanoseconds is always in range"),
 			},
 		);
-		self.recent.truncate(MAX_RECENT);
 	}
 
 	/// What to reopen on launch, if anything.
@@ -298,6 +301,9 @@ impl Store {
 		// a folder it no longer knows about could not be opened again anyway.
 		self.expanded.remove(root);
 		self.folded.remove(root);
+		if !self.forgotten.iter().any(|forgotten| forgotten == root) {
+			self.forgotten.push(root.to_path_buf());
+		}
 	}
 }
 
@@ -316,8 +322,8 @@ pub fn load(path: &Path) -> Result<Store> {
 /// Version 2 had no preferences, version 3 no `sidebar`, version 4 no
 /// `expanded`, version 5 no right sidebar, version 6 neither the sidebar
 /// widths nor the theme and manuscript font, and version 7 none of the session
-/// preferences, version 8 no folded groups on the Book page, and version 9 no
-/// projects folder; serde's defaults are the whole migration for all eight, and
+/// preferences, version 8 no folded groups on the Book page, and version 9
+/// neither the projects folder nor forgotten books; serde's defaults are the whole migration for all eight, and
 /// each of them is the behaviour that version already had.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
@@ -533,9 +539,9 @@ mod tests {
 	}
 
 	#[test]
-	fn the_list_stops_growing() {
+	fn the_list_has_no_cap() {
 		let mut store = Store::default();
-		for n in 0..MAX_RECENT as i64 + 5 {
+		for n in 0..15 {
 			store.remember(
 				format!("Book {n}"),
 				PathBuf::from(format!("/writing/{n}")),
@@ -543,8 +549,21 @@ mod tests {
 			);
 		}
 
-		assert_eq!(store.recent.len(), MAX_RECENT);
+		assert_eq!(store.recent.len(), 15);
 		assert_eq!(store.reopen().unwrap().name, "Book 14");
+	}
+
+	#[test]
+	fn opening_a_forgotten_project_puts_it_back() {
+		let mut store = Store::default();
+		let root = PathBuf::from("/writing/Ithaca");
+		store.remember("Ithaca", root.clone(), at(1));
+		store.forget(&root);
+		store.forget(&root);
+		assert_eq!(store.forgotten, vec![root.clone()]);
+
+		store.remember("Ithaca", root, at(2));
+		assert!(store.forgotten.is_empty());
 	}
 
 	#[test]
