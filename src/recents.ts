@@ -24,20 +24,26 @@ export function going(documents: number | null): string {
  * line under a book from elsewhere. `home` is null until it is known.
  */
 export function place(root: string, home: string | null): string {
-	const parent =
-		root.replace(/[\\/]+$/, "").replace(/[\\/][^\\/]*$/, "") || "/";
+	return tilde(
+		root.replace(/[\\/]+$/, "").replace(/[\\/][^\\/]*$/, "") || "/",
+		home,
+	);
+}
+
+/** A folder with the home folder written as `~`. */
+export function tilde(folder: string, home: string | null): string {
 	if (home === null) {
-		return parent;
+		return folder;
 	}
 	const base = home.replace(/[\\/]+$/, "");
-	if (parent === base) {
+	if (folder === base) {
 		return "~";
 	}
 	// A sibling such as /home/ines2 starts with /home/ines too.
-	if (parent.startsWith(base) && /[\\/]/.test(parent[base.length])) {
-		return "~" + parent.slice(base.length);
+	if (folder.startsWith(base) && /[\\/]/.test(folder[base.length])) {
+		return "~" + folder.slice(base.length);
 	}
-	return parent;
+	return folder;
 }
 
 /** The last part of a project's path, on either kind of system. */

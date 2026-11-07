@@ -25,7 +25,7 @@ import Menu, {
 	useLingering,
 } from "./Menu";
 import { coverFor } from "./lib/covers";
-import { folderName, going, place } from "./recents";
+import { folderName, going, place, tilde } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
 import { counts, draftOf, read } from "./lib/start";
@@ -414,15 +414,18 @@ function NewProject({
 	onCreate,
 	closing,
 	instant,
-	asked,
+	projectsFolder,
 	onFolder,
+	home,
 }: {
+	/** For writing a folder under home with `~`. */
+	home: string | null;
 	formats: FormatOption[];
 	structures: StructureLayout[];
 	busy: boolean;
-	/** Whether the writer has said where to keep books. Until then the dialog
-	 * asks first. */
-	asked: boolean;
+	/** Where new projects go, or null until the writer has said, in which
+	 * case the dialog asks first. */
+	projectsFolder: string | null;
 	onFolder: (folder: string) => void;
 	/** Told to close and fading, so it no longer takes anything. */
 	closing: boolean;
@@ -440,7 +443,7 @@ function NewProject({
 }) {
 	const [stage, setStage] = useState<
 		"folder" | "format" | "start" | "details"
-	>(asked ? "format" : "folder");
+	>(projectsFolder === null ? "folder" : "format");
 	// The projects folder on offer. Null until the default arrives, and for
 	// good if there is none, which leaves Change… as the way on.
 	const [keep, setKeep] = useState<string | null>(null);
@@ -457,7 +460,9 @@ function NewProject({
 	const [frontMatter, setFrontMatter] = useState(false);
 	const [backMatter, setBackMatter] = useState(false);
 	const [name, setName] = useState("");
-	const [parent, setParent] = useState<string | null>(null);
+	// Where this one project goes: the projects folder unless Change… says
+	// otherwise, which leaves the setting alone.
+	const [parent, setParent] = useState<string | null>(projectsFolder);
 	const dialog = useRef<HTMLDivElement>(null);
 
 	const chosen = formats.find((format) => format.id === selectedId) ?? null;
@@ -515,7 +520,7 @@ function NewProject({
 	});
 
 	useEffect(() => {
-		if (!asked) {
+		if (projectsFolder === null) {
 			invoke<string>("default_projects_folder").then(setKeep, () => {});
 		}
 		// Asked once, when the dialog opens.
@@ -577,7 +582,11 @@ function NewProject({
 						</p>
 
 						<p className="dialog__saved">
-							<span>{keep ?? "No folder chosen"}</span>
+							<span>
+								{keep === null
+									? "No folder chosen"
+									: tilde(keep, home)}
+							</span>
 							<button
 								type="button"
 								className="welcome__back"
@@ -602,6 +611,7 @@ function NewProject({
 								onClick={() => {
 									if (keep !== null) {
 										onFolder(keep);
+										setParent(keep);
 										setStage("format");
 									}
 								}}
@@ -802,16 +812,18 @@ function NewProject({
 							/>
 						</label>
 
-						<div className="dialog__label">
-							Location
+						<p className="dialog__saved">
+							{parent !== null && (
+								<span>Saved in {tilde(parent, home)}</span>
+							)}
 							<button
 								type="button"
-								className="dialog__folder"
+								className="welcome__back"
 								onClick={() => void chooseFolder()}
 							>
-								{parent ?? "Choose a folder…"}
+								Change…
 							</button>
-						</div>
+						</p>
 
 						<div className="dialog__foot">
 							<button
@@ -992,7 +1004,8 @@ export default function Welcome({
 						setStatus({ kind: "idle" });
 					}}
 					onChange={() => setStatus({ kind: "idle" })}
-					asked={projectsFolder !== null}
+					projectsFolder={projectsFolder}
+					home={home}
 					onFolder={onProjectsFolder}
 					onCreate={(parent, name, format, start) =>
 						void createProject(parent, name, format, start)

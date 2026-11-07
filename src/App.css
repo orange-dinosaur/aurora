@@ -1233,19 +1233,25 @@ body,
 	border-bottom-color: var(--accent-text);
 }
 
-/* A folder and the Change… beside it. A long path is cut short. */
+/* A folder and the Change… beside it, in the labels' type. A long path wraps
+   rather than hiding its end. */
 .dialog__saved {
 	display: flex;
 	align-items: baseline;
 	gap: var(--space-xs);
 	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-dim);
 }
 
 .dialog__saved span {
 	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
+}
+
+.dialog__saved .welcome__back {
+	flex: none;
+	font: inherit;
 }
 
 .dialog__foot {

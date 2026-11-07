@@ -742,6 +742,8 @@ pub fn create_from(
 		return Err(Error::StartOutOfRange);
 	}
 
+	// The projects folder is only a setting until its first project goes in.
+	fs::create_dir_all(parent)?;
 	let root = parent.join(name);
 	match fs::create_dir(&root) {
 		Ok(()) => {}
@@ -2449,10 +2451,11 @@ mod tests {
 	}
 
 	#[test]
-	fn create_reports_a_missing_parent() {
+	fn create_reports_a_parent_that_cannot_be_made() {
 		let parent = tempfile::tempdir().unwrap();
-		let missing = parent.path().join("nowhere");
-		let err = create(&missing, "Ithaca", Format::Novel, fixed_time()).unwrap_err();
+		let blocked = parent.path().join("nowhere");
+		fs::write(&blocked, "").unwrap();
+		let err = create(&blocked, "Ithaca", Format::Novel, fixed_time()).unwrap_err();
 		assert!(matches!(err, Error::Io(_)));
 	}
 
@@ -3081,6 +3084,18 @@ mod tests {
 		}
 
 		assert_eq!(summarise_recents(&store).unwrap().len(), 12);
+	}
+
+	#[test]
+	fn a_missing_projects_folder_is_made_by_its_first_project() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let folder = parent.path().join("Documents").join("Aurora");
+
+		let root =
+			create_and_remember(&store, &folder, "Ithaca", Format::Novel, fixed_time()).unwrap();
+		assert_eq!(root, folder.join("Ithaca"));
+		assert!(root.join(MANIFEST_FILE).is_file());
 	}
 
 	#[test]

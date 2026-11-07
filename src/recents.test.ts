@@ -1,5 +1,19 @@
 import { describe, expect, test } from "vitest";
-import { folderName, going, place } from "./recents";
+import { folderName, going, place, tilde } from "./recents";
+
+describe("tilde", () => {
+	test("shortens a folder under home", () => {
+		expect(tilde("/home/ines/Documents/Aurora", "/home/ines")).toBe(
+			"~/Documents/Aurora",
+		);
+	});
+
+	test("leaves the folder whole while home is unknown", () => {
+		expect(tilde("/home/ines/Documents", null)).toBe(
+			"/home/ines/Documents",
+		);
+	});
+});
 
 describe("place", () => {
 	test("writes the home folder as ~", () => {
