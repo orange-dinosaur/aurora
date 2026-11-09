@@ -33,4 +33,10 @@ title: string | null, author: string | null,
  * Relative to the project, for `read_cover` to fetch. None as well when
  * the book has no image, or names one `read_cover` would refuse.
  */
-cover: string | null, format: Format | null, };
+cover: string | null, format: Format | null, 
+/**
+ * The tab that was in front when the book was last left, in words. None
+ * for a book never left on this machine, for Trash and Search, and for a
+ * tab whose document or folder has gone since.
+ */
+leftOff: string | null, };

@@ -1054,6 +1054,10 @@ pub struct RecentSummary {
 	/// the book has no image, or names one `read_cover` would refuse.
 	pub cover: Option<String>,
 	pub format: Option<Format>,
+	/// The tab that was in front when the book was last left, in words. None
+	/// for a book never left on this machine, for Trash and Search, and for a
+	/// tab whose document or folder has gone since.
+	pub left_off: Option<String>,
 }
 
 /// Every word in a project. Nothing caches this, so it opens each document
@@ -1068,6 +1072,7 @@ struct Measure {
 	author: String,
 	cover: Option<String>,
 	format: Format,
+	left_off: Option<String>,
 }
 
 /// Whether a cover's name in the manifest is one file in the project. The
@@ -1076,10 +1081,42 @@ fn cover_stays_inside(name: &str) -> bool {
 	Path::new(name).file_name() == Some(std::ffi::OsStr::new(name))
 }
 
-fn measure(root: &Path) -> Option<Measure> {
+/// What the shelf says a book was left on: the front tab, named the way the
+/// writer would name it.
+fn left_off(workspace: &store::Workspace, nodes: &[Node]) -> Option<String> {
+	let front = workspace
+		.tabs
+		.get(usize::try_from(workspace.active?).ok()?)?;
+	let title = |id| match tree::find(nodes, id)? {
+		Node::Document { name, .. } => Path::new(name)
+			.file_stem()
+			.map(|stem| stem.to_string_lossy().into_owned()),
+		Node::Folder { .. } => None,
+	};
+	match front {
+		store::SavedTab::Document { id, .. } => {
+			let title = title(*id)?;
+			Some(match tree::parent(nodes, *id) {
+				Some(folder) => format!("{title} · {}", folder.name()),
+				None => title,
+			})
+		}
+		store::SavedTab::Subject { id } => title(*id),
+		store::SavedTab::Folder { id } => match tree::find(nodes, *id)? {
+			Node::Folder { name, .. } => Some(name.clone()),
+			Node::Document { .. } => None,
+		},
+		store::SavedTab::Tag { tag } => Some(tag.clone()),
+		store::SavedTab::Book => Some("Book details".to_owned()),
+		store::SavedTab::Trash | store::SavedTab::Search => None,
+	}
+}
+
+fn measure(root: &Path, workspace: Option<&store::Workspace>) -> Option<Measure> {
 	let manifest = read_manifest(root).ok()?;
 	let documents = manifest.documents();
 	Some(Measure {
+		left_off: workspace.and_then(|workspace| left_off(workspace, &manifest.nodes)),
 		name: manifest.name,
 		title: manifest.book.title,
 		author: manifest.book.author,
@@ -1115,8 +1152,9 @@ fn summarise(
 	name: Option<String>,
 	last_opened: Option<OffsetDateTime>,
 	elsewhere: bool,
+	workspace: Option<&store::Workspace>,
 ) -> RecentSummary {
-	let measured = measure(&root);
+	let measured = measure(&root, workspace);
 	let name = name
 		.or_else(|| measured.as_ref().map(|m| m.name.clone()))
 		.unwrap_or_else(|| {
@@ -1134,6 +1172,7 @@ fn summarise(
 		author: measured.as_ref().map(|m| m.author.clone()),
 		cover: measured.as_ref().and_then(|m| m.cover.clone()),
 		format: measured.as_ref().map(|m| m.format),
+		left_off: measured.and_then(|m| m.left_off),
 		root,
 	}
 }
@@ -1177,11 +1216,13 @@ fn summarise_recents(store_path: &Path) -> Result<Vec<RecentSummary>> {
 		let elsewhere = folder
 			.as_ref()
 			.is_none_or(|folder| !real.starts_with(folder));
+		let workspace = store.workspace.get(&project.root);
 		shelf.push(summarise(
 			project.root,
 			Some(project.name),
 			Some(project.last_opened),
 			elsewhere,
+			workspace,
 		));
 	}
 
@@ -1194,7 +1235,7 @@ fn summarise_recents(store_path: &Path) -> Result<Vec<RecentSummary>> {
 			let real = on_disk(root);
 			!forgotten.contains(&real) && seen.insert(real)
 		})
-		.map(|root| summarise(root, None, None, false))
+		.map(|root| summarise(root, None, None, false, None))
 		.collect();
 	unopened.sort_by_key(|book| book.name.to_lowercase());
 	shelf.extend(unopened);
@@ -2973,6 +3014,92 @@ mod tests {
 		write_manifest(&root, &mut manifest).unwrap();
 
 		assert_eq!(summarise_recents(&store).unwrap()[0].words, Some(0));
+	}
+
+	/// Where the shelf says a book was left, with `front` the only tab open.
+	fn left_on(front: store::SavedTab, nodes: &[Node]) -> Option<String> {
+		let workspace = store::Workspace {
+			tabs: vec![store::SavedTab::Trash, front],
+			active: Some(1),
+		};
+		left_off(&workspace, nodes)
+	}
+
+	#[test]
+	fn the_shelf_names_the_tab_a_book_was_left_on() {
+		let scene = Node::document("Harbour.md");
+		let loose = Node::document("Notes.md");
+		let chapter = Node::folder("Chapter 1", vec![scene.clone()]);
+		let nodes = [chapter.clone(), loose.clone()];
+		let document = |id| store::SavedTab::Document {
+			id,
+			caret: None,
+			scroll: 0,
+		};
+
+		assert_eq!(
+			left_on(document(scene.id()), &nodes).as_deref(),
+			Some("Harbour · Chapter 1"),
+		);
+		assert_eq!(
+			left_on(document(loose.id()), &nodes).as_deref(),
+			Some("Notes")
+		);
+		assert_eq!(
+			left_on(store::SavedTab::Folder { id: chapter.id() }, &nodes).as_deref(),
+			Some("Chapter 1"),
+		);
+		assert_eq!(
+			left_on(store::SavedTab::Subject { id: scene.id() }, &nodes).as_deref(),
+			Some("Harbour"),
+		);
+		assert_eq!(
+			left_on(
+				store::SavedTab::Tag {
+					tag: "storm".to_owned()
+				},
+				&nodes
+			)
+			.as_deref(),
+			Some("storm"),
+		);
+		assert_eq!(
+			left_on(store::SavedTab::Book, &nodes).as_deref(),
+			Some("Book details"),
+		);
+		assert_eq!(left_on(store::SavedTab::Trash, &nodes), None);
+		assert_eq!(left_on(store::SavedTab::Search, &nodes), None);
+	}
+
+	#[test]
+	fn the_shelf_says_nothing_when_the_front_tab_is_gone() {
+		let nodes = [Node::folder("Chapter 1", Vec::new())];
+
+		assert_eq!(
+			left_on(
+				store::SavedTab::Document {
+					id: Uuid::new_v4(),
+					caret: None,
+					scroll: 0,
+				},
+				&nodes
+			),
+			None,
+		);
+		assert_eq!(
+			left_on(store::SavedTab::Folder { id: Uuid::new_v4() }, &nodes),
+			None,
+		);
+		// A folder's id where a document was expected names nothing.
+		assert_eq!(
+			left_on(store::SavedTab::Subject { id: nodes[0].id() }, &nodes),
+			None,
+		);
+		let nothing_open = store::Workspace {
+			tabs: vec![store::SavedTab::Book],
+			active: None,
+		};
+		assert_eq!(left_off(&nothing_open, &nodes), None);
 	}
 
 	/// A projects folder inside `parent`, set in the store.
