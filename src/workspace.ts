@@ -2,6 +2,7 @@
 // The store holds ids only, so a tab whose document or folder has gone since
 // has nothing to come back as and is dropped.
 
+import type { Caret } from "./bindings/Caret";
 import type { SavedTab } from "./bindings/SavedTab";
 import type { Workspace } from "./bindings/Workspace";
 import { documentsOf, folderRef, type FolderRef } from "./tree";
@@ -17,9 +18,13 @@ export type Reopened =
 	| { kind: "tag"; tag: string }
 	| { kind: "subject"; subject: ProjectDocument };
 
+/** Where a document was left: the caret, and how far down the page was. */
+export type Place = { caret: Caret | null; scroll: number };
+
 export function remembered(
 	tabs: (Reopened & { key: string })[],
 	activeKey: string | null,
+	places: ReadonlyMap<string, Place> = new Map(),
 ): Workspace {
 	const active = tabs.findIndex((tab) => tab.key === activeKey);
 	return {
@@ -29,8 +34,10 @@ export function remembered(
 					return {
 						kind: "document",
 						id: tab.document.id,
-						caret: null,
-						scroll: 0,
+						...(places.get(tab.document.id) ?? {
+							caret: null,
+							scroll: 0,
+						}),
 					};
 				case "folder":
 					return { kind: "folder", id: tab.folder.id };
@@ -76,6 +83,27 @@ export function reopen(
 		active = 0;
 	}
 	return { tabs, active };
+}
+
+/**
+ * Which run of text an offset into a paragraph falls in, and how far into it,
+ * given the length of each run. An offset at the seam between two runs goes
+ * at the end of the first. The file may have shrunk since the caret was
+ * saved, so an offset past the end lands at the end.
+ */
+export function locate(
+	lengths: number[],
+	offset: number,
+): { run: number; offset: number } {
+	let left = Math.max(0, offset);
+	for (const [run, length] of lengths.entries()) {
+		if (left <= length) {
+			return { run, offset: left };
+		}
+		left -= length;
+	}
+	const last = lengths.length - 1;
+	return { run: last, offset: lengths[last] ?? 0 };
 }
 
 function reopened(

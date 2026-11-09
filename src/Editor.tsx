@@ -42,6 +42,9 @@ import Target from "./Target";
 import Toolbar from "./Toolbar";
 import Typewriter from "./Typewriter";
 import Typography from "./Typography";
+import Whereabouts from "./Whereabouts";
+import type { Caret } from "./bindings/Caret";
+import type { Place } from "./workspace";
 import { characters, charactersWithoutSpaces, prose, words } from "./words";
 
 // Lexical puts these class names on the elements it renders; App.css styles
@@ -162,6 +165,10 @@ type Props = {
 	onRestore: () => void;
 	onPreferences: (next: Preferences) => void;
 	onTarget: (target: number | null) => void;
+	/** Where the writer left this document last time, if anywhere. */
+	place: Place | null;
+	/** Where the caret and page are now, whenever either moves. */
+	onPlace: (place: Place) => void;
 };
 
 export default function Editor({
@@ -191,7 +198,22 @@ export default function Editor({
 	onRestore,
 	onPreferences,
 	onTarget,
+	place,
+	onPlace,
 }: Props) {
+	// Held here and handed up whole, because the caret and the scroll move
+	// separately. Through a ref so the handlers below need not change with
+	// `Project`'s callbacks.
+	const scroller = useRef<HTMLDivElement>(null);
+	const here = useRef<Place>(place ?? { caret: null, scroll: 0 });
+	const tell = useRef(onPlace);
+	useEffect(() => {
+		tell.current = onPlace;
+	});
+	const onCaret = useCallback((caret: Caret | null) => {
+		here.current = { ...here.current, caret };
+		tell.current(here.current);
+	}, []);
 	const toggle = useCallback(
 		() => onPreferences({ ...preferences, toolbar: !preferences.toolbar }),
 		[preferences, onPreferences],
@@ -342,7 +364,17 @@ export default function Editor({
 		>
 			<LexicalComposer initialConfig={config}>
 				<div className="editor__view">
-					<div className="editor__scroll">
+					<div
+						className="editor__scroll"
+						ref={scroller}
+						onScroll={(event) => {
+							here.current = {
+								...here.current,
+								scroll: event.currentTarget.scrollTop,
+							};
+							tell.current(here.current);
+						}}
+					>
 						<div className="editor__column editor__page">
 							<div className="editor__head">
 								<div className="editor__name">
@@ -477,6 +509,12 @@ export default function Editor({
 								/>
 								<Typewriter on={preferences.typewriter} />
 								<SlashMenu />
+								<Whereabouts
+									place={place}
+									active={active}
+									scroller={scroller}
+									onCaret={onCaret}
+								/>
 							</div>
 						</div>
 					</div>

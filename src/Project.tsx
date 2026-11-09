@@ -43,7 +43,7 @@ import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import { documentsOf, firstScene, folderOf, rows } from "./tree";
 import type { Workspace } from "./bindings/Workspace";
-import { remembered, reopen } from "./workspace";
+import { remembered, reopen, type Place } from "./workspace";
 import { deleteDocument, deleteFolder } from "./documents";
 import type { TakeView } from "./bindings/TakeView";
 import {
@@ -273,6 +273,9 @@ export default function Project({
 	// False until the tabs the project was left with are back, so the empty
 	// strip it opens on is not written over them.
 	const [pickedUp, setPickedUp] = useState(false);
+	// Where each document's caret and page were left, by id. A ref, because
+	// it moves with every keystroke and nothing on screen draws it.
+	const places = useRef(new Map<string, Place>());
 
 	// Once only: the dev build runs an effect twice, and a second pass would
 	// not yet see the first one's tabs and open them again.
@@ -304,6 +307,14 @@ export default function Project({
 			.then(([saved, tree]) => {
 				if (saved === null) {
 					return;
+				}
+				for (const tab of saved.tabs) {
+					if (tab.kind === "document") {
+						places.current.set(tab.id, {
+							caret: tab.caret,
+							scroll: tab.scroll,
+						});
+					}
 				}
 				const back = reopen(saved, tree);
 				const opening = back.tabs.map((tab): Tab =>
@@ -338,17 +349,29 @@ export default function Project({
 	const [activeKey, setActiveKey] = useState<string | null>(null);
 
 	// Written whenever the strip changes shape, not on every keystroke that
-	// passes through the tabs.
-	const leftWith = remembered(tabs, activeKey);
-	const leftWithText = JSON.stringify(leftWith);
+	// passes through the tabs. Carets and scrolls ride along with whatever
+	// they were last, and on the way out.
+	const shape = JSON.stringify(remembered(tabs, activeKey));
+	const leftWith = useRef<(() => Workspace) | null>(null);
 	useEffect(() => {
 		if (!pickedUp) {
 			return;
 		}
-		invoke("write_workspace", { root, workspace: leftWith }).catch(
-			() => {},
-		);
-	}, [pickedUp, leftWithText]);
+		leftWith.current = () => remembered(tabs, activeKey, places.current);
+		void keepWorkspace();
+	}, [pickedUp, shape]);
+
+	// Null until the tabs are back, so quitting first cannot write an empty
+	// strip over them.
+	async function keepWorkspace() {
+		if (leftWith.current === null) {
+			return;
+		}
+		await invoke("write_workspace", {
+			root,
+			workspace: leftWith.current(),
+		}).catch(() => {});
+	}
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
@@ -654,6 +677,7 @@ export default function Project({
 		const now = Date.now();
 		await keep(tick(sessions.current, now, words.current, idle.current));
 		await keep(ended(sessions.current, now, words.current));
+		await keepWorkspace();
 	}
 
 	// Quitting must not lose what the debounce has not written yet. Tauri waits
@@ -1507,6 +1531,10 @@ export default function Project({
 					onTakeText={(take) => takeText(root, tab.document.id, take)}
 					onChange={(text) => edit(tab.document.id, text)}
 					onWrote={(delta) => record(tab.document.id, delta)}
+					place={places.current.get(tab.document.id) ?? null}
+					onPlace={(place) =>
+						places.current.set(tab.document.id, place)
+					}
 					onFields={setFields}
 					onOutline={setOutline}
 					onMarks={setMarks}

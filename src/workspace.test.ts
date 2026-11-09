@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Workspace } from "./bindings/Workspace";
 import type { TreeNode } from "./types";
-import { remembered, reopen } from "./workspace";
+import { locate, remembered, reopen } from "./workspace";
 
 function folder(name: string, children: TreeNode[] = []): TreeNode {
 	return {
@@ -187,5 +187,49 @@ describe("remembered", () => {
 		expect(
 			remembered([{ kind: "book", key: "1" }], null).active,
 		).toBeNull();
+	});
+
+	test("keeps where each document was left", () => {
+		const { tabs } = reopen(
+			saved([
+				{
+					kind: "document",
+					id: "id-Manuscript/Chapter 1/Scene 1.md",
+					caret: null,
+					scroll: 0,
+				},
+			]),
+			tree,
+		);
+		const keyed = tabs.map((tab) => ({ ...tab, key: "1" }));
+		const place = { caret: { paragraph: 4, offset: 12 }, scroll: 900 };
+
+		expect(
+			remembered(
+				keyed,
+				"1",
+				new Map([["id-Manuscript/Chapter 1/Scene 1.md", place]]),
+			).tabs,
+		).toEqual([
+			{
+				kind: "document",
+				id: "id-Manuscript/Chapter 1/Scene 1.md",
+				...place,
+			},
+		]);
+	});
+});
+
+describe("locate", () => {
+	test("finds the run an offset falls in", () => {
+		expect(locate([5, 3, 4], 7)).toEqual({ run: 1, offset: 2 });
+	});
+
+	test("puts a seam at the end of the first run", () => {
+		expect(locate([5, 3], 5)).toEqual({ run: 0, offset: 5 });
+	});
+
+	test("lands at the end when the text has shrunk", () => {
+		expect(locate([5, 3], 40)).toEqual({ run: 1, offset: 3 });
 	});
 });
