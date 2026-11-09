@@ -329,6 +329,14 @@ function Book({
 					</span>
 				)}
 				<span className="shelf__meta">{size(project)}</span>
+				{project.leftOff !== null && (
+					<span
+						className="shelf__meta shelf__left"
+						title={project.leftOff}
+					>
+						{project.leftOff}
+					</span>
+				)}
 				{project.elsewhere && (
 					<span className="shelf__meta shelf__place">
 						<Icon name="link" />

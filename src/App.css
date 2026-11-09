@@ -1104,7 +1104,8 @@ body,
 	color: var(--accent-text);
 }
 
-.shelf__place span {
+.shelf__place span,
+.shelf__left {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
