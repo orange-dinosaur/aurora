@@ -4422,6 +4422,52 @@ mod tests {
 		waits(&root);
 	}
 
+	/// A merge left waiting on the book's title, changed on both versions.
+	fn titles_conflict(root: &Path) -> Vec<merge::Conflict> {
+		let retitle = |title: &str| {
+			let mut book = read_manifest(root).unwrap().book;
+			book.title = title.to_owned();
+			write_book(root.to_owned(), book).unwrap();
+		};
+		let conflicts = diverged(root, || retitle("Theirs"), || retitle("Ours"));
+		assert_eq!(conflicts.len(), 1);
+		conflicts
+	}
+
+	#[test]
+	fn settling_the_binder_undoes_book_details_changed_meanwhile() {
+		let (_parent, root, ..) = novel();
+		titles_conflict(&root);
+		let mut book = read_manifest(&root).unwrap().book;
+		let merged = book.blurb.clone();
+		book.blurb = "Written during the merge".to_owned();
+		write_book(root.clone(), book).unwrap();
+
+		settle_rest(&root, &[]).unwrap();
+
+		let book = read_manifest(&root).unwrap().book;
+		assert_eq!(book.blurb, merged);
+		assert_eq!(book.title, "Ours");
+	}
+
+	#[test]
+	fn settling_the_binder_deletes_a_document_created_meanwhile() {
+		let (_parent, root, _, here, _) = novel();
+		titles_conflict(&root);
+		let added = create_document(root.clone(), here, "Meanwhile".to_owned())
+			.unwrap()
+			.id;
+		let manifest = read_manifest(&root).unwrap();
+		let path = tree::path(&manifest.nodes, added).unwrap();
+		let file = crate::document::document_path(&manifest, &root, &path).unwrap();
+		assert!(file.exists());
+
+		settle_rest(&root, &[]).unwrap();
+
+		assert!(tree::find(&read_manifest(&root).unwrap().nodes, added).is_none());
+		assert!(!file.exists());
+	}
+
 	#[test]
 	fn a_documents_target_changed_on_both() {
 		let (_parent, root, seeded, ..) = novel();
