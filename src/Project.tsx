@@ -18,6 +18,7 @@ import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import BookView from "./Book";
+import { BookMenu } from "./BookHead";
 import Compare from "./Compare";
 import Icon from "./Icon";
 import Overwrite from "./Overwrite";
@@ -488,6 +489,12 @@ export default function Project({
 	const [settling, setSettling] = useState<string | null>(null);
 	const [choices, setChoices] = useState<Record<string, Choices>>({});
 	const [sides, setSides] = useState<Sides>({});
+	// What the book menu over Compare or Merge could not do, said in the
+	// binder once the writer is back there. A fresh object each time, so the
+	// same failure twice is said twice.
+	const [bookTrouble, setBookTrouble] = useState<{ message: string } | null>(
+		null,
+	);
 
 	// A floating list closes on any way in or out, and on a pick in Merge.
 	useEffect(() => setListOpen(false), [comparing, settling]);
@@ -1588,6 +1595,35 @@ export default function Project({
 
 	// Compare and Merge stand where the writing stands.
 	const covered = comparing !== null || (merge !== null && settling !== null);
+
+	function backToBinder() {
+		setComparing(null);
+		setSettling(null);
+	}
+
+	// The binder's own book menu, without the version, leading Compare's and
+	// Merge's lists. Opening the book or a failure goes back to the binder.
+	const bookMenu = (
+		<BookMenu
+			root={root}
+			name={name}
+			reload={listing}
+			written={bookWritten}
+			merging={merge !== null}
+			onOpenBook={() => {
+				backToBinder();
+				openBook();
+			}}
+			onClose={onClose}
+			onChanged={changed}
+			onMessage={(message) => {
+				if (message !== null) {
+					backToBinder();
+					setBookTrouble({ message });
+				}
+			}}
+		/>
+	);
 	// Only over a document, whose dock and Escape are the ways out. Anywhere else
 	// the frame is the only way around, so a saved Focus cannot strand the writer.
 	const focused =
@@ -1672,6 +1708,7 @@ export default function Project({
 			{comparing !== null && (
 				<Compare
 					root={root}
+					book={bookMenu}
 					document={
 						active?.kind === "document" ? active.document : null
 					}
@@ -1696,6 +1733,7 @@ export default function Project({
 			{comparing === null && merge !== null && settling !== null && (
 				<Merge
 					root={root}
+					book={bookMenu}
 					merge={merge}
 					open={settling}
 					onOpen={setSettling}
@@ -1744,6 +1782,7 @@ export default function Project({
 					}
 					selectedTrash={active?.kind === "trash"}
 					merging={merge !== null}
+					trouble={bookTrouble}
 					onCompare={(checkpoint, slug) =>
 						void writeAll().then(() =>
 							setComparing({ checkpoint, pick: null, slug }),

@@ -42,6 +42,8 @@ import type { Conflict, Piece, TreeNode } from "./types";
 
 type Props = {
 	root: string;
+	/** The book menu, which leads the list as it leads the binder. */
+	book: ReactNode;
 	merge: MergeUnderway;
 	/** The id of the document being settled, or `BINDER`. */
 	open: string;
@@ -71,6 +73,7 @@ function where(path: string | null): string {
 
 export default function Merge({
 	root,
+	book,
 	merge,
 	open,
 	onOpen,
@@ -250,6 +253,7 @@ export default function Merge({
 				className={floating ? "sidelist sidelist--open" : "sidelist"}
 				aria-label="To settle"
 			>
+				<div className="binder__head">{book}</div>
 				<div className="sidelist__head">
 					<p className="sidelist__of">Merging</p>
 					<h2 className="sidelist__title">

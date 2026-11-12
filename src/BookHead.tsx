@@ -10,7 +10,7 @@ import { failure } from "./errors";
 import { coverFor } from "./lib/covers";
 import type { Book, Branch } from "./types";
 
-type Props = {
+type BookProps = {
 	root: string;
 	/** The project's name, which stands in until the book has a title. */
 	name: string;
@@ -24,6 +24,11 @@ type Props = {
 	onClose: () => void;
 	/** The manifest was read again, so every listing of it should be too. */
 	onChanged: () => void;
+	/** What went wrong, or null once it no longer applies. */
+	onMessage: (message: string | null) => void;
+};
+
+type Props = BookProps & {
 	/** Opens compare at a checkpoint, listing the given version's history. */
 	onCompare: (checkpoint: string, slug: string) => void;
 	/** Writes every open tab, so asking what is not in a checkpoint sees it. */
@@ -32,8 +37,6 @@ type Props = {
 	onSwitch: (task: () => Promise<unknown>) => Promise<void>;
 	/** Reads the merge again after a switch or a merge from here. */
 	onMergeChanged: () => Promise<void>;
-	/** What went wrong, or null once it no longer applies. */
-	onMessage: (message: string | null) => void;
 };
 
 /**
@@ -41,46 +44,15 @@ type Props = {
  * done to the project as a whole, and the version it is on.
  */
 export default function BookHead({
-	root,
-	name,
-	reload,
-	written,
-	merging,
-	onOpenBook,
-	onClose,
-	onChanged,
 	onCompare,
 	onBeforeSwitch,
 	onSwitch,
 	onMergeChanged,
-	onMessage,
+	...book
 }: Props) {
-	const [book, setBook] = useState<Book | null>(null);
-	const [busy, setBusy] = useState(false);
+	const { root, merging, onMessage } = book;
 	const [versions, setVersions] = useState<Branch[]>([]);
 	const current = versions.find((version) => version.current);
-	const { src } = useCoverImage(root, book?.cover ?? "", reload + written);
-	const title = book === null || book.title.trim() === "" ? name : book.title;
-
-	// A book that cannot be read costs the head its details, not the project.
-	useEffect(() => {
-		let listening = true;
-		invoke<Book>("read_book", { root })
-			.then((read) => {
-				if (listening) {
-					setBook(read);
-				}
-			})
-			.catch(() => {
-				if (listening) {
-					setBook(null);
-				}
-			});
-
-		return () => {
-			listening = false;
-		};
-	}, [root, reload, written]);
 
 	async function listVersions() {
 		try {
@@ -138,105 +110,9 @@ export default function BookHead({
 		await listVersions();
 	}
 
-	// Hands the project folder to the desktop's file manager. Nothing about
-	// the project changes, so a refusal is worth saying once and no more.
-	async function reveal() {
-		try {
-			await revealItemInDir(root);
-			onMessage(null);
-		} catch (error) {
-			onMessage(failure(error).message);
-		}
-	}
-
-	// `refresh_documents` looks at the folder again before rewriting the
-	// manifest, for anything that changed outside Aurora.
-	async function refresh() {
-		setBusy(true);
-		try {
-			await invoke("refresh_documents", { root });
-			onMessage(null);
-			onChanged();
-		} catch (error) {
-			onMessage(failure(error).message);
-		} finally {
-			setBusy(false);
-		}
-	}
-
 	return (
 		<div className="binder__head">
-			<Menu
-				label={`${title}: book menu`}
-				wrapper="binder__menu"
-				className="binder__book"
-				trigger={
-					<>
-						{/* A wash of the title stands behind an image too, so
-						    the cover is never blank while one loads. */}
-						<span
-							className="binder__cover"
-							style={{ background: coverFor(title) }}
-							aria-hidden="true"
-						>
-							{src !== "" && <img src={src} alt="" />}
-						</span>
-						<span className="binder__names">
-							<span className="binder__title">{title}</span>
-							{book !== null && book.author.trim() !== "" && (
-								<span className="binder__author">
-									{book.author}
-								</span>
-							)}
-						</span>
-					</>
-				}
-			>
-				{(close) => (
-					<>
-						<MenuItem
-							disabled={merging}
-							title={merging ? MERGE_HOLDS : undefined}
-							onSelect={() => {
-								close();
-								onOpenBook();
-							}}
-						>
-							Book details
-						</MenuItem>
-						<MenuItem
-							onSelect={() => {
-								close();
-								void reveal();
-							}}
-						>
-							Show in Files
-							<span className="binder__path" title={root}>
-								{root}
-							</span>
-						</MenuItem>
-						<MenuItem
-							disabled={merging || busy}
-							title={merging ? MERGE_HOLDS : undefined}
-							onSelect={() => {
-								close();
-								void refresh();
-							}}
-						>
-							{busy ? "Refreshing…" : "Refresh documents"}
-						</MenuItem>
-						<span className="menu__rule" />
-						<MenuItem
-							onSelect={() => {
-								close();
-								onClose();
-							}}
-						>
-							Close project
-						</MenuItem>
-					</>
-				)}
-			</Menu>
+			<BookMenu {...book} />
 
 			{current !== undefined && (
 				<Menu
@@ -271,5 +147,146 @@ export default function BookHead({
 				</Menu>
 			)}
 		</div>
+	);
+}
+
+/**
+ * The book's cover and title, which open what can be done to the project as a
+ * whole. Compare and Merge lead their lists with it too.
+ */
+export function BookMenu({
+	root,
+	name,
+	reload,
+	written,
+	merging,
+	onOpenBook,
+	onClose,
+	onChanged,
+	onMessage,
+}: BookProps) {
+	const [book, setBook] = useState<Book | null>(null);
+	const [busy, setBusy] = useState(false);
+	const { src } = useCoverImage(root, book?.cover ?? "", reload + written);
+	const title = book === null || book.title.trim() === "" ? name : book.title;
+
+	// A book that cannot be read costs the head its details, not the project.
+	useEffect(() => {
+		let listening = true;
+		invoke<Book>("read_book", { root })
+			.then((read) => {
+				if (listening) {
+					setBook(read);
+				}
+			})
+			.catch(() => {
+				if (listening) {
+					setBook(null);
+				}
+			});
+
+		return () => {
+			listening = false;
+		};
+	}, [root, reload, written]);
+
+	// Hands the project folder to the desktop's file manager. Nothing about
+	// the project changes, so a refusal is worth saying once and no more.
+	async function reveal() {
+		try {
+			await revealItemInDir(root);
+			onMessage(null);
+		} catch (error) {
+			onMessage(failure(error).message);
+		}
+	}
+
+	// `refresh_documents` looks at the folder again before rewriting the
+	// manifest, for anything that changed outside Aurora.
+	async function refresh() {
+		setBusy(true);
+		try {
+			await invoke("refresh_documents", { root });
+			onMessage(null);
+			onChanged();
+		} catch (error) {
+			onMessage(failure(error).message);
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	return (
+		<Menu
+			label={`${title}: book menu`}
+			wrapper="binder__menu"
+			className="binder__book"
+			trigger={
+				<>
+					{/* A wash of the title stands behind an image too, so
+					    the cover is never blank while one loads. */}
+					<span
+						className="binder__cover"
+						style={{ background: coverFor(title) }}
+						aria-hidden="true"
+					>
+						{src !== "" && <img src={src} alt="" />}
+					</span>
+					<span className="binder__names">
+						<span className="binder__title">{title}</span>
+						{book !== null && book.author.trim() !== "" && (
+							<span className="binder__author">
+								{book.author}
+							</span>
+						)}
+					</span>
+				</>
+			}
+		>
+			{(close) => (
+				<>
+					<MenuItem
+						disabled={merging}
+						title={merging ? MERGE_HOLDS : undefined}
+						onSelect={() => {
+							close();
+							onOpenBook();
+						}}
+					>
+						Book details
+					</MenuItem>
+					<MenuItem
+						onSelect={() => {
+							close();
+							void reveal();
+						}}
+					>
+						Show in Files
+						<span className="binder__path" title={root}>
+							{root}
+						</span>
+					</MenuItem>
+					<MenuItem
+						disabled={merging || busy}
+						title={merging ? MERGE_HOLDS : undefined}
+						onSelect={() => {
+							close();
+							void refresh();
+						}}
+					>
+						{busy ? "Refreshing…" : "Refresh documents"}
+					</MenuItem>
+					<span className="menu__rule" />
+					<MenuItem
+						onSelect={() => {
+							close();
+							onClose();
+						}}
+					>
+						Close project
+					</MenuItem>
+				</>
+			)}
+		</Menu>
 	);
 }

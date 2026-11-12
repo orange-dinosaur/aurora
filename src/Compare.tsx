@@ -42,6 +42,8 @@ import { prose, words } from "./words";
 
 type Props = {
 	root: string;
+	/** The book menu, which leads the list as it leads the binder. */
+	book: ReactNode;
 	/** The open document, which This document compares. */
 	document: ProjectDocument | null;
 	scope: VersionsScope;
@@ -83,6 +85,7 @@ type Pair = [number, number];
 
 export default function Compare({
 	root,
+	book,
 	document,
 	scope,
 	version,
@@ -465,6 +468,7 @@ export default function Compare({
 				className={floating ? "sidelist sidelist--open" : "sidelist"}
 				aria-label="Checkpoints"
 			>
+				<div className="binder__head">{book}</div>
 				<div className="sidelist__head">
 					<p className="sidelist__of">Checkpoints of</p>
 					<h1 className="sidelist__title">

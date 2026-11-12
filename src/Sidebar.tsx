@@ -79,6 +79,8 @@ type Props = {
 	selectedFolder: string | null;
 	selectedTrash: boolean;
 	merging: boolean;
+	/** What the book menu over Compare or Merge could not do. */
+	trouble: { message: string } | null;
 	onSelect: (document: ProjectDocument) => void;
 	/** Opens the page about a character or a place, for the rows that are one. */
 	onSubject: (document: ProjectDocument) => void;
@@ -133,6 +135,7 @@ export default function Sidebar({
 	selectedFolder,
 	selectedTrash,
 	merging,
+	trouble,
 	onSelect,
 	onSubject,
 	onTry,
@@ -189,6 +192,12 @@ export default function Sidebar({
 	useEffect(() => {
 		void load();
 	}, [load, reload]);
+
+	useEffect(() => {
+		if (trouble !== null) {
+			setStatus({ kind: "error", message: trouble.message });
+		}
+	}, [trouble]);
 
 	// Which folders were open last time, read once the tree is here so that a
 	// project nothing has ever been folded in can open on its sections rather
