@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { MERGE_HOLDS } from "./branches";
 import Menu, { MenuItem } from "./Menu";
 import MoveTo from "./MoveTo";
 import type { Moving } from "./tree";
@@ -46,6 +47,7 @@ function Actions({
 	merging,
 }: Omit<Props, "label"> & { close: () => void }) {
 	const [choosing, setChoosing] = useState(false);
+	const why = merging ? MERGE_HOLDS : undefined;
 
 	if (choosing) {
 		return (
@@ -64,7 +66,8 @@ function Actions({
 	return (
 		<>
 			<MenuItem
-				disabled={index === 0}
+				disabled={merging || index === 0}
+				title={why}
 				onSelect={() => {
 					close();
 					onMove(moving.from, index - 1);
@@ -73,7 +76,8 @@ function Actions({
 				Move up
 			</MenuItem>
 			<MenuItem
-				disabled={index >= count - 1}
+				disabled={merging || index >= count - 1}
+				title={why}
 				onSelect={() => {
 					close();
 					onMove(moving.from, index + 1);
@@ -81,8 +85,16 @@ function Actions({
 			>
 				Move down
 			</MenuItem>
-			<MenuItem onSelect={() => setChoosing(true)}>Move to…</MenuItem>
 			<MenuItem
+				disabled={merging}
+				title={why}
+				onSelect={() => setChoosing(true)}
+			>
+				Move to…
+			</MenuItem>
+			<MenuItem
+				disabled={merging}
+				title={why}
 				onSelect={() => {
 					close();
 					onRename();
@@ -103,6 +115,7 @@ function Actions({
 			{onTry !== undefined && (
 				<MenuItem
 					disabled={merging}
+					title={why}
 					onSelect={() => {
 						close();
 						onTry();
@@ -113,6 +126,8 @@ function Actions({
 			)}
 			<MenuItem
 				danger
+				disabled={merging}
+				title={why}
 				onSelect={() => {
 					close();
 					onDelete();

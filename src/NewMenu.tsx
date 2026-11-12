@@ -1,5 +1,6 @@
 // The + that makes something new, offering only what belongs where it sits.
 
+import { MERGE_HOLDS } from "./branches";
 import Menu, { MenuItem } from "./Menu";
 import Icon from "./Icon";
 import { creatable } from "./kinds";
@@ -18,6 +19,7 @@ type Props = {
 	held?: readonly (FolderKind | null)[];
 	text?: string;
 	className?: string;
+	merging: boolean;
 	onChoose: (making: Making) => void;
 };
 
@@ -28,9 +30,11 @@ export default function NewMenu({
 	held,
 	text,
 	className,
+	merging,
 	onChoose,
 }: Props) {
 	const offered = creatable(kind, section, held);
+	const why = merging ? MERGE_HOLDS : undefined;
 
 	// A chapter holds scenes and nothing else, so there is nothing to choose
 	// between: the + asks for the name straight away rather than opening a
@@ -45,6 +49,8 @@ export default function NewMenu({
 					type="button"
 					className={className ?? "menu__trigger"}
 					aria-label={only.label}
+					disabled={merging}
+					title={why}
 					onClick={() => onChoose(only)}
 				>
 					<Icon name="plus" />
@@ -55,7 +61,14 @@ export default function NewMenu({
 	}
 
 	return (
-		<Menu label={label} icon="plus" text={text} className={className}>
+		<Menu
+			label={label}
+			icon="plus"
+			text={text}
+			className={className}
+			disabled={merging}
+			title={why}
+		>
 			{(close) =>
 				offered.map((making) => (
 					<MenuItem

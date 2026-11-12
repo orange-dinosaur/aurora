@@ -403,8 +403,10 @@ export default function Sidebar({
 								? NONE
 								: inside(list, reorder.dragging);
 						// Every row in the list asks for its drag the same way.
-						const draggable = (row: Row) =>
-							reorder.item(spot(row, section.name, held));
+						const draggable = (row: Row) => ({
+							...reorder.item(spot(row, section.name, held)),
+							draggable: !merging,
+						});
 
 						return (
 							<section key={section.id} className="section">
@@ -448,6 +450,7 @@ export default function Sidebar({
 										kind={section.kind}
 										section={section.name}
 										held={folderKinds(section.children)}
+										merging={merging}
 										onChoose={(making) =>
 											making.name
 												? void create(
@@ -478,6 +481,7 @@ export default function Sidebar({
 														row={row}
 														section={section.name}
 														drag={draggable(row)}
+														merging={merging}
 														current={
 															row.id ===
 															selectedFolder

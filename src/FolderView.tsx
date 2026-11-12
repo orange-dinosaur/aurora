@@ -255,6 +255,7 @@ export default function FolderView({
 					held={folderKinds(cards)}
 					text="New"
 					className="overview__new"
+					merging={merging}
 					onChoose={(making) =>
 						making.name
 							? void create(making, making.name)
@@ -299,6 +300,7 @@ export default function FolderView({
 								key={card.id}
 								className="cards__item"
 								{...reorder.item(spot(card, at))}
+								draggable={!merging}
 							>
 								<button
 									type="button"
@@ -348,6 +350,7 @@ export default function FolderView({
 									onDelete={() =>
 										void remove(card.id, "folder")
 									}
+									merging={merging}
 								/>
 							</li>
 						);
@@ -390,6 +393,7 @@ export default function FolderView({
 							key={document.id}
 							className="cards__item"
 							{...reorder.item(spot(document, at))}
+							draggable={!merging}
 						>
 							<button
 								type="button"
@@ -470,6 +474,7 @@ export default function FolderView({
 							held={folderKinds(cards)}
 							text="New"
 							className="card card--new"
+							merging={merging}
 							onChoose={(making) =>
 								making.name
 									? void create(making, making.name)

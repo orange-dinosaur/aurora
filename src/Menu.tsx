@@ -40,6 +40,9 @@ type Props = {
 	 * and two shapes on one element only fight.
 	 */
 	className?: string;
+	/** Greys the trigger, with `title` saying why. */
+	disabled?: boolean;
+	title?: string;
 	/** The items, given the way to close the menu behind them. */
 	children: (close: () => void) => ReactNode;
 };
@@ -127,6 +130,8 @@ export default function Menu({
 	trigger,
 	wrapper,
 	className,
+	disabled,
+	title,
 	children,
 }: Props) {
 	const [open, setOpen] = useState(false);
@@ -165,6 +170,8 @@ export default function Menu({
 				className={className ?? "menu__trigger"}
 				aria-label={label}
 				aria-expanded={open}
+				disabled={disabled}
+				title={title}
 				onClick={(event) => {
 					setInstant(event.detail === 0);
 					setOpen((was) => !was);
@@ -207,11 +214,14 @@ export function MenuItem({
 	autoFocus,
 	checked,
 	depth,
+	title,
 	onSelect,
 	children,
 }: {
 	danger?: boolean;
 	disabled?: boolean;
+	/** Says why, when it is disabled for a reason the writer can change. */
+	title?: string;
 	autoFocus?: boolean;
 	/** Given only in a menu that picks one of several. */
 	checked?: boolean;
@@ -234,6 +244,7 @@ export function MenuItem({
 					: ({ "--depth": depth } as CSSProperties)
 			}
 			disabled={disabled}
+			title={title}
 			autoFocus={autoFocus}
 			onClick={onSelect}
 		>

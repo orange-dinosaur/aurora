@@ -25,6 +25,7 @@ type Props = {
 	/** Set only on the row being retitled. */
 	renaming: Retitling | null;
 	drag: Draggable;
+	merging: boolean;
 	onOpen: () => void;
 	onNew: (making: Making) => void;
 	onMove: (parentId: string, index: number) => void;
@@ -42,6 +43,7 @@ export default function FolderRow({
 	current,
 	renaming,
 	drag,
+	merging,
 	onOpen,
 	onNew,
 	onMove,
@@ -115,6 +117,7 @@ export default function FolderRow({
 					label={`New in ${row.name}`}
 					kind={row.folderKind}
 					section={section}
+					merging={merging}
 					onChoose={onNew}
 				/>
 				<FolderMenu
@@ -129,6 +132,7 @@ export default function FolderRow({
 					onMove={onMove}
 					onRename={onRename}
 					onDelete={onDelete}
+					merging={merging}
 				/>
 			</div>
 		</li>

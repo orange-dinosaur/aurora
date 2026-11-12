@@ -5462,6 +5462,17 @@ button.compare__pick:focus-visible {
 	background: var(--bg-hover);
 }
 
+.card--new:disabled {
+	color: var(--text-faint);
+	background: none;
+	cursor: default;
+}
+
+/* A card that cannot be dragged, while a merge waits, does not offer to be. */
+[draggable="false"] > .card {
+	cursor: pointer;
+}
+
 /* Naming writes straight onto the card, in the title's own place and type. */
 .card--naming,
 .card--naming:hover {
@@ -6226,6 +6237,12 @@ button.compare__pick:focus-visible {
 .menu__trigger[aria-expanded="true"] {
 	color: var(--text);
 	background: var(--bg-hover);
+}
+
+.menu__trigger:disabled {
+	color: var(--text-faint);
+	background: none;
+	cursor: default;
 }
 
 .menu__items {

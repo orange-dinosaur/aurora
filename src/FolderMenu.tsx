@@ -2,6 +2,7 @@
 // top level of a project is its shape rather than something in it.
 
 import { useState } from "react";
+import { MERGE_HOLDS } from "./branches";
 import Menu, { MenuItem } from "./Menu";
 import MoveTo from "./MoveTo";
 import type { Moving } from "./tree";
@@ -13,6 +14,7 @@ type Props = {
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
 	onDelete: () => void;
+	merging: boolean;
 };
 
 export default function FolderMenu({ label, ...rest }: Props) {
@@ -31,8 +33,10 @@ function Actions({
 	onMove,
 	onRename,
 	onDelete,
+	merging,
 }: Omit<Props, "label"> & { close: () => void }) {
 	const [choosing, setChoosing] = useState(false);
+	const why = merging ? MERGE_HOLDS : undefined;
 
 	if (choosing) {
 		return (
@@ -50,8 +54,16 @@ function Actions({
 
 	return (
 		<>
-			<MenuItem onSelect={() => setChoosing(true)}>Move to…</MenuItem>
 			<MenuItem
+				disabled={merging}
+				title={why}
+				onSelect={() => setChoosing(true)}
+			>
+				Move to…
+			</MenuItem>
+			<MenuItem
+				disabled={merging}
+				title={why}
 				onSelect={() => {
 					close();
 					onRename();
@@ -61,6 +73,8 @@ function Actions({
 			</MenuItem>
 			<MenuItem
 				danger
+				disabled={merging}
+				title={why}
 				onSelect={() => {
 					close();
 					onDelete();
