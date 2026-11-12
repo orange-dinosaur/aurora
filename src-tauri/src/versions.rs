@@ -870,10 +870,20 @@ fn carry(root: &Path, row: Row, staging: bool) -> Result<()> {
 			is.book.cover = from.book.cover;
 		}
 		Row::Node { id } => match tree::path(&from.nodes, id) {
-			// ponytail: a folder goes with all it holds, even a document moved
-			// out of it first whose move is not in the next checkpoint.
+			// A document moved out before the folder went has its move carried
+			// too, or the folder would take it along.
 			None => {
-				tree::remove(&mut is.nodes, id);
+				let held = tree::remove(&mut is.nodes, id).map_or_else(Vec::new, |node| {
+					tree::documents(std::slice::from_ref(&node))
+				});
+				for document in held {
+					if let Some(path) = tree::path(&from.nodes, document.id) {
+						take(&from.nodes, &mut is.nodes, document.id);
+						if let Some(blob) = blob_at(&from_tree, &path) {
+							blobs.insert(document.id, blob);
+						}
+					}
+				}
 			}
 			Some(path) => {
 				take(&from.nodes, &mut is.nodes, id);
@@ -3447,6 +3457,54 @@ mod tests {
 		carry(&root, Row::Node { id: part }, true).unwrap();
 
 		assert_eq!(take_files_held(&root, inside), 0);
+	}
+
+	/// A folder with one document, kept, then the document moved out to
+	/// `there` and the folder deleted.
+	fn moved_out_then_deleted(root: &Path, here: Uuid, there: Uuid) -> (Uuid, Uuid) {
+		let act = create_folder(root.to_owned(), here, "Act".to_owned(), None)
+			.unwrap()
+			.id();
+		let scene = create_document(root.to_owned(), act, "Scene".to_owned())
+			.unwrap()
+			.id;
+		checkpoint(root, "Set up", "").unwrap();
+		move_node(root.to_owned(), scene, there, 0).unwrap();
+		delete_folder(root.to_owned(), act).unwrap();
+		(act, scene)
+	}
+
+	#[test]
+	fn a_deleted_folder_brings_the_move_of_a_document_that_left_it() {
+		let (_parent, root, _, here, there) = novel();
+		let (act, scene) = moved_out_then_deleted(&root, here, there);
+
+		carry(&root, Row::Node { id: act }, true).unwrap();
+
+		let repo = Repository::open(&root).unwrap();
+		let (tree, staged) = staged_side(&repo).unwrap();
+		assert!(tree::find(&staged.nodes, act).is_none());
+		assert_eq!(
+			tree::parent(&staged.nodes, scene).map(Node::id),
+			Some(there)
+		);
+		let path = tree::path(&staged.nodes, scene).unwrap();
+		assert!(blob_at(&tree, &path).is_some());
+		assert!(nothing_in(&status(&root).unwrap().unstaged));
+	}
+
+	#[test]
+	fn unstaging_the_move_out_puts_the_deleted_folder_back() {
+		let (_parent, root, _, here, there) = novel();
+		let (act, scene) = moved_out_then_deleted(&root, here, there);
+		carry(&root, Row::Node { id: act }, true).unwrap();
+
+		carry(&root, Row::Node { id: scene }, false).unwrap();
+
+		let status = status(&root).unwrap();
+		assert!(nothing_in(&status.staged));
+		assert!(change_of(&status.unstaged, act).unwrap().after.is_none());
+		assert!(change_of(&status.unstaged, scene).unwrap().moved);
 	}
 
 	#[test]
