@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { TakeView } from "./bindings/TakeView";
+import { MERGE_HOLDS } from "./branches";
 import { counted } from "./cards";
 import { failure } from "./errors";
 import Menu, { MenuItem } from "./Menu";
@@ -45,6 +46,7 @@ export default function TakeStrip({
 	onDelete,
 }: Props) {
 	const [renaming, setRenaming] = useState<Renaming | null>(null);
+	const why = merging ? MERGE_HOLDS : undefined;
 
 	async function rename(take: string, name: string) {
 		setRenaming({ id: take, busy: true, error: null });
@@ -91,6 +93,7 @@ export default function TakeStrip({
 								className="takes__name"
 								aria-current={take.chosen ? "true" : undefined}
 								disabled={merging}
+								title={why}
 								onClick={() => onChoose(take.id)}
 							>
 								{take.name}
@@ -128,6 +131,7 @@ export default function TakeStrip({
 						type="button"
 						className="takes__try"
 						disabled={merging}
+						title={why}
 						onClick={onTry}
 					>
 						Try something

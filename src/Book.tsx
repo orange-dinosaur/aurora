@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Cover from "./Cover";
 import Export from "./Export";
-import { Chips, TextBox } from "./Field";
+import { Chips, Still, TextBox } from "./Field";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import { ROLES, added, changed, kept, removed, titled } from "./contributors";
@@ -20,6 +20,7 @@ type Props = {
 	changed: number;
 	/** The book reached the disk, so what shows it elsewhere can read it. */
 	onWritten: () => void;
+	merging: boolean;
 };
 
 /** How long the writer has to stop typing before the book is written. */
@@ -30,7 +31,12 @@ const AUTOSAVE_MS = 800;
  * record while it is being edited and sends the whole of it back, because that
  * is the shape `write_book` takes and there is only ever one of these open.
  */
-export default function BookView({ root, changed: moved, onWritten }: Props) {
+export default function BookView({
+	root,
+	changed: moved,
+	onWritten,
+	merging,
+}: Props) {
 	const [book, setBook] = useState<Book | null>(null);
 	const [shut, setShut] = useState<GroupKey[]>([]);
 	const [trouble, setTrouble] = useState("");
@@ -145,6 +151,11 @@ export default function BookView({ root, changed: moved, onWritten }: Props) {
 	const languages = offered(navigator.language);
 	const language = book === null ? "" : named(book.language);
 
+	// Inside the group rather than around it, so the groups still fold.
+	function still(children: ReactNode) {
+		return <Still merging={merging}>{children}</Still>;
+	}
+
 	function group(key: GroupKey, children: ReactNode) {
 		const heading = GROUPS.find((each) => each.key === key);
 
@@ -155,22 +166,25 @@ export default function BookView({ root, changed: moved, onWritten }: Props) {
 				open={!shut.includes(key)}
 				onToggle={() => fold(key)}
 			>
-				{children}
+				{still(children)}
 			</Group>
 		);
 	}
 
 	return (
 		<div className="book">
-			{book !== null && (
-				<Cover
-					root={root}
-					cover={book.cover}
-					title={book.title.trim() === "" ? "Untitled" : book.title}
-					author={book.author}
-					onChange={(cover) => edit({ ...book, cover })}
-				/>
-			)}
+			{book !== null &&
+				still(
+					<Cover
+						root={root}
+						cover={book.cover}
+						title={
+							book.title.trim() === "" ? "Untitled" : book.title
+						}
+						author={book.author}
+						onChange={(cover) => edit({ ...book, cover })}
+					/>,
+				)}
 
 			{/* Always drawn, so a complaint about a failed write does not push
 			    the field that caused it down the page. */}

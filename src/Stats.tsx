@@ -29,6 +29,7 @@ type Props = {
 	changed: number;
 	/** The target the writer typed over the number, for whichever is open. */
 	onTarget: (target: number | null) => void;
+	merging: boolean;
 };
 
 /**
@@ -93,6 +94,7 @@ export default function Stats({
 	logged,
 	changed,
 	onTarget,
+	merging,
 }: Props) {
 	const [history, setHistory] = useState<PastSession[]>([]);
 	const [progress, setProgress] = useState<FolderProgress | null>(null);
@@ -166,6 +168,7 @@ export default function Stats({
 						words={progress.words}
 						target={progress.target}
 						onTarget={onTarget}
+						merging={merging}
 					/>
 				</div>
 			</div>
@@ -184,6 +187,7 @@ export default function Stats({
 					words={counted}
 					target={page.target}
 					onTarget={onTarget}
+					merging={merging}
 				/>
 			</div>
 

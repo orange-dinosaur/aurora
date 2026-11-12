@@ -5,6 +5,7 @@ import { useCoverImage } from "./Cover";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import VersionMenu from "./VersionMenu";
+import { MERGE_HOLDS } from "./branches";
 import { failure } from "./errors";
 import { coverFor } from "./lib/covers";
 import type { Book, Branch } from "./types";
@@ -194,6 +195,8 @@ export default function BookHead({
 				{(close) => (
 					<>
 						<MenuItem
+							disabled={merging}
+							title={merging ? MERGE_HOLDS : undefined}
 							onSelect={() => {
 								close();
 								onOpenBook();
@@ -213,7 +216,8 @@ export default function BookHead({
 							</span>
 						</MenuItem>
 						<MenuItem
-							disabled={busy}
+							disabled={merging || busy}
+							title={merging ? MERGE_HOLDS : undefined}
 							onSelect={() => {
 								close();
 								void refresh();

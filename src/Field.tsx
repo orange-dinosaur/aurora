@@ -1,11 +1,35 @@
 import { useId, useState } from "react";
+import type { ReactNode } from "react";
 import Icon from "./Icon";
+import { MERGE_HOLDS } from "./branches";
 import type { Ties } from "./frontmatter";
 
 // The controls the panel is built from. A field's text is held here while it is
 // being typed and pushed to the document on every keystroke, rather than being
 // read straight back out of the editor: the round trip through Lexical and the
 // front matter is fast, but not fast enough to be in the way of typing.
+
+/**
+ * Stills every field inside it while a merge waits, since settling the merge
+ * writes the book and its folders afresh and would drop anything typed here.
+ */
+export function Still({
+	merging,
+	children,
+}: {
+	merging: boolean;
+	children: ReactNode;
+}) {
+	return (
+		<fieldset
+			className="still"
+			disabled={merging}
+			title={merging ? MERGE_HOLDS : undefined}
+		>
+			{children}
+		</fieldset>
+	);
+}
 
 type BoxProps = {
 	label: string;

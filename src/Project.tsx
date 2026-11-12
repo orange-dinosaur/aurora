@@ -1855,6 +1855,7 @@ export default function Project({
 									onWritten={() =>
 										setBookWritten((times) => times + 1)
 									}
+									merging={merge !== null}
 								/>
 							</div>
 						) : active.kind === "trash" ? (
@@ -1992,6 +1993,7 @@ export default function Project({
 								void retarget(active.document.id, target);
 							}
 						}}
+						merging={merge !== null}
 						sessions={sessions.current}
 						words={words.current}
 						width={preferences.rightSidebarWidth}

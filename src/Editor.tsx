@@ -561,6 +561,7 @@ export default function Editor({
 							words={tally.words}
 							target={target}
 							onTarget={onTarget}
+							merging={merging}
 						/>
 						{tallied(tally)}
 					</p>

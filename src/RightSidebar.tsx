@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Still } from "./Field";
 import Grip from "./Grip";
 import Icon, { type IconName } from "./Icon";
 import Info from "./Info";
@@ -66,6 +67,8 @@ type Props = {
 	folder: FolderRef | null;
 	/** A target typed over the number in the Stats tab. */
 	onTarget: (target: number | null) => void;
+	/** Whether a merge waits, which stills targets and a folder's fields. */
+	merging: boolean;
 	/** The two layers of the session as they stand. */
 	sessions: Sessions;
 	/** What the whole project holds, for the numbers that are not per document. */
@@ -118,6 +121,7 @@ export default function RightSidebar({
 	text,
 	folder,
 	onTarget,
+	merging,
 	sessions,
 	words,
 	width,
@@ -210,6 +214,7 @@ export default function RightSidebar({
 								logged={logged}
 								changed={changed}
 								onTarget={onTarget}
+								merging={merging}
 							/>
 						) : tab === "mentions" ? (
 							about === null ? (
@@ -229,25 +234,33 @@ export default function RightSidebar({
 							<p className="right-sidebar__empty">
 								Nothing here yet.
 							</p>
-						) : tab === "synopsis" ? (
-							<Synopsis
-								{...fields}
-								outline={outline}
-								marks={marks}
-							/>
 						) : (
-							<Info
-								{...fields}
-								subject={
-									about?.kind === "document" &&
-									isSubject(about.page.trail)
-								}
-								manuscript={inManuscript(about)}
-								root={root}
-								changed={changed}
-								onOpenTag={onOpenTag}
-								onSubject={onSubject}
-							/>
+							// A document's fields live in its own file, which a
+							// merge leaves alone; a folder's are in the binder.
+							<Still
+								merging={merging && about?.kind !== "document"}
+							>
+								{tab === "synopsis" ? (
+									<Synopsis
+										{...fields}
+										outline={outline}
+										marks={marks}
+									/>
+								) : (
+									<Info
+										{...fields}
+										subject={
+											about?.kind === "document" &&
+											isSubject(about.page.trail)
+										}
+										manuscript={inManuscript(about)}
+										root={root}
+										changed={changed}
+										onOpenTag={onOpenTag}
+										onSubject={onSubject}
+									/>
+								)}
+							</Still>
 						)}
 					</div>
 

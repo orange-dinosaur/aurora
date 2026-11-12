@@ -7454,10 +7454,24 @@ button.compare__pick:focus-visible {
 	cursor: pointer;
 }
 
-.editor__target:hover,
+.editor__target:hover:not(:disabled),
 .editor__target:focus-visible {
 	color: var(--text);
 	text-decoration: underline;
+}
+
+.editor__target:disabled {
+	cursor: default;
+}
+
+/* A fieldset only for its disabled state: no box of its own. */
+.still {
+	display: contents;
+}
+
+.still:disabled :is(input, textarea, button) {
+	color: var(--text-faint);
+	cursor: default;
 }
 
 .editor__aim {

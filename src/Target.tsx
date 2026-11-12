@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { MERGE_HOLDS } from "./branches";
 
 type Props = {
 	words: number;
 	target: number | null;
 	onTarget: (target: number | null) => void;
+	merging: boolean;
 };
 
 /** The words half of the status line: how many there are, and how many are wanted. */
@@ -21,7 +23,7 @@ export function reading(words: number, target: number | null): string {
  * The word count, which is also how a target is set: there is no button for it
  * anywhere, the number itself is the control.
  */
-export default function Target({ words, target, onTarget }: Props) {
+export default function Target({ words, target, onTarget, merging }: Props) {
 	const [typing, setTyping] = useState(false);
 	const [draft, setDraft] = useState("");
 	const input = useRef<HTMLInputElement>(null);
@@ -44,10 +46,13 @@ export default function Target({ words, target, onTarget }: Props) {
 			<button
 				type="button"
 				className="editor__target"
+				disabled={merging}
 				title={
-					target === null
-						? "Set a word target"
-						: "Change or clear the word target"
+					merging
+						? MERGE_HOLDS
+						: target === null
+							? "Set a word target"
+							: "Change or clear the word target"
 				}
 				onClick={open}
 			>
