@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TrashEntry } from "./types";
+import { MERGE_HOLDS } from "./branches";
 import { listTrash, purgeTrashEntry, restoreFromTrash } from "./documents";
 import { deliberate, trashed } from "./cards";
 import { when } from "./dates";
@@ -17,9 +18,10 @@ type Props = {
 	// Changes when the project view has altered the manifest.
 	reload: number;
 	onChanged: () => void;
+	merging: boolean;
 };
 
-export default function Trash({ root, reload, onChanged }: Props) {
+export default function Trash({ root, reload, onChanged, merging }: Props) {
 	const [entries, setEntries] = useState<TrashEntry[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
 	const [asking, setAsking] = useState<Asking>({ kind: "no" });
@@ -135,7 +137,15 @@ export default function Trash({ root, reload, onChanged }: Props) {
 										<button
 											type="button"
 											className="quiet"
-											disabled={status.kind === "busy"}
+											disabled={
+												merging ||
+												status.kind === "busy"
+											}
+											title={
+												merging
+													? MERGE_HOLDS
+													: undefined
+											}
 											onClick={() =>
 												void act(
 													restoreFromTrash(

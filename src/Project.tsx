@@ -1866,6 +1866,7 @@ export default function Project({
 									onChanged={() =>
 										setListing((version) => version + 1)
 									}
+									merging={merge !== null}
 								/>
 							</div>
 						) : active.kind === "tag" ? (
