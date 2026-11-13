@@ -4266,8 +4266,12 @@ button.compare__pick:focus-visible {
 	resize: vertical;
 }
 
-.field__box:focus-visible,
-.field__line:focus-visible {
+.field__line {
+	padding: 4px 0;
+	font: var(--text-ui);
+}
+
+.field__box:focus-visible {
 	outline: 2px solid var(--accent-text);
 	/* Inside the box rather than around it: the panel's own padding is only
 	   0.75rem and a ring outside would be clipped by the scroll container. */
@@ -4369,15 +4373,9 @@ button.compare__pick:focus-visible {
 	align-items: center;
 	gap: 0.25rem;
 	margin: 0;
-	padding: 0.25rem 0.5rem;
-	font-size: 0.8125rem;
-	line-height: 1.5;
+	padding: 4px 0;
+	font: var(--text-ui);
 	list-style: none;
-}
-
-.chips:has(.chips__input:focus-visible) {
-	outline: 2px solid var(--accent-text);
-	outline-offset: -1px;
 }
 
 /* Follows the last chip and only wraps once the line has no room left for it. */
@@ -8287,8 +8285,6 @@ button.compare__pick:focus-visible {
 
 /* A line of its own is underlined. Only what runs to several lines needs edges
    to type inside. */
-.book .field__line,
-.book .chips,
 .book__pick {
 	padding: 4px 0;
 	font: var(--text-ui);
@@ -8298,8 +8294,6 @@ button.compare__pick:focus-visible {
 	border-radius: 0;
 }
 
-.book .field__line:focus,
-.book .chips:has(.chips__input:focus),
 .book__pick:focus-visible {
 	outline: none;
 	border-bottom-color: var(--accent-text);
@@ -8724,8 +8718,6 @@ button.compare__pick:focus-visible {
 
 .changes__message,
 .field__box,
-.field__line,
-.chips,
 .subject__remarks {
 	background: var(--bg);
 	border: 1px solid var(--graphic-faint);
@@ -8740,7 +8732,9 @@ button.compare__pick:focus-visible {
 .editor__aim-input,
 .settings__field,
 .login__input,
-.profile__input {
+.profile__input,
+.field__line,
+.chips {
 	background: none;
 	border: 0;
 	border-bottom: 1px solid var(--graphic-faint);
@@ -8752,7 +8746,9 @@ button.compare__pick:focus-visible {
 .editor__find-input:focus,
 .editor__aim-input:focus,
 .settings__field:focus,
-.login__input:focus {
+.login__input:focus,
+.field__line:focus,
+.chips:has(.chips__input:focus) {
 	outline: none;
 	border-bottom-color: var(--accent-text);
 	box-shadow: 0 1px 0 var(--accent-text);
