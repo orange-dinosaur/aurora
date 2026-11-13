@@ -1,10 +1,5 @@
+import { MAX_CHAPTERS, MAX_PARTS, MAX_SCENES } from "../bindings/limits";
 import type { StructureLayout } from "../types";
-
-// The same ranges `structure.rs` checks. The dialog keeps to them so Create is
-// never refused, but Rust has the last word.
-export const MAX_PARTS = 10;
-export const MAX_CHAPTERS = 99;
-export const MAX_SCENES = 20;
 
 /** The number fields as typed, so one can be cleared and retyped. */
 export type Draft = { parts: string; chapters: string; scenes: string };
