@@ -145,6 +145,56 @@ describe("reopen", () => {
 		expect(active).toBe(0);
 	});
 
+	test("brings a split back with its current side", () => {
+		const back = reopen(
+			{
+				tabs: [{ kind: "book" }, { kind: "trash" }, { kind: "search" }],
+				active: 2,
+				beside: { tab: 0, left: true },
+			},
+			tree,
+		);
+
+		expect(back.active).toBe(2);
+		expect(back.beside).toEqual({ tab: 0, left: true });
+	});
+
+	test("lets the current side fill the page when the other has gone", () => {
+		const back = reopen(
+			{
+				tabs: [
+					{ kind: "document", id: "id-gone", caret: null, scroll: 0 },
+					{ kind: "trash" },
+				],
+				active: 1,
+				beside: { tab: 0, left: true },
+			},
+			tree,
+		);
+
+		expect(back.active).toBe(0);
+		expect(back.beside).toBeNull();
+	});
+
+	test("lets the other side fill the page when the current has gone", () => {
+		const back = reopen(
+			{
+				tabs: [
+					{ kind: "book" },
+					{ kind: "trash" },
+					{ kind: "document", id: "id-gone", caret: null, scroll: 0 },
+				],
+				active: 2,
+				beside: { tab: 0, left: true },
+			},
+			tree,
+		);
+
+		expect(back.tabs.map((tab) => tab.kind)).toEqual(["book", "trash"]);
+		expect(back.active).toBe(0);
+		expect(back.beside).toBeNull();
+	});
+
 	test("has nothing in front when every tab has gone", () => {
 		const { tabs, active } = reopen(
 			saved([{ kind: "folder", id: "id-gone" }], 0),
@@ -187,6 +237,29 @@ describe("remembered", () => {
 		expect(
 			remembered([{ kind: "book", key: "1" }], null).active,
 		).toBeNull();
+	});
+
+	test("keeps a split by tab position", () => {
+		const keyed = [
+			{ kind: "book" as const, key: "a" },
+			{ kind: "trash" as const, key: "b" },
+		];
+
+		expect(
+			remembered(keyed, "b", new Map(), { key: "a", left: false }),
+		).toEqual({
+			tabs: [{ kind: "book" }, { kind: "trash" }],
+			active: 1,
+			beside: { tab: 0, left: false },
+		});
+	});
+
+	test("keeps a split with an empty side as the tab showing", () => {
+		const keyed = [{ kind: "book" as const, key: "a" }];
+
+		expect(
+			remembered(keyed, null, new Map(), { key: "a", left: true }),
+		).toEqual({ tabs: [{ kind: "book" }], active: 0, beside: null });
 	});
 
 	test("keeps where each document was left", () => {

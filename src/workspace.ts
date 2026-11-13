@@ -5,6 +5,7 @@
 import type { Caret } from "./bindings/Caret";
 import type { SavedTab } from "./bindings/SavedTab";
 import type { Workspace } from "./bindings/Workspace";
+import type { Sides } from "./split";
 import { documentsOf, folderRef, type FolderRef } from "./tree";
 import type { ProjectDocument, TreeNode } from "./types";
 
@@ -21,12 +22,26 @@ export type Reopened =
 /** Where a document was left: the caret, and how far down the page was. */
 export type Place = { caret: Caret | null; scroll: number };
 
+/**
+ * A split with an empty side is kept as the one tab showing, since an empty
+ * side is only somewhere to put the next tab.
+ */
 export function remembered(
 	tabs: (Reopened & { key: string })[],
 	activeKey: string | null,
 	places: ReadonlyMap<string, Place> = new Map(),
+	other: Sides["other"] = null,
 ): Workspace {
-	const active = tabs.findIndex((tab) => tab.key === activeKey);
+	const at = (key: string | null) => tabs.findIndex((tab) => tab.key === key);
+	let active = at(activeKey);
+	let beside: Workspace["beside"] = null;
+	if (other !== null && at(other.key) !== -1) {
+		if (active === -1) {
+			active = at(other.key);
+		} else {
+			beside = { tab: at(other.key), left: other.left };
+		}
+	}
 	return {
 		tabs: tabs.map((tab): SavedTab => {
 			switch (tab.kind) {
@@ -50,24 +65,31 @@ export function remembered(
 			}
 		}),
 		active: active === -1 ? null : active,
-		beside: null,
+		beside,
 	};
 }
 
 /**
  * The tabs that can still open, in their order, and which one goes in front.
  * When the front tab is the one that has gone, the tab before it takes its
- * place, as closing it would have done.
+ * place, as closing it would have done. A split comes back only if both of its
+ * tabs do; with one gone, the survivor fills the page.
  */
 export function reopen(
 	saved: Workspace,
 	tree: TreeNode[],
-): { tabs: Reopened[]; active: number | null } {
+): {
+	tabs: Reopened[];
+	active: number | null;
+	beside: { tab: number; left: boolean } | null;
+} {
 	const documents = new Map(
 		documentsOf(tree).map((document) => [document.id, document]),
 	);
 	const tabs: Reopened[] = [];
 	let active: number | null = null;
+	let activeBack = false;
+	let besideAt: number | null = null;
 
 	for (const [index, tab] of saved.tabs.entries()) {
 		const back = reopened(tab, documents, tree);
@@ -76,6 +98,10 @@ export function reopen(
 		}
 		if (index === saved.active && tabs.length > 0) {
 			active = tabs.length - 1;
+			activeBack = back !== null;
+		}
+		if (index === saved.beside?.tab && back !== null) {
+			besideAt = tabs.length - 1;
 		}
 	}
 
@@ -83,7 +109,13 @@ export function reopen(
 	if (active === null && saved.active !== null && tabs.length > 0) {
 		active = 0;
 	}
-	return { tabs, active };
+	if (saved.beside === null || besideAt === null || besideAt === active) {
+		return { tabs, active, beside: null };
+	}
+	if (!activeBack) {
+		return { tabs, active: besideAt, beside: null };
+	}
+	return { tabs, active, beside: { tab: besideAt, left: saved.beside.left } };
 }
 
 /**
