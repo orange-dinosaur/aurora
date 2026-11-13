@@ -3,7 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 import { outOfView } from "./lib/overflow";
-import { MenuItem, PointerMenu } from "./Menu";
+import { MenuItem, PointerMenu, pointOf, type Point } from "./Menu";
 
 /**
  * One tab as the strip shows it. The key is what the strip hands back; only
@@ -65,7 +65,7 @@ export default function Tabs({
 	// still have a tab to name while they fade.
 	const [asked, setAsked] = useState<{
 		key: string;
-		at: { x: number; y: number };
+		at: Point;
 		open: boolean;
 	} | null>(null);
 	const split = besideKey !== null;
@@ -86,16 +86,7 @@ export default function Tabs({
 
 	function ask(event: ReactMouseEvent<HTMLElement>, key: string) {
 		event.preventDefault();
-		// The menu key reports no pointer, so the menu hangs under the tab.
-		const box = event.currentTarget.getBoundingClientRect();
-		const keyed = event.clientX === 0 && event.clientY === 0;
-		setAsked({
-			key,
-			at: keyed
-				? { x: box.left, y: box.bottom }
-				: { x: event.clientX, y: event.clientY },
-			open: true,
-		});
+		setAsked({ key, at: pointOf(event), open: true });
 	}
 
 	function nudge(by: number) {

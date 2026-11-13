@@ -6,7 +6,14 @@ import DocumentRow from "./DocumentRow";
 import FolderRow from "./FolderRow";
 import Grip from "./Grip";
 import Icon from "./Icon";
-import { useDismissal } from "./Menu";
+import {
+	MenuItem,
+	PointerMenu,
+	pointOf,
+	useDismissal,
+	useRightClick,
+	type Point,
+} from "./Menu";
 import { SIDEBAR } from "./panels";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
@@ -81,14 +88,15 @@ type Props = {
 	merging: boolean;
 	/** What the book menu over Compare or Merge could not do. */
 	trouble: { message: string } | null;
-	onSelect: (document: ProjectDocument) => void;
+	/** Opens a document, beside on the side the writer is not in. */
+	onSelect: (document: ProjectDocument, beside: boolean) => void;
 	/** Opens the page about a character or a place, for the rows that are one. */
 	onSubject: (document: ProjectDocument) => void;
 	onTry: (document: ProjectDocument) => Promise<void>;
-	onOpenFolder: (folder: FolderRef) => void;
-	onOpenTrash: () => void;
+	onOpenFolder: (folder: FolderRef, beside: boolean) => void;
+	onOpenTrash: (beside: boolean) => void;
 	/** Opens the page about the book the project adds up to. */
-	onOpenBook: () => void;
+	onOpenBook: (beside: boolean) => void;
 	onCreated: (document: ProjectDocument) => void;
 	/** The renamed document, and the title it answered to before. */
 	onRenamed: (document: ProjectDocument, was: string) => void;
@@ -156,6 +164,14 @@ export default function Sidebar({
 	onSwitch,
 	onMergeChanged,
 }: Props) {
+	const trash = useRightClick();
+	// The section heading right-clicked, and where. Kept after the menu shuts,
+	// so its items still have a section to open while they fade.
+	const [sectionAsked, setSectionAsked] = useState<{
+		folder: FolderRef;
+		at: Point;
+		open: boolean;
+	} | null>(null);
 	// Held here rather than passed in, so the element the grip moves is the
 	// one this component drew.
 	const panel = useRef<HTMLElement>(null);
@@ -377,7 +393,8 @@ export default function Sidebar({
 				reload={reload}
 				written={bookWritten}
 				merging={merging}
-				onOpenBook={onOpenBook}
+				onOpenBook={() => onOpenBook(false)}
+				onBookBeside={() => onOpenBook(true)}
 				onClose={onClose}
 				onChanged={onChanged}
 				onCompare={onCompare}
@@ -442,14 +459,19 @@ export default function Sidebar({
 													: undefined
 											}
 											onClick={() =>
-												onOpenFolder({
-													id: section.id,
-													name: section.name,
-													kind: section.kind,
-													section: section.name,
-													trail: [section.name],
-												})
+												onOpenFolder(
+													sectionRef(section),
+													false,
+												)
 											}
+											onContextMenu={(event) => {
+												event.preventDefault();
+												setSectionAsked({
+													folder: sectionRef(section),
+													at: pointOf(event),
+													open: true,
+												});
+											}}
 										>
 											{section.name}
 										</button>
@@ -499,15 +521,18 @@ export default function Sidebar({
 															renaming,
 															row.id,
 														)}
-														onOpen={() =>
-															onOpenFolder({
-																id: row.id,
-																name: row.name,
-																kind: row.folderKind,
-																section:
-																	section.name,
-																trail: row.trail,
-															})
+														onOpen={(beside) =>
+															onOpenFolder(
+																{
+																	id: row.id,
+																	name: row.name,
+																	kind: row.folderKind,
+																	section:
+																		section.name,
+																	trail: row.trail,
+																},
+																beside,
+															)
 														}
 														onNew={(making) =>
 															setNaming({
@@ -589,8 +614,11 @@ export default function Sidebar({
 													)}
 													drag={draggable(row)}
 													merging={merging}
-													onOpen={() =>
-														onSelect(row.document)
+													onOpen={(beside) =>
+														onSelect(
+															row.document,
+															beside,
+														)
 													}
 													onSubject={() =>
 														onSubject(row.document)
@@ -658,11 +686,69 @@ export default function Sidebar({
 					type="button"
 					className="sidebar__leave"
 					aria-current={selectedTrash ? "page" : undefined}
-					onClick={onOpenTrash}
+					onClick={() => onOpenTrash(false)}
+					onContextMenu={trash.open}
 				>
 					<Icon name="trash" />
 					Trash
 				</button>
+				<PointerMenu
+					at={sectionAsked?.open === true ? sectionAsked.at : null}
+					label="Section"
+					onClose={() =>
+						setSectionAsked((now) =>
+							now === null ? now : { ...now, open: false },
+						)
+					}
+				>
+					{(close) =>
+						sectionAsked !== null && (
+							<>
+								<MenuItem
+									onSelect={() => {
+										close();
+										onOpenFolder(
+											sectionAsked.folder,
+											false,
+										);
+									}}
+								>
+									Open
+								</MenuItem>
+								<MenuItem
+									onSelect={() => {
+										close();
+										onOpenFolder(sectionAsked.folder, true);
+									}}
+								>
+									Open beside
+								</MenuItem>
+							</>
+						)
+					}
+				</PointerMenu>
+				<PointerMenu at={trash.at} label="Trash" onClose={trash.close}>
+					{(close) => (
+						<>
+							<MenuItem
+								onSelect={() => {
+									close();
+									onOpenTrash(false);
+								}}
+							>
+								Open
+							</MenuItem>
+							<MenuItem
+								onSelect={() => {
+									close();
+									onOpenTrash(true);
+								}}
+							>
+								Open beside
+							</MenuItem>
+						</>
+					)}
+				</PointerMenu>
 			</div>
 
 			<Grip
@@ -675,4 +761,15 @@ export default function Sidebar({
 			/>
 		</nav>
 	);
+}
+
+/** A section as its overview opens: the top of its own trail. */
+function sectionRef(section: FolderNode): FolderRef {
+	return {
+		id: section.id,
+		name: section.name,
+		kind: section.kind,
+		section: section.name,
+		trail: [section.name],
+	};
 }

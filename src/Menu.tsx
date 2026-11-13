@@ -3,6 +3,7 @@
 // makes something new.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
 	CSSProperties,
 	MouseEvent as ReactMouseEvent,
@@ -44,9 +45,44 @@ type Props = {
 	/** Greys the trigger, with `title` saying why. */
 	disabled?: boolean;
 	title?: string;
+	/** A right-click on the trigger, for a menu that also opens at the pointer. */
+	onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void;
 	/** The items, given the way to close the menu behind them. */
 	children: (close: () => void) => ReactNode;
 };
+
+export type Point = { x: number; y: number };
+
+/** A menu asked for by right-click, and the ways to open and shut it. */
+export type RightClick = {
+	at: Point | null;
+	open: (event: ReactMouseEvent<HTMLElement>) => void;
+	close: () => void;
+};
+
+/**
+ * Where a right-click asked for a menu. The menu key reports no pointer, so
+ * its menu hangs under the element instead.
+ */
+export function pointOf(event: ReactMouseEvent<HTMLElement>): Point {
+	if (event.clientX === 0 && event.clientY === 0) {
+		const box = event.currentTarget.getBoundingClientRect();
+		return { x: box.left, y: box.bottom };
+	}
+	return { x: event.clientX, y: event.clientY };
+}
+
+export function useRightClick(): RightClick {
+	const [at, setAt] = useState<Point | null>(null);
+	return {
+		at,
+		open: (event) => {
+			event.preventDefault();
+			setAt(pointOf(event));
+		},
+		close: () => setAt(null),
+	};
+}
 
 /**
  * Closes something open on a click outside `within`, or on Escape. It watches
@@ -133,6 +169,7 @@ export default function Menu({
 	className,
 	disabled,
 	title,
+	onContextMenu,
 	children,
 }: Props) {
 	const [open, setOpen] = useState(false);
@@ -177,6 +214,7 @@ export default function Menu({
 					setInstant(event.detail === 0);
 					setOpen((was) => !was);
 				}}
+				onContextMenu={onContextMenu}
 			>
 				{trigger ??
 					(trailing === true ? (
@@ -220,7 +258,7 @@ export function PointerMenu({
 	children,
 }: {
 	/** Where it was asked for, in window coordinates, or null while shut. */
-	at: { x: number; y: number } | null;
+	at: Point | null;
 	label: string;
 	onClose: () => void;
 	children: (close: () => void) => ReactNode;
@@ -253,7 +291,10 @@ export function PointerMenu({
 		return null;
 	}
 
-	return (
+	// On the body, so no sliding or blurred ancestor becomes what `fixed` is
+	// measured against. React still bubbles its events to the row that asked,
+	// so a right-click inside goes no further.
+	return createPortal(
 		<div
 			ref={items}
 			className="menu__items menu__items--pointer"
@@ -261,9 +302,14 @@ export function PointerMenu({
 			aria-label={label}
 			data-closing={open ? undefined : ""}
 			inert={!open}
+			onContextMenu={(event) => {
+				event.preventDefault();
+				event.stopPropagation();
+			}}
 		>
 			{children(onClose)}
-		</div>
+		</div>,
+		document.body,
 	);
 }
 

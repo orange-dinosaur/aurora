@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCoverImage } from "./Cover";
 import Icon from "./Icon";
-import Menu, { MenuItem } from "./Menu";
+import Menu, { MenuItem, PointerMenu, useRightClick } from "./Menu";
 import VersionMenu from "./VersionMenu";
 import { MERGE_HOLDS } from "./branches";
 import { failure } from "./errors";
@@ -21,6 +21,11 @@ type BookProps = {
 	/** Whether a merge is waiting to be settled. */
 	merging: boolean;
 	onOpenBook: () => void;
+	/**
+	 * Opens Book details on the side the writer is not in. Given only in the
+	 * binder, where the cover also answers a right-click.
+	 */
+	onBookBeside?: () => void;
 	onClose: () => void;
 	/** The manifest was read again, so every listing of it should be too. */
 	onChanged: () => void;
@@ -161,10 +166,12 @@ export function BookMenu({
 	written,
 	merging,
 	onOpenBook,
+	onBookBeside,
 	onClose,
 	onChanged,
 	onMessage,
 }: BookProps) {
+	const pointer = useRightClick();
 	const [book, setBook] = useState<Book | null>(null);
 	const [busy, setBusy] = useState(false);
 	const { src } = useCoverImage(root, book?.cover ?? "", reload + written);
@@ -216,77 +223,103 @@ export function BookMenu({
 		}
 	}
 
-	return (
-		<Menu
-			label={`${title}: book menu`}
-			wrapper="binder__menu"
-			className="binder__book"
-			trigger={
-				<>
-					{/* A wash of the title stands behind an image too, so
-					    the cover is never blank while one loads. */}
-					<span
-						className="binder__cover"
-						style={{ background: coverFor(title) }}
-						aria-hidden="true"
-					>
-						{src !== "" && <img src={src} alt="" />}
-					</span>
-					<span className="binder__names">
-						<span className="binder__title">{title}</span>
-						{book !== null && book.author.trim() !== "" && (
-							<span className="binder__author">
-								{book.author}
-							</span>
-						)}
-					</span>
-				</>
-			}
-		>
-			{(close) => (
-				<>
+	const label = `${title}: book menu`;
+
+	function items(close: () => void) {
+		return (
+			<>
+				<MenuItem
+					disabled={merging}
+					title={merging ? MERGE_HOLDS : undefined}
+					onSelect={() => {
+						close();
+						onOpenBook();
+					}}
+				>
+					Book details
+				</MenuItem>
+				{onBookBeside !== undefined && (
 					<MenuItem
 						disabled={merging}
 						title={merging ? MERGE_HOLDS : undefined}
 						onSelect={() => {
 							close();
-							onOpenBook();
+							onBookBeside();
 						}}
 					>
-						Book details
+						Book details beside
 					</MenuItem>
-					<MenuItem
-						onSelect={() => {
-							close();
-							void reveal();
-						}}
-					>
-						Show in Files
-						<span className="binder__path" title={root}>
-							{root}
+				)}
+				<MenuItem
+					onSelect={() => {
+						close();
+						void reveal();
+					}}
+				>
+					Show in Files
+					<span className="binder__path" title={root}>
+						{root}
+					</span>
+				</MenuItem>
+				<MenuItem
+					disabled={merging || busy}
+					title={merging ? MERGE_HOLDS : undefined}
+					onSelect={() => {
+						close();
+						void refresh();
+					}}
+				>
+					{busy ? "Refreshing…" : "Refresh documents"}
+				</MenuItem>
+				<span className="menu__rule" />
+				<MenuItem
+					onSelect={() => {
+						close();
+						onClose();
+					}}
+				>
+					Close project
+				</MenuItem>
+			</>
+		);
+	}
+
+	return (
+		<>
+			<Menu
+				label={label}
+				wrapper="binder__menu"
+				className="binder__book"
+				onContextMenu={
+					onBookBeside === undefined ? undefined : pointer.open
+				}
+				trigger={
+					<>
+						{/* A wash of the title stands behind an image too, so
+						    the cover is never blank while one loads. */}
+						<span
+							className="binder__cover"
+							style={{ background: coverFor(title) }}
+							aria-hidden="true"
+						>
+							{src !== "" && <img src={src} alt="" />}
 						</span>
-					</MenuItem>
-					<MenuItem
-						disabled={merging || busy}
-						title={merging ? MERGE_HOLDS : undefined}
-						onSelect={() => {
-							close();
-							void refresh();
-						}}
-					>
-						{busy ? "Refreshing…" : "Refresh documents"}
-					</MenuItem>
-					<span className="menu__rule" />
-					<MenuItem
-						onSelect={() => {
-							close();
-							onClose();
-						}}
-					>
-						Close project
-					</MenuItem>
-				</>
-			)}
-		</Menu>
+						<span className="binder__names">
+							<span className="binder__title">{title}</span>
+							{book !== null && book.author.trim() !== "" && (
+								<span className="binder__author">
+									{book.author}
+								</span>
+							)}
+						</span>
+					</>
+				}
+			>
+				{items}
+			</Menu>
+			<PointerMenu at={pointer.at} label={label} onClose={pointer.close}>
+				{items}
+			</PointerMenu>
+		</>
 	);
 }

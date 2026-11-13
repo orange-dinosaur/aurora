@@ -4,6 +4,7 @@
 // draggable while it does.
 
 import FolderMenu from "./FolderMenu";
+import { useRightClick } from "./Menu";
 import { abbreviated } from "./cards";
 import Icon from "./Icon";
 import NameField from "./NameField";
@@ -26,7 +27,8 @@ type Props = {
 	renaming: Retitling | null;
 	drag: Draggable;
 	merging: boolean;
-	onOpen: () => void;
+	/** Opens its overview, beside on the side the writer is not in. */
+	onOpen: (beside: boolean) => void;
 	onNew: (making: Making) => void;
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
@@ -53,6 +55,8 @@ export default function FolderRow({
 	onRetitle,
 	onCancelRetitle,
 }: Props) {
+	const pointer = useRightClick();
+
 	if (renaming !== null) {
 		return (
 			<li className="documents__item" style={indent(row.depth)}>
@@ -80,6 +84,7 @@ export default function FolderRow({
 			}
 			style={indent(row.depth)}
 			{...drag}
+			onContextMenu={pointer.open}
 		>
 			{/* Over the row rather than inside it, for the reason the menus at
 			    the other end are: the row is itself a button. A folder holding
@@ -102,7 +107,7 @@ export default function FolderRow({
 				className="folder"
 				data-kind={row.folderKind ?? undefined}
 				aria-current={current ? "page" : undefined}
-				onClick={onOpen}
+				onClick={() => onOpen(false)}
 			>
 				<span className="folder__name">{row.name}</span>
 				{/* Left of the menus' slot rather than in it, so the two can
@@ -122,6 +127,7 @@ export default function FolderRow({
 				/>
 				<FolderMenu
 					label={`Actions for ${row.name}`}
+					pointer={pointer}
 					root={root}
 					moving={{
 						id: row.id,
@@ -130,6 +136,7 @@ export default function FolderRow({
 						from: row.group,
 					}}
 					onMove={onMove}
+					onBeside={() => onOpen(true)}
 					onRename={onRename}
 					onDelete={onDelete}
 					merging={merging}

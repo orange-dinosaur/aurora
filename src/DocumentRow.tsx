@@ -3,6 +3,7 @@
 // being retitled, and is not draggable while it does.
 
 import DocumentMenu from "./DocumentMenu";
+import { useRightClick } from "./Menu";
 import NameField from "./NameField";
 import { isSubject } from "./subjects";
 import { canTry } from "./takes";
@@ -22,7 +23,8 @@ type Props = {
 	renaming: Retitling | null;
 	drag: Draggable;
 	merging: boolean;
-	onOpen: () => void;
+	/** Opens it, beside on the side the writer is not in. */
+	onOpen: (beside: boolean) => void;
 	/** Opens the page about it, which only a subject has. */
 	onSubject: () => void;
 	onTry: () => void;
@@ -51,6 +53,7 @@ export default function DocumentRow({
 	onCancelRetitle,
 }: Props) {
 	const document = row.document;
+	const pointer = useRightClick();
 
 	if (renaming !== null) {
 		return (
@@ -79,12 +82,13 @@ export default function DocumentRow({
 			}
 			style={indent(row.depth)}
 			{...drag}
+			onContextMenu={pointer.open}
 		>
 			<button
 				type="button"
 				className="document"
 				aria-current={current ? "page" : undefined}
-				onClick={onOpen}
+				onClick={() => onOpen(false)}
 			>
 				<span className="document__title">{document.title}</span>
 				{/* Always in the row and faded when there is nothing to say, so
@@ -97,6 +101,7 @@ export default function DocumentRow({
 			</button>
 			<DocumentMenu
 				label={`Actions for ${document.title}`}
+				pointer={pointer}
 				root={root}
 				index={row.index}
 				count={row.siblings}
@@ -110,6 +115,7 @@ export default function DocumentRow({
 				onTry={canTry(document.trail) ? onTry : undefined}
 				merging={merging}
 				onMove={onMove}
+				onBeside={() => onOpen(true)}
 				onRename={onRename}
 				onDelete={onDelete}
 			/>

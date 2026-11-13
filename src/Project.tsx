@@ -178,6 +178,9 @@ type SubjectTab = {
 
 type Tab = DocumentTab | FolderTab | BookTab | TrashTab | TagTab | SubjectTab;
 
+/** Where an opened tab goes: the current side, across a split, or beside. */
+type Landing = "here" | "across" | "beside";
+
 /**
  * What is being offered after a document was renamed out from under the tags
  * pointing at it. `from` and `to` are the titles; `ids` are the documents
@@ -827,19 +830,26 @@ export default function Project({
 	}
 
 	// Puts a tab on the page. A link followed from inside a side goes `across`,
-	// to the other side of a split; without a split the two are the same.
-	function show(key: string, across: boolean) {
-		setOnPage((now) => (across ? follow(now, key) : activate(now, key)));
+	// to the other side of a split; without a split it lands `here`. Open
+	// beside makes the split if there is none.
+	function show(key: string, landing: Landing) {
+		setOnPage((now) =>
+			landing === "beside"
+				? openBeside(now, key)
+				: landing === "across"
+					? follow(now, key)
+					: activate(now, key),
+		);
 	}
 
 	async function openDocument(
 		document: ProjectDocument,
 		seed: Seed | null = null,
-		across = false,
+		landing: Landing = "here",
 	) {
 		const already = documentTab(document.id);
 		if (already !== undefined) {
-			show(already.key, across);
+			show(already.key, landing);
 			// The tab was already here, so the seed is the only news: the
 			// editor is mounted and Find answers it where it stands.
 			if (seed !== null) {
@@ -858,7 +868,7 @@ export default function Project({
 			takes: [],
 		};
 		setTabs((open) => [...open, opening]);
-		show(opening.key, across);
+		show(opening.key, landing);
 		await fill(document.id);
 	}
 
@@ -873,17 +883,20 @@ export default function Project({
 	}
 
 	// The writer sees the new take, so a document that was shut opens.
-	async function startTake(document: ProjectDocument, across = false) {
+	async function startTake(
+		document: ProjectDocument,
+		landing: Landing = "here",
+	) {
 		await putBack(() => trySomething(root, document.id));
-		await openDocument(document, null, across);
+		await openDocument(document, null, landing);
 	}
 
-	function openFolder(folder: FolderRef, across = false) {
+	function openFolder(folder: FolderRef, landing: Landing = "here") {
 		const already = tabs.find(
 			(tab) => tab.kind === "folder" && tab.folder.id === folder.id,
 		);
 		if (already !== undefined) {
-			show(already.key, across);
+			show(already.key, landing);
 			return;
 		}
 
@@ -893,31 +906,31 @@ export default function Project({
 			folder,
 		};
 		setTabs((open) => [...open, opening]);
-		show(opening.key, across);
+		show(opening.key, landing);
 	}
 
-	function openBook() {
+	function openBook(landing: Landing = "here") {
 		const already = tabs.find((tab) => tab.kind === "book");
 		if (already !== undefined) {
-			setActiveKey(already.key);
+			show(already.key, landing);
 			return;
 		}
 
 		const opening: BookTab = { kind: "book", key: freshKey() };
 		setTabs((open) => [...open, opening]);
-		setActiveKey(opening.key);
+		show(opening.key, landing);
 	}
 
-	function openTrash() {
+	function openTrash(landing: Landing = "here") {
 		const already = tabs.find((tab) => tab.kind === "trash");
 		if (already !== undefined) {
-			setActiveKey(already.key);
+			show(already.key, landing);
 			return;
 		}
 
 		const opening: TrashTab = { kind: "trash", key: freshKey() };
 		setTabs((open) => [...open, opening]);
-		setActiveKey(opening.key);
+		show(opening.key, landing);
 	}
 
 	/**
@@ -930,14 +943,14 @@ export default function Project({
 	 * The title is looked up as the chip is clicked rather than held anywhere,
 	 * so deleting Elena's document turns the link into a list on its own.
 	 */
-	async function openTag(tag: string, across = false) {
+	async function openTag(tag: string, landing: Landing = "here") {
 		try {
 			const tree = await invoke<TreeNode[]>("document_tree", { root });
 			const named = documentsOf(tree).find(
 				(document) => document.title === tag,
 			);
 			if (named !== undefined) {
-				await openDocument(named, null, across);
+				await openDocument(named, null, landing);
 				return;
 			}
 		} catch {
@@ -949,13 +962,13 @@ export default function Project({
 			(tab) => tab.kind === "tag" && tab.tag === tag,
 		);
 		if (already !== undefined) {
-			show(already.key, across);
+			show(already.key, landing);
 			return;
 		}
 
 		const opening: TagTab = { kind: "tag", key: freshKey(), tag };
 		setTabs((open) => [...open, opening]);
-		show(opening.key, across);
+		show(opening.key, landing);
 	}
 
 	/**
@@ -963,12 +976,12 @@ export default function Project({
 	 * rather than in place of the document: the page is a reading of the same
 	 * file, and the writer should be able to keep both.
 	 */
-	function openSubject(subject: ProjectDocument, across = false) {
+	function openSubject(subject: ProjectDocument, landing: Landing = "here") {
 		const already = tabs.find(
 			(tab) => tab.kind === "subject" && tab.subject.id === subject.id,
 		);
 		if (already !== undefined) {
-			show(already.key, across);
+			show(already.key, landing);
 			return;
 		}
 
@@ -978,7 +991,7 @@ export default function Project({
 			subject,
 		};
 		setTabs((open) => [...open, opening]);
-		show(opening.key, across);
+		show(opening.key, landing);
 	}
 
 	/**
@@ -1698,10 +1711,10 @@ export default function Project({
 						reload={listing}
 						merging={merge !== null}
 						onSelect={(document) =>
-							void openDocument(document, null, true)
+							void openDocument(document, null, "across")
 						}
-						onTry={(document) => startTake(document, true)}
-						onOpenFolder={(folder) => openFolder(folder, true)}
+						onTry={(document) => startTake(document, "across")}
+						onOpenFolder={(folder) => openFolder(folder, "across")}
 						onCreated={(document) => void created(document)}
 						onRenamed={renamed}
 						onFolderRenamed={renamedFolder}
@@ -1740,7 +1753,7 @@ export default function Project({
 						changed={listing + written}
 						live={live}
 						onOpen={(document) =>
-							void openDocument(document, null, true)
+							void openDocument(document, null, "across")
 						}
 					/>
 				);
@@ -1753,10 +1766,10 @@ export default function Project({
 						changed={listing + written}
 						live={live}
 						onOpen={(document, seed) =>
-							void openDocument(document, seed, true)
+							void openDocument(document, seed, "across")
 						}
 						onDraft={() =>
-							void openDocument(tab.subject, null, true)
+							void openDocument(tab.subject, null, "across")
 						}
 						onSubject={(document) => turnSubject(tab.key, document)}
 						onRemarks={(text, failed) =>
@@ -2061,12 +2074,24 @@ export default function Project({
 					onBeforeSwitch={writeAll}
 					onSwitch={putBack}
 					onMergeChanged={readMerge}
-					onSelect={(document) => void openDocument(document)}
-					onSubject={openSubject}
-					onTry={startTake}
-					onOpenFolder={openFolder}
-					onOpenTrash={openTrash}
-					onOpenBook={openBook}
+					onSelect={(document, beside) =>
+						void openDocument(
+							document,
+							null,
+							beside ? "beside" : "here",
+						)
+					}
+					onSubject={(document) => openSubject(document)}
+					onTry={(document) => startTake(document)}
+					onOpenFolder={(folder, beside) =>
+						openFolder(folder, beside ? "beside" : "here")
+					}
+					onOpenTrash={(beside) =>
+						openTrash(beside ? "beside" : "here")
+					}
+					onOpenBook={(beside) =>
+						openBook(beside ? "beside" : "here")
+					}
 					onCreated={(document) => void created(document)}
 					onRenamed={renamed}
 					onFolderRenamed={renamedFolder}
@@ -2245,7 +2270,7 @@ export default function Project({
 					// The panel speaks for the current side, so what it opens
 					// goes across, as a link inside that side would.
 					onOpen={(document, seed) =>
-						void openDocument(document, seed, true)
+						void openDocument(document, seed, "across")
 					}
 					asked={asked}
 					// Search is the way to a document, not a link from one, so a
@@ -2253,10 +2278,10 @@ export default function Project({
 					onFound={(document, seed) =>
 						void openDocument(document, seed)
 					}
-					onOpenTag={(tag) => void openTag(tag, true)}
+					onOpenTag={(tag) => void openTag(tag, "across")}
 					onSubject={() => {
 						if (active?.kind === "document") {
-							openSubject(active.document, true);
+							openSubject(active.document, "across");
 						}
 					}}
 					onClose={() =>

@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { MERGE_HOLDS } from "./branches";
-import Menu, { MenuItem } from "./Menu";
+import Menu, { MenuItem, PointerMenu, type RightClick } from "./Menu";
 import MoveTo from "./MoveTo";
 import type { Moving } from "./tree";
 
@@ -12,16 +12,34 @@ type Props = {
 	root: string;
 	moving: Moving;
 	onMove: (parentId: string, index: number) => void;
+	/** Given only in the binder, where the row also answers a right-click. */
+	onBeside?: () => void;
 	onRename: () => void;
 	onDelete: () => void;
 	merging: boolean;
 };
 
-export default function FolderMenu({ label, ...rest }: Props) {
+/** The ⋮ on the row, and the same items where the row was right-clicked. */
+export default function FolderMenu({
+	label,
+	pointer,
+	...rest
+}: Props & { pointer?: RightClick }) {
 	return (
-		<Menu label={label} icon="more-vertical">
-			{(close) => <Actions close={close} {...rest} />}
-		</Menu>
+		<>
+			<Menu label={label} icon="more-vertical">
+				{(close) => <Actions close={close} {...rest} />}
+			</Menu>
+			{pointer !== undefined && (
+				<PointerMenu
+					at={pointer.at}
+					label={label}
+					onClose={pointer.close}
+				>
+					{(close) => <Actions close={close} {...rest} />}
+				</PointerMenu>
+			)}
+		</>
 	);
 }
 
@@ -31,6 +49,7 @@ function Actions({
 	root,
 	moving,
 	onMove,
+	onBeside,
 	onRename,
 	onDelete,
 	merging,
@@ -54,6 +73,19 @@ function Actions({
 
 	return (
 		<>
+			{onBeside !== undefined && (
+				<>
+					<MenuItem
+						onSelect={() => {
+							close();
+							onBeside();
+						}}
+					>
+						Open beside
+					</MenuItem>
+					<span className="menu__rule" />
+				</>
+			)}
 			<MenuItem
 				disabled={merging}
 				title={why}
