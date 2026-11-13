@@ -2,7 +2,7 @@
 // such list needs. Two surfaces use it: the actions on a row, and the + that
 // makes something new.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
 	CSSProperties,
 	MouseEvent as ReactMouseEvent,
@@ -11,6 +11,7 @@ import type {
 } from "react";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
+import { inward } from "./lib/overflow";
 
 type Props = {
 	label: string;
@@ -203,6 +204,65 @@ export default function Menu({
 					{children(() => setOpen(false))}
 				</div>
 			)}
+		</div>
+	);
+}
+
+/**
+ * The same list of items, opened where the writer right-clicked rather than
+ * from a button of its own. It hangs from the pointer and turns back inward
+ * near the window's edges.
+ */
+export function PointerMenu({
+	at,
+	label,
+	onClose,
+	children,
+}: {
+	/** Where it was asked for, in window coordinates, or null while shut. */
+	at: { x: number; y: number } | null;
+	label: string;
+	onClose: () => void;
+	children: (close: () => void) => ReactNode;
+}) {
+	const open = at !== null;
+	const drawn = useLingering(open, MENU_FADE);
+	const items = useRef<HTMLDivElement>(null);
+
+	useDismissal(open, items, onClose);
+
+	// Measured before it is painted, so it never shows past the edge first.
+	// Closing leaves it where it was while it fades.
+	useLayoutEffect(() => {
+		const box = items.current;
+		if (at === null || box === null) {
+			return;
+		}
+
+		const spot = inward(
+			at,
+			{ width: box.offsetWidth, height: box.offsetHeight },
+			{ width: window.innerWidth, height: window.innerHeight },
+		);
+		box.style.left = `${spot.x}px`;
+		box.style.top = `${spot.y}px`;
+		box.querySelector<HTMLButtonElement>("button:enabled")?.focus();
+	}, [at]);
+
+	if (!drawn) {
+		return null;
+	}
+
+	return (
+		<div
+			ref={items}
+			className="menu__items menu__items--pointer"
+			role="menu"
+			aria-label={label}
+			data-closing={open ? undefined : ""}
+			inert={!open}
+		>
+			{children(onClose)}
 		</div>
 	);
 }

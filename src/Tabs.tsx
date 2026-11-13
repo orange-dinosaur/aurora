@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 import { outOfView } from "./lib/overflow";
+import { MenuItem, PointerMenu } from "./Menu";
 
 /**
  * One tab as the strip shows it. The key is what the strip hands back; only
@@ -39,6 +41,12 @@ type Props = {
 	folded: boolean;
 	onActivate: (key: string) => void;
 	onClose: (key: string) => void;
+	/** Puts the tab on the side the writer is not in. */
+	onBeside: (key: string) => void;
+	/** The two sides trade places. */
+	onSwap: () => void;
+	/** Ends the split, keeping the current side. */
+	onEndSplit: () => void;
 };
 
 export default function Tabs({
@@ -48,8 +56,19 @@ export default function Tabs({
 	folded,
 	onActivate,
 	onClose,
+	onBeside,
+	onSwap,
+	onEndSplit,
 }: Props) {
 	const row = useRef<HTMLUListElement>(null);
+	// The tab right-clicked, and where. Kept after the menu shuts, so its items
+	// still have a tab to name while they fade.
+	const [asked, setAsked] = useState<{
+		key: string;
+		at: { x: number; y: number };
+		open: boolean;
+	} | null>(null);
+	const split = besideKey !== null;
 	const active = useRef<HTMLLIElement>(null);
 	const [before, setBefore] = useState(false);
 	const [after, setAfter] = useState(false);
@@ -63,6 +82,20 @@ export default function Tabs({
 			setBefore(hidden.before);
 			setAfter(hidden.after);
 		}
+	}
+
+	function ask(event: ReactMouseEvent<HTMLElement>, key: string) {
+		event.preventDefault();
+		// The menu key reports no pointer, so the menu hangs under the tab.
+		const box = event.currentTarget.getBoundingClientRect();
+		const keyed = event.clientX === 0 && event.clientY === 0;
+		setAsked({
+			key,
+			at: keyed
+				? { x: box.left, y: box.bottom }
+				: { x: event.clientX, y: event.clientY },
+			open: true,
+		});
 	}
 
 	function nudge(by: number) {
@@ -140,6 +173,7 @@ export default function Tabs({
 										? "folded"
 										: ""
 							}
+							onContextMenu={(event) => ask(event, tab.key)}
 						>
 							{/* Laid over the pill's edge, so a tab does not change
 							    width the moment it is typed into. */}
@@ -190,6 +224,53 @@ export default function Tabs({
 					<Icon name="chevron-right" />
 				</button>
 			)}
+
+			<PointerMenu
+				at={asked?.open === true ? asked.at : null}
+				label="Tab"
+				onClose={() =>
+					setAsked((now) =>
+						now === null ? now : { ...now, open: false },
+					)
+				}
+			>
+				{(close) => {
+					if (asked === null) {
+						return null;
+					}
+					const { key } = asked;
+					const onSide =
+						split && (key === activeKey || key === besideKey);
+					function pick(action: () => void) {
+						close();
+						action();
+					}
+
+					return (
+						<>
+							{onSide ? (
+								<MenuItem onSelect={() => pick(onSwap)}>
+									Swap sides
+								</MenuItem>
+							) : (
+								<MenuItem
+									onSelect={() => pick(() => onBeside(key))}
+								>
+									Open beside
+								</MenuItem>
+							)}
+							{split && (
+								<MenuItem onSelect={() => pick(onEndSplit)}>
+									Close split
+								</MenuItem>
+							)}
+							<MenuItem onSelect={() => pick(() => onClose(key))}>
+								Close
+							</MenuItem>
+						</>
+					);
+				}}
+			</PointerMenu>
 		</div>
 	);
 }

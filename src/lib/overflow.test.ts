@@ -1,5 +1,33 @@
 import { describe, expect, test } from "vitest";
-import { outOfView } from "./overflow";
+import { inward, outOfView } from "./overflow";
+
+describe("inward", () => {
+	const room = { width: 1000, height: 800 };
+	const box = { width: 160, height: 100 };
+
+	test("hangs down and right of the point when there is room", () => {
+		expect(inward({ x: 300, y: 40 }, box, room)).toEqual({ x: 300, y: 40 });
+	});
+
+	test("flips left near the right edge", () => {
+		expect(inward({ x: 900, y: 40 }, box, room)).toEqual({ x: 740, y: 40 });
+	});
+
+	test("flips up near the bottom", () => {
+		expect(inward({ x: 300, y: 750 }, box, room)).toEqual({
+			x: 300,
+			y: 650,
+		});
+	});
+
+	test("is pinned to the edge when neither side has room", () => {
+		const narrow = { width: 200, height: 800 };
+		expect(inward({ x: 100, y: 40 }, box, narrow)).toEqual({
+			x: 40,
+			y: 40,
+		});
+	});
+});
 
 describe("outOfView", () => {
 	test("a row that fits hides nothing", () => {

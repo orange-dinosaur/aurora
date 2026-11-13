@@ -6302,6 +6302,17 @@ button.compare__pick:focus-visible {
 	min-width: 8rem;
 }
 
+/* Opened at the pointer: placed against the window rather than a trigger,
+   over everything but a dialog. */
+.menu__items.menu__items--pointer {
+	position: fixed;
+	top: 0;
+	right: auto;
+	left: 0;
+	z-index: 30;
+	transform-origin: top left;
+}
+
 /* A menu listing folders can run past the window, so it scrolls rather than
    growing off the bottom of a deep project. */
 .menu__items {

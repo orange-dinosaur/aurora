@@ -62,11 +62,13 @@ import {
 	follow,
 	layout,
 	noTrail,
+	openBeside,
 	press,
 	prune,
 	rekey,
 	remember,
 	single,
+	swap,
 	type Sides as OnPage,
 	type Trail,
 } from "./split";
@@ -1949,6 +1951,13 @@ export default function Project({
 							folded={shown.kind === "folded"}
 							onActivate={setActiveKey}
 							onClose={closeTab}
+							onBeside={(key) =>
+								setOnPage((now) => openBeside(now, key))
+							}
+							onSwap={() => setOnPage(swap)}
+							onEndSplit={() =>
+								setOnPage((now) => act(now, "end"))
+							}
 						/>
 					)
 				}
