@@ -6446,8 +6446,9 @@ button.compare__pick:focus-visible {
 	padding-inline: var(--gutter);
 }
 
-/* What Find and the dock float over. */
+/* What Find, the dock and the page tools float over. */
 .editor__view {
+	--tools-height: 32px;
 	position: relative;
 	flex: 1;
 	min-height: 0;
@@ -6483,12 +6484,12 @@ button.compare__pick:focus-visible {
 	}
 }
 
+/* The right padding keeps a long title or trail out from under the page tools
+   when the column fills the pane. */
 .editor__head {
 	flex: none;
 	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: var(--space-md);
+	padding-right: 7rem;
 	margin-bottom: var(--space-lg);
 }
 
@@ -6518,13 +6519,32 @@ button.compare__pick:focus-visible {
 	overflow-wrap: anywhere;
 }
 
-/* Stands a little above the caption, in the corner of the column. */
+/* Stays in the pane's corner while the title scrolls away. The frosting is on
+   a layer behind, because a backdrop filter here would stop Aa's own panel
+   from blurring what lies beyond these buttons. */
 .editor__tools {
-	flex: none;
+	position: absolute;
+	top: var(--space-xs);
+	right: var(--gutter);
+	z-index: 7;
 	display: flex;
 	align-items: center;
 	gap: 0.1rem;
-	margin-top: calc(var(--space-xs) * -1);
+	height: var(--tools-height);
+	padding: var(--space-xxs);
+}
+
+.editor__tools::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
 }
 
 .editor__toggle {
@@ -7256,7 +7276,7 @@ button.compare__pick:focus-visible {
    is going on, and the panel gives it back when it closes. */
 .editor__find {
 	position: absolute;
-	top: var(--space-xs);
+	top: calc(var(--space-xs) * 2 + var(--tools-height));
 	right: var(--gutter);
 	z-index: 6;
 	display: flex;

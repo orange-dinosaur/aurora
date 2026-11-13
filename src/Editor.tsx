@@ -364,6 +364,48 @@ export default function Editor({
 		>
 			<LexicalComposer initialConfig={config}>
 				<div className="editor__view">
+					{/* Outside the scroll, so Aa is in reach halfway down a
+					    scene. Ahead of the page so Tab meets it first. */}
+					<div className="editor__tools">
+						{/* The only way to the panel that does not need the
+						    caret to be in the text: Ctrl+F is the editor's own
+						    key, so it cannot answer when the focus is
+						    elsewhere. */}
+						<button
+							type="button"
+							className="editor__toggle"
+							aria-expanded={finding}
+							aria-label="Find in this document"
+							title={`Find (${shortcutLabel(FIND)})`}
+							aria-keyshortcuts={shortcutLabel(FIND)}
+							onClick={find}
+						>
+							<Icon name="search" />
+						</button>
+						{/* The one way back once the dock is gone, so it stays
+						    off the dock. */}
+						<button
+							type="button"
+							className="editor__toggle"
+							aria-expanded={preferences.toolbar}
+							aria-label="Formatting bar"
+							title={`Formatting bar (${shortcutLabel(TOOLBAR)})`}
+							aria-keyshortcuts={shortcutLabel(TOOLBAR)}
+							onClick={toggle}
+						>
+							<Icon
+								name={
+									preferences.toolbar
+										? "chevron-down"
+										: "chevron-right"
+								}
+							/>
+						</button>
+						<Typography
+							preferences={preferences}
+							onPreferences={onPreferences}
+						/>
+					</div>
 					<div
 						className="editor__scroll"
 						ref={scroller}
@@ -386,48 +428,6 @@ export default function Editor({
 										{trail.join(" · ")}
 									</p>
 									<h2 className="editor__title">{title}</h2>
-								</div>
-								<div className="editor__tools">
-									{/* The only way to the panel that does not
-									    need the caret to be in the text: Ctrl+F
-									    is the editor's own key, so it cannot
-									    answer when the focus is elsewhere. */}
-									<button
-										type="button"
-										className="editor__toggle"
-										aria-expanded={finding}
-										aria-label="Find in this document"
-										title={`Find (${shortcutLabel(FIND)})`}
-										aria-keyshortcuts={shortcutLabel(FIND)}
-										onClick={find}
-									>
-										<Icon name="search" />
-									</button>
-									{/* The one way back once the dock is gone,
-									    so it stays off the dock. */}
-									<button
-										type="button"
-										className="editor__toggle"
-										aria-expanded={preferences.toolbar}
-										aria-label="Formatting bar"
-										title={`Formatting bar (${shortcutLabel(TOOLBAR)})`}
-										aria-keyshortcuts={shortcutLabel(
-											TOOLBAR,
-										)}
-										onClick={toggle}
-									>
-										<Icon
-											name={
-												preferences.toolbar
-													? "chevron-down"
-													: "chevron-right"
-											}
-										/>
-									</button>
-									<Typography
-										preferences={preferences}
-										onPreferences={onPreferences}
-									/>
 								</div>
 							</div>
 							{takes.length > 0 && !preferences.focus && (
