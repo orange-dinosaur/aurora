@@ -15,7 +15,6 @@ import { useFolderFields, type FieldsHandle } from "./fields";
 import { flushAll, holdUnsaved } from "./flushing";
 import { list } from "./frontmatter";
 import type { About } from "./Mentions";
-import Search from "./Search";
 import FolderView from "./FolderView";
 import RightSidebar from "./RightSidebar";
 import Sidebar from "./Sidebar";
@@ -162,11 +161,6 @@ type TrashTab = {
 	key: string;
 };
 
-type SearchTab = {
-	kind: "search";
-	key: string;
-};
-
 type TagTab = {
 	kind: "tag";
 	key: string;
@@ -180,14 +174,7 @@ type SubjectTab = {
 	subject: ProjectDocument;
 };
 
-type Tab =
-	| DocumentTab
-	| FolderTab
-	| BookTab
-	| TrashTab
-	| SearchTab
-	| TagTab
-	| SubjectTab;
+type Tab = DocumentTab | FolderTab | BookTab | TrashTab | TagTab | SubjectTab;
 
 /**
  * What is being offered after a document was renamed out from under the tags
@@ -246,14 +233,6 @@ function strip(tab: Tab): TabView {
 				kind: "trash",
 				folder: null,
 				title: "Trash",
-				dirty: false,
-			};
-		case "search":
-			return {
-				key: tab.key,
-				kind: "search",
-				folder: null,
-				title: "Search",
 				dirty: false,
 			};
 		case "tag":
@@ -481,8 +460,8 @@ export default function Project({
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
-	// Bumped every time search is asked for, so asking again while its tab is
-	// already open reaches the field rather than doing nothing.
+	// Bumped every time search is asked for, so asking again while its panel
+	// is already open reaches the field rather than doing nothing.
 	const [asked, setAsked] = useState(0);
 	// Bumped whenever a document reaches disk, which is the other way the
 	// project changes under anything holding a copy of it.
@@ -727,13 +706,15 @@ export default function Project({
 		return () => window.clearInterval(beat);
 	}, [root, gap]);
 
-	// The tabs and the idle gap as they stand now. The handlers below are registered once and
-	// would otherwise go on seeing the tabs they were born with.
+	// The tabs, the idle gap and the preferences as they stand now. The handlers below are
+	// registered once and would otherwise go on seeing what they were born with.
 	const latest = useRef(tabs);
 	const idle = useRef(gap);
+	const held = useRef(preferences);
 	useEffect(() => {
 		latest.current = tabs;
 		idle.current = gap;
+		held.current = preferences;
 	});
 
 	function documentTab(id: string): DocumentTab | undefined {
@@ -1010,17 +991,14 @@ export default function Project({
 	}
 
 	// Reached from the window as well as from the titlebar, so it reads the
-	// tabs through the ref rather than closing over them.
+	// preferences through the ref rather than closing over them.
 	function openSearch() {
-		const already = latest.current.find((tab) => tab.kind === "search");
-		if (already === undefined) {
-			const opening: SearchTab = { kind: "search", key: freshKey() };
-			setTabs((open) => [...open, opening]);
-			setActiveKey(opening.key);
-		} else {
-			setActiveKey(already.key);
-		}
-		// Asking a second time is asking for the field, not for another tab.
+		onPreferences({
+			...held.current,
+			rightSidebar: true,
+			rightSidebarTab: "search",
+		});
+		// Asking a second time is asking for the field again.
 		setAsked((times) => times + 1);
 	}
 
@@ -1840,7 +1818,7 @@ export default function Project({
 	// else folds to its current side.
 	const halves = [onPage.current, onPage.other?.key ?? null].every((key) => {
 		const kind = tabs.find((tab) => tab.key === key)?.kind;
-		return kind === undefined || kind === "document" || kind === "search";
+		return kind === undefined || kind === "document";
 	});
 	// Unmeasured counts as roomy, so a restored split does not flash folded
 	// before the first measurement arrives.
@@ -2106,36 +2084,11 @@ export default function Project({
 						    takes its undo history, its selection and its
 						    scroll position with it. Hiding is by visibility
 						    rather than display, which would drop the layout
-						    box and with it the scroll position.
-
-						    Search is here for the same reason and not the
-						    same one: going to a hit and coming back is the
-						    whole point of it being a tab, and a Search
-						    unmounted on the way out would come back with an
-						    empty field. */}
+						    box and with it the scroll position. */}
 						{tabs.map((tab) =>
 							tab.kind === "document"
 								? pane(tab.key, documentBody(tab), true)
-								: tab.kind === "search"
-									? pane(
-											tab.key,
-											<Search
-												root={root}
-												asked={asked}
-												active={tab.key === activeKey}
-												changed={listing + written}
-												live={live}
-												onOpen={(document, seed) =>
-													void openDocument(
-														document,
-														seed,
-														true,
-													)
-												}
-											/>,
-											true,
-										)
-									: pane(tab.key, page(tab)),
+								: pane(tab.key, page(tab)),
 						)}
 
 						{pane(
@@ -2203,93 +2156,93 @@ export default function Project({
 					)}
 				</div>
 
-				{about !== null && (
-					<RightSidebar
-						open={preferences.rightSidebar}
-						fields={about === "document" ? fields : folderFields}
-						outline={about === "document" ? outline : null}
-						marks={about === "document" ? marks : null}
-						trouble={trouble ?? aiming}
-						about={panel}
-						root={root}
-						changed={listing + written}
-						live={live}
-						page={
-							active?.kind === "document" ? active.document : null
+				<RightSidebar
+					open={preferences.rightSidebar}
+					fields={about === "document" ? fields : folderFields}
+					outline={about === "document" ? outline : null}
+					marks={about === "document" ? marks : null}
+					trouble={trouble ?? aiming}
+					about={panel}
+					root={root}
+					changed={listing + written}
+					live={live}
+					page={active?.kind === "document" ? active.document : null}
+					text={
+						active?.kind === "document" &&
+						active.content.kind === "ready"
+							? active.content.text
+							: ""
+					}
+					folder={active?.kind === "folder" ? active.folder : null}
+					onTarget={(target) => {
+						if (active?.kind === "folder") {
+							void retargetFolder(active.folder.id, target);
+						} else if (active?.kind === "document") {
+							void retarget(active.document.id, target);
 						}
-						text={
-							active?.kind === "document" &&
-							active.content.kind === "ready"
-								? active.content.text
-								: ""
+					}}
+					merging={merge !== null}
+					sessions={sessions.current}
+					words={words.current}
+					width={preferences.rightSidebarWidth}
+					onWidth={(rightSidebarWidth) =>
+						onPreferences({
+							...preferences,
+							rightSidebarWidth,
+						})
+					}
+					logged={logged}
+					tab={preferences.rightSidebarTab}
+					onTab={(tab) =>
+						onPreferences({
+							...preferences,
+							rightSidebar: true,
+							rightSidebarTab: tab,
+						})
+					}
+					versionsScope={preferences.versionsScope}
+					onVersionsScope={(versionsScope) =>
+						onPreferences({ ...preferences, versionsScope })
+					}
+					enclosing={enclosingRepository}
+					merge={merge}
+					onMergeChanged={readMerge}
+					onSettle={setSettling}
+					onBeforeKeep={writeAll}
+					onCompare={(checkpoint, document) =>
+						void writeAll().then(() => {
+							setComparing({
+								checkpoint: checkpoint.id,
+								pick: document ?? null,
+								slug: null,
+							});
+						})
+					}
+					onPutBack={putBack}
+					// The panel speaks for the current side, so what it opens
+					// goes across, as a link inside that side would.
+					onOpen={(document, seed) =>
+						void openDocument(document, seed, true)
+					}
+					asked={asked}
+					// Search is the way to a document, not a link from one, so a
+					// hit takes the current side's place.
+					onFound={(document, seed) =>
+						void openDocument(document, seed)
+					}
+					onOpenTag={(tag) => void openTag(tag, true)}
+					onSubject={() => {
+						if (active?.kind === "document") {
+							openSubject(active.document, true);
 						}
-						folder={
-							active?.kind === "folder" ? active.folder : null
-						}
-						onTarget={(target) => {
-							if (active?.kind === "folder") {
-								void retargetFolder(active.folder.id, target);
-							} else if (active?.kind === "document") {
-								void retarget(active.document.id, target);
-							}
-						}}
-						merging={merge !== null}
-						sessions={sessions.current}
-						words={words.current}
-						width={preferences.rightSidebarWidth}
-						onWidth={(rightSidebarWidth) =>
-							onPreferences({
-								...preferences,
-								rightSidebarWidth,
-							})
-						}
-						logged={logged}
-						tab={preferences.rightSidebarTab}
-						onTab={(tab) =>
-							onPreferences({
-								...preferences,
-								rightSidebar: true,
-								rightSidebarTab: tab,
-							})
-						}
-						versionsScope={preferences.versionsScope}
-						onVersionsScope={(versionsScope) =>
-							onPreferences({ ...preferences, versionsScope })
-						}
-						enclosing={enclosingRepository}
-						merge={merge}
-						onMergeChanged={readMerge}
-						onSettle={setSettling}
-						onBeforeKeep={writeAll}
-						onCompare={(checkpoint, document) =>
-							void writeAll().then(() => {
-								setComparing({
-									checkpoint: checkpoint.id,
-									pick: document ?? null,
-									slug: null,
-								});
-							})
-						}
-						onPutBack={putBack}
-						// The panel speaks for the current side, so what it opens
-						// goes across, as a link inside that side would.
-						onOpen={(document, seed) =>
-							void openDocument(document, seed, true)
-						}
-						onOpenTag={(tag) => void openTag(tag, true)}
-						onSubject={() => {
-							if (active?.kind === "document") {
-								openSubject(active.document, true);
-							}
-						}}
-						onClose={() =>
-							onPreferences({
-								...preferences,
-								rightSidebar: false,
-							})
-						}
-					/>
-				)}
+					}}
+					onClose={() =>
+						onPreferences({
+							...preferences,
+							rightSidebar: false,
+						})
+					}
+				/>
 			</div>
 
 			{asking !== null && (

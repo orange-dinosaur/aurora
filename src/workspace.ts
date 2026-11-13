@@ -15,7 +15,6 @@ export type Reopened =
 	| { kind: "folder"; folder: FolderRef }
 	| { kind: "book" }
 	| { kind: "trash" }
-	| { kind: "search" }
 	| { kind: "tag"; tag: string }
 	| { kind: "subject"; subject: ProjectDocument };
 
@@ -161,6 +160,9 @@ function reopened(
 		}
 		case "tag":
 			return { kind: "tag", tag: tab.tag };
+		// Search lives in the panel now. A book left with it as a tab drops it.
+		case "search":
+			return null;
 		default:
 			return { kind: tab.kind };
 	}

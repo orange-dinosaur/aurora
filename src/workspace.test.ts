@@ -56,7 +56,6 @@ describe("reopen", () => {
 					{ kind: "folder", id: "id-Chapter 1" },
 					{ kind: "book" },
 					{ kind: "trash" },
-					{ kind: "search" },
 					{ kind: "tag", tag: "harbour" },
 					{ kind: "subject", id: "id-Characters/Elena.md" },
 				],
@@ -70,11 +69,20 @@ describe("reopen", () => {
 			"folder",
 			"book",
 			"trash",
-			"search",
 			"tag",
 			"subject",
 		]);
 		expect(active).toBe(1);
+	});
+
+	test("drops a Search tab left from before Search moved to the panel", () => {
+		const { tabs, active } = reopen(
+			saved([{ kind: "search" }, { kind: "book" }], 1),
+			tree,
+		);
+
+		expect(tabs.map((tab) => tab.kind)).toEqual(["book"]);
+		expect(active).toBe(0);
 	});
 
 	test("rebuilds a folder the way the sidebar opens it", () => {
@@ -148,7 +156,11 @@ describe("reopen", () => {
 	test("brings a split back with its current side", () => {
 		const back = reopen(
 			{
-				tabs: [{ kind: "book" }, { kind: "trash" }, { kind: "search" }],
+				tabs: [
+					{ kind: "book" },
+					{ kind: "trash" },
+					{ kind: "tag", tag: "harbour" },
+				],
 				active: 2,
 				beside: { tab: 0, left: true },
 			},

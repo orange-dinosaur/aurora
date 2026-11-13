@@ -252,7 +252,7 @@ export const FIND: Keys = { key: "f", shift: false };
 export const REPLACE: Keys = { key: "h", shift: false };
 
 /** Opens search across the whole project. Bound on the window rather than on
- * an editor, the way the keys above are: the Search tab has no editor to hold
+ * an editor, the way the keys above are: Search's panel has no editor to hold
  * it, and neither does the trash. */
 export const SEARCH: Keys = { key: "f", shift: true };
 

@@ -6,6 +6,7 @@ import Info from "./Info";
 import { useDismissal } from "./Menu";
 import { RIGHT_SIDEBAR } from "./panels";
 import Mentions, { type About } from "./Mentions";
+import Search from "./Search";
 import Stats from "./Stats";
 import Synopsis from "./Synopsis";
 import type { MarksHandle } from "./TakeStrip";
@@ -28,9 +29,11 @@ import type {
 // The rail on the far right and the one panel it opens, about whatever is open.
 // It serves a document and a folder overview alike, which is why it takes what
 // it shows rather than reading it: `Project` knows which of the two is in front
-// of the writer, and this only lays it out.
+// of the writer, and this only lays it out. Search is the exception: it is about
+// the whole project, so it is offered even when nothing is open.
 
 const TABS: { name: RightSidebarTab; label: string; icon: IconName }[] = [
+	{ name: "search", label: "Search", icon: "search" },
 	{ name: "synopsis", label: "Synopsis", icon: "card" },
 	{ name: "info", label: "Info", icon: "tag" },
 	{ name: "mentions", label: "Mentions", icon: "quote" },
@@ -100,6 +103,10 @@ type Props = {
 		target?: Overwrites,
 	) => Promise<void>;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
+	/** Counts the times search has been asked for, so a second ask can answer. */
+	asked: number;
+	/** Opens a search hit, which takes the current side's place. */
+	onFound: (document: ProjectDocument, seed: Seed | null) => void;
 	/** Where a tag chip goes, which only the project view can work out. */
 	onOpenTag: (tag: string) => void;
 	/** Opens the page about the open document, when it is a subject. */
@@ -139,10 +146,18 @@ export default function RightSidebar({
 	onCompare,
 	onPutBack,
 	onOpen,
+	asked,
+	onFound,
 	onOpenTag,
 	onSubject,
 	onClose,
 }: Props) {
+	// With nothing open, Search is the only panel with anything to say. One
+	// left open on another stays saved for when a document comes back.
+	const tiles =
+		about === null ? TABS.filter(({ name }) => name === "search") : TABS;
+	const showing = open && (about !== null || tab === "search");
+
 	// Held here rather than passed in, so the element the grip moves is the
 	// one this component drew.
 	const panel = useRef<HTMLElement>(null);
@@ -160,7 +175,7 @@ export default function RightSidebar({
 		query.addEventListener("change", changed);
 		return () => query.removeEventListener("change", changed);
 	}, []);
-	useDismissal(open && overlay, panel, onClose, rail);
+	useDismissal(showing && overlay, panel, onClose, rail);
 
 	// Only a tile clicked with the mouse fades the panel in. It also mounts on
 	// launch, on leaving focus mode and on arriving at a document.
@@ -168,7 +183,7 @@ export default function RightSidebar({
 
 	return (
 		<>
-			{open && (
+			{showing && (
 				<aside
 					ref={panel}
 					className="right-sidebar"
@@ -188,7 +203,19 @@ export default function RightSidebar({
 					</p>
 
 					<div className="right-sidebar__body">
-						{tab === "versions" ? (
+						{/* Mounted for as long as the panel is, so a query
+						    survives a look at Synopsis and back. */}
+						<div hidden={tab !== "search"}>
+							<Search
+								root={root}
+								asked={asked}
+								active={tab === "search"}
+								changed={changed}
+								live={live}
+								onOpen={onFound}
+							/>
+						</div>
+						{tab === "search" ? null : tab === "versions" ? (
 							<Versions
 								root={root}
 								page={page}
@@ -276,8 +303,8 @@ export default function RightSidebar({
 			)}
 
 			<div ref={rail} className="rail" role="group" aria-label="Panels">
-				{TABS.map(({ name, label, icon }) => {
-					const on = open && name === tab;
+				{tiles.map(({ name, label, icon }) => {
+					const on = showing && name === tab;
 
 					return (
 						<button
@@ -288,7 +315,7 @@ export default function RightSidebar({
 							aria-pressed={on}
 							title={label}
 							onClick={(event) => {
-								setFading(!open && event.detail !== 0);
+								setFading(!showing && event.detail !== 0);
 								if (on) {
 									onClose();
 								} else {

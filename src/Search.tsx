@@ -10,7 +10,7 @@ type Props = {
 	root: string;
 	/** Counts the times search has been asked for, so a second ask can answer. */
 	asked: number;
-	/** Whether this tab is the one on screen. */
+	/** Whether the panel is showing Search rather than another of its tabs. */
 	active: boolean;
 	/**
 	 * Counts the times the project has changed under what search read: a
@@ -109,7 +109,7 @@ export default function Search({
 
 	// Asking again puts the caret back in the field with the last query
 	// selected, so a second Ctrl+Shift+F types over what is there rather than
-	// leaving the writer to clear it. Coming back to the tab does the same.
+	// leaving the writer to clear it. Coming back to the panel does the same.
 	useEffect(() => {
 		if (active) {
 			field.current?.focus();
@@ -144,7 +144,7 @@ export default function Search({
 	}
 
 	return (
-		<section className="overview overview--sheet search--page">
+		<section className="search--page search--panel">
 			<label className="search__box">
 				<Icon name="search" />
 				<input

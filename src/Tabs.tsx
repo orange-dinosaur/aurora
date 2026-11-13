@@ -9,8 +9,7 @@ import { outOfView } from "./lib/overflow";
  */
 export type TabView = {
 	key: string;
-	kind:
-		"document" | "folder" | "book" | "trash" | "search" | "tag" | "subject";
+	kind: "document" | "folder" | "book" | "trash" | "tag" | "subject";
 	/** The section a document sits in. Nothing else has one. */
 	folder: string | null;
 	title: string;
@@ -24,7 +23,6 @@ const MARKS: Record<TabView["kind"], IconName | null> = {
 	folder: "folder",
 	book: "book",
 	trash: "trash",
-	search: "search",
 	tag: "tag",
 	subject: "user",
 };
