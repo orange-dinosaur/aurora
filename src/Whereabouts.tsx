@@ -15,6 +15,8 @@ type Props = {
 	/** Where the document was left, put back once when the editor mounts. */
 	place: Place | null;
 	active: boolean;
+	/** Bumped when the writer moves to this side by keyboard. */
+	summoned: number;
 	scroller: RefObject<HTMLDivElement | null>;
 	onCaret: (caret: Caret | null) => void;
 };
@@ -24,6 +26,7 @@ type Props = {
 export default function Whereabouts({
 	place,
 	active,
+	summoned,
 	scroller,
 	onCaret,
 }: Props) {
@@ -58,6 +61,14 @@ export default function Whereabouts({
 			onCaret(editorState.read($caret)),
 		);
 	}, [editor, scroller, onCaret]);
+
+	// Lexical's own focus, which puts back the caret this editor last had
+	// rather than one at the start of the text.
+	useEffect(() => {
+		if (summoned > 0 && active) {
+			editor.focus();
+		}
+	}, [editor, summoned]);
 
 	return null;
 }

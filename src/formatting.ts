@@ -39,6 +39,12 @@ import {
 	type RangeSelection,
 	type TextFormatType,
 } from "lexical";
+import {
+	CHORD,
+	CHORD_KEY,
+	TOGGLE_KEY,
+	type Action as SplitAction,
+} from "./split";
 
 // The command key — ⌘ on a Mac, Ctrl everywhere else — is always part of a
 // shortcut, so only what is held with it is worth recording.
@@ -282,8 +288,34 @@ export function shortcutLabel(keys: Keys): string {
 	return `${COMMAND_KEY}${keys.shift ? SHIFT_KEY : ""}${keys.key.toUpperCase()}`;
 }
 
+/**
+ * The split's keys, held with literal Control on every platform, the Mac
+ * included. `then` is a chord's second key, pressed after letting go.
+ */
+export type ControlKeys = { control: string; then: string | null };
+
+const CONTROL_KEY = IS_APPLE ? "Control+" : "Ctrl+";
+
+/** Any binding written out, the split's included. */
+export function written(keys: Keys | ControlKeys): string {
+	if (!("control" in keys)) {
+		return shortcutLabel(keys);
+	}
+	const first = `${CONTROL_KEY}${keys.control.toUpperCase()}`;
+	return keys.then === null ? first : `${first} ${keys.then.toUpperCase()}`;
+}
+
 /** One binding as something to read rather than something to dispatch on. */
-export type Shortcut = { label: string; keys: Keys };
+export type Shortcut = { label: string; keys: Keys | ControlKeys };
+
+const SPLIT_LABELS: Record<SplitAction, string> = {
+	toggle: "Split the page or end the split",
+	left: "Go to the left side",
+	right: "Go to the right side",
+	other: "Go to the other side",
+	split: "Split the page",
+	end: "End the split",
+};
 
 /** A run of them under the heading a writer would look for them beneath. */
 export type ShortcutGroup = { heading: string; rows: Shortcut[] };
@@ -293,9 +325,9 @@ function named({ label, keys }: Action): Shortcut {
 }
 
 /**
- * Every binding Aurora makes, grouped for reading. The last two groups are
- * built from the lists the editor answers key presses from, so a key that
- * moves there moves here with it; the first names the eight constants above,
+ * Every binding Aurora makes, grouped for reading. The groups after the first
+ * are built from the lists the split and the editor answer key presses from,
+ * so a key that moves there moves here with it; the first names the eight constants above,
  * which have no labels of their own. A new binding has to be added here by
  * hand, and `formatting.test.ts` is what notices when one is not.
  */
@@ -311,6 +343,19 @@ export const KEYBOARD: ShortcutGroup[] = [
 			{ label: "Formatting bar", keys: TOOLBAR },
 			{ label: "Start or stop a session", keys: SESSION },
 			{ label: "Fold or unfold every section", keys: FOLD },
+		],
+	},
+	{
+		heading: "Side by side",
+		rows: [
+			{
+				label: SPLIT_LABELS.toggle,
+				keys: { control: TOGGLE_KEY, then: null },
+			},
+			...Object.entries(CHORD).map(([then, action]) => ({
+				label: SPLIT_LABELS[action],
+				keys: { control: CHORD_KEY, then },
+			})),
 		],
 	},
 	{ heading: "Marks", rows: MARKS.map(named) },

@@ -141,6 +141,8 @@ type Props = {
 	text: string;
 	/** Whether this is the tab being looked at, and so the one that reports. */
 	active: boolean;
+	/** Bumped when a split key brings this side to the front by keyboard. */
+	summoned: number;
 	dirty: boolean;
 	saving: boolean;
 	missing: boolean;
@@ -176,6 +178,7 @@ export default function Editor({
 	trail,
 	text,
 	active,
+	summoned,
 	dirty,
 	saving,
 	missing,
@@ -512,6 +515,7 @@ export default function Editor({
 								<Whereabouts
 									place={place}
 									active={active}
+									summoned={summoned}
 									scroller={scroller}
 									onCaret={onCaret}
 								/>

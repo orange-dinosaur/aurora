@@ -7,7 +7,7 @@ import Account from "./Account";
 import Icon from "./Icon";
 import { UNITS } from "./Session";
 import { bounded } from "./lib/settings";
-import { KEYBOARD, shortcutLabel } from "./formatting";
+import { KEYBOARD, written } from "./formatting";
 import { face, FACES, nudged, SETTINGS, type Setting } from "./lib/typography";
 import type { Preferences, Theme } from "./types";
 
@@ -579,7 +579,7 @@ function Shortcuts() {
 						<Fragment key={row.label}>
 							<span>{row.label}</span>
 							<span className="settings__chord">
-								{shortcutLabel(row.keys)}
+								{written(row.keys)}
 							</span>
 						</Fragment>
 					))}

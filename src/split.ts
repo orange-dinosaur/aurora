@@ -263,7 +263,13 @@ export type Press = {
 	shiftKey: boolean;
 };
 
-const CHORD: Record<string, Action> = {
+/** Control with this toggles the split. */
+export const TOGGLE_KEY = "\\";
+/** Control with this starts the chord. */
+export const CHORD_KEY = "w";
+
+/** The chord's second key, and what it does. */
+export const CHORD: Record<string, Action> = {
 	h: "left",
 	l: "right",
 	w: "other",
@@ -295,10 +301,10 @@ export function press(
 			? { waiting: false, action: null, swallow: false }
 			: { waiting: false, action, swallow: true };
 	}
-	if (control && event.key === "\\") {
+	if (control && event.key === TOGGLE_KEY) {
 		return { waiting: false, action: "toggle", swallow: true };
 	}
-	if (control && event.key === "w") {
+	if (control && event.key === CHORD_KEY) {
 		return { waiting: true, action: null, swallow: true };
 	}
 	return { waiting: false, action: null, swallow: false };

@@ -54,6 +54,7 @@ import type { FolderRef } from "./tree";
 import { documentsOf, firstScene, folderOf, rows } from "./tree";
 import type { Workspace } from "./bindings/Workspace";
 import {
+	act,
 	activate,
 	closeBack,
 	fits,
@@ -66,7 +67,6 @@ import {
 	rekey,
 	remember,
 	single,
-	toggle,
 	type Sides as OnPage,
 	type Trail,
 } from "./split";
@@ -407,24 +407,37 @@ export default function Project({
 		onPreferences({ ...preferences, splitShare });
 	}
 
-	// On the window, ahead of the editor, so the key works whatever is
+	// Bumped when a split key moves the current side, so the editor now in
+	// front takes the caret and typing follows the accent line.
+	const [summoned, setSummoned] = useState(0);
+	const sidesNow = useRef(onPage);
+	useEffect(() => {
+		sidesNow.current = onPage;
+	});
+
+	// On the window, ahead of the editor, so the keys work whatever is
 	// focused, a folder overview or Search as much as a document.
 	useEffect(() => {
+		let waiting = false;
 		function onKey(event: KeyboardEvent) {
-			if (press(false, event).action !== "toggle") {
+			const split = press(waiting, event);
+			waiting = split.waiting;
+			if (!split.swallow) {
 				return;
 			}
 			event.preventDefault();
 			event.stopPropagation();
-			setOnPage((now) => {
-				const after = toggle(now);
-				// The new side is empty and current, so typing must not go on
-				// landing in the side just left.
-				if (after.current === null && now.current !== null) {
-					(document.activeElement as HTMLElement | null)?.blur();
-				}
-				return after;
-			});
+			if (split.action === null) {
+				return;
+			}
+			const now = sidesNow.current;
+			const after = act(now, split.action);
+			setOnPage(after);
+			// Typing must not go on landing in the side just left.
+			if (after.current !== now.current) {
+				(document.activeElement as HTMLElement | null)?.blur();
+				setSummoned((times) => times + 1);
+			}
 		}
 		window.addEventListener("keydown", onKey, true);
 		return () => window.removeEventListener("keydown", onKey, true);
@@ -1614,6 +1627,7 @@ export default function Project({
 					trail={tab.document.trail}
 					text={tab.content.text}
 					active={tab.key === activeKey}
+					summoned={summoned}
 					dirty={tab.save.kind !== "clean"}
 					saving={tab.save.kind === "saving"}
 					missing={tab.save.kind === "missing"}

@@ -30,6 +30,7 @@ import {
 	setLink,
 	shortcutLabel,
 	TOOLBAR,
+	written,
 	type Action,
 	type Keys,
 } from "./formatting";
@@ -469,9 +470,9 @@ describe("the keyboard the settings dialog lists", () => {
 		for (const action of ACTIONS) {
 			expect(listed).toContain(action.label);
 		}
-		// The actions, and the eight bindings that do something to the app
-		// rather than to the text. Nothing else is bound.
-		expect(rows).toHaveLength(ACTIONS.length + 8);
+		// The actions, the eight bindings that do something to the app rather
+		// than to the text, and the split's six. Nothing else is bound.
+		expect(rows).toHaveLength(ACTIONS.length + 8 + 6);
 	});
 
 	test("an action is listed under the keys it is bound to", () => {
@@ -482,7 +483,7 @@ describe("the keyboard the settings dialog lists", () => {
 	});
 
 	test("the bindings that are not actions are all there", () => {
-		const chords = rows.map((row) => shortcutLabel(row.keys));
+		const chords = rows.map((row) => written(row.keys));
 		for (const keys of [
 			SETTINGS,
 			SEARCH,
@@ -499,7 +500,21 @@ describe("the keyboard the settings dialog lists", () => {
 	// The list is also the only place every binding is side by side, which
 	// makes it the only place a clash between two of them would show.
 	test("no two bindings claim the same keys", () => {
-		const chords = rows.map((row) => shortcutLabel(row.keys));
+		const chords = rows.map((row) => written(row.keys));
 		expect(new Set(chords).size).toBe(chords.length);
+	});
+
+	test("the split's keys are written as literal Control, then the second key", () => {
+		const chords = rows.map((row) => written(row.keys));
+		for (const chord of [
+			"Ctrl+\\",
+			"Ctrl+W H",
+			"Ctrl+W L",
+			"Ctrl+W W",
+			"Ctrl+W V",
+			"Ctrl+W Q",
+		]) {
+			expect(chords).toContain(chord);
+		}
 	});
 });
