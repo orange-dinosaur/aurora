@@ -353,10 +353,19 @@ export default function Project({
 				setTabs((open) => [...opening, ...open]);
 				if (back.active !== null) {
 					const front = opening[back.active].key;
+					const beside = back.beside;
 					setOnPage((now) =>
-						now.current === null && now.other === null
-							? single(front)
-							: now,
+						now.current !== null || now.other !== null
+							? now
+							: beside === null
+								? single(front)
+								: {
+										current: front,
+										other: {
+											key: opening[beside.tab].key,
+											left: beside.left,
+										},
+									},
 					);
 				}
 				for (const tab of opening) {
@@ -407,13 +416,16 @@ export default function Project({
 	// Written whenever the strip changes shape, not on every keystroke that
 	// passes through the tabs. Carets and scrolls ride along with whatever
 	// they were last, and on the way out.
-	const shape = JSON.stringify(remembered(tabs, activeKey));
+	const shape = JSON.stringify(
+		remembered(tabs, activeKey, new Map(), onPage.other),
+	);
 	const leftWith = useRef<(() => Workspace) | null>(null);
 	useEffect(() => {
 		if (!pickedUp) {
 			return;
 		}
-		leftWith.current = () => remembered(tabs, activeKey, places.current);
+		leftWith.current = () =>
+			remembered(tabs, activeKey, places.current, onPage.other);
 		void keepWorkspace();
 	}, [pickedUp, shape]);
 
