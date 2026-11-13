@@ -1867,16 +1867,10 @@ export default function Project({
 	const focused =
 		preferences.focus && active?.kind === "document" && !covered;
 
-	// Only these read well at half the page so far. A split holding anything
-	// else folds to its current side.
-	const halves = [onPage.current, onPage.other?.key ?? null].every((key) => {
-		const kind = tabs.find((tab) => tab.key === key)?.kind;
-		return kind === undefined || kind === "document";
-	});
 	// Unmeasured counts as roomy, so a restored split does not flash folded
 	// before the first measurement arrives.
 	const roomy = room === 0 || fits(room, SIDE_MIN);
-	const shown = layout(onPage, halves && !focused && roomy);
+	const shown = layout(onPage, !focused && roomy);
 	const split = standing(preferences.splitShare, room);
 
 	// Where a tab dragged over the page would land: a side of a split, or an
