@@ -156,10 +156,12 @@ pub enum ManuscriptFont {
 	System,
 }
 
-/// The four things the right sidebar can be showing.
+/// The things the panel beside the page can be showing.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub enum RightSidebarTab {
+	/// Project-wide search, which used to be a tab of its own.
+	Search,
 	#[default]
 	Synopsis,
 	Info,
@@ -245,6 +247,8 @@ pub enum SavedTab {
 	},
 	Book,
 	Trash,
+	/// Search is a panel now. Still read, so tabs left before the move are
+	/// not lost with it; the window drops this one when the project reopens.
 	Search,
 	Tag {
 		tag: String,
@@ -1028,6 +1032,33 @@ mod tests {
 			active: Some(5),
 			beside: Some(Beside { tab: 0, left: true }),
 		}
+	}
+
+	#[test]
+	fn the_search_panel_is_remembered() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(
+			&path,
+			r#"{
+				"version": 10,
+				"recent": [],
+				"preferences": {
+					"toolbar": true,
+					"focus": false,
+					"rightSidebarTab": "search",
+					"measure": 68,
+					"fontSize": 16,
+					"lineHeight": 1.7
+				}
+			}"#,
+		)
+		.unwrap();
+
+		assert_eq!(
+			load(&path).unwrap().preferences.right_sidebar_tab,
+			RightSidebarTab::Search
+		);
 	}
 
 	#[test]
