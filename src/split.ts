@@ -143,6 +143,78 @@ export function prune(sides: Sides, open: (key: string) => boolean): Sides {
 	return kept;
 }
 
+/**
+ * The tabs each side of a split has shown before the one it shows now, most
+ * recent first. A null is the side standing empty. Kept only while the split
+ * lasts and only while Aurora runs.
+ */
+export type Trail = { left: (string | null)[]; right: (string | null)[] };
+
+export const noTrail: Trail = { left: [], right: [] };
+
+/** Which tab is on which side, or null without a split. */
+function positions(
+	sides: Sides,
+): { left: string | null; right: string | null } | null {
+	const { current, other } = sides;
+	if (other === null) {
+		return null;
+	}
+	return other.left
+		? { left: other.key, right: current }
+		: { left: current, right: other.key };
+}
+
+/** Adds to the trail whatever a side stopped showing between two states. */
+export function remember(trail: Trail, before: Sides, after: Sides): Trail {
+	const was = positions(before);
+	const now = positions(after);
+	if (was === null || now === null) {
+		return noTrail;
+	}
+	const push = (list: (string | null)[], key: string | null) => [
+		key,
+		...list.filter((earlier) => earlier !== key),
+	];
+	return {
+		left: was.left === now.left ? trail.left : push(trail.left, was.left),
+		right:
+			was.right === now.right
+				? trail.right
+				: push(trail.right, was.right),
+	};
+}
+
+/**
+ * Closing a tab on a side brings back what that side showed before, if it is
+ * still open and not on the other side. With nothing to go back to, the split
+ * ends as `close` ends it.
+ */
+export function closeBack(
+	sides: Sides,
+	key: string,
+	trail: Trail,
+	open: (key: string) => boolean,
+): Sides {
+	const at = positions(sides);
+	const side = at?.left === key ? "left" : at?.right === key ? "right" : null;
+	if (at === null || side === null || sides.other === null) {
+		return close(sides, key);
+	}
+	const across = side === "left" ? at.right : at.left;
+	const back = trail[side].find((earlier) =>
+		earlier === null
+			? across !== null
+			: earlier !== key && earlier !== across && open(earlier),
+	);
+	if (back === undefined) {
+		return close(sides, key);
+	}
+	return sides.other.left === (side === "left")
+		? { ...sides, other: { ...sides.other, key: back } }
+		: { ...sides, current: back };
+}
+
 export function act(sides: Sides, action: Action): Sides {
 	switch (action) {
 		case "toggle":

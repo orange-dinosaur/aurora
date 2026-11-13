@@ -56,16 +56,20 @@ import { documentsOf, firstScene, folderOf, rows } from "./tree";
 import type { Workspace } from "./bindings/Workspace";
 import {
 	activate,
-	close,
+	closeBack,
 	fits,
 	focus,
+	follow,
 	layout,
+	noTrail,
 	press,
 	prune,
 	rekey,
+	remember,
 	single,
 	toggle,
 	type Sides as OnPage,
+	type Trail,
 } from "./split";
 import { remembered, reopen, type Place } from "./workspace";
 import { deleteDocument, deleteFolder } from "./documents";
@@ -393,6 +397,14 @@ export default function Project({
 	function setActiveKey(key: string) {
 		setOnPage((now) => activate(now, key));
 	}
+
+	// What each side showed before, so closing a side's tab can go back to it.
+	const trail = useRef<Trail>(noTrail);
+	const shownBefore = useRef(onPage);
+	useEffect(() => {
+		trail.current = remember(trail.current, shownBefore.current, onPage);
+		shownBefore.current = onPage;
+	}, [onPage.current, onPage.other?.key, onPage.other?.left]);
 
 	// The width the sides share, which the divider is dragged across.
 	const panes = useRef<HTMLDivElement>(null);
@@ -818,13 +830,20 @@ export default function Project({
 		);
 	}
 
+	// Puts a tab on the page. A link followed from inside a side goes `across`,
+	// to the other side of a split; without a split the two are the same.
+	function show(key: string, across: boolean) {
+		setOnPage((now) => (across ? follow(now, key) : activate(now, key)));
+	}
+
 	async function openDocument(
 		document: ProjectDocument,
 		seed: Seed | null = null,
+		across = false,
 	) {
 		const already = documentTab(document.id);
 		if (already !== undefined) {
-			setActiveKey(already.key);
+			show(already.key, across);
 			// The tab was already here, so the seed is the only news: the
 			// editor is mounted and Find answers it where it stands.
 			if (seed !== null) {
@@ -843,7 +862,7 @@ export default function Project({
 			takes: [],
 		};
 		setTabs((open) => [...open, opening]);
-		setActiveKey(opening.key);
+		show(opening.key, across);
 		await fill(document.id);
 	}
 
@@ -858,17 +877,17 @@ export default function Project({
 	}
 
 	// The writer sees the new take, so a document that was shut opens.
-	async function startTake(document: ProjectDocument) {
+	async function startTake(document: ProjectDocument, across = false) {
 		await putBack(() => trySomething(root, document.id));
-		await openDocument(document);
+		await openDocument(document, null, across);
 	}
 
-	function openFolder(folder: FolderRef) {
+	function openFolder(folder: FolderRef, across = false) {
 		const already = tabs.find(
 			(tab) => tab.kind === "folder" && tab.folder.id === folder.id,
 		);
 		if (already !== undefined) {
-			setActiveKey(already.key);
+			show(already.key, across);
 			return;
 		}
 
@@ -878,7 +897,7 @@ export default function Project({
 			folder,
 		};
 		setTabs((open) => [...open, opening]);
-		setActiveKey(opening.key);
+		show(opening.key, across);
 	}
 
 	function openBook() {
@@ -915,14 +934,14 @@ export default function Project({
 	 * The title is looked up as the chip is clicked rather than held anywhere,
 	 * so deleting Elena's document turns the link into a list on its own.
 	 */
-	async function openTag(tag: string) {
+	async function openTag(tag: string, across = false) {
 		try {
 			const tree = await invoke<TreeNode[]>("document_tree", { root });
 			const named = documentsOf(tree).find(
 				(document) => document.title === tag,
 			);
 			if (named !== undefined) {
-				await openDocument(named);
+				await openDocument(named, null, across);
 				return;
 			}
 		} catch {
@@ -934,13 +953,13 @@ export default function Project({
 			(tab) => tab.kind === "tag" && tab.tag === tag,
 		);
 		if (already !== undefined) {
-			setActiveKey(already.key);
+			show(already.key, across);
 			return;
 		}
 
 		const opening: TagTab = { kind: "tag", key: freshKey(), tag };
 		setTabs((open) => [...open, opening]);
-		setActiveKey(opening.key);
+		show(opening.key, across);
 	}
 
 	/**
@@ -948,12 +967,12 @@ export default function Project({
 	 * rather than in place of the document: the page is a reading of the same
 	 * file, and the writer should be able to keep both.
 	 */
-	function openSubject(subject: ProjectDocument) {
+	function openSubject(subject: ProjectDocument, across = false) {
 		const already = tabs.find(
 			(tab) => tab.kind === "subject" && tab.subject.id === subject.id,
 		);
 		if (already !== undefined) {
-			setActiveKey(already.key);
+			show(already.key, across);
 			return;
 		}
 
@@ -963,7 +982,7 @@ export default function Project({
 			subject,
 		};
 		setTabs((open) => [...open, opening]);
-		setActiveKey(opening.key);
+		show(opening.key, across);
 	}
 
 	/**
@@ -1486,8 +1505,11 @@ export default function Project({
 		const remaining = open.filter((tab) => tab.key !== key);
 		setTabs(remaining);
 		setOnPage((now) => {
-			// In a split, the other side fills the page.
-			const after = close(now, key);
+			// In a split, the side goes back to what it showed before, or the
+			// other side fills the page.
+			const after = closeBack(now, key, trail.current, (open) =>
+				remaining.some((tab) => tab.key === open),
+			);
 			const showing =
 				after.other !== null ||
 				(after.current !== null && after.current !== key);
@@ -1681,9 +1703,11 @@ export default function Project({
 						folder={tab.folder}
 						reload={listing}
 						merging={merge !== null}
-						onSelect={(document) => void openDocument(document)}
-						onTry={startTake}
-						onOpenFolder={openFolder}
+						onSelect={(document) =>
+							void openDocument(document, null, true)
+						}
+						onTry={(document) => startTake(document, true)}
+						onOpenFolder={(folder) => openFolder(folder, true)}
 						onCreated={(document) => void created(document)}
 						onRenamed={renamed}
 						onFolderRenamed={renamedFolder}
@@ -1721,7 +1745,9 @@ export default function Project({
 						tag={tab.tag}
 						changed={listing + written}
 						live={live}
-						onOpen={(document) => void openDocument(document)}
+						onOpen={(document) =>
+							void openDocument(document, null, true)
+						}
 					/>
 				);
 			case "subject":
@@ -1733,9 +1759,11 @@ export default function Project({
 						changed={listing + written}
 						live={live}
 						onOpen={(document, seed) =>
-							void openDocument(document, seed)
+							void openDocument(document, seed, true)
 						}
-						onDraft={() => void openDocument(tab.subject)}
+						onDraft={() =>
+							void openDocument(tab.subject, null, true)
+						}
 						onSubject={(document) => turnSubject(tab.key, document)}
 						onRemarks={(text, failed) =>
 							remark(tab.subject.id, text, failed)
@@ -2101,6 +2129,7 @@ export default function Project({
 													void openDocument(
 														document,
 														seed,
+														true,
 													)
 												}
 											/>,
@@ -2242,13 +2271,15 @@ export default function Project({
 							})
 						}
 						onPutBack={putBack}
+						// The panel speaks for the current side, so what it opens
+						// goes across, as a link inside that side would.
 						onOpen={(document, seed) =>
-							void openDocument(document, seed)
+							void openDocument(document, seed, true)
 						}
-						onOpenTag={(tag) => void openTag(tag)}
+						onOpenTag={(tag) => void openTag(tag, true)}
 						onSubject={() => {
 							if (active?.kind === "document") {
-								openSubject(active.document);
+								openSubject(active.document, true);
 							}
 						}}
 						onClose={() =>

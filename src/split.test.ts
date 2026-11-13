@@ -3,14 +3,17 @@ import {
 	act,
 	activate,
 	close,
+	closeBack,
 	fits,
 	focus,
 	follow,
 	layout,
+	noTrail,
 	openBeside,
 	press,
 	prune,
 	rekey,
+	remember,
 	single,
 	swap,
 	toggle,
@@ -190,6 +193,83 @@ describe("prune", () => {
 	test("an empty side is not gone", () => {
 		const empty = toggle(single("scene"));
 		expect(prune(empty, () => true)).toEqual(empty);
+	});
+});
+
+describe("closing back to what a side showed before", () => {
+	const all = () => true;
+
+	// Scene left, Mira right; Search then opened onto the right side.
+	const before: Sides = {
+		current: "mira",
+		other: { key: "scene", left: true },
+	};
+	const after = activate(before, "search");
+	const trail = remember(noTrail, before, after);
+
+	test("the trail keeps what the right side showed", () => {
+		expect(trail).toEqual({ left: [], right: ["mira"] });
+	});
+
+	test("closing Search brings Mira back on its side", () => {
+		expect(closeBack(after, "search", trail, all)).toEqual(before);
+	});
+
+	test("an empty side comes back empty", () => {
+		const opened = toggle(single("scene"));
+		const filled = activate(opened, "mira");
+		const kept = remember(noTrail, opened, filled);
+		expect(closeBack(filled, "mira", kept, all)).toEqual(opened);
+	});
+
+	test("with nothing before, the split ends", () => {
+		const opened = openBeside(single("scene"), "mira");
+		expect(closeBack(opened, "mira", noTrail, all)).toEqual(
+			single("scene"),
+		);
+	});
+
+	test("skips a tab that has since been closed", () => {
+		expect(
+			closeBack(after, "search", trail, (key) => key !== "mira"),
+		).toEqual(single("scene"));
+	});
+
+	test("skips the tab on the other side", () => {
+		const moved = { left: [], right: ["scene"] };
+		expect(closeBack(after, "search", moved, all)).toEqual(single("scene"));
+	});
+
+	test("never leaves both sides empty", () => {
+		const lonely: Sides = {
+			current: "mira",
+			other: { key: null, left: true },
+		};
+		const kept = { left: [], right: [null] };
+		expect(closeBack(lonely, "mira", kept, all)).toEqual(single(null));
+	});
+
+	test("restores the other side without moving the writer", () => {
+		const back = closeBack(
+			{ current: "scene", other: { key: "search", left: false } },
+			"search",
+			{ left: [], right: ["mira"] },
+			all,
+		);
+		expect(back).toEqual({
+			current: "scene",
+			other: { key: "mira", left: false },
+		});
+	});
+
+	test("starts afresh when a split begins or ends", () => {
+		expect(remember(trail, after, single("scene"))).toEqual(noTrail);
+	});
+
+	test("a tab gone back to moves to the front of the trail", () => {
+		const there = activate(after, "mira");
+		const kept = remember(trail, after, there);
+		expect(kept.right).toEqual(["search", "mira"]);
 	});
 });
 
