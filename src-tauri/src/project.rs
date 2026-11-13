@@ -3021,6 +3021,7 @@ mod tests {
 		let workspace = store::Workspace {
 			tabs: vec![store::SavedTab::Trash, front],
 			active: Some(1),
+			beside: None,
 		};
 		left_off(&workspace, nodes)
 	}
@@ -3098,6 +3099,7 @@ mod tests {
 		let nothing_open = store::Workspace {
 			tabs: vec![store::SavedTab::Book],
 			active: None,
+			beside: None,
 		};
 		assert_eq!(left_off(&nothing_open, &nodes), None);
 	}

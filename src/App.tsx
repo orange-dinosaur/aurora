@@ -26,6 +26,7 @@ const DEFAULTS: Preferences = {
 	versionsScope: "document",
 	sidebarWidth: 248,
 	rightSidebarWidth: 300,
+	splitShare: 50,
 	theme: "system",
 	manuscriptFont: "newsreader",
 	defaultSprint: null,

@@ -50,6 +50,7 @@ export function remembered(
 			}
 		}),
 		active: active === -1 ? null : active,
+		beside: null,
 	};
 }
 

@@ -51,6 +51,11 @@ pub struct Preferences {
 	/// the left one because its tabs have to sit side by side.
 	#[serde(default = "right_sidebar_width")]
 	pub right_sidebar_width: u32,
+	/// How much of a split the left side takes, in percent. One value for every
+	/// project, like the sidebar widths. Zero would hide the left side, hence
+	/// the default of its own.
+	#[serde(default = "split_share")]
+	pub split_share: u32,
 	/// Whether Aurora follows the desktop's light or dark setting, or is told
 	/// which to use.
 	#[serde(default)]
@@ -105,6 +110,10 @@ fn sidebar_width() -> u32 {
 
 fn right_sidebar_width() -> u32 {
 	300
+}
+
+fn split_share() -> u32 {
+	50
 }
 
 fn idle_minutes() -> u32 {
@@ -182,6 +191,7 @@ impl Default for Preferences {
 			versions_scope: VersionsScope::Document,
 			sidebar_width: sidebar_width(),
 			right_sidebar_width: right_sidebar_width(),
+			split_share: split_share(),
 			theme: Theme::System,
 			manuscript_font: ManuscriptFont::Newsreader,
 			default_sprint: None,
@@ -251,6 +261,20 @@ pub struct Workspace {
 	pub tabs: Vec<SavedTab>,
 	/// An index into `tabs`, or `None` when no tab was open.
 	pub active: Option<u32>,
+	/// The other side of a split, `None` when there was no split. `active` is
+	/// the current side. Absent from a workspace written before splits.
+	#[serde(default)]
+	pub beside: Option<Beside>,
+}
+
+/// The tab on the side of a split the writer was not in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct Beside {
+	/// An index into the workspace's `tabs`.
+	pub tab: u32,
+	/// Whether this side is the left one.
+	pub left: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -802,6 +826,8 @@ mod tests {
 		// sidebars would come back invisible.
 		assert_eq!(store.preferences.sidebar_width, 248);
 		assert_eq!(store.preferences.right_sidebar_width, 300);
+		// A split shared at zero would open with its left side gone.
+		assert_eq!(store.preferences.split_share, 50);
 		assert_eq!(store.preferences.theme, Theme::System);
 		assert_eq!(
 			store.preferences.manuscript_font,
@@ -856,6 +882,7 @@ mod tests {
 			versions_scope: VersionsScope::Project,
 			sidebar_width: 300,
 			right_sidebar_width: 360,
+			split_share: 65,
 			theme: Theme::Dark,
 			manuscript_font: ManuscriptFont::PlexMono,
 			default_sprint: Some(750),
@@ -999,7 +1026,31 @@ mod tests {
 				SavedTab::Subject { id: Uuid::new_v4() },
 			],
 			active: Some(5),
+			beside: Some(Beside { tab: 0, left: true }),
 		}
+	}
+
+	#[test]
+	fn tabs_left_before_splits_existed_still_read() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(
+			&path,
+			r#"{
+				"version": 10,
+				"recent": [],
+				"workspace": {
+					"/writing/Ithaca": { "tabs": [{ "kind": "book" }], "active": 0 }
+				}
+			}"#,
+		)
+		.unwrap();
+
+		let left = workspace(&path, Path::new("/writing/Ithaca"))
+			.unwrap()
+			.unwrap();
+		assert_eq!(left.tabs, vec![SavedTab::Book]);
+		assert_eq!(left.beside, None);
 	}
 
 	#[test]

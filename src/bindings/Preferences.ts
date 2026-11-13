@@ -51,6 +51,12 @@ sidebarWidth: number,
  */
 rightSidebarWidth: number, 
 /**
+ * How much of a split the left side takes, in percent. One value for every
+ * project, like the sidebar widths. Zero would hide the left side, hence
+ * the default of its own.
+ */
+splitShare: number, 
+/**
  * Whether Aurora follows the desktop's light or dark setting, or is told
  * which to use.
  */

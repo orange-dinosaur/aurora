@@ -39,7 +39,7 @@ function saved(
 	tabs: Workspace["tabs"],
 	active: number | null = null,
 ): Workspace {
-	return { tabs, active };
+	return { tabs, active, beside: null };
 }
 
 describe("reopen", () => {
