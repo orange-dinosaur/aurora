@@ -29,7 +29,7 @@ import {
 } from "./documents";
 import { failure } from "./errors";
 import { FOLD, pressed } from "./formatting";
-import { useReorder } from "./reorder";
+import { useReorder, type Draggable } from "./reorder";
 import type { Renaming } from "./rows";
 import { indent, retitling, spot } from "./rows";
 import { timed } from "./timing";
@@ -57,6 +57,11 @@ type Naming =
 	| { kind: "open"; at: string; making: Making }
 	| { kind: "creating"; at: string; making: Making }
 	| { kind: "refused"; at: string; making: Making; message: string };
+
+/** A binder row on its way to the page. */
+export type BinderDrag =
+	| { kind: "document"; document: ProjectDocument }
+	| { kind: "folder"; folder: FolderRef };
 
 type Props = {
 	// Styled out rather than unmounted, so a half-typed section name and the
@@ -117,6 +122,8 @@ type Props = {
 	onDelete: (id: string) => Promise<void>;
 	onDeleteFolder: (id: string) => Promise<void>;
 	onClose: () => void;
+	/** A row picked up, which the page can open where it is dropped. */
+	onDrag: (what: BinderDrag | null) => void;
 	/** Opens compare at a checkpoint, listing the given version's history. */
 	onCompare: (checkpoint: string, slug: string) => void;
 	/** Writes every open tab, so asking what is not in a checkpoint sees it. */
@@ -159,6 +166,7 @@ export default function Sidebar({
 	onDelete,
 	onDeleteFolder,
 	onClose,
+	onDrag,
 	onCompare,
 	onBeforeSwitch,
 	onSwitch,
@@ -429,10 +437,42 @@ export default function Sidebar({
 								? NONE
 								: inside(list, reorder.dragging);
 						// Every row in the list asks for its drag the same way.
-						const draggable = (row: Row) => ({
-							...reorder.item(spot(row, section.name, held)),
-							draggable: !merging,
-						});
+						// A row can always be dragged to the page, since
+						// opening is allowed while a merge waits. Only the
+						// reorder drop is refused then, by not answering it.
+						const draggable = (row: Row): Draggable => {
+							const item = reorder.item(
+								spot(row, section.name, held),
+							);
+							return {
+								...item,
+								onDragStart: (event) => {
+									item.onDragStart(event);
+									onDrag(
+										row.kind === "document"
+											? {
+													kind: "document",
+													document: row.document,
+												}
+											: {
+													kind: "folder",
+													folder: rowRef(
+														row,
+														section.name,
+													),
+												},
+									);
+								},
+								onDragEnd: () => {
+									item.onDragEnd();
+									onDrag(null);
+								},
+								...(merging && {
+									onDragOver: () => {},
+									onDrop: () => {},
+								}),
+							};
+						};
 
 						return (
 							<section key={section.id} className="section">
@@ -472,6 +512,22 @@ export default function Sidebar({
 													open: true,
 												});
 											}}
+											// To the page only: a section has
+											// no place in the binder to move to.
+											draggable
+											onDragStart={(event) => {
+												event.dataTransfer.effectAllowed =
+													"move";
+												event.dataTransfer.setData(
+													"text/plain",
+													section.id,
+												);
+												onDrag({
+													kind: "folder",
+													folder: sectionRef(section),
+												});
+											}}
+											onDragEnd={() => onDrag(null)}
 										>
 											{section.name}
 										</button>
@@ -523,14 +579,10 @@ export default function Sidebar({
 														)}
 														onOpen={(beside) =>
 															onOpenFolder(
-																{
-																	id: row.id,
-																	name: row.name,
-																	kind: row.folderKind,
-																	section:
-																		section.name,
-																	trail: row.trail,
-																},
+																rowRef(
+																	row,
+																	section.name,
+																),
 																beside,
 															)
 														}
@@ -761,6 +813,20 @@ export default function Sidebar({
 			/>
 		</nav>
 	);
+}
+
+/** A folder row as its overview opens. */
+function rowRef(
+	row: Extract<Row, { kind: "folder" }>,
+	section: string,
+): FolderRef {
+	return {
+		id: row.id,
+		name: row.name,
+		kind: row.folderKind,
+		section,
+		trail: row.trail,
+	};
 }
 
 /** A section as its overview opens: the top of its own trail. */

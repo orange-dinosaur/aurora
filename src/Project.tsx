@@ -18,7 +18,7 @@ import { list } from "./frontmatter";
 import type { About } from "./Mentions";
 import FolderView from "./FolderView";
 import RightSidebar from "./RightSidebar";
-import Sidebar from "./Sidebar";
+import Sidebar, { type BinderDrag } from "./Sidebar";
 import SubjectView from "./SubjectView";
 import TagView from "./TagView";
 import Tabs from "./Tabs";
@@ -181,8 +181,14 @@ type SubjectTab = {
 
 type Tab = DocumentTab | FolderTab | BookTab | TrashTab | TagTab | SubjectTab;
 
-/** Where an opened tab goes: the current side, across a split, or beside. */
-type Landing = "here" | "across" | "beside";
+/**
+ * Where an opened tab goes: the current side, across a split, beside, or the
+ * side of the page it was dropped on.
+ */
+type Landing = "here" | "across" | "beside" | "left" | "right";
+
+/** What is being dragged toward the page. */
+type Dragged = { kind: "tab"; key: string } | BinderDrag;
 
 /**
  * What is being offered after a document was renamed out from under the tags
@@ -410,11 +416,12 @@ export default function Project({
 	// The drag leaves pixels on the element. Put a share back, so the sides
 	// keep their proportion as the window changes, even when the share comes
 	// out the same and React would see nothing to write.
-	// The tab being dragged toward the page, and the zone it is over.
-	const [dragged, setDragged] = useState<string | null>(null);
+	// The tab or binder row being dragged toward the page, and the zone it is
+	// over.
+	const [dragged, setDragged] = useState<Dragged | null>(null);
 	const [zone, setZone] = useState<"left" | "right" | null>(null);
-	function drag(key: string | null) {
-		setDragged(key);
+	function drag(what: Dragged | null) {
+		setDragged(what);
 		setZone(null);
 	}
 
@@ -844,13 +851,19 @@ export default function Project({
 	// to the other side of a split; without a split it lands `here`. Open
 	// beside makes the split if there is none.
 	function show(key: string, landing: Landing) {
-		setOnPage((now) =>
-			landing === "beside"
-				? openBeside(now, key)
-				: landing === "across"
-					? follow(now, key)
-					: activate(now, key),
-		);
+		setOnPage((now) => {
+			switch (landing) {
+				case "beside":
+					return openBeside(now, key);
+				case "across":
+					return follow(now, key);
+				case "left":
+				case "right":
+					return dropOn(now, key, landing);
+				default:
+					return activate(now, key);
+			}
+		});
 	}
 
 	async function openDocument(
@@ -1877,6 +1890,21 @@ export default function Project({
 		return third(x, box.width);
 	}
 
+	// A drop on a zone. A binder row opens its tab, or finds the one it has,
+	// and puts it there; opening is allowed while a merge waits.
+	function land(what: Dragged, side: "left" | "right") {
+		switch (what.kind) {
+			case "tab":
+				show(what.key, side);
+				return;
+			case "document":
+				void openDocument(what.document, null, side);
+				return;
+			case "folder":
+				openFolder(what.folder, side);
+		}
+	}
+
 	// Where a tab's page goes, or null when it is not on the page.
 	function placed(key: string | null): "full" | "left" | "right" | null {
 		switch (shown.kind) {
@@ -1993,7 +2021,9 @@ export default function Project({
 							onEndSplit={() =>
 								setOnPage((now) => act(now, "end"))
 							}
-							onDrag={drag}
+							onDrag={(key) =>
+								drag(key === null ? null : { kind: "tab", key })
+							}
 						/>
 					)
 				}
@@ -2123,6 +2153,7 @@ export default function Project({
 					onDelete={remove}
 					onDeleteFolder={removeFolder}
 					onClose={onClose}
+					onDrag={drag}
 				/>
 				<div className="project__main">
 					<div
@@ -2161,7 +2192,7 @@ export default function Project({
 							event.stopPropagation();
 							const side = zoneOf(event);
 							if (side !== null) {
-								setOnPage((now) => dropOn(now, dragged, side));
+								land(dragged, side);
 							}
 							drag(null);
 						}}
