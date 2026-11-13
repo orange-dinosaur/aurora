@@ -2245,6 +2245,35 @@ body,
 	pointer-events: none;
 }
 
+/* Where a dragged tab would land: an outer third of a page, or a whole side
+   of a split. Over the page, and never in the way of the drag itself. */
+.project__drop {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	z-index: 3;
+	width: calc(100% / 3);
+	background: color-mix(in srgb, var(--accent) 10%, transparent);
+	box-shadow: inset 0 0 0 2px var(--accent);
+	pointer-events: none;
+}
+
+.project__drop[data-zone="left"] {
+	left: 0;
+}
+
+.project__drop[data-zone="right"] {
+	right: 0;
+}
+
+.project__drop[data-whole][data-zone="left"] {
+	width: var(--split, 50%);
+}
+
+.project__drop[data-whole][data-zone="right"] {
+	width: calc(100% - var(--split, 50%));
+}
+
 .project__empty {
 	margin: 3rem 0 0;
 	font: var(--text-ui);

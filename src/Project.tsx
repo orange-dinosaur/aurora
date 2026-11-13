@@ -5,6 +5,7 @@ import {
 	useRef,
 	useState,
 	type CSSProperties,
+	type DragEvent,
 	type ReactNode,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -57,6 +58,7 @@ import {
 	act,
 	activate,
 	closeBack,
+	dropOn,
 	fits,
 	focus,
 	follow,
@@ -69,6 +71,7 @@ import {
 	remember,
 	single,
 	swap,
+	third,
 	type Sides as OnPage,
 	type Trail,
 } from "./split";
@@ -407,6 +410,14 @@ export default function Project({
 	// The drag leaves pixels on the element. Put a share back, so the sides
 	// keep their proportion as the window changes, even when the share comes
 	// out the same and React would see nothing to write.
+	// The tab being dragged toward the page, and the zone it is over.
+	const [dragged, setDragged] = useState<string | null>(null);
+	const [zone, setZone] = useState<"left" | "right" | null>(null);
+	function drag(key: string | null) {
+		setDragged(key);
+		setZone(null);
+	}
+
 	function divide(splitShare: number) {
 		panes.current?.style.setProperty("--split", `${splitShare}%`);
 		onPreferences({ ...preferences, splitShare });
@@ -1855,6 +1866,17 @@ export default function Project({
 	const shown = layout(onPage, halves && !focused && roomy);
 	const split = standing(preferences.splitShare, room);
 
+	// Where a tab dragged over the page would land: a side of a split, or an
+	// outer third of a page that is not split.
+	function zoneOf(event: DragEvent<HTMLElement>): "left" | "right" | null {
+		const box = event.currentTarget.getBoundingClientRect();
+		const x = event.clientX - box.left;
+		if (shown.kind === "split") {
+			return x < (box.width * split) / 100 ? "left" : "right";
+		}
+		return third(x, box.width);
+	}
+
 	// Where a tab's page goes, or null when it is not on the page.
 	function placed(key: string | null): "full" | "left" | "right" | null {
 		switch (shown.kind) {
@@ -1971,6 +1993,7 @@ export default function Project({
 							onEndSplit={() =>
 								setOnPage((now) => act(now, "end"))
 							}
+							onDrag={drag}
 						/>
 					)
 				}
@@ -2110,7 +2133,49 @@ export default function Project({
 								"--split": `${split}%`,
 							} as CSSProperties
 						}
+						// In the capture phase, so a tab dropped over an editor
+						// is the page's and never reaches Lexical as text.
+						onDragOverCapture={(event) => {
+							if (dragged === null) {
+								return;
+							}
+							event.preventDefault();
+							event.stopPropagation();
+							event.dataTransfer.dropEffect = "move";
+							setZone(zoneOf(event));
+						}}
+						onDragLeave={(event) => {
+							if (
+								!event.currentTarget.contains(
+									event.relatedTarget as Node | null,
+								)
+							) {
+								setZone(null);
+							}
+						}}
+						onDropCapture={(event) => {
+							if (dragged === null) {
+								return;
+							}
+							event.preventDefault();
+							event.stopPropagation();
+							const side = zoneOf(event);
+							if (side !== null) {
+								setOnPage((now) => dropOn(now, dragged, side));
+							}
+							drag(null);
+						}}
 					>
+						{zone !== null && (
+							<div
+								className="project__drop"
+								data-zone={zone}
+								data-whole={
+									shown.kind === "split" ? "" : undefined
+								}
+								aria-hidden="true"
+							/>
+						)}
 						{shown.kind === "split" && (
 							<div className="project__divider">
 								<Grip

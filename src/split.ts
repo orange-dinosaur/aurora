@@ -215,6 +215,54 @@ export function closeBack(
 		: { ...sides, current: back };
 }
 
+/** Which drop zone of an unsplit page `x` is in: its outer thirds, or none. */
+export function third(x: number, width: number): "left" | "right" | null {
+	if (x < width / 3) {
+		return "left";
+	}
+	return x > (width * 2) / 3 ? "right" : null;
+}
+
+/**
+ * A tab dropped onto the page. On an unsplit page `side` is the third it
+ * landed in, and the split opens with the tab there and what was showing on
+ * the other side. On a split it is the side it landed on: the tab takes that
+ * side and becomes current. A tab already on the other side trades places.
+ */
+export function dropOn(
+	sides: Sides,
+	key: string,
+	side: "left" | "right",
+): Sides {
+	const { current, other } = sides;
+	if (other === null) {
+		if (current === null) {
+			return single(key);
+		}
+		return {
+			current: key,
+			other: {
+				key: key === current ? null : current,
+				left: side === "right",
+			},
+		};
+	}
+
+	const onCurrent = (side === "left") !== other.left;
+	if (onCurrent) {
+		return key === other.key
+			? { current: key, other: { key: current, left: other.left } }
+			: { current: key, other };
+	}
+	return {
+		current: key,
+		other: {
+			key: key === current ? other.key : current,
+			left: !other.left,
+		},
+	};
+}
+
 export function act(sides: Sides, action: Action): Sides {
 	switch (action) {
 		case "toggle":

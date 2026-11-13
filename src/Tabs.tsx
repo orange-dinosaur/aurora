@@ -47,6 +47,8 @@ type Props = {
 	onSwap: () => void;
 	/** Ends the split, keeping the current side. */
 	onEndSplit: () => void;
+	/** A tab picked up to drop on the page, or null once it is let go. */
+	onDrag: (key: string | null) => void;
 };
 
 export default function Tabs({
@@ -59,6 +61,7 @@ export default function Tabs({
 	onBeside,
 	onSwap,
 	onEndSplit,
+	onDrag,
 }: Props) {
 	const row = useRef<HTMLUListElement>(null);
 	// The tab right-clicked, and where. Kept after the menu shuts, so its items
@@ -165,6 +168,20 @@ export default function Tabs({
 										: ""
 							}
 							onContextMenu={(event) => ask(event, tab.key)}
+							draggable
+							onDragStart={(event) => {
+								// The page knows the tab from `onDrag`. The data
+								// is only so the drag starts at all, and plain
+								// text is the type WebKitGTK will carry, as the
+								// binder's reorder found.
+								event.dataTransfer.effectAllowed = "move";
+								event.dataTransfer.setData(
+									"text/plain",
+									tab.key,
+								);
+								onDrag(tab.key);
+							}}
+							onDragEnd={() => onDrag(null)}
 						>
 							{/* Laid over the pill's edge, so a tab does not change
 							    width the moment it is typed into. */}

@@ -4,6 +4,7 @@ import {
 	activate,
 	close,
 	closeBack,
+	dropOn,
 	fits,
 	focus,
 	follow,
@@ -16,6 +17,7 @@ import {
 	remember,
 	single,
 	swap,
+	third,
 	toggle,
 	type Press,
 	type Sides,
@@ -270,6 +272,70 @@ describe("closing back to what a side showed before", () => {
 		const there = activate(after, "mira");
 		const kept = remember(trail, after, there);
 		expect(kept.right).toEqual(["search", "mira"]);
+	});
+});
+
+describe("third", () => {
+	test("the outer thirds are drop zones and the middle is not", () => {
+		expect(third(100, 900)).toBe("left");
+		expect(third(450, 900)).toBeNull();
+		expect(third(800, 900)).toBe("right");
+	});
+});
+
+describe("dropOn", () => {
+	test("onto the right third of an unsplit page splits with it there", () => {
+		expect(dropOn(single("scene"), "notes", "right")).toEqual(split);
+	});
+
+	test("onto the left third puts it on the left", () => {
+		expect(dropOn(single("scene"), "notes", "left")).toEqual({
+			current: "notes",
+			other: { key: "scene", left: false },
+		});
+	});
+
+	test("the tab showing, dropped on a third, leaves the other side empty", () => {
+		expect(dropOn(single("scene"), "scene", "right")).toEqual({
+			current: "scene",
+			other: { key: null, left: true },
+		});
+	});
+
+	test("onto an empty page simply shows it", () => {
+		expect(dropOn(single(null), "scene", "left")).toEqual(single("scene"));
+	});
+
+	test("onto the current side replaces its tab", () => {
+		expect(dropOn(split, "mira", "right")).toEqual({
+			current: "mira",
+			other: { key: "scene", left: true },
+		});
+	});
+
+	test("onto the other side replaces that tab and makes it current", () => {
+		expect(dropOn(split, "mira", "left")).toEqual({
+			current: "mira",
+			other: { key: "notes", left: false },
+		});
+	});
+
+	test("the other side's tab dropped on the current side trades places", () => {
+		expect(dropOn(split, "scene", "right")).toEqual({
+			current: "scene",
+			other: { key: "notes", left: true },
+		});
+	});
+
+	test("the current tab dropped on the other side trades places", () => {
+		expect(dropOn(split, "notes", "left")).toEqual({
+			current: "notes",
+			other: { key: "scene", left: false },
+		});
+	});
+
+	test("its own side changes nothing", () => {
+		expect(dropOn(split, "notes", "right")).toEqual(split);
 	});
 });
 
