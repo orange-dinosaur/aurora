@@ -12,6 +12,22 @@ export const SIDEBAR: Bounds = { min: 200, max: 460 };
 /** The panel about what is open. */
 export const RIGHT_SIDEBAR: Bounds = { min: 240, max: 480 };
 
+/** The narrowest a side of a split may be. */
+export const SIDE_MIN = 320;
+
+/** Where the divider may go, given the room the two sides share. */
+export function divider(room: number): Bounds {
+	return { min: SIDE_MIN, max: Math.max(SIDE_MIN, room - SIDE_MIN) };
+}
+
+/** The left side's width as the percentage the preference keeps. */
+export function share(left: number, room: number): number {
+	if (room <= 0) {
+		return 50;
+	}
+	return Math.min(100, Math.max(0, Math.round((left / room) * 100)));
+}
+
 /**
  * The width a drag has reached. Both handles sit on the inner edge of their
  * panel, against the writing, so the same movement of the pointer means

@@ -2212,14 +2212,24 @@ body,
 	visibility: hidden;
 }
 
-/* A split's two sides. */
+/* A split's two sides, meeting where the writer left the divider. */
 .project__pane--left {
-	right: 50%;
+	right: calc(100% - var(--split, 50%));
 }
 
 .project__pane--right {
-	left: 50%;
+	left: var(--split, 50%);
 	border-left: 1px solid var(--border);
+}
+
+/* No width of its own: the grip inside straddles the line between the sides. */
+.project__divider {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--split, 50%);
+	z-index: 2;
+	width: 0;
 }
 
 /* Laid over the side's top edge, so marking a side current moves nothing. */

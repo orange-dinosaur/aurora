@@ -1,5 +1,32 @@
 import { describe, expect, test } from "vitest";
-import { dragged, RIGHT_SIDEBAR, SIDEBAR } from "./panels";
+import {
+	divider,
+	dragged,
+	RIGHT_SIDEBAR,
+	share,
+	SIDE_MIN,
+	SIDEBAR,
+} from "./panels";
+
+describe("the divider of a split", () => {
+	test("leaves each side at least the minimum", () => {
+		expect(divider(1000)).toEqual({ min: SIDE_MIN, max: 1000 - SIDE_MIN });
+	});
+
+	test("never asks for a range that runs backwards", () => {
+		const tight = divider(500);
+		expect(tight.max).toBeGreaterThanOrEqual(tight.min);
+	});
+
+	test("is kept as the left side's share in whole percent", () => {
+		expect(share(350, 700)).toBe(50);
+		expect(share(455, 700)).toBe(65);
+	});
+
+	test("falls back to halves before the page has been measured", () => {
+		expect(share(300, 0)).toBe(50);
+	});
+});
 
 describe("dragging a panel edge", () => {
 	test("the left panel follows the pointer", () => {

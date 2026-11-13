@@ -4,6 +4,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
+	type CSSProperties,
 	type ReactNode,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -27,7 +28,9 @@ import Trash from "./Trash";
 import BookView from "./Book";
 import { BookMenu } from "./BookHead";
 import Compare from "./Compare";
+import Grip from "./Grip";
 import Icon from "./Icon";
+import { divider, share } from "./panels";
 import Overwrite from "./Overwrite";
 import Merge from "./Merge";
 import type { Choices, Sides } from "./lib/merge";
@@ -388,6 +391,28 @@ export default function Project({
 	const activeKey = onPage.current;
 	function setActiveKey(key: string) {
 		setOnPage((now) => activate(now, key));
+	}
+
+	// The width the sides share, which the divider is dragged across.
+	const panes = useRef<HTMLDivElement>(null);
+	const [room, setRoom] = useState(0);
+	useEffect(() => {
+		if (panes.current === null) {
+			return;
+		}
+		const watcher = new ResizeObserver(([entry]) =>
+			setRoom(entry.contentRect.width),
+		);
+		watcher.observe(panes.current);
+		return () => watcher.disconnect();
+	}, []);
+
+	// The drag leaves pixels on the element. Put a share back, so the sides
+	// keep their proportion as the window changes, even when the share comes
+	// out the same and React would see nothing to write.
+	function divide(splitShare: number) {
+		panes.current?.style.setProperty("--split", `${splitShare}%`);
+		onPreferences({ ...preferences, splitShare });
 	}
 
 	// On the window, ahead of the editor, so the key works whatever is
@@ -2017,7 +2042,33 @@ export default function Project({
 					onClose={onClose}
 				/>
 				<div className="project__main">
-					<div className="project__panes">
+					<div
+						ref={panes}
+						className="project__panes"
+						style={
+							{
+								"--split": `${preferences.splitShare}%`,
+							} as CSSProperties
+						}
+					>
+						{shown.kind === "split" && (
+							<div className="project__divider">
+								<Grip
+									side="left"
+									panel={panes}
+									property="--split"
+									width={Math.round(
+										(room * preferences.splitShare) / 100,
+									)}
+									bounds={divider(room)}
+									label="Divider between the sides"
+									onWidth={(left) =>
+										divide(share(left, room))
+									}
+									onReset={() => divide(50)}
+								/>
+							</div>
+						)}
 						{/* Every open document stays mounted and all but one
 						    is hidden. An editor torn down on a tab switch
 						    takes its undo history, its selection and its

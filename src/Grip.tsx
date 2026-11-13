@@ -18,6 +18,10 @@ type Props = {
 	/** The width the drag settled on. Called once, on letting go, because this
 	 * is a preference and every call writes the store. */
 	onWidth: (width: number) => void;
+	/** What the drag sets on `panel`, for an edge that is not a panel's width. */
+	property?: string;
+	/** A double-click, for an edge with somewhere to go back to. */
+	onReset?: () => void;
 };
 
 /** How far an arrow key moves the edge. Wide enough to get somewhere, narrow
@@ -32,6 +36,8 @@ export default function Grip({
 	bounds,
 	label,
 	onWidth,
+	property = "width",
+	onReset,
 }: Props) {
 	// Where the drag has reached, so letting go hands over what the moves
 	// agreed on rather than the width this render was built with.
@@ -48,7 +54,7 @@ export default function Grip({
 				event.clientX - grabbed,
 				bounds,
 			);
-			panel.current?.style.setProperty("width", `${reached.current}px`);
+			panel.current?.style.setProperty(property, `${reached.current}px`);
 		}
 
 		function drop() {
@@ -99,6 +105,7 @@ export default function Grip({
 				grab(event.clientX);
 			}}
 			onKeyDown={nudge}
+			onDoubleClick={onReset}
 		/>
 	);
 }
