@@ -20,6 +20,19 @@ export function divider(room: number): Bounds {
 	return { min: SIDE_MIN, max: Math.max(SIDE_MIN, room - SIDE_MIN) };
 }
 
+/**
+ * The share the divider stands at, kept inside the range that leaves both
+ * sides their minimum. A share chosen on a wide window would otherwise squeeze
+ * one side on a narrower one.
+ */
+export function standing(share: number, room: number): number {
+	if (room < SIDE_MIN * 2) {
+		return 50;
+	}
+	const least = (SIDE_MIN / room) * 100;
+	return Math.min(Math.max(share, least), 100 - least);
+}
+
 /** The left side's width as the percentage the preference keeps. */
 export function share(left: number, room: number): number {
 	if (room <= 0) {

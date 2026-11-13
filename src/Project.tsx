@@ -30,7 +30,7 @@ import { BookMenu } from "./BookHead";
 import Compare from "./Compare";
 import Grip from "./Grip";
 import Icon from "./Icon";
-import { divider, share } from "./panels";
+import { divider, share, SIDE_MIN, standing } from "./panels";
 import Overwrite from "./Overwrite";
 import Merge from "./Merge";
 import type { Choices, Sides } from "./lib/merge";
@@ -57,6 +57,7 @@ import type { Workspace } from "./bindings/Workspace";
 import {
 	activate,
 	close,
+	fits,
 	focus,
 	layout,
 	press,
@@ -1813,7 +1814,11 @@ export default function Project({
 		const kind = tabs.find((tab) => tab.key === key)?.kind;
 		return kind === undefined || kind === "document" || kind === "search";
 	});
-	const shown = layout(onPage, halves && !focused);
+	// Unmeasured counts as roomy, so a restored split does not flash folded
+	// before the first measurement arrives.
+	const roomy = room === 0 || fits(room, SIDE_MIN);
+	const shown = layout(onPage, halves && !focused && roomy);
+	const split = standing(preferences.splitShare, room);
 
 	// Where a tab's page goes, or null when it is not on the page.
 	function placed(key: string | null): "full" | "left" | "right" | null {
@@ -1921,6 +1926,7 @@ export default function Project({
 							tabs={tabs.map(strip)}
 							activeKey={activeKey}
 							besideKey={onPage.other?.key ?? null}
+							folded={shown.kind === "folded"}
 							onActivate={setActiveKey}
 							onClose={closeTab}
 						/>
@@ -2047,7 +2053,7 @@ export default function Project({
 						className="project__panes"
 						style={
 							{
-								"--split": `${preferences.splitShare}%`,
+								"--split": `${split}%`,
 							} as CSSProperties
 						}
 					>
@@ -2057,9 +2063,7 @@ export default function Project({
 									side="left"
 									panel={panes}
 									property="--split"
-									width={Math.round(
-										(room * preferences.splitShare) / 100,
-									)}
+									width={Math.round((room * split) / 100)}
 									bounds={divider(room)}
 									label="Divider between the sides"
 									onWidth={(left) =>

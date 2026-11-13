@@ -6,6 +6,7 @@ import {
 	share,
 	SIDE_MIN,
 	SIDEBAR,
+	standing,
 } from "./panels";
 
 describe("the divider of a split", () => {
@@ -25,6 +26,19 @@ describe("the divider of a split", () => {
 
 	test("falls back to halves before the page has been measured", () => {
 		expect(share(300, 0)).toBe(50);
+	});
+
+	test("stands where it was left when both sides have room", () => {
+		expect(standing(60, 2000)).toBe(60);
+	});
+
+	test("moves in so a narrower window leaves each side its minimum", () => {
+		expect(standing(65, 800)).toBe(60);
+		expect(standing(10, 800)).toBe(40);
+	});
+
+	test("stands in the middle when there is no room for two", () => {
+		expect(standing(65, 500)).toBe(50);
 	});
 });
 

@@ -5064,8 +5064,15 @@ button.compare__pick:focus-visible {
 	box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.tab[data-beside] .tab__title {
+.tab[data-beside=""] .tab__title {
 	color: var(--text);
+}
+
+/* Folded away for want of room: still part of the split, but only just. */
+.tab[data-beside="folded"] {
+	box-shadow: none;
+	outline: 1px dashed var(--border);
+	outline-offset: -1px;
 }
 
 /* What the tab holds. Smaller than the 16px the rest of the interface uses,

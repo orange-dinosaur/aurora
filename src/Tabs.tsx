@@ -37,6 +37,8 @@ type Props = {
 	activeKey: string | null;
 	/** The tab on the other side of a split, lit less strongly. */
 	besideKey: string | null;
+	/** Whether that side is folded away for want of room. */
+	folded: boolean;
 	onActivate: (key: string) => void;
 	onClose: (key: string) => void;
 };
@@ -45,6 +47,7 @@ export default function Tabs({
 	tabs,
 	activeKey,
 	besideKey,
+	folded,
 	onActivate,
 	onClose,
 }: Props) {
@@ -132,7 +135,13 @@ export default function Tabs({
 							ref={tab.key === activeKey ? active : null}
 							className="tab"
 							data-active={tab.key === activeKey ? "" : undefined}
-							data-beside={tab.key === besideKey ? "" : undefined}
+							data-beside={
+								tab.key !== besideKey
+									? undefined
+									: folded
+										? "folded"
+										: ""
+							}
 						>
 							{/* Laid over the pill's edge, so a tab does not change
 							    width the moment it is typed into. */}
