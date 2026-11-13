@@ -35,11 +35,19 @@ const NUDGE = 180;
 type Props = {
 	tabs: TabView[];
 	activeKey: string | null;
+	/** The tab on the other side of a split, lit less strongly. */
+	besideKey: string | null;
 	onActivate: (key: string) => void;
 	onClose: (key: string) => void;
 };
 
-export default function Tabs({ tabs, activeKey, onActivate, onClose }: Props) {
+export default function Tabs({
+	tabs,
+	activeKey,
+	besideKey,
+	onActivate,
+	onClose,
+}: Props) {
 	const row = useRef<HTMLUListElement>(null);
 	const active = useRef<HTMLLIElement>(null);
 	const [before, setBefore] = useState(false);
@@ -124,6 +132,7 @@ export default function Tabs({ tabs, activeKey, onActivate, onClose }: Props) {
 							ref={tab.key === activeKey ? active : null}
 							className="tab"
 							data-active={tab.key === activeKey ? "" : undefined}
+							data-beside={tab.key === besideKey ? "" : undefined}
 						>
 							{/* Laid over the pill's edge, so a tab does not change
 							    width the moment it is typed into. */}

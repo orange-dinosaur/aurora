@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ReactNode,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { filed, refile } from "./corpus";
@@ -44,6 +51,18 @@ import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import { documentsOf, firstScene, folderOf, rows } from "./tree";
 import type { Workspace } from "./bindings/Workspace";
+import {
+	activate,
+	close,
+	focus,
+	layout,
+	press,
+	prune,
+	rekey,
+	single,
+	toggle,
+	type Sides as OnPage,
+} from "./split";
 import { remembered, reopen, type Place } from "./workspace";
 import { deleteDocument, deleteFolder } from "./documents";
 import type { TakeView } from "./bindings/TakeView";
@@ -334,7 +353,11 @@ export default function Project({
 				setTabs((open) => [...opening, ...open]);
 				if (back.active !== null) {
 					const front = opening[back.active].key;
-					setActiveKey((active) => active ?? front);
+					setOnPage((now) =>
+						now.current === null && now.other === null
+							? single(front)
+							: now,
+					);
 				}
 				for (const tab of opening) {
 					if (tab.kind === "document") {
@@ -347,7 +370,39 @@ export default function Project({
 			.catch(() => {})
 			.finally(() => setPickedUp(true));
 	}, []);
-	const [activeKey, setActiveKey] = useState<string | null>(null);
+	// Which tabs are on the page. Without a split, `current` is simply the
+	// active tab, which is what most of this view still calls it.
+	const [unpruned, setOnPage] = useState<OnPage>(single(null));
+	const onPage = prune(unpruned, (key) =>
+		tabs.some((tab) => tab.key === key),
+	);
+	const activeKey = onPage.current;
+	function setActiveKey(key: string) {
+		setOnPage((now) => activate(now, key));
+	}
+
+	// On the window, ahead of the editor, so the key works whatever is
+	// focused, a folder overview or Search as much as a document.
+	useEffect(() => {
+		function onKey(event: KeyboardEvent) {
+			if (press(false, event).action !== "toggle") {
+				return;
+			}
+			event.preventDefault();
+			event.stopPropagation();
+			setOnPage((now) => {
+				const after = toggle(now);
+				// The new side is empty and current, so typing must not go on
+				// landing in the side just left.
+				if (after.current === null && now.current !== null) {
+					(document.activeElement as HTMLElement | null)?.blur();
+				}
+				return after;
+			});
+		}
+		window.addEventListener("keydown", onKey, true);
+		return () => window.removeEventListener("keydown", onKey, true);
+	}, []);
 
 	// Written whenever the strip changes shape, not on every keystroke that
 	// passes through the tabs. Carets and scrolls ride along with whatever
@@ -1027,7 +1082,7 @@ export default function Project({
 			content: { kind: "ready", text },
 			save: { kind: "clean" },
 		}));
-		setActiveKey((active) => (active === tab.key ? key : active));
+		setOnPage((now) => rekey(now, new Map([[tab.key, key]])));
 	}
 
 	// This is the one write that is not told to the corpus a document at a
@@ -1204,14 +1259,15 @@ export default function Project({
 			}
 		});
 		setTabs(next);
-		setActiveKey((active) => {
-			if (active === null) {
-				return null;
-			}
-			const kept = renamed.get(active) ?? active;
-			return next.some((tab) => tab.key === kept)
-				? kept
-				: (next[0]?.key ?? null);
+		setOnPage((now) => {
+			const kept = prune(rekey(now, renamed), (key) =>
+				next.some((tab) => tab.key === key),
+			);
+			const lost =
+				now.current !== null &&
+				kept.current === null &&
+				kept.other === null;
+			return lost ? single(next[0]?.key ?? null) : kept;
 		});
 	}
 
@@ -1391,12 +1447,18 @@ export default function Project({
 
 		const remaining = open.filter((tab) => tab.key !== key);
 		setTabs(remaining);
-		setActiveKey((current) =>
-			current === key
-				? // The one to its left, or the new first if it was leftmost.
-					((remaining[index - 1] ?? remaining[0])?.key ?? null)
-				: current,
-		);
+		setOnPage((now) => {
+			// In a split, the other side fills the page.
+			const after = close(now, key);
+			const showing =
+				after.other !== null ||
+				(after.current !== null && after.current !== key);
+			const wasShown = now.current === key || now.other?.key === key;
+			return showing || !wasShown
+				? after
+				: // The one to its left, or the new first if it was leftmost.
+					single((remaining[index - 1] ?? remaining[0])?.key ?? null);
+		});
 	}
 
 	function closeTab(key: string) {
@@ -1568,6 +1630,85 @@ export default function Project({
 		);
 	}
 
+	// The tabs that are drawn only while on the page. Each is keyed by its tab,
+	// so moving between two overviews starts the new one empty rather than
+	// showing the previous section's cards until its read comes back.
+	function page(tab: Tab): ReactNode {
+		switch (tab.kind) {
+			case "folder":
+				return (
+					<FolderView
+						key={tab.key}
+						root={root}
+						folder={tab.folder}
+						reload={listing}
+						merging={merge !== null}
+						onSelect={(document) => void openDocument(document)}
+						onTry={startTake}
+						onOpenFolder={openFolder}
+						onCreated={(document) => void created(document)}
+						onRenamed={renamed}
+						onFolderRenamed={renamedFolder}
+						onChanged={changed}
+						onMoved={() => void moved()}
+						onDelete={remove}
+						onDeleteFolder={removeFolder}
+					/>
+				);
+			case "book":
+				return (
+					<BookView
+						key={tab.key}
+						root={root}
+						changed={listing + written}
+						onWritten={() => setBookWritten((times) => times + 1)}
+						merging={merge !== null}
+					/>
+				);
+			case "trash":
+				return (
+					<Trash
+						key={tab.key}
+						root={root}
+						reload={listing}
+						onChanged={() => setListing((version) => version + 1)}
+						merging={merge !== null}
+					/>
+				);
+			case "tag":
+				return (
+					<TagView
+						key={tab.key}
+						root={root}
+						tag={tab.tag}
+						changed={listing + written}
+						live={live}
+						onOpen={(document) => void openDocument(document)}
+					/>
+				);
+			case "subject":
+				return (
+					<SubjectView
+						key={tab.key}
+						root={root}
+						subject={tab.subject}
+						changed={listing + written}
+						live={live}
+						onOpen={(document, seed) =>
+							void openDocument(document, seed)
+						}
+						onDraft={() => void openDocument(tab.subject)}
+						onSubject={(document) => turnSubject(tab.key, document)}
+						onRemarks={(text, failed) =>
+							remark(tab.subject.id, text, failed)
+						}
+					/>
+				);
+			default:
+				return null;
+		}
+	}
+
 	// Only a document and a folder overview have anything to say about
 	// themselves. Search and the trash are lists of other things.
 	const about =
@@ -1629,6 +1770,62 @@ export default function Project({
 	const focused =
 		preferences.focus && active?.kind === "document" && !covered;
 
+	// Only these read well at half the page so far. A split holding anything
+	// else folds to its current side.
+	const halves = [onPage.current, onPage.other?.key ?? null].every((key) => {
+		const kind = tabs.find((tab) => tab.key === key)?.kind;
+		return kind === undefined || kind === "document" || kind === "search";
+	});
+	const shown = layout(onPage, halves && !focused);
+
+	// Where a tab's page goes, or null when it is not on the page.
+	function placed(key: string | null): "full" | "left" | "right" | null {
+		switch (shown.kind) {
+			case "split":
+				return key === shown.left
+					? "left"
+					: key === shown.right
+						? "right"
+						: null;
+			default:
+				return key === shown.key ? "full" : null;
+		}
+	}
+
+	// One side of the page. Pressing or tabbing into the side that is not
+	// current makes it current.
+	function pane(key: string | null, body: ReactNode, mounted = false) {
+		const where = placed(key);
+		if (where === null && !mounted) {
+			return null;
+		}
+		const enter = () =>
+			setOnPage((now) =>
+				now.other !== null && now.other.key === key
+					? focus(now, "other")
+					: now,
+			);
+		const classes = ["project__pane"];
+		if (where === null) {
+			classes.push("project__pane--hidden");
+		} else if (where !== "full") {
+			classes.push(`project__pane--${where}`);
+			if (key === onPage.current) {
+				classes.push("project__pane--current");
+			}
+		}
+		return (
+			<div
+				key={key ?? "empty"}
+				className={classes.join(" ")}
+				onPointerDownCapture={enter}
+				onFocusCapture={enter}
+			>
+				{body}
+			</div>
+		);
+	}
+
 	return (
 		<section className={focused ? "project project--focus" : "project"}>
 			<Titlebar
@@ -1686,6 +1883,7 @@ export default function Project({
 						<Tabs
 							tabs={tabs.map(strip)}
 							activeKey={activeKey}
+							besideKey={onPage.other?.key ?? null}
 							onActivate={setActiveKey}
 							onClose={closeTab}
 						/>
@@ -1821,130 +2019,37 @@ export default function Project({
 						    unmounted on the way out would come back with an
 						    empty field. */}
 						{tabs.map((tab) =>
-							tab.kind === "document" || tab.kind === "search" ? (
-								<div
-									key={tab.key}
-									className={
-										tab.key === activeKey
-											? "project__pane"
-											: "project__pane project__pane--hidden"
-									}
-								>
-									{tab.kind === "document" ? (
-										documentBody(tab)
-									) : (
-										<Search
-											root={root}
-											asked={asked}
-											active={tab.key === activeKey}
-											changed={listing + written}
-											live={live}
-											onOpen={(document, seed) =>
-												void openDocument(
-													document,
-													seed,
-												)
-											}
-										/>
-									)}
-								</div>
-							) : null,
+							tab.kind === "document"
+								? pane(tab.key, documentBody(tab), true)
+								: tab.kind === "search"
+									? pane(
+											tab.key,
+											<Search
+												root={root}
+												asked={asked}
+												active={tab.key === activeKey}
+												changed={listing + written}
+												live={live}
+												onOpen={(document, seed) =>
+													void openDocument(
+														document,
+														seed,
+													)
+												}
+											/>,
+											true,
+										)
+									: pane(tab.key, page(tab)),
 						)}
 
-						{active === null ? (
-							<div className="project__pane">
-								<p className="project__empty">
-									Choose a document to open.
-								</p>
-							</div>
-						) : active.kind === "folder" ? (
-							<div className="project__pane">
-								{/* Keyed, so moving between two overviews
-								    starts the new one empty rather than
-								    showing the previous section's cards
-								    until its read comes back. */}
-								<FolderView
-									key={active.key}
-									root={root}
-									folder={active.folder}
-									reload={listing}
-									merging={merge !== null}
-									onSelect={(document) =>
-										void openDocument(document)
-									}
-									onTry={startTake}
-									onOpenFolder={openFolder}
-									onCreated={(document) =>
-										void created(document)
-									}
-									onRenamed={renamed}
-									onFolderRenamed={renamedFolder}
-									onChanged={changed}
-									onMoved={() => void moved()}
-									onDelete={remove}
-									onDeleteFolder={removeFolder}
-								/>
-							</div>
-						) : active.kind === "book" ? (
-							<div className="project__pane">
-								<BookView
-									key={active.key}
-									root={root}
-									changed={listing + written}
-									onWritten={() =>
-										setBookWritten((times) => times + 1)
-									}
-									merging={merge !== null}
-								/>
-							</div>
-						) : active.kind === "trash" ? (
-							<div className="project__pane">
-								<Trash
-									key={active.key}
-									root={root}
-									reload={listing}
-									onChanged={() =>
-										setListing((version) => version + 1)
-									}
-									merging={merge !== null}
-								/>
-							</div>
-						) : active.kind === "tag" ? (
-							<div className="project__pane">
-								<TagView
-									key={active.key}
-									root={root}
-									tag={active.tag}
-									changed={listing + written}
-									live={live}
-									onOpen={(document) =>
-										void openDocument(document)
-									}
-								/>
-							</div>
-						) : active.kind === "subject" ? (
-							<div className="project__pane">
-								<SubjectView
-									key={active.key}
-									root={root}
-									subject={active.subject}
-									changed={listing + written}
-									live={live}
-									onOpen={(document, seed) =>
-										void openDocument(document, seed)
-									}
-									onDraft={() =>
-										void openDocument(active.subject)
-									}
-									onSubject={(document) =>
-										turnSubject(active.key, document)
-									}
-									onRemarks={(text, failed) =>
-										remark(active.subject.id, text, failed)
-									}
-								/>
-							</div>
-						) : null}
+						{pane(
+							null,
+							<p className="project__empty">
+								{shown.kind === "split"
+									? "Pick a tab or a binder row."
+									: "Choose a document to open."}
+							</p>,
+						)}
 					</div>
 
 					{/* Over the panes rather than above them: the writing does

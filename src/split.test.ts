@@ -9,6 +9,8 @@ import {
 	layout,
 	openBeside,
 	press,
+	prune,
+	rekey,
 	single,
 	swap,
 	toggle,
@@ -157,6 +159,37 @@ describe("close", () => {
 
 	test("without a split, leaves the next tab to the caller", () => {
 		expect(close(single("scene"), "scene")).toEqual(single("scene"));
+	});
+});
+
+test("rekey follows both sides through a rename", () => {
+	expect(
+		rekey(
+			split,
+			new Map([
+				["scene", "scene2"],
+				["notes", "notes2"],
+			]),
+		),
+	).toEqual({ current: "notes2", other: { key: "scene2", left: true } });
+});
+
+describe("prune", () => {
+	test("a gone current side leaves the other filling the page", () => {
+		expect(prune(split, (key) => key !== "notes")).toEqual(single("scene"));
+	});
+
+	test("a gone other side leaves the current filling the page", () => {
+		expect(prune(split, (key) => key !== "scene")).toEqual(single("notes"));
+	});
+
+	test("a gone single tab leaves nothing showing", () => {
+		expect(prune(single("scene"), () => false)).toEqual(single(null));
+	});
+
+	test("an empty side is not gone", () => {
+		const empty = toggle(single("scene"));
+		expect(prune(empty, () => true)).toEqual(empty);
 	});
 });
 

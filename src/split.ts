@@ -115,6 +115,34 @@ export function close(sides: Sides, key: string): Sides {
 	return sides;
 }
 
+/** Follows tabs given new keys, as a rename does. */
+export function rekey(
+	sides: Sides,
+	renamed: ReadonlyMap<string, string>,
+): Sides {
+	const to = (key: string | null) =>
+		key === null ? null : (renamed.get(key) ?? key);
+	return {
+		current: to(sides.current),
+		other:
+			sides.other === null
+				? null
+				: { ...sides.other, key: to(sides.other.key) },
+	};
+}
+
+/** Lets go of tabs that are no longer open, as closing them would have. */
+export function prune(sides: Sides, open: (key: string) => boolean): Sides {
+	let kept = sides;
+	if (kept.current !== null && !open(kept.current)) {
+		kept = kept.other === null ? single(null) : close(kept, kept.current);
+	}
+	if (kept.other?.key != null && !open(kept.other.key)) {
+		kept = close(kept, kept.other.key);
+	}
+	return kept;
+}
+
 export function act(sides: Sides, action: Action): Sides {
 	switch (action) {
 		case "toggle":
