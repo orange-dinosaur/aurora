@@ -5,6 +5,7 @@ import {
 	deliberate,
 	described,
 	previewed,
+	reached,
 	summarised,
 	trashed,
 } from "./cards";
@@ -48,6 +49,21 @@ describe("a document card's count", () => {
 
 	test("a target turns the count into a report against it", () => {
 		expect(counted(1200, 2000)).toBe("1,200 of 2,000 words");
+	});
+});
+
+describe("how far a row is along its target", () => {
+	test("no target draws no line", () => {
+		expect(reached(900, null)).toBeNull();
+	});
+
+	test("the share is the words over the target", () => {
+		expect(reached(900, 1500)).toBe(0.6);
+		expect(reached(0, 1500)).toBe(0);
+	});
+
+	test("writing past the target keeps the line full", () => {
+		expect(reached(1800, 1500)).toBe(1);
 	});
 });
 

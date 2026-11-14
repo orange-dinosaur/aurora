@@ -4784,6 +4784,21 @@ button.compare__pick:focus-visible {
 	position: relative;
 }
 
+/* Drawn over the row's bottom edge rather than below it, so a target never
+   changes the row's height. It starts where the names do. */
+.row__progress {
+	position: absolute;
+	bottom: 1px;
+	left: calc(var(--nest, 0rem) + 0.25rem + var(--depth, 0) * 0.75rem + 1rem);
+	right: 0.25rem;
+	height: 2px;
+	border-radius: 1px;
+	background: var(--accent);
+	transform: scaleX(var(--reached));
+	transform-origin: left;
+	pointer-events: none;
+}
+
 /* The row being dragged stays where it is and fades, so the list does not
    reflow under the cursor while it is being aimed. */
 .documents__item[data-dragging] {

@@ -13,6 +13,7 @@ import { inManuscript } from "./tree";
 import type { Draggable } from "./reorder";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
+import { progress } from "./RowProgress";
 
 type Props = {
 	root: string;
@@ -106,6 +107,7 @@ export default function DocumentRow({
 					{abbreviated(row.words)}
 				</span>
 			</button>
+			{progress(row.words, document.target)}
 			<DocumentMenu
 				label={`Actions for ${document.title}`}
 				pointer={pointer}

@@ -65,6 +65,8 @@ export type Row =
 			folderKind: FolderKind | null;
 			/** The words in every document below it, however deep. */
 			words: number;
+			/** The words the writer means it to reach, null when unset. */
+			target: number | null;
 			/** How many nodes it holds directly, which is whether it opens. */
 			holds: number;
 			/** Whether what it holds is drawn under it. */
@@ -146,6 +148,7 @@ export function rows(
 			name: node.name,
 			folderKind: node.kind,
 			words: node.words,
+			target: node.target,
 			holds: node.children.length,
 			expanded,
 			trail,

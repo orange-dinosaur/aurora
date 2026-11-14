@@ -14,6 +14,18 @@ export function counted(words: number, target: number | null) {
 	return words === 1 ? "1 word" : `${words.toLocaleString()} words`;
 }
 
+/**
+ * How far along its target a row is, from 0 to 1, for the line under it.
+ * Writing past the target stays at 1: the line is full, not overflowing. Null
+ * when there is no target, so no line is drawn.
+ */
+export function reached(words: number, target: number | null) {
+	if (target === null || target <= 0) {
+		return null;
+	}
+	return Math.min(words / target, 1);
+}
+
 const KIND_NAMES: Record<FolderKind, string> = {
 	part: "Part",
 	chapter: "Chapter",

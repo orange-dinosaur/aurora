@@ -16,6 +16,7 @@ import type { Row } from "./tree";
 import { inManuscript } from "./tree";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
+import { progress } from "./RowProgress";
 
 type Props = {
 	root: string;
@@ -117,6 +118,7 @@ export default function FolderRow({
 				    appear together when the row is hovered. */}
 				<span className="folder__words">{abbreviated(row.words)}</span>
 			</button>
+			{progress(row.words, row.target)}
 
 			{/* Two menus share the right-hand end of a folder's row, so they sit
 			    in a slot rather than both reaching for the same edge. */}
