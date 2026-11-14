@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
 	abbreviated,
+	band,
 	counted,
 	deliberate,
 	described,
@@ -64,6 +65,17 @@ describe("how far a row is along its target", () => {
 
 	test("writing past the target keeps the line full", () => {
 		expect(reached(1800, 1500)).toBe(1);
+	});
+});
+
+describe("the colour of a progress line", () => {
+	test("each band starts at its own share", () => {
+		expect(band(0)).toBe("red");
+		expect(band(0.249)).toBe("red");
+		expect(band(0.25)).toBe("orange");
+		expect(band(0.5)).toBe("yellow");
+		expect(band(0.999)).toBe("yellow");
+		expect(band(1)).toBe("green");
 	});
 });
 

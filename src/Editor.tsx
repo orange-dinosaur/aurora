@@ -9,6 +9,7 @@ import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { EditorState, EditorThemeClasses } from "lexical";
 import type { TakeView } from "./bindings/TakeView";
+import { band } from "./cards";
 import { failure } from "./errors";
 import Icon from "./Icon";
 import type { Preferences } from "./types";
@@ -598,6 +599,7 @@ export default function Editor({
 				{target !== null && (
 					<div
 						className="editor__progress"
+						data-band={band(tally.words / target)}
 						style={
 							{
 								"--progress": `${Math.min(100, (tally.words / target) * 100)}%`,

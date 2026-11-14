@@ -26,6 +26,19 @@ export function reached(words: number, target: number | null) {
 	return Math.min(words / target, 1);
 }
 
+export type Band = "red" | "orange" | "yellow" | "green";
+
+/** The colour a progress line takes from its share of the target. */
+export function band(share: number): Band {
+	if (share >= 1) {
+		return "green";
+	}
+	if (share >= 0.5) {
+		return "yellow";
+	}
+	return share >= 0.25 ? "orange" : "red";
+}
+
 const KIND_NAMES: Record<FolderKind, string> = {
 	part: "Part",
 	chapter: "Chapter",

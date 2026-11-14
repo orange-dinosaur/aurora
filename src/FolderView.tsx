@@ -9,7 +9,7 @@ import type { FolderNode, OverviewCard, ProjectDocument } from "./types";
 import type { Making } from "./kinds";
 import { folderKinds, folderPlaceholder } from "./kinds";
 import type { FolderRef } from "./tree";
-import { counted, described, previewed, summarised } from "./cards";
+import { band, counted, described, previewed, summarised } from "./cards";
 import {
 	createDocument,
 	createFolder,
@@ -423,6 +423,9 @@ export default function FolderView({
 								{document.target !== null && (
 									<span
 										className="editor__progress card__progress"
+										data-band={band(
+											document.words / document.target,
+										)}
 										style={
 											{
 												"--progress": `${Math.min(100, (document.words / document.target) * 100)}%`,

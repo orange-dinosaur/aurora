@@ -2,7 +2,7 @@
 // share of the target its words have reached.
 
 import type { CSSProperties } from "react";
-import { reached } from "./cards";
+import { band, reached } from "./cards";
 
 export function progress(words: number, target: number | null) {
 	const share = reached(words, target);
@@ -12,6 +12,7 @@ export function progress(words: number, target: number | null) {
 	return (
 		<span
 			className="row__progress"
+			data-band={band(share)}
 			style={{ "--reached": share } as CSSProperties}
 			aria-hidden="true"
 		/>
