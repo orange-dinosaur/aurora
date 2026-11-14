@@ -11,6 +11,7 @@ function folder(name: string, children: TreeNode[] = []): TreeNode {
 		kind: null,
 		children,
 		words: 0,
+		target: null,
 		inBook: true,
 	};
 }
@@ -24,6 +25,7 @@ function document(path: string): TreeNode {
 		trail: path.split("/").slice(0, -1),
 		title: name.replace(/\.md$/, ""),
 		target: null,
+		words: 0,
 		inBook: true,
 	};
 }

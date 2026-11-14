@@ -758,6 +758,7 @@ mod tests {
 		};
 		NodeView::Document {
 			document: (&document).into(),
+			words: 0,
 			in_book,
 		}
 	}
@@ -774,6 +775,7 @@ mod tests {
 			kind,
 			children,
 			words: 0,
+			target: None,
 			in_book,
 		}
 	}

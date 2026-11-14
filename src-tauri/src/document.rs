@@ -160,6 +160,9 @@ pub enum NodeView {
 		/// The words in every document below it, however deep, less anything in
 		/// the Manuscript's front or back matter.
 		words: usize,
+		/// The words the writer means it to reach, `null` when they have not
+		/// said. Carried here so every row can draw its progress from one read.
+		target: Option<u32>,
 		/// Whether an export takes it. The sidebar draws what is out of the
 		/// book faint, so this rides along with the tree rather than being
 		/// asked for a node at a time the way a folder's other fields are.
@@ -172,6 +175,8 @@ pub enum NodeView {
 	Document {
 		#[serde(flatten)]
 		document: DocumentView,
+		/// The words in its body, counted the way a folder's are.
+		words: usize,
 		#[serde(rename = "inBook")]
 		in_book: bool,
 	},
@@ -342,6 +347,7 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 				kind,
 				children,
 				fields,
+				target,
 				..
 			} => {
 				let (children, words) = views(root, children, &format!("{prefix}{name}/"));
@@ -357,6 +363,7 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 					kind: *kind,
 					children,
 					words,
+					target: *target,
 					in_book: folder_in_book(fields),
 				});
 			}
@@ -372,6 +379,7 @@ fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
 				total += tally.words;
 				built.push(NodeView::Document {
 					document: (&document).into(),
+					words: tally.words,
 					in_book: tally.in_book,
 				});
 			}
@@ -2399,9 +2407,9 @@ mod tests {
 			} => (found == name)
 				.then_some(*in_book)
 				.or_else(|| found_in_book(children, name)),
-			NodeView::Document { document, in_book } => {
-				(document.title == name).then_some(*in_book)
-			}
+			NodeView::Document {
+				document, in_book, ..
+			} => (document.title == name).then_some(*in_book),
 		})
 	}
 
@@ -4126,6 +4134,36 @@ mod tests {
 			folder_progress(root, manuscript).unwrap().target,
 			Some(90_000)
 		);
+	}
+
+	#[test]
+	fn the_tree_carries_a_folder_target_and_a_document_count() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let manuscript = folder_id(&root, "Manuscript");
+		fs::write(
+			root.join("Manuscript").join("Chapter 1.md"),
+			"Elena andava a scuola\n",
+		)
+		.unwrap();
+		refresh_documents(root.clone()).unwrap();
+		set_folder_target(root.clone(), manuscript, Some(90_000)).unwrap();
+
+		let tree = document_tree(root).unwrap();
+		let Some(NodeView::Folder {
+			target, children, ..
+		}) = tree.iter().find(|node| node.id() == manuscript)
+		else {
+			panic!("no Manuscript in the tree");
+		};
+		assert_eq!(*target, Some(90_000));
+		let words = children.iter().find_map(|node| match node {
+			NodeView::Document {
+				document, words, ..
+			} if document.path == "Manuscript/Chapter 1.md" => Some(*words),
+			_ => None,
+		});
+		assert_eq!(words, Some(4));
 	}
 
 	#[test]

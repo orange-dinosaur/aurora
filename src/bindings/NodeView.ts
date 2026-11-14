@@ -19,6 +19,11 @@ kind: FolderKind | null, children: Array<NodeView>,
  */
 words: number, 
 /**
+ * The words the writer means it to reach, `null` when they have not
+ * said. Carried here so every row can draw its progress from one read.
+ */
+target: number | null, 
+/**
  * Whether an export takes it. The sidebar draws what is out of the
  * book faint, so this rides along with the tree rather than being
  * asked for a node at a time the way a folder's other fields are.
@@ -26,7 +31,11 @@ words: number,
  * Spelled out because `rename_all` on an enum renames its variants
  * and not the fields inside them.
  */
-inBook: boolean, } | { "node": "document", inBook: boolean, id: string, path: string, 
+inBook: boolean, } | { "node": "document", 
+/**
+ * The words in its body, counted the way a folder's are.
+ */
+words: number, inBook: boolean, id: string, path: string, 
 /**
  * The folders it sits in, from its section down. A list rather than one
  * joined name, because the search panel draws the whole of it and the tab

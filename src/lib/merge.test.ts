@@ -174,6 +174,7 @@ describe("named", () => {
 				name: "Chapter 1",
 				kind: null,
 				words: 0,
+				target: null,
 				inBook: true,
 				children: [
 					{
@@ -183,6 +184,7 @@ describe("named", () => {
 						trail: ["Chapter 1"],
 						title: "Scene 1",
 						target: null,
+						words: 0,
 						inBook: true,
 					},
 				],
