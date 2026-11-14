@@ -2096,7 +2096,7 @@ export default function Project({
 					}
 					root={root}
 					name={name}
-					reload={listing}
+					reload={listing + written}
 					bookWritten={bookWritten}
 					onWords={measured}
 					unsaved={tabs.flatMap((tab) =>
