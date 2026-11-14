@@ -1746,6 +1746,9 @@ export default function Project({
 						onMoved={() => void moved()}
 						onDelete={remove}
 						onDeleteFolder={removeFolder}
+						onRetarget={(target) =>
+							void retargetFolder(tab.folder.id, target)
+						}
 					/>
 				);
 			case "book":

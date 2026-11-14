@@ -7668,6 +7668,17 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 }
 
+/* In a header the field reads as the number it replaced, so it starts where
+   the number started. */
+.aim--sentence .editor__aim-input {
+	padding: 0;
+	text-align: left;
+}
+
+.aim--sentence .editor__aim-input::selection {
+	background: var(--accent-wash);
+}
+
 /* A hairline under the foot rather than a widget: the number says how far
    along the writer is, and this only gives it a shape. */
 .editor__progress {

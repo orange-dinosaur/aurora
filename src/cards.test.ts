@@ -148,7 +148,7 @@ describe("a folder row's count", () => {
 
 describe("the line under a folder's name", () => {
 	test("an empty folder still says so", () => {
-		expect(summarised([])).toBe("0 documents · 0 words");
+		expect(summarised([])).toEqual({ documents: "0 documents", words: 0 });
 	});
 
 	test("the documents at this level are counted", () => {
@@ -157,7 +157,7 @@ describe("the line under a folder's name", () => {
 				document("Chapter 1", 900),
 				document("Chapter 2", 350),
 			]),
-		).toBe("2 documents · 1,250 words");
+		).toEqual({ documents: "2 documents", words: 1_250 });
 	});
 
 	test("a folder card brings its words but is not a document", () => {
@@ -166,7 +166,7 @@ describe("the line under a folder's name", () => {
 				folder("Part One", "part", 4, 8_000),
 				document("Epilogue", 120),
 			]),
-		).toBe("1 document · 8,120 words");
+		).toEqual({ documents: "1 document", words: 8_120 });
 	});
 
 	test("front and back matter bring no words", () => {
@@ -176,7 +176,7 @@ describe("the line under a folder's name", () => {
 				folder("Part One", "part", 4, 8_000),
 				folder("Back Matter", "back-matter", 1, 150),
 			]),
-		).toBe("0 documents · 8,000 words");
+		).toEqual({ documents: "0 documents", words: 8_000 });
 	});
 });
 

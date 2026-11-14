@@ -22,6 +22,8 @@ import type { Spot } from "./reorder";
 import { useReorder } from "./reorder";
 import { failure } from "./errors";
 import { canTry } from "./takes";
+import Target from "./Target";
+import type { FolderProgress } from "./bindings/FolderProgress";
 
 /** A card being named: the name goes straight onto it, with no box. */
 function NamingCard({
@@ -88,6 +90,8 @@ type Props = {
 	// last typed before the files move, and close the tabs afterwards.
 	onDelete: (id: string) => Promise<void>;
 	onDeleteFolder: (id: string) => Promise<void>;
+	/** Sets or clears (with null) this folder's word target. */
+	onRetarget: (target: number | null) => void;
 };
 
 export default function FolderView({
@@ -105,8 +109,10 @@ export default function FolderView({
 	onMoved,
 	onDelete,
 	onDeleteFolder,
+	onRetarget,
 }: Props) {
 	const [cards, setCards] = useState<OverviewCard[]>([]);
+	const [target, setTarget] = useState<number | null>(null);
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
@@ -136,12 +142,20 @@ export default function FolderView({
 	const load = useCallback(async () => {
 		setStatus({ kind: "busy" });
 		try {
-			setCards(
-				await invoke<OverviewCard[]>("folder_overview", {
+			// The cards already add up to the folder's words; only its
+			// target lives elsewhere.
+			const [read, progress] = await Promise.all([
+				invoke<OverviewCard[]>("folder_overview", {
 					root,
 					id: folder.id,
 				}),
-			);
+				invoke<FolderProgress>("folder_progress", {
+					root,
+					id: folder.id,
+				}),
+			]);
+			setCards(read);
+			setTarget(progress.target);
 			setStatus({ kind: "idle" });
 		} catch (error) {
 			setStatus({ kind: "error", message: failure(error).message });
@@ -234,6 +248,8 @@ export default function FolderView({
 		);
 	}
 
+	const summary = summarised(cards);
+
 	return (
 		<div className="overview overview--folder">
 			<header className="overview__header">
@@ -246,7 +262,18 @@ export default function FolderView({
 						</p>
 					)}
 					<h2 className="overview__title">{folder.name}</h2>
-					<p className="overview__count">{summarised(cards)}</p>
+					{/* A div, not a paragraph: the words become a form while a
+					    target is typed. */}
+					<div className="overview__count">
+						{summary.documents} ·{" "}
+						<Target
+							words={summary.words}
+							target={target}
+							onTarget={onRetarget}
+							merging={merging}
+							inline
+						/>
+					</div>
 				</div>
 				<NewMenu
 					label={`New in ${folder.name}`}

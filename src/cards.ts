@@ -120,6 +120,9 @@ export function deliberate(detail: number) {
  * the ones sitting in it, since a folder below it is not one; the words are
  * the whole of what is written under it, which every card now carries. Front
  * and back matter are left out of the words, as they are in the sidebar.
+ *
+ * The two halves come back apart because the words half is also where the
+ * folder's target is set.
  */
 export function summarised(cards: OverviewCard[]) {
 	let words = 0;
@@ -133,6 +136,8 @@ export function summarised(cards: OverviewCard[]) {
 			documents += 1;
 		}
 	}
-	const kept = documents === 1 ? "1 document" : `${documents} documents`;
-	return `${kept} · ${words.toLocaleString()} words`;
+	return {
+		documents: documents === 1 ? "1 document" : `${documents} documents`,
+		words,
+	};
 }
