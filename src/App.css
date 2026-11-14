@@ -4711,6 +4711,15 @@ button.compare__pick:focus-visible {
 	opacity: 1;
 }
 
+/* The book's length, left of the + the way a folder row's count sits left of
+   its menus. */
+.section__words {
+	flex: none;
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+}
+
 .section__header .menu__trigger {
 	width: 24px;
 	height: 24px;
@@ -4921,15 +4930,18 @@ button.compare__pick:focus-visible {
 	}
 }
 
-/* There when asked for, so a long book does not carry a column of figures. */
-.folder__words {
+/* There when asked for outside the Manuscript, where a column of figures says
+   nothing about the book. Inside it every row keeps its count in view. */
+.folder__words,
+.document__words {
 	flex: none;
 	font-variant-numeric: tabular-nums;
 	opacity: 0;
 }
 
-.documents__item:hover .folder__words,
-.documents__item:focus-within .folder__words {
+.documents__item:hover :is(.folder__words, .document__words),
+.documents__item:focus-within :is(.folder__words, .document__words),
+.documents__item--counted :is(.folder__words, .document__words) {
 	opacity: 1;
 }
 

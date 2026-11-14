@@ -2,12 +2,14 @@
 // and what may be done to it. It draws the field instead when it is the row
 // being retitled, and is not draggable while it does.
 
+import { abbreviated } from "./cards";
 import DocumentMenu from "./DocumentMenu";
 import { useRightClick } from "./Menu";
 import NameField from "./NameField";
 import { isSubject } from "./subjects";
 import { canTry } from "./takes";
 import type { Row } from "./tree";
+import { inManuscript } from "./tree";
 import type { Draggable } from "./reorder";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
@@ -75,11 +77,13 @@ export default function DocumentRow({
 
 	return (
 		<li
-			className={
-				row.dim
-					? "documents__item documents__item--out"
-					: "documents__item"
-			}
+			className={[
+				"documents__item",
+				row.dim && "documents__item--out",
+				inManuscript(row) && "documents__item--counted",
+			]
+				.filter(Boolean)
+				.join(" ")}
 			style={indent(row.depth)}
 			{...drag}
 			onContextMenu={pointer.open}
@@ -98,6 +102,9 @@ export default function DocumentRow({
 					data-dirty={unsaved ? "" : undefined}
 					aria-hidden="true"
 				/>
+				<span className="document__words">
+					{abbreviated(row.words)}
+				</span>
 			</button>
 			<DocumentMenu
 				label={`Actions for ${document.title}`}

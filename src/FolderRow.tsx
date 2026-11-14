@@ -13,6 +13,7 @@ import type { Making } from "./kinds";
 import { folderPlaceholder } from "./kinds";
 import type { Draggable } from "./reorder";
 import type { Row } from "./tree";
+import { inManuscript } from "./tree";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
 
@@ -77,11 +78,13 @@ export default function FolderRow({
 
 	return (
 		<li
-			className={
-				row.dim
-					? "documents__item documents__item--out"
-					: "documents__item"
-			}
+			className={[
+				"documents__item",
+				row.dim && "documents__item--out",
+				inManuscript(row) && "documents__item--counted",
+			]
+				.filter(Boolean)
+				.join(" ")}
 			style={indent(row.depth)}
 			{...drag}
 			onContextMenu={pointer.open}

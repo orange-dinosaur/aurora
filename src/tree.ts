@@ -72,7 +72,21 @@ export type Row =
 			/** As `FolderRef.trail`: from the section down, itself included. */
 			trail: string[];
 	  })
-	| (Place & { kind: "document"; document: ProjectDocument });
+	| (Place & {
+			kind: "document";
+			document: ProjectDocument;
+			/** The words in its body. */
+			words: number;
+	  });
+
+/**
+ * Whether the row sits in the Manuscript, where every row keeps its count in
+ * view. Both kinds' trails start at their section.
+ */
+export function inManuscript(row: Row): boolean {
+	const trail = row.kind === "folder" ? row.trail : row.document.trail;
+	return trail[0] === MANUSCRIPT;
+}
 
 /**
  * Everything under one folder, depth first: a folder, then all it holds if it
@@ -114,7 +128,12 @@ export function rows(
 				title: node.title,
 				target: node.target,
 			};
-			const row: Row = { kind: "document", ...place, document };
+			const row: Row = {
+				kind: "document",
+				...place,
+				document,
+				words: node.words,
+			};
 			return [row];
 		}
 

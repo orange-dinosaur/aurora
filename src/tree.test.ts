@@ -6,6 +6,7 @@ import {
 	folded,
 	foldersAbove,
 	folderOf,
+	inManuscript,
 	inside,
 	rows,
 	sections,
@@ -187,6 +188,33 @@ describe("laying a level out as rows", () => {
 				target: null,
 			},
 		});
+	});
+});
+
+describe("which rows keep their count in view", () => {
+	test("every row in the Manuscript does, however deep", () => {
+		const manuscript = [
+			folder("Part One", [document("Manuscript/Part One/Chapter 1.md")]),
+			document("Manuscript/Epilogue.md"),
+		];
+		const laid = rows(manuscript, "g", null, 0, ["Manuscript"]);
+		expect(laid).toHaveLength(3);
+		expect(laid.every(inManuscript)).toBe(true);
+	});
+
+	test("rows in any other section do not", () => {
+		const characters = [
+			folder("Minor", [document("Characters/Minor/Argos.md")]),
+			document("Characters/Elena.md"),
+		];
+		const laid = rows(characters, "g", null, 0, ["Characters"]);
+		expect(laid.some(inManuscript)).toBe(false);
+	});
+
+	test("a document row carries the words Rust counted", () => {
+		const node = { ...document("Manuscript/Chapter 1.md"), words: 1_204 };
+		const [row] = rows([node], "g");
+		expect(row.kind === "document" && row.words).toBe(1_204);
 	});
 });
 

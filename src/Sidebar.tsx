@@ -14,12 +14,13 @@ import {
 	useRightClick,
 	type Point,
 } from "./Menu";
+import { abbreviated } from "./cards";
 import { SIDEBAR } from "./panels";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
 import type { FolderNode, ProjectDocument, TreeNode } from "./types";
 import type { Making } from "./kinds";
-import { folderKinds } from "./kinds";
+import { MANUSCRIPT, folderKinds } from "./kinds";
 import {
 	createDocument,
 	createFolder,
@@ -428,7 +429,9 @@ export default function Sidebar({
 						const verb = shut ? "Unfold" : "Fold";
 						const list = shut
 							? []
-							: rows(section.children, section.id, open);
+							: rows(section.children, section.id, open, 0, [
+									section.name,
+								]);
 						// Nowhere inside what is being dragged can be where it
 						// lands. Only the section holding it has any such rows;
 						// for the others this comes back empty.
@@ -532,6 +535,11 @@ export default function Sidebar({
 											{section.name}
 										</button>
 									</h3>
+									{section.name === MANUSCRIPT && (
+										<span className="section__words">
+											{abbreviated(section.words)}
+										</span>
+									)}
 									<NewMenu
 										label={`New in ${section.name}`}
 										kind={section.kind}
