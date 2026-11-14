@@ -2244,6 +2244,49 @@ body,
 	width: 0;
 }
 
+/* In the side's corner, inside the padding or the page's top gutter, so it
+   covers nothing. */
+.project__dismiss {
+	position: absolute;
+	top: var(--space-xxs);
+	right: var(--space-xxs);
+	z-index: 8;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	color: var(--text-faint);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.project__dismiss:hover {
+	color: var(--text);
+}
+
+.project__dismiss svg {
+	width: 13px;
+	height: 13px;
+}
+
+.project__dismiss:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -2px;
+}
+
+/* The editor's tools share that corner, so they step left of the ✕. */
+.project__pane:has(> .project__dismiss) .editor__tools {
+	right: calc(var(--gutter) + 20px);
+}
+
+.project__pane:has(> .project__dismiss) .editor__head {
+	padding-right: calc(7rem + 20px);
+}
+
 /* Laid over the side's top edge, so marking a side current moves nothing. */
 .project__pane--current::after {
 	content: "";

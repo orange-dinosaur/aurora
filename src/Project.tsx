@@ -57,6 +57,7 @@ import type { Workspace } from "./bindings/Workspace";
 import {
 	act,
 	activate,
+	close,
 	closeBack,
 	dropOn,
 	fits,
@@ -1952,6 +1953,17 @@ export default function Project({
 				onFocusCapture={enter}
 			>
 				{body}
+				{where !== null && onPage.other !== null && !focused && (
+					<button
+						type="button"
+						className="project__dismiss"
+						title="Close this side"
+						aria-label="Close this side"
+						onClick={() => setOnPage((now) => close(now, key))}
+					>
+						<Icon name="x" />
+					</button>
+				)}
 			</div>
 		);
 	}

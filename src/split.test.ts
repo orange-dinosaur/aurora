@@ -162,6 +162,22 @@ describe("close", () => {
 		expect(close(split, "mira")).toEqual(split);
 	});
 
+	test("an empty current side leaves the other filling the page", () => {
+		const empty: Sides = {
+			current: null,
+			other: { key: "scene", left: true },
+		};
+		expect(close(empty, null)).toEqual(single("scene"));
+	});
+
+	test("an empty other side leaves the current filling the page", () => {
+		const empty: Sides = {
+			current: "notes",
+			other: { key: null, left: false },
+		};
+		expect(close(empty, null)).toEqual(single("notes"));
+	});
+
 	test("without a split, leaves the next tab to the caller", () => {
 		expect(close(single("scene"), "scene")).toEqual(single("scene"));
 	});

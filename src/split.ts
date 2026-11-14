@@ -99,9 +99,10 @@ export function swap(sides: Sides): Sides {
 /**
  * A tab was closed. Closing either side's tab ends the split and the other side
  * fills the page. Without a split this has nothing to say: the caller picks
- * the next tab as it always has.
+ * the next tab as it always has. A side's ✕ passes its key, which is null for
+ * an empty side, and ends the split the same way.
  */
-export function close(sides: Sides, key: string): Sides {
+export function close(sides: Sides, key: string | null): Sides {
 	const { current, other } = sides;
 	if (other === null) {
 		return sides;
