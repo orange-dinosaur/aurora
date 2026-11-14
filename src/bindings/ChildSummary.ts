@@ -15,4 +15,8 @@ children: number,
 /**
  * The words in every document below it, however deep.
  */
-words: number, } | { "node": "document" } & DocumentSummary;
+words: number, 
+/**
+ * The words the writer means it to reach, `null` when unset.
+ */
+target: number | null, } | { "node": "document" } & DocumentSummary;

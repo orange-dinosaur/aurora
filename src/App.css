@@ -5555,6 +5555,12 @@ button.compare__pick:focus-visible {
 	color: var(--text-dim);
 }
 
+/* A folder with a target gives its count a second line, which stays under the
+   first rather than sharing the card's spare room with it. */
+.card__meta + .card__meta {
+	margin-top: 0;
+}
+
 /* The card lays its children out with a gap already, so the bar drops the
    margin it carries in the editor's foot. */
 .card__progress {

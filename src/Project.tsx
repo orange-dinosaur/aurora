@@ -1749,6 +1749,12 @@ export default function Project({
 						onRetarget={(target) =>
 							void retargetFolder(tab.folder.id, target)
 						}
+						onRetargetDocument={(id, target) =>
+							void retarget(id, target)
+						}
+						onRetargetFolder={(id, target) =>
+							void retargetFolder(id, target)
+						}
 					/>
 				);
 			case "book":

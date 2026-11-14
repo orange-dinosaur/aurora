@@ -22,8 +22,53 @@ import type { Spot } from "./reorder";
 import { useReorder } from "./reorder";
 import { failure } from "./errors";
 import { canTry } from "./takes";
-import Target from "./Target";
+import Target, { TargetField } from "./Target";
 import type { FolderProgress } from "./bindings/FolderProgress";
+
+/**
+ * A card's face: a button that opens what it stands for, or, while its target
+ * is typed, the same face without one, since a form cannot sit in a button.
+ */
+function Card({
+	className,
+	aiming,
+	onClick,
+	children,
+}: {
+	className: string;
+	aiming: boolean;
+	onClick: () => void;
+	children: ReactNode;
+}) {
+	return aiming ? (
+		<div className={className}>{children}</div>
+	) : (
+		<button type="button" className={className} onClick={onClick}>
+			{children}
+		</button>
+	);
+}
+
+/**
+ * The shape of a card's count against its target. The line above it is the
+ * real report, and there is nothing to draw until a target is set.
+ */
+function bar(words: number, target: number | null) {
+	if (target === null) {
+		return null;
+	}
+	return (
+		<span
+			className="editor__progress card__progress"
+			data-band={band(words / target)}
+			style={
+				{
+					"--progress": `${Math.min(100, (words / target) * 100)}%`,
+				} as CSSProperties
+			}
+		/>
+	);
+}
 
 /** A card being named: the name goes straight onto it, with no box. */
 function NamingCard({
@@ -92,6 +137,9 @@ type Props = {
 	onDeleteFolder: (id: string) => Promise<void>;
 	/** Sets or clears (with null) this folder's word target. */
 	onRetarget: (target: number | null) => void;
+	/** The same for a document or a folder shown as a card. */
+	onRetargetDocument: (id: string, target: number | null) => void;
+	onRetargetFolder: (id: string, target: number | null) => void;
 };
 
 export default function FolderView({
@@ -110,9 +158,13 @@ export default function FolderView({
 	onDelete,
 	onDeleteFolder,
 	onRetarget,
+	onRetargetDocument,
+	onRetargetFolder,
 }: Props) {
 	const [cards, setCards] = useState<OverviewCard[]>([]);
 	const [target, setTarget] = useState<number | null>(null);
+	// The card whose target is being typed, if one is.
+	const [aiming, setAiming] = useState<string | null>(null);
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
@@ -329,9 +381,9 @@ export default function FolderView({
 								{...reorder.item(spot(card, at))}
 								draggable={!merging}
 							>
-								<button
-									type="button"
+								<Card
 									className="card card--folder"
+									aiming={aiming === card.id}
 									onClick={() =>
 										onOpenFolder({
 											id: card.id,
@@ -353,9 +405,35 @@ export default function FolderView({
 											card.kind,
 											card.children,
 											card.words,
+											card.target,
 										)}
 									</span>
-								</button>
+									{aiming === card.id ? (
+										<span className="card__meta">
+											<TargetField
+												words={card.words}
+												target={card.target}
+												onTarget={(target) =>
+													onRetargetFolder(
+														card.id,
+														target,
+													)
+												}
+												onDone={() => setAiming(null)}
+											/>
+										</span>
+									) : (
+										card.target !== null && (
+											<span className="card__meta">
+												{counted(
+													card.words,
+													card.target,
+												)}
+											</span>
+										)
+									)}
+									{bar(card.words, card.target)}
+								</Card>
 								<FolderMenu
 									label={`Actions for ${card.name}`}
 									root={root}
@@ -374,6 +452,7 @@ export default function FolderView({
 											id: card.id,
 										})
 									}
+									onTarget={() => setAiming(card.id)}
 									onDelete={() =>
 										void remove(card.id, "folder")
 									}
@@ -422,9 +501,9 @@ export default function FolderView({
 							{...reorder.item(spot(document, at))}
 							draggable={!merging}
 						>
-							<button
-								type="button"
+							<Card
 								className="card"
+								aiming={aiming === document.id}
 								onClick={() => onSelect(document)}
 							>
 								<span className="card__ordinal">
@@ -440,27 +519,26 @@ export default function FolderView({
 									)}
 								</span>
 								<span className="card__meta">
-									{document.modified === null
-										? "This document’s file is no longer there"
-										: `${counted(document.words, document.target)} · ${when(document.modified)}`}
+									{aiming === document.id ? (
+										<TargetField
+											words={document.words}
+											target={document.target}
+											onTarget={(target) =>
+												onRetargetDocument(
+													document.id,
+													target,
+												)
+											}
+											onDone={() => setAiming(null)}
+										/>
+									) : document.modified === null ? (
+										"This document’s file is no longer there"
+									) : (
+										`${counted(document.words, document.target)} · ${when(document.modified)}`
+									)}
 								</span>
-								{/* The line above is the real report; this is
-								    only its shape, and there is nothing to
-								    draw until a target is set. */}
-								{document.target !== null && (
-									<span
-										className="editor__progress card__progress"
-										data-band={band(
-											document.words / document.target,
-										)}
-										style={
-											{
-												"--progress": `${Math.min(100, (document.words / document.target) * 100)}%`,
-											} as CSSProperties
-										}
-									/>
-								)}
-							</button>
+								{bar(document.words, document.target)}
+							</Card>
 							<DocumentMenu
 								label={`Actions for ${document.title}`}
 								root={root}
@@ -481,6 +559,7 @@ export default function FolderView({
 										id: document.id,
 									})
 								}
+								onTarget={() => setAiming(document.id)}
 								onDelete={() =>
 									void remove(document.id, "document")
 								}

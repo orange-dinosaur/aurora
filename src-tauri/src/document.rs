@@ -138,6 +138,8 @@ pub enum ChildSummary {
 		children: usize,
 		/// The words in every document below it, however deep.
 		words: usize,
+		/// The words the writer means it to reach, `null` when unset.
+		target: Option<u32>,
 	},
 	Document(DocumentSummary),
 }
@@ -1824,13 +1826,15 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 		.unwrap_or_default()
 		.iter()
 		.map(|node| match node {
-			// A folder card says what it is and how much it holds. What the
-			// writer said about it is the panel's business, not the card's.
+			// A folder card says what it is, how much it holds and what it is
+			// aiming at. What the writer said about it is the panel's
+			// business, not the card's.
 			Node::Folder {
 				id,
 				name,
 				kind,
 				children,
+				target,
 				..
 			} => ChildSummary::Folder {
 				id: *id,
@@ -1838,6 +1842,7 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 				kind: *kind,
 				children: children.len(),
 				words: words_under(&counting_root, children, &format!("{prefix}/{name}/")),
+				target: *target,
 			},
 			Node::Document {
 				id, name, target, ..
@@ -2923,6 +2928,23 @@ mod tests {
 	}
 
 	#[test]
+	fn a_folder_card_carries_its_target() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		fs::create_dir(root.join("Manuscript").join("Part One")).unwrap();
+		refresh(&root).unwrap();
+		let part = folder_id(&root, "Manuscript/Part One");
+		set_folder_target(root.clone(), part, Some(8_000)).unwrap();
+
+		let overview = folder_overview(root.clone(), section_id(&root, "Manuscript")).unwrap();
+		let target = overview.iter().find_map(|card| match card {
+			ChildSummary::Folder { id, target, .. } if *id == part => Some(*target),
+			_ => None,
+		});
+		assert_eq!(target, Some(Some(8_000)));
+	}
+
+	#[test]
 	fn an_overview_looks_only_at_what_a_folder_holds_directly() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
@@ -3076,6 +3098,7 @@ mod tests {
 			kind: Some(FolderKind::Part),
 			children: 2,
 			words: 1200,
+			target: None,
 		})
 		.unwrap();
 		assert_eq!(json["node"], "folder");

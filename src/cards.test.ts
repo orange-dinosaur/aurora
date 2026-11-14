@@ -25,6 +25,7 @@ function folder(
 		kind,
 		children: held,
 		words,
+		target: null,
 	} satisfies OverviewCard;
 }
 
@@ -117,6 +118,10 @@ describe("a folder card's line", () => {
 
 	test("one item is not one items", () => {
 		expect(described("part", 1, 1)).toBe("Part · 1 item · 1 word");
+	});
+
+	test("with a target the words leave for a line of their own", () => {
+		expect(described("chapter", 3, 4200, 8000)).toBe("Chapter · 3 items");
 	});
 
 	test("front and back matter are named, not taken for chapters", () => {

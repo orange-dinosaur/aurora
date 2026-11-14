@@ -56,10 +56,15 @@ export function described(
 	kind: FolderKind | null,
 	children: number,
 	words: number,
+	target: number | null = null,
 ) {
 	const what = kind === null ? "Folder" : KIND_NAMES[kind];
 	const held = children === 1 ? "1 item" : `${children} items`;
-	return `${what} · ${held} · ${counted(words, null)}`;
+	// With a target the words get a line of their own, the one a document
+	// card gives them, so they are not said twice.
+	return target === null
+		? `${what} · ${held} · ${counted(words, null)}`
+		: `${what} · ${held}`;
 }
 
 /**
