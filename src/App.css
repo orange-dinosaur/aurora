@@ -4784,6 +4784,18 @@ button.compare__pick:focus-visible {
 	position: relative;
 }
 
+/* A row's target field takes the count's slot in the row's own line, so the
+   row keeps its height and its highlight. */
+.row__aim {
+	flex: none;
+	align-items: center;
+}
+
+.row__aim .editor__aim-input {
+	width: 9ch;
+	cursor: text;
+}
+
 /* Drawn over the row's bottom edge rather than below it, so a target never
    changes the row's height. It starts where the names do. */
 .row__progress {

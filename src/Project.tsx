@@ -2142,6 +2142,10 @@ export default function Project({
 					onCreated={(document) => void created(document)}
 					onRenamed={renamed}
 					onFolderRenamed={renamedFolder}
+					onRetarget={(id, target) => void retarget(id, target)}
+					onRetargetFolder={(id, target) =>
+						void retargetFolder(id, target)
+					}
 					onChanged={changed}
 					onMoved={() => void moved()}
 					onDelete={remove}

@@ -107,6 +107,9 @@ type Props = {
 	/** The renamed document, and the title it answered to before. */
 	onRenamed: (document: ProjectDocument, was: string) => void;
 	onFolderRenamed: (folder: FolderNode) => void;
+	/** Sets or clears (with null) the word target of a document or a folder. */
+	onRetarget: (id: string, target: number | null) => void;
+	onRetargetFolder: (id: string, target: number | null) => void;
 	/** The manifest changed in a way every listing of it has to read again. */
 	onChanged: () => void;
 	/** The same, plus the paths of open documents may have changed under them. */
@@ -161,6 +164,8 @@ export default function Sidebar({
 	onCreated,
 	onRenamed,
 	onFolderRenamed,
+	onRetarget,
+	onRetargetFolder,
 	onChanged,
 	onMoved,
 	onWords,
@@ -617,6 +622,12 @@ export default function Sidebar({
 																id: row.id,
 															})
 														}
+														onTarget={(target) =>
+															onRetargetFolder(
+																row.id,
+																target,
+															)
+														}
 														onDelete={() =>
 															void remove(
 																row.id,
@@ -700,6 +711,12 @@ export default function Sidebar({
 															kind: "open",
 															id: row.document.id,
 														})
+													}
+													onTarget={(target) =>
+														onRetarget(
+															row.document.id,
+															target,
+														)
 													}
 													onDelete={() =>
 														void remove(

@@ -2,6 +2,7 @@
 // and what may be done to it. It draws the field instead when it is the row
 // being retitled, and is not draggable while it does.
 
+import { useState } from "react";
 import { abbreviated } from "./cards";
 import DocumentMenu from "./DocumentMenu";
 import { useRightClick } from "./Menu";
@@ -14,6 +15,7 @@ import type { Draggable } from "./reorder";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
 import { progress } from "./RowProgress";
+import { TargetField } from "./Target";
 
 type Props = {
 	root: string;
@@ -33,6 +35,7 @@ type Props = {
 	onTry: () => void;
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
+	onTarget: (target: number | null) => void;
 	onDelete: () => void;
 	onRetitle: (name: string) => void;
 	onCancelRetitle: () => void;
@@ -51,12 +54,27 @@ export default function DocumentRow({
 	onTry,
 	onMove,
 	onRename,
+	onTarget,
 	onDelete,
 	onRetitle,
 	onCancelRetitle,
 }: Props) {
 	const document = row.document;
 	const pointer = useRightClick();
+	const [aiming, setAiming] = useState(false);
+
+	const title = (
+		<>
+			<span className="document__title">{document.title}</span>
+			{/* Always in the row and faded when there is nothing to say, so
+			    the title never shifts as the writer types. */}
+			<span
+				className="document__dirty"
+				data-dirty={unsaved ? "" : undefined}
+				aria-hidden="true"
+			/>
+		</>
+	);
 
 	if (renaming !== null) {
 		return (
@@ -86,27 +104,37 @@ export default function DocumentRow({
 				.filter(Boolean)
 				.join(" ")}
 			style={indent(row.depth)}
-			{...drag}
+			{...(aiming ? {} : drag)}
 			onContextMenu={pointer.open}
 		>
-			<button
-				type="button"
-				className="document"
-				aria-current={current ? "page" : undefined}
-				onClick={() => onOpen(false)}
-			>
-				<span className="document__title">{document.title}</span>
-				{/* Always in the row and faded when there is nothing to say, so
-				    the title never shifts as the writer types. */}
-				<span
-					className="document__dirty"
-					data-dirty={unsaved ? "" : undefined}
-					aria-hidden="true"
-				/>
-				<span className="document__words">
-					{abbreviated(row.words)}
-				</span>
-			</button>
+			{aiming ? (
+				// A form cannot sit inside a button, so the row is drawn
+				// without one while its count is a field.
+				<div
+					className="document"
+					aria-current={current ? "page" : undefined}
+				>
+					{title}
+					<TargetField
+						compact
+						target={document.target}
+						onTarget={onTarget}
+						onDone={() => setAiming(false)}
+					/>
+				</div>
+			) : (
+				<button
+					type="button"
+					className="document"
+					aria-current={current ? "page" : undefined}
+					onClick={() => onOpen(false)}
+				>
+					{title}
+					<span className="document__words">
+						{abbreviated(row.words)}
+					</span>
+				</button>
+			)}
 			{progress(row.words, document.target)}
 			<DocumentMenu
 				label={`Actions for ${document.title}`}
@@ -126,6 +154,7 @@ export default function DocumentRow({
 				onMove={onMove}
 				onBeside={() => onOpen(true)}
 				onRename={onRename}
+				onTarget={() => setAiming(true)}
 				onDelete={onDelete}
 			/>
 		</li>

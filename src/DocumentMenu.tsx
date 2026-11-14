@@ -16,6 +16,8 @@ type Props = {
 	/** Given only in the binder, where the row also answers a right-click. */
 	onBeside?: () => void;
 	onRename: () => void;
+	/** Given only in the binder, where the row's count opens the field. */
+	onTarget?: () => void;
 	onDelete: () => void;
 	/** Given only for a subject, which is the only kind with a page. */
 	onSubject?: () => void;
@@ -60,6 +62,7 @@ function Actions({
 	onMove,
 	onBeside,
 	onRename,
+	onTarget,
 	onDelete,
 	onSubject,
 	onTry,
@@ -134,6 +137,18 @@ function Actions({
 			>
 				Rename
 			</MenuItem>
+			{onTarget !== undefined && (
+				<MenuItem
+					disabled={merging}
+					title={why}
+					onSelect={() => {
+						close();
+						onTarget();
+					}}
+				>
+					Set target…
+				</MenuItem>
+			)}
 			{onSubject !== undefined && (
 				<MenuItem
 					onSelect={() => {

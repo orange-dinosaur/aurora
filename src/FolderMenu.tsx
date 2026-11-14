@@ -15,6 +15,8 @@ type Props = {
 	/** Given only in the binder, where the row also answers a right-click. */
 	onBeside?: () => void;
 	onRename: () => void;
+	/** Given only in the binder, where the row's count opens the field. */
+	onTarget?: () => void;
 	onDelete: () => void;
 	merging: boolean;
 };
@@ -51,6 +53,7 @@ function Actions({
 	onMove,
 	onBeside,
 	onRename,
+	onTarget,
 	onDelete,
 	merging,
 }: Omit<Props, "label"> & { close: () => void }) {
@@ -103,6 +106,18 @@ function Actions({
 			>
 				Rename
 			</MenuItem>
+			{onTarget !== undefined && (
+				<MenuItem
+					disabled={merging}
+					title={why}
+					onSelect={() => {
+						close();
+						onTarget();
+					}}
+				>
+					Set target…
+				</MenuItem>
+			)}
 			<MenuItem
 				danger
 				disabled={merging}

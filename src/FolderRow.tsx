@@ -3,6 +3,7 @@
 // retitled, because a rename happens where the name already is, and is not
 // draggable while it does.
 
+import { useState } from "react";
 import FolderMenu from "./FolderMenu";
 import { useRightClick } from "./Menu";
 import { abbreviated } from "./cards";
@@ -17,6 +18,7 @@ import { inManuscript } from "./tree";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
 import { progress } from "./RowProgress";
+import { TargetField } from "./Target";
 
 type Props = {
 	root: string;
@@ -34,6 +36,7 @@ type Props = {
 	onNew: (making: Making) => void;
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
+	onTarget: (target: number | null) => void;
 	onDelete: () => void;
 	onToggle: () => void;
 	onRetitle: (name: string) => void;
@@ -52,12 +55,14 @@ export default function FolderRow({
 	onNew,
 	onMove,
 	onRename,
+	onTarget,
 	onDelete,
 	onToggle,
 	onRetitle,
 	onCancelRetitle,
 }: Props) {
 	const pointer = useRightClick();
+	const [aiming, setAiming] = useState(false);
 
 	if (renaming !== null) {
 		return (
@@ -87,7 +92,7 @@ export default function FolderRow({
 				.filter(Boolean)
 				.join(" ")}
 			style={indent(row.depth)}
-			{...drag}
+			{...(aiming ? {} : drag)}
 			onContextMenu={pointer.open}
 		>
 			{/* Over the row rather than inside it, for the reason the menus at
@@ -106,18 +111,38 @@ export default function FolderRow({
 				</button>
 			)}
 
-			<button
-				type="button"
-				className="folder"
-				data-kind={row.folderKind ?? undefined}
-				aria-current={current ? "page" : undefined}
-				onClick={() => onOpen(false)}
-			>
-				<span className="folder__name">{row.name}</span>
-				{/* Left of the menus' slot rather than in it, so the two can
-				    appear together when the row is hovered. */}
-				<span className="folder__words">{abbreviated(row.words)}</span>
-			</button>
+			{aiming ? (
+				// A form cannot sit inside a button, so the row is drawn
+				// without one while its count is a field.
+				<div
+					className="folder"
+					data-kind={row.folderKind ?? undefined}
+					aria-current={current ? "page" : undefined}
+				>
+					<span className="folder__name">{row.name}</span>
+					<TargetField
+						compact
+						target={row.target}
+						onTarget={onTarget}
+						onDone={() => setAiming(false)}
+					/>
+				</div>
+			) : (
+				<button
+					type="button"
+					className="folder"
+					data-kind={row.folderKind ?? undefined}
+					aria-current={current ? "page" : undefined}
+					onClick={() => onOpen(false)}
+				>
+					<span className="folder__name">{row.name}</span>
+					{/* Left of the menus' slot rather than in it, so the two can
+					    appear together when the row is hovered. */}
+					<span className="folder__words">
+						{abbreviated(row.words)}
+					</span>
+				</button>
+			)}
 			{progress(row.words, row.target)}
 
 			{/* Two menus share the right-hand end of a folder's row, so they sit
@@ -143,6 +168,7 @@ export default function FolderRow({
 					onMove={onMove}
 					onBeside={() => onOpen(true)}
 					onRename={onRename}
+					onTarget={() => setAiming(true)}
 					onDelete={onDelete}
 					merging={merging}
 				/>

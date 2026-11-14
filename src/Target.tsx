@@ -25,21 +25,6 @@ export function reading(words: number, target: number | null): string {
  */
 export default function Target({ words, target, onTarget, merging }: Props) {
 	const [typing, setTyping] = useState(false);
-	const [draft, setDraft] = useState("");
-	const input = useRef<HTMLInputElement>(null);
-
-	// The field opens on whatever the target is now, ready to be typed over
-	// rather than edited a digit at a time.
-	useEffect(() => {
-		if (typing) {
-			input.current?.select();
-		}
-	}, [typing]);
-
-	function open() {
-		setDraft(target === null ? "" : String(target));
-		setTyping(true);
-	}
 
 	if (!typing) {
 		return (
@@ -54,7 +39,7 @@ export default function Target({ words, target, onTarget, merging }: Props) {
 							? "Set a word target"
 							: "Change or clear the word target"
 				}
-				onClick={open}
+				onClick={() => setTyping(true)}
 			>
 				{reading(words, target)}
 			</button>
@@ -62,14 +47,48 @@ export default function Target({ words, target, onTarget, merging }: Props) {
 	}
 
 	return (
+		<TargetField
+			target={target}
+			onTarget={onTarget}
+			onDone={() => setTyping(false)}
+		/>
+	);
+}
+
+type FieldProps = {
+	target: number | null;
+	onTarget: (target: number | null) => void;
+	/** Called once the field is finished with, saved or abandoned. */
+	onDone: () => void;
+	/** For a binder row: no note beside it, which a row has no room for. */
+	compact?: boolean;
+};
+
+/** The field a target is typed into, wherever a count opens one. */
+export function TargetField({
+	target,
+	onTarget,
+	onDone,
+	compact = false,
+}: FieldProps) {
+	const [draft, setDraft] = useState(target === null ? "" : String(target));
+	const input = useRef<HTMLInputElement>(null);
+
+	// The field opens on whatever the target is now, ready to be typed over
+	// rather than edited a digit at a time.
+	useEffect(() => {
+		input.current?.select();
+	}, []);
+
+	return (
 		<form
-			className="editor__aim"
+			className={compact ? "editor__aim row__aim" : "editor__aim"}
 			onSubmit={(event) => {
 				event.preventDefault();
 				// An empty field is how a target is taken away; Rust reads a
 				// zero the same way.
 				onTarget(draft === "" ? null : Number(draft));
-				setTyping(false);
+				onDone();
 			}}
 			onBlur={(event) => {
 				// Clicking away abandons it, the same as Escape, which a
@@ -79,7 +98,7 @@ export default function Target({ words, target, onTarget, merging }: Props) {
 					moved instanceof Node &&
 					event.currentTarget.contains(moved);
 				if (!inside) {
-					setTyping(false);
+					onDone();
 				}
 			}}
 		>
@@ -90,7 +109,7 @@ export default function Target({ words, target, onTarget, merging }: Props) {
 				value={draft}
 				inputMode="numeric"
 				aria-label="Word target"
-				placeholder="none"
+				placeholder={compact ? "no target" : "none"}
 				// Digits only: a target is a count, and refusing the rest here
 				// saves explaining it afterwards.
 				onChange={(event) =>
@@ -99,13 +118,15 @@ export default function Target({ words, target, onTarget, merging }: Props) {
 				onKeyDown={(event) => {
 					if (event.key === "Escape") {
 						event.preventDefault();
-						setTyping(false);
+						onDone();
 					}
 				}}
 			/>
-			<span className="editor__aim-note">
-				{draft === "" ? "no target" : "word target"}
-			</span>
+			{!compact && (
+				<span className="editor__aim-note">
+					{draft === "" ? "no target" : "word target"}
+				</span>
+			)}
 		</form>
 	);
 }
