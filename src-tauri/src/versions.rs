@@ -24,7 +24,7 @@ use crate::history::HISTORY_FILE;
 use crate::merge;
 use crate::project::{
 	Book, COVER_NAMES, Error, Format, MANIFEST_FILE, Manifest, Result, read_manifest,
-	remove_if_there, to_json, write_atomic, write_book,
+	remove_if_there, to_json, write_atomic, write_manifest,
 };
 use crate::takes::{TAKES_DIR, in_order, restore};
 use crate::tree::{self, Node, Take};
@@ -1407,7 +1407,12 @@ pub fn put_back_book(root: PathBuf, version: String) -> Result<()> {
 			None => remove_if_there(&root.join(name))?,
 		}
 	}
-	write_book(root, then.book)
+	let mut manifest = read_manifest(&root)?;
+	manifest.book = Book {
+		identifier: manifest.book.identifier,
+		..then.book
+	};
+	write_manifest(&root, &mut manifest)
 }
 
 /// Puts the whole project back as a version had it. Stats and the Trash are

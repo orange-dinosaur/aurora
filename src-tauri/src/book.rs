@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::document::{DocumentView, NodeView, body, document_tree};
 use crate::docx::docx;
 use crate::epub::{Flavour, epub};
-use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, cover_bytes, matter, read_book};
+use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, cover_bytes, matter, read_manifest};
 use crate::text::text;
 use crate::tree::FolderKind;
 
@@ -344,7 +344,7 @@ pub struct Extent {
 
 /// What an export would take, with the words counted the way the sidebar
 /// counts them.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn book_extent(root: PathBuf) -> Result<Extent> {
 	let compiled = compile(&document_tree(root.clone())?);
 	let words = prose(&root, &compiled)
@@ -403,7 +403,7 @@ pub fn export(
 	formats: &[ExportFormat],
 	mut report: impl FnMut(Progress),
 ) -> Result<Vec<String>> {
-	let book = read_book(root.to_path_buf())?;
+	let book = read_manifest(root)?.book;
 	let compiled = compile(&document_tree(root.to_path_buf())?);
 	let scenes = all_scenes(&compiled).len();
 	let total = scenes + formats.len();
@@ -1103,6 +1103,23 @@ mod tests {
 		assert_eq!(file_stem("Either/Or: A Fragment"), "EitherOr A Fragment");
 		assert_eq!(file_stem(".hidden"), "hidden");
 		assert_eq!(file_stem("  ?  "), "Untitled");
+	}
+
+	#[test]
+	fn an_export_leaves_an_older_manifest_as_it_was() {
+		let parent = tempfile::tempdir().unwrap();
+		let out = tempfile::tempdir().unwrap();
+		let root = ithaca(parent.path());
+		let path = root.join(crate::project::MANIFEST_FILE);
+		let mut manifest: serde_json::Value =
+			serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+		manifest["version"] = 3.into();
+		fs::write(&path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+		let before = fs::read(&path).unwrap();
+
+		export(&root, out.path(), &[ExportFormat::Markdown], |_| {}).unwrap();
+
+		assert_eq!(fs::read(&path).unwrap(), before);
 	}
 
 	#[test]

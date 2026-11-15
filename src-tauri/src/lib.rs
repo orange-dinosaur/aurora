@@ -230,8 +230,10 @@ pub fn run() {
 			// Closing the window waits for the frontend's flush, but quitting
 			// (macOS ⌘Q, the Dock, logging out) does not go through the window
 			// at all. Hold the quit, ask for the writes, and go when they land.
+			// With no window left there is nothing to write, so it goes at once.
 			if let tauri::RunEvent::ExitRequested { api, code, .. } = &event
 				&& code.is_none()
+				&& !tauri::Manager::webview_windows(handle).is_empty()
 			{
 				api.prevent_exit();
 				quit_after_flush(handle);

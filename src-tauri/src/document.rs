@@ -222,7 +222,9 @@ struct Counted {
 /// Every file this process has counted, by canonical path, held until it
 /// quits. A tree read stats every document and opens only the ones that moved.
 ///
-/// The commands run on Tauri's thread pool, so the map needs a lock. A `Mutex`
+/// A command without `async` runs on the main thread, which is what keeps
+/// manifest writes one at a time. The commands that only read run on Tauri's
+/// thread pool and share this map, so it needs a lock. A `Mutex`
 /// rather than an `RwLock`: a hit reads and a miss writes, each holds the map
 /// for about as long as a hash lookup, and readers do not queue long enough
 /// for the second lock to earn its keep. A panic while counting must not take
@@ -1004,7 +1006,7 @@ pub fn create_folder(
 
 /// The project as a tree, straight from the manifest. Every listing of the
 /// project is this one, however much of it the caller draws.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn document_tree(root: PathBuf) -> Result<Vec<NodeView>> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
@@ -1805,7 +1807,7 @@ pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
 /// What a folder holds, one card at a time, in the order the folder keeps
 /// them. Reads the manifest rather than the folder, the way `document_tree`
 /// does.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
@@ -1866,7 +1868,7 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 /// Every document in the project with its text, in manifest order. One call
 /// rather than one per document: the search reads the whole project on the
 /// first query, and a round trip per file would be the bulk of that cost.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);

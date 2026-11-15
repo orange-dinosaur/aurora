@@ -775,9 +775,19 @@ pub(crate) fn to_json<T: Serialize>(value: &T) -> Result<Vec<u8>> {
 /// the previous version intact rather than a truncated one. The temporary file
 /// replaces the extension rather than adding one, which keeps it out of `scan`.
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+	use std::io::Write;
+
 	let temp = path.with_extension("tmp");
-	fs::write(&temp, bytes)?;
-	fs::rename(&temp, path)?;
+	let written = fs::File::create(&temp)
+		.and_then(|mut file| {
+			file.write_all(bytes)?;
+			file.sync_all()
+		})
+		.and_then(|()| fs::rename(&temp, path));
+	if let Err(e) = written {
+		let _ = fs::remove_file(&temp);
+		return Err(e.into());
+	}
 	Ok(())
 }
 
@@ -900,8 +910,8 @@ fn create_and_remember(
 		return Err(Error::RelativePath);
 	}
 
-	let root = create_from(parent, name, format, start, at)?;
 	let mut store = store::load(store_path)?;
+	let root = create_from(parent, name, format, start, at)?;
 	store.remember(name, root.clone(), at);
 	store::save(store_path, &store)?;
 	Ok(root)
@@ -1248,7 +1258,7 @@ pub fn open_project(app: AppHandle, root: PathBuf) -> Result<OpenedProject> {
 	open_and_remember(&store_path(&app)?, &root, OffsetDateTime::now_utc())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recent_projects(app: AppHandle) -> Result<Vec<RecentSummary>> {
 	summarise_recents(&store_path(&app)?)
 }
@@ -1334,7 +1344,8 @@ pub fn read_book(root: PathBuf) -> Result<Book> {
 
 /// Replaces everything the writer has said about the book, which arrives whole
 /// because the page that sends it holds the whole of it. The identifier is not
-/// theirs to change and is kept from the manifest on disk.
+/// theirs to change and is kept from the manifest on disk, as is the cover,
+/// which `set_cover` owns and a page holding an older copy would write back.
 #[tauri::command]
 pub fn write_book(root: PathBuf, book: Book) -> Result<()> {
 	if !root.is_absolute() {
@@ -1344,6 +1355,7 @@ pub fn write_book(root: PathBuf, book: Book) -> Result<()> {
 	let mut manifest = read_manifest(&root)?;
 	manifest.book = Book {
 		identifier: manifest.book.identifier,
+		cover: std::mem::take(&mut manifest.book.cover),
 		..book
 	};
 	write_manifest(&root, &mut manifest)
@@ -1370,6 +1382,7 @@ pub fn set_cover(root: PathBuf, source: PathBuf) -> Result<String> {
 	// Choosing the project's own copy again is a no-op, not a file copied over
 	// itself, which would leave nothing behind.
 	if !same_file(&source, &destination) {
+		write_atomic(&destination, &fs::read(&source)?)?;
 		// A JPEG replacing a PNG would otherwise leave the old copy in the
 		// project folder for good.
 		for old in COVER_NAMES {
@@ -1377,7 +1390,6 @@ pub fn set_cover(root: PathBuf, source: PathBuf) -> Result<String> {
 				remove_if_there(&root.join(old))?;
 			}
 		}
-		fs::copy(&source, &destination)?;
 	}
 
 	manifest.book.cover = name.to_owned();
@@ -2108,19 +2120,83 @@ mod tests {
 		let dir = tempfile::tempdir().unwrap();
 		version_three_project(dir.path());
 		let root = dir.path().to_path_buf();
-		write_book(
-			root.clone(),
-			Book {
-				cover: "../cover.png".to_owned(),
-				..read_book(root.clone()).unwrap()
-			},
-		)
-		.unwrap();
+		let mut manifest = read_manifest(&root).unwrap();
+		manifest.book.cover = "../cover.png".to_owned();
+		write_manifest(&root, &mut manifest).unwrap();
 
 		assert!(matches!(
 			cover_bytes(&root).unwrap_err(),
 			Error::OutsideProject
 		));
+	}
+
+	#[test]
+	fn a_failed_atomic_write_leaves_no_temporary_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let target = dir.path().join("missing").join("aurora.json");
+		assert!(write_atomic(&target, b"{}").is_err());
+
+		let blocked = dir.path().join("blocked");
+		fs::create_dir(&blocked).unwrap();
+		assert!(write_atomic(&blocked, b"{}").is_err());
+		assert!(!dir.path().join("blocked.tmp").exists());
+	}
+
+	#[test]
+	fn saving_the_book_keeps_the_cover_on_disk() {
+		let elsewhere = tempfile::tempdir().unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+		set_cover(root.clone(), picture(elsewhere.path(), "art.png", b"one")).unwrap();
+
+		write_book(
+			root.clone(),
+			Book {
+				cover: String::new(),
+				..read_book(root.clone()).unwrap()
+			},
+		)
+		.unwrap();
+
+		assert_eq!(read_book(root.clone()).unwrap().cover, "cover.png");
+		assert_eq!(cover_bytes(&root).unwrap(), b"one");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn a_read_only_source_does_not_block_the_next_cover() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let elsewhere = tempfile::tempdir().unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+		let first = picture(elsewhere.path(), "first.png", b"one");
+		fs::set_permissions(&first, fs::Permissions::from_mode(0o444)).unwrap();
+
+		set_cover(root.clone(), first).unwrap();
+		set_cover(
+			root.clone(),
+			picture(elsewhere.path(), "second.png", b"two"),
+		)
+		.unwrap();
+
+		assert_eq!(cover_bytes(&root).unwrap(), b"two");
+	}
+
+	#[test]
+	fn a_cover_that_cannot_be_read_keeps_the_old_one() {
+		let elsewhere = tempfile::tempdir().unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		version_three_project(dir.path());
+		let root = dir.path().to_path_buf();
+		set_cover(root.clone(), picture(elsewhere.path(), "art.png", b"one")).unwrap();
+
+		assert!(set_cover(root.clone(), elsewhere.path().join("gone.jpg")).is_err());
+
+		assert_eq!(read_book(root.clone()).unwrap().cover, "cover.png");
+		assert_eq!(cover_bytes(&root).unwrap(), b"one");
 	}
 
 	#[test]
