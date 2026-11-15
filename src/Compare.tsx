@@ -404,7 +404,8 @@ export default function Compare({
 			setAgain((times) => times + 1);
 		}
 	}
-	const asked = a === undefined || busy ? null : { root, version: a.id };
+	const asked =
+		a === undefined || busy || merging ? null : { root, version: a.id };
 
 	// One difference is the text written back with that run as it was.
 	function backOne(index: number) {

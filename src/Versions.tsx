@@ -486,7 +486,7 @@ export default function Versions({
 											: () => onCompare(checkpoint)
 									}
 									onPutBack={
-										noDocument || busy
+										noDocument || busy || merging !== null
 											? null
 											: () => putBack(checkpoint)
 									}

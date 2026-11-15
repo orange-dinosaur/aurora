@@ -26,7 +26,7 @@ export type Value = string | string[] | Ties | boolean;
  * looks at the text. Rust matches the same shape in `document::body`, which is
  * how the word count and the card excerpt skip it.
  */
-const FRONT_MATTER = /^---\n[\s\S]*?\n---[ \t]*\n?/;
+const FRONT_MATTER = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 
 /**
  * The key a scene carries when the writer has taken it out of the book. It is
@@ -49,7 +49,7 @@ export const BUILT_IN = [
 export type Fields = Map<string, Value>;
 
 /** A key at the left margin, and whatever follows the colon. */
-const KEY = /^([A-Za-z0-9_][^:\n]*):(.*)$/;
+const KEY = /^([\p{L}\p{N}_][^:\n]*):(.*)$/u;
 
 /** One item of a block list, indented under its key. */
 const ITEM = /^\s*-\s*(.*?)\s*$/;
@@ -62,7 +62,7 @@ const NESTED = /:(?:\s|$)/;
  * indent is captured because every pair in a block has to share it: a line that
  * steps in again is a map deeper than Aurora reads.
  */
-const PAIR = /^(\s+)([A-Za-z0-9_"'][^:\n]*):(.*)$/;
+const PAIR = /^(\s+)("[^"\n]*"|'[^'\n]*'|[\p{L}\p{N}_][^:\n]*):(.*)$/u;
 
 /** What a plain scalar may not start with, since YAML gives it a meaning. */
 const OPAQUE = /^[#&*!|>{}%@`]/;
@@ -98,7 +98,9 @@ function lines(block: string): string[] {
 }
 
 /** A scalar or a flow list as written, or null if it is not either. */
-function read(text: string): Value | null {
+function read(source: string): Value | null {
+	// A comment after a flow list is not part of it.
+	const text = source.replace(/^(\[.*\])\s+#.*$/, "$1");
 	if (text.startsWith("[") && text.endsWith("]")) {
 		const inside = text.slice(1, -1).trim();
 		if (inside === "") {
@@ -302,7 +304,11 @@ export function segments(block: string): Segment[] {
 
 			if (item !== null) {
 				shape = "list";
-				const value = NESTED.test(item[1]) ? null : unquote(item[1]);
+				// A quoted item may hold a colon without being a map.
+				const value =
+					!/^["']/.test(item[1]) && NESTED.test(item[1])
+						? null
+						: unquote(item[1]);
 				if (value === null) {
 					usable = false;
 				} else {
@@ -433,9 +439,32 @@ export function flag(fields: Fields, key: string): boolean {
 export function split(text: string): { block: string; body: string } {
 	const found = FRONT_MATTER.exec(text);
 
-	return found === null
+	return found === null || !reads(found[0])
 		? { block: "", body: text }
 		: { block: found[0].trimEnd(), body: text.slice(found[0].length) };
+}
+
+/**
+ * Whether a fenced stretch is front matter rather than prose between two scene
+ * breaks: it opens on a line with something in it, and every line is blank, a
+ * comment, indented, a list item or a `key:` line. Rust asks the same of the
+ * same lines in `document::split`.
+ */
+function reads(block: string): boolean {
+	const inside = lines(block);
+
+	return (
+		inside.length > 0 &&
+		inside[0].trim() !== "" &&
+		inside.every(
+			(line) =>
+				line.trim() === "" ||
+				/^\s*#/.test(line) ||
+				/^\s/.test(line) ||
+				/^-(?:\s|$)/.test(line) ||
+				KEY.test(line),
+		)
+	);
 }
 
 /** The keys of the fields the writer added themselves, in the file's order. */

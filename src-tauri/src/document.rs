@@ -12,8 +12,8 @@ use time::{Date, Month, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::project::{
-	Error, MANUSCRIPT, Manifest, Result, adopt_matter, matter, read_manifest, validate_name,
-	write_atomic, write_manifest,
+	Error, MANUSCRIPT, Manifest, Result, adopt_matter, editable, matter, read_manifest,
+	remove_if_there, validate_name, write_atomic, write_json, write_manifest,
 };
 use crate::takes;
 use crate::tree::{self, Fields, FolderKind, Node};
@@ -86,6 +86,9 @@ impl From<&Document> for DocumentView {
 /// into it is a rename rather than a copy, and `scan` never looks at it: it
 /// only ever reads the section folders the manifest names.
 pub const TRASH_DIR: &str = ".trash";
+
+/// Where the trash keeps a record of each node it holds, beside the entries.
+const NODES_DIR: &str = ".nodes";
 
 /// How much of a document's opening the overview carries. Long enough to
 /// recognise a chapter by, short enough that a whole section stays small.
@@ -553,27 +556,62 @@ fn merge(known: &[Node], found: &[Node]) -> Vec<Node> {
 	let mut merged = Vec::new();
 	let mut seen: HashSet<&str> = HashSet::new();
 
+	// One thing gone and one new thing of the same kind in the same folder is
+	// a rename made outside Aurora, so the known node keeps its id, target and
+	// place under the new name. Any other count is left as additions and
+	// removals, since nothing says which went with which.
+	let known_names: HashSet<&str> = known.iter().map(Node::name).collect();
+	let missing: Vec<&Node> = known
+		.iter()
+		.filter(|node| !found.iter().any(|other| other.name() == node.name()))
+		.collect();
+	let unknown: Vec<&Node> = found
+		.iter()
+		.filter(|node| !known_names.contains(node.name()))
+		.collect();
+	let renamed = match (missing[..].first(), unknown[..].first()) {
+		(Some(gone), Some(new))
+			if missing.len() == 1
+				&& unknown.len() == 1
+				&& std::mem::discriminant(*gone) == std::mem::discriminant(*new) =>
+		{
+			Some((*gone, *new))
+		}
+		_ => None,
+	};
+
 	for node in known {
 		// A name recorded twice would otherwise be two nodes over one file.
 		if !seen.insert(node.name()) {
 			continue;
 		}
-		let Some(on_disk) = found.iter().find(|other| other.name() == node.name()) else {
+		let Some(on_disk) = found
+			.iter()
+			.find(|other| other.name() == node.name())
+			.or_else(|| {
+				renamed
+					.filter(|(gone, _)| std::ptr::eq(*gone, node))
+					.map(|(_, new)| new)
+			})
+		else {
 			continue;
 		};
+		seen.insert(on_disk.name());
 
 		merged.push(match (node, on_disk) {
 			(
 				Node::Folder {
 					id,
-					name,
 					kind,
 					target,
 					fields,
 					children,
+					..
 				},
 				Node::Folder {
-					children: below, ..
+					name,
+					children: below,
+					..
 				},
 			) => Node::Folder {
 				id: *id,
@@ -583,7 +621,13 @@ fn merge(known: &[Node], found: &[Node]) -> Vec<Node> {
 				fields: fields.clone(),
 				children: merge(children, below),
 			},
-			(Node::Document { .. }, Node::Document { .. }) => node.clone(),
+			(Node::Document { .. }, Node::Document { name: new, .. }) => {
+				let mut kept = node.clone();
+				if let Node::Document { name, .. } = &mut kept {
+					name.clone_from(new);
+				}
+				kept
+			}
 			// A name that was a file and is now a directory, or the other way
 			// about, is a new thing under an old name. What is on disk wins.
 			_ => on_disk.clone(),
@@ -616,19 +660,51 @@ pub fn refresh(root: &Path) -> Result<Manifest> {
 /// the block; the two have to agree on where a document starts. The block comes
 /// back with its fences and nothing after them, which is the shape the parser
 /// there is given.
+///
+/// The block closes on the first later line that is `---` and nothing but
+/// spaces or tabs, and only counts when every line between the fences reads
+/// as front matter. A scene that opens with a scene break would otherwise
+/// have its first stretch of prose lifted off as a block.
 fn split(text: &str) -> (&str, &str) {
-	let Some(rest) = text.strip_prefix("---\n") else {
-		return ("", text);
+	let none = ("", text);
+	let Some(rest) = text.strip_prefix("---") else {
+		return none;
 	};
-	let Some(close) = rest.find("\n---") else {
-		return ("", text);
+	let Some(rest) = rest
+		.strip_prefix("\r\n")
+		.or_else(|| rest.strip_prefix('\n'))
+	else {
+		return none;
 	};
 
-	let after = rest[close + 4..].trim_start_matches([' ', '\t']);
-	let prose = after.strip_prefix('\n').unwrap_or(after);
+	let mut offset = text.len() - rest.len();
+	for (at, line) in rest.split_inclusive('\n').enumerate() {
+		let bare = line.trim_end_matches(['\r', '\n']);
+		if at > 0
+			&& let Some(tail) = bare.strip_prefix("---")
+			&& tail.chars().all(|c| c == ' ' || c == '\t')
+		{
+			return (&text[..offset + 3], &text[offset + line.len()..]);
+		}
+		if (at == 0 && bare.trim().is_empty()) || !front_matter_line(bare) {
+			return none;
+		}
+		offset += line.len();
+	}
+	none
+}
 
-	// The opening fence and the closing one are four bytes each.
-	(&text[..close + 8], prose)
+/// Whether a line could sit inside a front matter block: blank, a comment,
+/// indented, a list item, or a `key:` line. The same test as in
+/// `src/frontmatter.ts`.
+fn front_matter_line(line: &str) -> bool {
+	line.trim().is_empty()
+		|| line.trim_start().starts_with('#')
+		|| line.starts_with(char::is_whitespace)
+		|| line
+			.strip_prefix('-')
+			.is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+		|| (line.starts_with(|c: char| c.is_alphanumeric() || c == '_') && line.contains(':'))
 }
 
 /// A document's prose, with any front matter block lifted off the top.
@@ -767,19 +843,49 @@ pub(crate) fn resolve(manifest: &Manifest, root: &Path, id: Uuid) -> Result<Path
 		_ => return Err(Error::UnknownDocument),
 	};
 
-	// Canonicalising both sides resolves `..` and follows symlinks, so the
-	// comparison is between two real locations.
-	let path = root.join(relative);
-	let path = path.canonicalize().map_err(|e| match e.kind() {
-		io::ErrorKind::NotFound => Error::DocumentMissing,
-		_ => Error::Io(e),
-	})?;
+	within(&root.canonicalize()?, &relative)
+}
 
-	if !path.starts_with(root.canonicalize()?) {
+/// A document's path under a root that is already canonical. Canonicalising
+/// both sides resolves `..` and follows symlinks, so the comparison is
+/// between two real locations. Tree reads call this with one root for every
+/// document rather than canonicalising it again each time.
+fn within(base: &Path, relative: &str) -> Result<PathBuf> {
+	let path = base
+		.join(relative)
+		.canonicalize()
+		.map_err(|e| match e.kind() {
+			io::ErrorKind::NotFound => Error::DocumentMissing,
+			_ => Error::Io(e),
+		})?;
+
+	if !path.starts_with(base) {
 		return Err(Error::OutsideProject);
 	}
 
 	Ok(path)
+}
+
+/// An existing `path`, once it is known to lead somewhere under `base`.
+fn under(base: &Path, path: &Path) -> Result<PathBuf> {
+	let path = path.canonicalize()?;
+	if !path.starts_with(base.canonicalize()?) {
+		return Err(Error::OutsideProject);
+	}
+	Ok(path)
+}
+
+/// Makes `dir` and what is missing above it, but only once the nearest part
+/// that exists is known to lead under `base`. Checking afterwards would leave
+/// the folders already made at the end of a symlink.
+fn make_inside(base: &Path, dir: &Path) -> Result<()> {
+	let near = dir
+		.ancestors()
+		.find(|above| above.exists())
+		.ok_or(Error::BadDocumentPath)?;
+	under(base, near)?;
+	fs::create_dir_all(dir)?;
+	Ok(())
 }
 
 /// The text of one document.
@@ -814,6 +920,7 @@ pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
 #[ts(export)]
 pub struct Opened {
 	pub text: String,
+	#[ts(type = "number")]
 	pub seen: i64,
 }
 
@@ -882,8 +989,14 @@ fn project_path(manifest: &Manifest, base: &Path, path: &str, markdown: bool) ->
 		return Err(Error::BadDocumentPath);
 	};
 
-	let ordinary =
-		|part: &str| !part.is_empty() && part != "." && part != ".." && !part.contains('\\');
+	let ordinary = |part: &str| {
+		!part.starts_with('.')
+			&& !part.contains('\\')
+			&& matches!(
+				Path::new(part).components().collect::<Vec<_>>()[..],
+				[std::path::Component::Normal(_)]
+			)
+	};
 
 	let mut parts = rest.split('/').peekable();
 	let mut file = base.join(section);
@@ -909,11 +1022,7 @@ fn project_path(manifest: &Manifest, base: &Path, path: &str, markdown: bool) ->
 /// manifest still knew the path, a fresh one if it had to be adopted again.
 #[tauri::command]
 pub fn restore_document(root: PathBuf, path: String, text: String) -> Result<DocumentView> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-
-	let manifest = read_manifest(&root)?;
+	let manifest = editable(&root)?;
 	add_document(&root, &manifest, &path, &text)
 }
 
@@ -928,12 +1037,9 @@ fn add_document(root: &Path, manifest: &Manifest, path: &str, text: &str) -> Res
 	}
 
 	let folder = file.parent().ok_or(Error::BadDocumentPath)?;
-	fs::create_dir_all(folder)?;
 	// A section folder can be a symlink the writer made, so where it actually
 	// leads is what decides whether this write stays inside the project.
-	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
-		return Err(Error::OutsideProject);
-	}
+	make_inside(root, folder)?;
 
 	write_atomic(&file, text.as_bytes())?;
 
@@ -960,14 +1066,10 @@ fn without_extension(name: &str) -> &str {
 /// chapter three folders down.
 #[tauri::command]
 pub fn create_document(root: PathBuf, parent_id: Uuid, name: String) -> Result<DocumentView> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-
+	let manifest = editable(&root)?;
 	let name = without_extension(&name);
 	validate_name(name)?;
 
-	let manifest = read_manifest(&root)?;
 	let inside = folder_at(&manifest, parent_id)?.0;
 
 	add_document(&root, &manifest, &format!("{inside}/{name}.md"), "")
@@ -994,12 +1096,9 @@ pub fn create_folder(
 	name: String,
 	kind: Option<FolderKind>,
 ) -> Result<NodeView> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	let mut manifest = editable(&root)?;
 	validate_name(&name)?;
 
-	let mut manifest = read_manifest(&root)?;
 	let chain = tree::trail(&manifest.nodes, parent_id).ok_or(Error::UnknownFolder)?;
 	let (inside, parent) = folder_at(&manifest, parent_id)?;
 
@@ -1027,9 +1126,7 @@ pub fn create_folder(
 	// Where the folder above actually leads is what decides whether this stays
 	// inside the project: a section folder can be a symlink the writer made.
 	let above = directory.parent().ok_or(Error::BadDocumentPath)?;
-	if !above.canonicalize()?.starts_with(root.canonicalize()?) {
-		return Err(Error::OutsideProject);
-	}
+	under(&root, above)?;
 	fs::create_dir(&directory)?;
 
 	let made = Node::Folder {
@@ -1110,17 +1207,17 @@ fn taken(from: &Path, to: &Path) -> Result<bool> {
 
 #[tauri::command]
 pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<DocumentView> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-
+	let mut manifest = editable(&root)?;
 	let name = without_extension(&name);
 	validate_name(name)?;
 
-	let mut manifest = read_manifest(&root)?;
-	let from = resolve(&manifest, &root, id)?;
+	// The safety check. The path used below is built the way `to` is, since a
+	// canonical one (`\\?\` on Windows) is not the same shape and would hide a
+	// change of case.
+	resolve(&manifest, &root, id)?;
 
 	let was = tree::path(&manifest.nodes, id).ok_or(Error::UnknownDocument)?;
+	let from = document_path(&manifest, &root, &was)?;
 	let file = format!("{name}.md");
 	// A document is renamed where it stands, so its path is the one it has
 	// with the last part swapped.
@@ -1169,12 +1266,9 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 /// rules stand on that, so the top level of a project holds still.
 #[tauri::command]
 pub fn rename_folder(root: PathBuf, id: Uuid, name: String) -> Result<NodeView> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	let mut manifest = editable(&root)?;
 	validate_name(&name)?;
 
-	let mut manifest = read_manifest(&root)?;
 	if !matches!(tree::find(&manifest.nodes, id), Some(Node::Folder { .. })) {
 		return Err(Error::UnknownFolder);
 	}
@@ -1226,9 +1320,7 @@ pub fn rename_folder(root: PathBuf, id: Uuid, name: String) -> Result<NodeView> 
 	// Where the folder above actually leads is what decides whether this stays
 	// inside the project, the same as when the folder was made.
 	let over = to.parent().ok_or(Error::BadDocumentPath)?;
-	if !over.canonicalize()?.starts_with(root.canonicalize()?) {
-		return Err(Error::OutsideProject);
-	}
+	under(&root, over)?;
 	// The manifest has already said no sibling is called this. Anything at the
 	// new name is something Aurora does not know about, and is not to be
 	// written over.
@@ -1254,15 +1346,12 @@ pub fn rename_folder(root: PathBuf, id: Uuid, name: String) -> Result<NodeView> 
 /// intention, not part of the text.
 #[tauri::command]
 pub fn set_document_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Result<DocumentView> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	let mut manifest = editable(&root)?;
 
 	// Aiming at no words is the same as not aiming, and saying so here keeps
 	// the two apart everywhere above.
 	let target = target.filter(|words| *words > 0);
 
-	let mut manifest = read_manifest(&root)?;
 	match tree::find_mut(&mut manifest.nodes, id) {
 		Some(Node::Document { target: aim, .. }) => *aim = target,
 		_ => return Err(Error::UnknownDocument),
@@ -1282,13 +1371,10 @@ pub fn set_document_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Resu
 /// the whole Manuscript are aimed the same way.
 #[tauri::command]
 pub fn set_folder_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	let mut manifest = editable(&root)?;
 
 	let target = target.filter(|words| *words > 0);
 
-	let mut manifest = read_manifest(&root)?;
 	match tree::find_mut(&mut manifest.nodes, id) {
 		Some(Node::Folder { target: aim, .. }) => *aim = target,
 		_ => return Err(Error::UnknownFolder),
@@ -1355,11 +1441,7 @@ pub fn folder_fields(root: PathBuf, id: Uuid) -> Result<Fields> {
 /// holds the whole set.
 #[tauri::command]
 pub fn set_folder_fields(root: PathBuf, id: Uuid, fields: Fields) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-
-	let mut manifest = read_manifest(&root)?;
+	let mut manifest = editable(&root)?;
 	match tree::find_mut(&mut manifest.nodes, id) {
 		Some(Node::Folder { fields: held, .. }) => *held = fields,
 		_ => return Err(Error::UnknownFolder),
@@ -1403,14 +1485,35 @@ fn stamp(at: OffsetDateTime) -> String {
 	)
 }
 
+/// Where the manifest's record of a trashed node waits, beside the trash and
+/// at the same path as the entry it describes.
+fn node_record(root: &Path, entry: &str) -> PathBuf {
+	root.join(TRASH_DIR)
+		.join(NODES_DIR)
+		.join(format!("{entry}.json"))
+}
+
+/// Takes away the folders left empty by an entry leaving, from the one it sat
+/// in up to `top`, which stays.
+fn tidy(top: &Path, from: &Path) {
+	let mut dir = from;
+	while dir != top && dir.starts_with(top) && fs::remove_dir(dir).is_ok() {
+		match dir.parent() {
+			Some(above) => dir = above,
+			None => break,
+		}
+	}
+}
+
 /// Moves a node into the project's trash and drops it from the manifest.
 ///
 /// **The trash mirrors the project.** What is deleted lands at the path it sat
-/// at, with the moment of the deletion in front of its own name. That is the
-/// whole record of where it came from: nothing is written down beside it, and a
-/// writer looking in `.trash` sees the shape they deleted from. A folder goes
-/// in as one directory, so what was inside it stays inside it. Takes go along,
-/// to the same path under `.trash/.takes`.
+/// at, with the moment of the deletion in front of its own name, so a writer
+/// looking in `.trash` sees the shape they deleted from. The node itself, with
+/// its kind, fields, targets and order, is written as JSON to the same path
+/// under `.trash/.nodes`, which is what lets a folder come back as it was. A
+/// folder goes in as one directory, so what was inside it stays inside it.
+/// Takes go along, to the same path under `.trash/.takes`.
 ///
 /// The name keeps its stamp so that deleting two things called the same thing
 /// does not lose the first.
@@ -1438,13 +1541,10 @@ fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
 	// The folders above it are made in the trash as they are needed, so the
 	// mirror only ever holds the paths something was actually deleted from.
 	let into = root.join(TRASH_DIR).join(inside);
-	fs::create_dir_all(&into)?;
 	// The trash is an ordinary folder a writer can replace with a symlink, so
 	// where it actually leads is what decides whether this move stays inside
 	// the project.
-	if !into.canonicalize()?.starts_with(root.canonicalize()?) {
-		return Err(Error::OutsideProject);
-	}
+	make_inside(root, &into)?;
 
 	let at = stamp(at);
 	let mut stamped = format!("{at} {name}");
@@ -1457,22 +1557,25 @@ fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
 	}
 
 	// The file moves first. If writing the manifest then fails, the next
-	// refresh drops the node anyway, since it is no longer in the section.
+	// refresh drops the node anyway, since it is no longer in the section. The
+	// manifest follows at once, so a failure moving the takes cannot leave the
+	// binder holding a row over a file that has gone; the takes move last,
+	// from the manifest as it stood.
 	fs::rename(&from, into.join(&stamped))?;
-	takes::into_trash(root, &manifest, &was, &format!("{inside}/{stamped}"))?;
-
-	tree::remove(&mut manifest.nodes, id);
-	write_manifest(root, &mut manifest)
+	let before = manifest.clone();
+	if let Some(node) = tree::remove(&mut manifest.nodes, id) {
+		let record = node_record(root, &format!("{inside}/{stamped}"));
+		make_inside(root, record.parent().ok_or(Error::BadDocumentPath)?)?;
+		write_json(&record, &node)?;
+	}
+	write_manifest(root, &mut manifest)?;
+	takes::into_trash(root, &before, &was, &format!("{inside}/{stamped}"))
 }
 
 /// Deletes a document, which is to say puts it in the project's trash.
 #[tauri::command]
 pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-
-	let manifest = read_manifest(&root)?;
+	let manifest = editable(&root)?;
 	if !matches!(tree::find(&manifest.nodes, id), Some(Node::Document { .. })) {
 		return Err(Error::UnknownDocument);
 	}
@@ -1483,11 +1586,7 @@ pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
 /// one directory and comes back out of it as one.
 #[tauri::command]
 pub fn delete_folder(root: PathBuf, id: Uuid) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-
-	let manifest = read_manifest(&root)?;
+	let manifest = editable(&root)?;
 	if !matches!(tree::find(&manifest.nodes, id), Some(Node::Folder { .. })) {
 		return Err(Error::UnknownFolder);
 	}
@@ -1507,11 +1606,7 @@ pub fn delete_folder(root: PathBuf, id: Uuid) -> Result<()> {
 /// section stays where it is, and nothing may be moved inside itself.
 #[tauri::command]
 pub fn move_node(root: PathBuf, id: Uuid, parent_id: Uuid, index: usize) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-
-	let mut manifest = read_manifest(&root)?;
+	let mut manifest = editable(&root)?;
 
 	let (folder, kind, name) = match tree::find(&manifest.nodes, id) {
 		Some(Node::Folder { kind, name, .. }) => (true, *kind, name.clone()),
@@ -1572,9 +1667,7 @@ pub fn move_node(root: PathBuf, id: Uuid, parent_id: Uuid, index: usize) -> Resu
 		// Where the folder above actually leads is what decides whether this
 		// stays inside the project, the same as when something is made.
 		let over = to.parent().ok_or(Error::BadDocumentPath)?;
-		if !over.canonicalize()?.starts_with(root.canonicalize()?) {
-			return Err(Error::OutsideProject);
-		}
+		under(&root, over)?;
 		if to.exists() {
 			return Err(taken);
 		}
@@ -1611,10 +1704,7 @@ pub(crate) fn recreate_document(
 		return Err(Error::DocumentExists);
 	}
 	let folder = to.parent().ok_or(Error::BadDocumentPath)?;
-	fs::create_dir_all(folder)?;
-	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
-		return Err(Error::OutsideProject);
-	}
+	make_inside(root, folder)?;
 
 	write_atomic(&to, text)?;
 	let Some(Node::Folder { children, .. }) = tree::find_mut(&mut manifest.nodes, parent_id) else {
@@ -1766,10 +1856,9 @@ fn trash_entry(manifest: &Manifest, root: &Path, path: &str) -> Result<PathBuf> 
 	if !file.exists() {
 		return Err(Error::DocumentMissing);
 	}
-	// The trash is an ordinary folder a writer can replace with a symlink.
-	if !file.canonicalize()?.starts_with(root.canonicalize()?) {
-		return Err(Error::OutsideProject);
-	}
+	// The trash is an ordinary folder a writer can replace with a symlink, so
+	// an entry has to lead somewhere under the trash itself.
+	under(&root.join(TRASH_DIR), &file)?;
 	Ok(file)
 }
 
@@ -1800,11 +1889,7 @@ fn nearest_folder(manifest: &Manifest, path: &str) -> String {
 /// failing. Anything already using that name is not written over.
 #[tauri::command]
 pub fn restore_from_trash(root: PathBuf, path: String) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-
-	let manifest = read_manifest(&root)?;
+	let manifest = editable(&root)?;
 	let from = trash_entry(&manifest, &root, &path)?;
 
 	let (inside, file) = path.rsplit_once('/').ok_or(Error::BadDocumentPath)?;
@@ -1826,18 +1911,69 @@ pub fn restore_from_trash(root: PathBuf, path: String) -> Result<()> {
 	}
 
 	let folder = to.parent().ok_or(Error::BadDocumentPath)?;
-	fs::create_dir_all(folder)?;
-	if !folder.canonicalize()?.starts_with(root.canonicalize()?) {
-		return Err(Error::OutsideProject);
-	}
+	make_inside(&root, folder)?;
 
 	fs::rename(&from, &to)?;
 
-	// What came back has no ids any more, so the manifest adopts it the way it
-	// adopts anything that appears in a section: at the end of the folder it
-	// landed in, and inside a restored folder in the order the disk lists it.
+	// A record of the node lets it come back as it was, ids, kind, fields,
+	// targets and order. One that cannot be read, or an entry from before
+	// records were kept, is adopted from the disk like anything else.
+	let record = node_record(&root, &path);
+	let landed = nearest_folder(&manifest, inside);
+	if let Some(node) = fs::read(&record)
+		.ok()
+		.and_then(|bytes| serde_json::from_slice::<Node>(&bytes).ok())
+	{
+		put_node_back(&root, &landed, node, was)?;
+	}
+
+	// Anything the record did not cover is adopted the way anything that
+	// appears in a section is: at the end of the folder it landed in, and
+	// inside a restored folder in the order the disk lists it.
 	refresh(&root)?;
-	takes::out_of_trash(&root, &path, &back)
+	takes::out_of_trash(&root, &path, &back)?;
+
+	remove_if_there(&record)?;
+	let trash = root.join(TRASH_DIR);
+	tidy(&trash, from.parent().unwrap_or(&trash));
+	tidy(&trash.join(NODES_DIR), record.parent().unwrap_or(&trash));
+	Ok(())
+}
+
+/// Adds a node restored from the trash at the end of the folder at `landed`.
+/// A folder's kind is dropped where the rules no longer let it stand.
+fn put_node_back(root: &Path, landed: &str, mut node: Node, name: &str) -> Result<()> {
+	let mut manifest = read_manifest(root)?;
+	let Some((parent, parent_kind)) =
+		tree::walk(&manifest.nodes).find_map(|candidate| match candidate {
+			Node::Folder { id, kind, .. }
+				if tree::path(&manifest.nodes, *id).as_deref() == Some(landed) =>
+			{
+				Some((*id, *kind))
+			}
+			_ => None,
+		})
+	else {
+		return Ok(());
+	};
+
+	let in_manuscript = landed.split('/').next() == Some(MANUSCRIPT);
+	match &mut node {
+		Node::Folder {
+			kind, name: held, ..
+		} => {
+			if !tree::may_hold(in_manuscript, parent_kind, *kind) {
+				*kind = None;
+			}
+			name.clone_into(held);
+		}
+		Node::Document { name: held, .. } => name.clone_into(held),
+	}
+
+	if let Some(Node::Folder { children, .. }) = tree::find_mut(&mut manifest.nodes, parent) {
+		children.push(node);
+	}
+	write_manifest(root, &mut manifest)
 }
 
 /// Throws one thing in the trash away for good, a folder with everything that
@@ -1851,11 +1987,18 @@ pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
 	let manifest = read_manifest(&root)?;
 	let file = trash_entry(&manifest, &root, &path)?;
 	if file.is_dir() {
-		fs::remove_dir_all(file)?;
+		fs::remove_dir_all(&file)?;
 	} else {
-		fs::remove_file(file)?;
+		fs::remove_file(&file)?;
 	}
-	takes::purge(&root, &path)
+	takes::purge(&root, &path)?;
+
+	let record = node_record(&root, &path);
+	remove_if_there(&record)?;
+	let trash = root.join(TRASH_DIR);
+	tidy(&trash, file.parent().unwrap_or(&trash));
+	tidy(&trash.join(NODES_DIR), record.parent().unwrap_or(&trash));
+	Ok(())
 }
 
 /// What a folder holds, one card at a time, in the order the folder keeps
@@ -1908,7 +2051,7 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 					path: format!("{prefix}/{name}"),
 					target: *target,
 				};
-				ChildSummary::Document(match resolve(&manifest, &root, document.id) {
+				ChildSummary::Document(match within(&counting_root, &document.path) {
 					Ok(path) => summarise(&document, &path),
 					// A vanished file, or one the manifest points outside the
 					// project.
@@ -1929,6 +2072,7 @@ pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
 	}
 
 	let manifest = read_manifest(&root)?;
+	let base = canonical(&root);
 
 	Ok(manifest
 		.documents()
@@ -1938,7 +2082,7 @@ pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
 			// A file that has vanished, is not UTF-8, or that the manifest
 			// points outside the project, costs that one document rather than
 			// the whole search.
-			text: resolve(&manifest, &root, document.id)
+			text: within(&base, &document.path)
 				.and_then(|path| String::from_utf8(fs::read(path)?).map_err(|_| Error::NotText))
 				.ok(),
 		})
@@ -2237,6 +2381,64 @@ mod tests {
 
 		assert!(reconcile(&mut manifest, &found(&["Notes/Notes.md"])));
 		assert_eq!(paths_of(&manifest), ["Notes/Notes.md"]);
+	}
+
+	#[test]
+	fn one_file_renamed_on_disk_keeps_its_id() {
+		let mut manifest = manifest_with(&["Manuscript/Scene 1.md", "Manuscript/Scene 2.md"]);
+		let ids: Vec<Uuid> = manifest.documents().iter().map(|d| d.id).collect();
+
+		assert!(reconcile(
+			&mut manifest,
+			&found(&["Manuscript/Scene 1.md", "Manuscript/Opening.md"])
+		));
+
+		let after = manifest.documents();
+		assert_eq!(
+			paths_of(&manifest),
+			["Manuscript/Scene 1.md", "Manuscript/Opening.md"]
+		);
+		assert_eq!(
+			after[1].id, ids[1],
+			"the renamed one is still the same document"
+		);
+	}
+
+	#[test]
+	fn one_folder_renamed_on_disk_keeps_its_id() {
+		let mut manifest = manifest_with(&["Manuscript/Act 1/Scene 1.md"]);
+		let document = manifest.documents()[0].id;
+		let Node::Folder { children, .. } = &manifest.nodes[0] else {
+			unreachable!()
+		};
+		let act = children[0].id();
+
+		assert!(reconcile(
+			&mut manifest,
+			&found(&["Manuscript/Act I/Scene 1.md"])
+		));
+
+		assert_eq!(paths_of(&manifest), ["Manuscript/Act I/Scene 1.md"]);
+		assert_eq!(manifest.documents()[0].id, document);
+		let Node::Folder { children, .. } = &manifest.nodes[0] else {
+			unreachable!()
+		};
+		assert_eq!(children[0].id(), act, "the folder keeps its id");
+	}
+
+	#[test]
+	fn two_missing_and_two_found_are_left_as_additions_and_removals() {
+		let mut manifest = manifest_with(&["Manuscript/One.md", "Manuscript/Two.md"]);
+		let ids: Vec<Uuid> = manifest.documents().iter().map(|d| d.id).collect();
+
+		assert!(reconcile(
+			&mut manifest,
+			&found(&["Manuscript/Three.md", "Manuscript/Four.md"])
+		));
+
+		for document in manifest.documents() {
+			assert!(!ids.contains(&document.id));
+		}
 	}
 
 	#[test]
@@ -2641,8 +2843,8 @@ mod tests {
 		let opened = open_document(root.clone(), id).unwrap();
 
 		write_document(root.clone(), id, "Theirs.".to_owned()).unwrap();
-		let err = save_document(root.clone(), id, "Mine.".to_owned(), Some(opened.seen))
-			.unwrap_err();
+		let err =
+			save_document(root.clone(), id, "Mine.".to_owned(), Some(opened.seen)).unwrap_err();
 
 		assert!(matches!(err, Error::ChangedOnDisk));
 		assert_eq!(read_document(root.clone(), id).unwrap(), "Theirs.");
@@ -2812,6 +3014,7 @@ mod tests {
 			"Manuscript/notes.txt",
 			"Manuscript/",
 			"Manuscript/..",
+			"Manuscript/.hidden.md",
 		] {
 			let err =
 				restore_document(root.clone(), path.to_owned(), "text".to_owned()).unwrap_err();
@@ -2834,11 +3037,18 @@ mod tests {
 		fs::remove_dir_all(root.join("Notes")).unwrap();
 		std::os::unix::fs::symlink(&elsewhere, root.join("Notes")).unwrap();
 
-		let err =
-			restore_document(root, "Notes/Notes.md".to_owned(), "text".to_owned()).unwrap_err();
-
+		let err = restore_document(root.clone(), "Notes/Notes.md".to_owned(), "text".to_owned())
+			.unwrap_err();
 		assert!(matches!(err, Error::OutsideProject));
 		assert!(!elsewhere.join("Notes.md").exists());
+
+		let err =
+			restore_document(root, "Notes/Sub/Notes.md".to_owned(), "text".to_owned()).unwrap_err();
+		assert!(matches!(err, Error::OutsideProject));
+		assert!(
+			!elsewhere.join("Sub").exists(),
+			"no folder is made at the end of the link"
+		);
 	}
 
 	#[test]
@@ -3259,6 +3469,39 @@ mod tests {
 		assert_eq!(split("---\ntags: []\n---  \n").0, "---\ntags: []\n---");
 		assert_eq!(split("Sing to me.").0, "");
 		assert_eq!(split("---\ntags: []\n").0, "");
+	}
+
+	#[test]
+	fn a_scene_break_at_the_top_is_not_a_front_matter_block() {
+		let text = "---\n\ntext\n\n---\n\nmore";
+		assert_eq!(split(text), ("", text));
+		assert_eq!(body(text), text);
+		assert_eq!(
+			split("---\n# kept\ntags:\n  - a\n- b\n\n---\nProse").0,
+			"---\n# kept\ntags:\n  - a\n- b\n\n---",
+			"keys, lists and comments still make a block"
+		);
+	}
+
+	#[test]
+	fn a_fence_is_only_a_line_of_three_dashes() {
+		// Neither of these closes the block early, and neither reads as front
+		// matter, so the whole text stays prose rather than losing its tail.
+		for text in [
+			"---\ntags: []\n----\nsynopsis: x\n---\nProse",
+			"---\ntags: []\n---note\n---\nProse",
+		] {
+			assert_eq!(split(text), ("", text));
+		}
+		assert_eq!(
+			split("---\ntags: []\n---\t \nProse"),
+			("---\ntags: []\n---", "Prose")
+		);
+		assert_eq!(
+			split("---\r\ntags: []\r\n---\r\nProse"),
+			("---\r\ntags: []\r\n---", "Prose")
+		);
+		assert_eq!(split("---\ntags: []\n---"), ("---\ntags: []\n---", ""));
 	}
 
 	#[test]
@@ -4965,6 +5208,71 @@ mod tests {
 			!root
 				.join("Manuscript/Part One/Chapter 2/Landfall.md")
 				.exists()
+		);
+	}
+
+	#[test]
+	fn a_chapter_put_back_keeps_its_kind_target_and_scene_order() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		with_a_part(&root);
+		let chapter = folder_id(&root, "Manuscript/Part One/Chapter 2");
+		let storm = create_document(root.clone(), chapter, "Storm".to_owned())
+			.unwrap()
+			.id;
+		set_folder_target(root.clone(), chapter, Some(500)).unwrap();
+		move_node(root.clone(), storm, chapter, 0).unwrap();
+		trash(&root, chapter, fixed_time()).unwrap();
+		let entry = list_trash(root.clone()).unwrap().remove(0);
+
+		restore_from_trash(root.clone(), entry.path).unwrap();
+
+		let manifest = read_manifest(&root).unwrap();
+		let Some(Node::Folder {
+			id,
+			kind,
+			target,
+			children,
+			..
+		}) = tree::find(&manifest.nodes, chapter)
+		else {
+			panic!("the chapter came back under its own id");
+		};
+		assert_eq!(*id, chapter);
+		assert_eq!(*kind, Some(FolderKind::Chapter));
+		assert_eq!(*target, Some(500));
+		assert_eq!(
+			children[0].name(),
+			"Storm.md",
+			"the scenes keep their order"
+		);
+	}
+
+	#[test]
+	fn a_scene_put_back_leaves_no_empty_folder_in_the_trash() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		with_a_part(&root);
+		let scene = document_id(&root, "Manuscript/Part One/Chapter 2/Landfall.md");
+		trash(&root, scene, fixed_time()).unwrap();
+		let entry = list_trash(root.clone()).unwrap().remove(0);
+
+		restore_from_trash(root.clone(), entry.path).unwrap();
+
+		let left: Vec<_> = fs::read_dir(root.join(TRASH_DIR))
+			.unwrap()
+			.map(|entry| entry.unwrap().file_name())
+			.collect();
+		assert!(
+			!left.iter().any(|name| name == "Manuscript"),
+			"the folders it sat in are gone from the trash: {left:?}"
+		);
+		assert!(
+			fs::read_dir(root.join(TRASH_DIR).join(NODES_DIR))
+				.unwrap()
+				.next()
+				.is_none(),
+			"and so are the records"
 		);
 	}
 

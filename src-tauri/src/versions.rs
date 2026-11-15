@@ -445,6 +445,7 @@ fn version_name(repo: &Repository, slug: &str) -> Result<String> {
 fn new_branch(root: &Path, name: &str) -> Result<String> {
 	let slug = slug(name)?;
 	let repo = Repository::open(root)?;
+	refuse_while_merging(&repo)?;
 	let Some(head) = head_commit(&repo)? else {
 		return Err(Error::NothingKept);
 	};
@@ -460,6 +461,7 @@ fn new_branch(root: &Path, name: &str) -> Result<String> {
 /// Returns the version's new slug.
 fn renamed_branch(root: &Path, slug: &str, name: &str) -> Result<String> {
 	let repo = Repository::open(root)?;
+	refuse_while_merging(&repo)?;
 	if slug == main_slug(&repo)? {
 		return Err(Error::MainFixed);
 	}
@@ -477,6 +479,7 @@ fn renamed_branch(root: &Path, slug: &str, name: &str) -> Result<String> {
 
 fn dropped_branch(root: &Path, slug: &str) -> Result<()> {
 	let repo = Repository::open(root)?;
+	refuse_while_merging(&repo)?;
 	if slug == main_slug(&repo)? {
 		return Err(Error::MainFixed);
 	}
@@ -847,6 +850,7 @@ pub enum Row {
 /// disk has it when staging, or as the last checkpoint has it when not.
 fn carry(root: &Path, row: Row, staging: bool) -> Result<()> {
 	let repo = Repository::open(root)?;
+	refuse_while_merging(&repo)?;
 	let (from_tree, from) = side(&repo, if staging { None } else { Some("HEAD") })?;
 	let (was_tree, was) = staged_side(&repo)?;
 	let mut is = Manifest {
@@ -1240,7 +1244,9 @@ pub fn stage_all(root: PathBuf) -> Result<()> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
-	stage(&Repository::open(&root)?)?;
+	let repo = Repository::open(&root)?;
+	refuse_while_merging(&repo)?;
+	stage(&repo)?;
 	Ok(())
 }
 
@@ -1250,6 +1256,7 @@ pub fn unstage_all(root: PathBuf) -> Result<()> {
 		return Err(Error::RelativePath);
 	}
 	let repo = Repository::open(&root)?;
+	refuse_while_merging(&repo)?;
 	let mut index = repo.index()?;
 	match head_commit(&repo)? {
 		Some(head) => index.read_tree(&head.tree()?)?,
@@ -1273,7 +1280,9 @@ fn open_for_putting_back(root: &Path) -> Result<Repository> {
 	if !root.is_absolute() {
 		return Err(Error::RelativePath);
 	}
-	Ok(Repository::open(root)?)
+	let repo = Repository::open(root)?;
+	refuse_while_merging(&repo)?;
+	Ok(repo)
 }
 
 /// Where a version had a document: the nearest of its old folders the project
@@ -1481,6 +1490,7 @@ fn pending(root: &Path) -> Result<bool> {
 /// Moves the writer into another version, refusing while there are changes
 /// a checkout would overwrite.
 fn switch(root: &Path, slug: &str) -> Result<()> {
+	refuse_while_merging(&Repository::open(root)?)?;
 	if pending(root)? {
 		return Err(Error::ChangesPending);
 	}
@@ -1524,9 +1534,23 @@ fn merge_head(repo: &Repository) -> Result<Option<Commit<'_>>> {
 	}
 }
 
-/// Whether a merge is waiting to be settled.
+/// Refuses while a merge is waiting to be settled, which is when staging,
+/// putting back and changing versions would settle or drop its conflicts.
+fn refuse_while_merging(repo: &Repository) -> Result<()> {
+	if merge_head(repo)?.is_some() {
+		return Err(Error::MergeUnderway);
+	}
+	Ok(())
+}
+
+/// Whether a merge is waiting to be settled. A project with no repository has
+/// no versions to merge.
 pub(crate) fn merge_underway(root: &Path) -> Result<bool> {
-	Ok(merge_head(&Repository::open(root)?)?.is_some())
+	match Repository::open(root) {
+		Ok(repo) => Ok(merge_head(&repo)?.is_some()),
+		Err(e) if e.code() == ErrorCode::NotFound => Ok(false),
+		Err(e) => Err(e.into()),
+	}
 }
 
 /// The checkpoint both versions grew from, or none for histories that never
@@ -2892,8 +2916,9 @@ mod tests {
 		let refused = checkpoint(&root, "Merged Act two", "");
 		assert!(matches!(refused, Err(Error::ConflictsRemain)));
 
-		write_document(root.clone(), seeded, "One, settled.\n".to_owned()).unwrap();
-		stage_all(root.clone()).unwrap();
+		assert!(matches!(stage_all(root.clone()), Err(Error::MergeUnderway)));
+		assert!(!merging(&root).unwrap().unwrap().conflicts.is_empty());
+		settle(&root, seeded, "One, settled.\n").unwrap();
 		checkpoint(&root, "Merged Act two", "").unwrap();
 
 		assert_eq!(parents(&root), [main, draft]);
@@ -4459,11 +4484,22 @@ mod tests {
 	fn settling_the_binder_deletes_a_document_created_meanwhile() {
 		let (_parent, root, _, here, _) = novel();
 		titles_conflict(&root);
-		let added = create_document(root.clone(), here, "Meanwhile".to_owned())
+		assert!(matches!(
+			create_document(root.clone(), here, "Meanwhile".to_owned()),
+			Err(Error::MergeUnderway)
+		));
+		// A file added outside Aurora is adopted all the same.
+		let folder = tree::path(&read_manifest(&root).unwrap().nodes, here).unwrap();
+		fs::write(root.join(&folder).join("Meanwhile.md"), "").unwrap();
+		crate::document::refresh_documents(root.clone()).unwrap();
+		let manifest = read_manifest(&root).unwrap();
+		let path = format!("{folder}/Meanwhile.md");
+		let added = manifest
+			.documents()
+			.iter()
+			.find(|document| document.path == path)
 			.unwrap()
 			.id;
-		let manifest = read_manifest(&root).unwrap();
-		let path = tree::path(&manifest.nodes, added).unwrap();
 		let file = crate::document::document_path(&manifest, &root, &path).unwrap();
 		assert!(file.exists());
 

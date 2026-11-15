@@ -141,7 +141,7 @@ function renested(body: string): string {
 
 /** Replaces the document with the tree a markdown string describes. */
 export function $fromMarkdown(text: string): void {
-	const { block, body } = split(text);
+	const { block, body } = split(text.replace(/\r\n/g, "\n"));
 	$convertFromMarkdownString(
 		renested(body.replace(/^\n+/, "")),
 		MARKDOWN_TRANSFORMERS,

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import Icon from "./Icon";
 import { MenuItem } from "./Menu";
 import NameField from "./NameField";
-import { unmergedQuestion } from "./branches";
+import { MERGE_HOLDS, unmergedQuestion } from "./branches";
 import { failure } from "./errors";
 import type { Branch, Checkpoint } from "./types";
 
@@ -235,6 +235,8 @@ export default function VersionMenu({
 					<div key={version.slug} className="version__row">
 						<MenuItem
 							checked={version.current}
+							disabled={merging && !version.current}
+							title={merging ? MERGE_HOLDS : undefined}
 							onSelect={() => {
 								if (version.current) {
 									close();
@@ -263,7 +265,8 @@ export default function VersionMenu({
 										type="button"
 										className="menu__trigger"
 										aria-label={`Rename ${version.name}`}
-										title="Rename"
+										title={merging ? MERGE_HOLDS : "Rename"}
+										disabled={merging}
 										onClick={() =>
 											setDoing({
 												kind: "renaming",
@@ -279,7 +282,8 @@ export default function VersionMenu({
 										type="button"
 										className="menu__trigger"
 										aria-label={`Delete ${version.name}`}
-										title="Delete"
+										title={merging ? MERGE_HOLDS : "Delete"}
+										disabled={merging}
 										onClick={() =>
 											version.unmerged > 0
 												? setDoing({
@@ -320,7 +324,8 @@ export default function VersionMenu({
 			) : (
 				<>
 					<MenuItem
-						disabled={kept !== true}
+						disabled={kept !== true || merging}
+						title={merging ? MERGE_HOLDS : undefined}
 						onSelect={() => setDoing({ kind: "naming" })}
 					>
 						New version…

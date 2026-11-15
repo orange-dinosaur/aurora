@@ -107,6 +107,71 @@ describe("taking a block off a file", () => {
 	});
 });
 
+describe("telling a block from two scene breaks", () => {
+	test("prose between two scene breaks is not a block", () => {
+		const text = "---\n\ntext\n\n---\n\nmore";
+		expect(split(text)).toEqual({ block: "", body: text });
+	});
+
+	test("keys, a list and a comment still make a block", () => {
+		const lines = block(
+			"# kept",
+			"tags:",
+			"  - sea",
+			"- shore",
+			"",
+			"n: 1",
+		);
+		expect(split(`${lines}\nProse`).block).toBe(lines);
+	});
+
+	test("a fence is a line of three dashes and nothing else", () => {
+		const text = "---\ntags: [sea]\n----\nsynopsis: x\n---\nProse";
+		expect(split(text)).toEqual({ block: "", body: text });
+		expect(split("---\ntags: [sea]\n---\t \nProse")).toEqual({
+			block: "---\ntags: [sea]\n---",
+			body: "Prose",
+		});
+	});
+
+	test("a block may use CRLF or close at the end of the file", () => {
+		expect(split("---\r\ntags: [sea]\r\n---\r\nProse")).toEqual({
+			block: "---\r\ntags: [sea]\r\n---",
+			body: "Prose",
+		});
+		expect(split("---\ntags: [sea]\n---")).toEqual({
+			block: "---\ntags: [sea]\n---",
+			body: "",
+		});
+	});
+});
+
+describe("reading what was written", () => {
+	test("names with a colon, accents or other scripts survive a round trip", () => {
+		const written: Fields = new Map<
+			string,
+			string | string[] | Map<string, string>
+		>([
+			["tags", ["Act One: Setup", "Élodie", "李"]],
+			[
+				"relationships",
+				new Map([
+					["Dr: X", "a doctor"],
+					["Élodie", ""],
+				]),
+			],
+		]);
+
+		expect(parse(serialize(written))).toEqual(written);
+	});
+
+	test("a comment after a flow list is not part of it", () => {
+		expect(
+			parse(block("names: [Elena, Ellie] # nicknames")).get("names"),
+		).toEqual(["Elena", "Ellie"]);
+	});
+});
+
 describe("fields the writer added", () => {
 	test("the four Aurora knows are not among them", () => {
 		const found = parse(

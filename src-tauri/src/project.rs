@@ -1001,6 +1001,18 @@ pub fn read_manifest(root: &Path) -> Result<Manifest> {
 	Ok(manifest)
 }
 
+/// The manifest, for a command that changes the project. None may while a
+/// merge is under way: the binder and the files are what the merge is settling.
+pub(crate) fn editable(root: &Path) -> Result<Manifest> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	if versions::merge_underway(root)? {
+		return Err(Error::MergeUnderway);
+	}
+	read_manifest(root)
+}
+
 /// Writes the manifest back, at the current version whatever version it was
 /// read as: what goes to disk from here is always a tree.
 pub(crate) fn write_manifest(root: &Path, manifest: &mut Manifest) -> Result<()> {

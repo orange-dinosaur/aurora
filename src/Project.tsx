@@ -783,7 +783,7 @@ export default function Project({
 						root,
 						path: tab.document.path,
 						text,
-					})
+					}).then(() => seen.current.delete(tab.document.id))
 				: save(tab.document.id, text, null);
 
 		return done.then(() => filed(root, tab.document.id, text));
@@ -1603,6 +1603,8 @@ export default function Project({
 			return;
 		}
 
+		// The file is new, so the time the tab held belongs to the one that went.
+		seen.current.delete(id);
 		// A refresh while the file was away drops the document, so it can come
 		// back under a new id and the tab has to follow it.
 		patch(id, (open) => ({

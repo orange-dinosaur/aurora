@@ -4,4 +4,4 @@
  * A document's text and the file's modified time, in milliseconds, as the
  * tab that holds it saw them.
  */
-export type Opened = { text: string, seen: bigint, };
+export type Opened = { text: string, seen: number, };

@@ -14,10 +14,11 @@ use uuid::Uuid;
 
 use crate::document::{TRASH_DIR, body, resolve, with_body};
 use crate::project::{
-	Error, MANUSCRIPT, Manifest, NameError, Result, read_manifest, write_atomic, write_manifest,
+	Error, MANUSCRIPT, Manifest, NameError, Result, editable, read_manifest, write_atomic,
+	write_manifest,
 };
 use crate::tree::{self, Node, Take};
-use crate::versions::{self, merge_underway};
+use crate::versions;
 
 pub const TAKES_DIR: &str = ".takes";
 
@@ -82,17 +83,6 @@ fn takes_mut(
 		Some(Node::Document { takes, chosen, .. }) => Ok((takes, chosen)),
 		_ => Err(Error::UnknownDocument),
 	}
-}
-
-/// The manifest, for a command that changes takes. None may during a merge.
-fn editable(root: &Path) -> Result<Manifest> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
-	if merge_underway(root)? {
-		return Err(Error::MergeUnderway);
-	}
-	read_manifest(root)
 }
 
 /// Takes in order, by number and then id, since a merge can bring two with one
@@ -931,7 +921,7 @@ mod tests {
 	}
 
 	#[test]
-	fn a_deleted_document_gets_its_takes_back_under_its_new_id() {
+	fn a_deleted_document_gets_its_takes_back_under_its_own_id() {
 		let (_dir, root) = project();
 		let (id, takes) = three(&root);
 		let path = path_of(&root, id);
@@ -945,7 +935,7 @@ mod tests {
 		restore_from_trash(root.clone(), entry.path.clone()).unwrap();
 
 		let back = at(&root, &path);
-		assert_ne!(back, id);
+		assert_eq!(back, id, "the record of the node keeps its id");
 		assert_eq!(list_takes(root.clone(), back).unwrap(), takes);
 		assert_eq!(
 			read_document(root.clone(), back).unwrap(),
