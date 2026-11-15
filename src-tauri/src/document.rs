@@ -808,6 +808,60 @@ pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
 	write_atomic(&path, text.as_bytes())
 }
 
+/// A document's text and the file's modified time, in milliseconds, as the
+/// tab that holds it saw them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct Opened {
+	pub text: String,
+	pub seen: i64,
+}
+
+fn modified(path: &Path) -> Result<i64> {
+	let since = fs::metadata(path)?
+		.modified()?
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap_or_default();
+	Ok(i64::try_from(since.as_millis()).unwrap_or(i64::MAX))
+}
+
+/// Reads a document for a tab, with the time its file was last written. Read
+/// the time first: a change between the two reads then shows up as a refused
+/// save rather than going unseen.
+#[tauri::command]
+pub fn open_document(root: PathBuf, id: Uuid) -> Result<Opened> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	let path = resolve(&manifest, &root, id)?;
+	let seen = modified(&path)?;
+	let text = String::from_utf8(fs::read(&path)?).map_err(|_| Error::NotText)?;
+	Ok(Opened { text, seen })
+}
+
+/// Replaces one document's text like `write_document`, and hands back the
+/// file's new modified time. With a `seen` that is not the file's current
+/// time, something else has written it since the tab read it, and nothing is
+/// written.
+#[tauri::command]
+pub fn save_document(root: PathBuf, id: Uuid, text: String, seen: Option<i64>) -> Result<i64> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+
+	let manifest = read_manifest(&root)?;
+	let path = resolve(&manifest, &root, id)?;
+	if let Some(seen) = seen
+		&& seen != modified(&path)?
+	{
+		return Err(Error::ChangedOnDisk);
+	}
+	write_atomic(&path, text.as_bytes())?;
+	modified(&path)
+}
+
 /// Turns a relative path into somewhere this project is willing to keep a
 /// document: a Markdown file under one of the format's sections, at whatever
 /// depth. `base` is the project root, or the trash inside it, which is laid out
@@ -2548,6 +2602,52 @@ mod tests {
 			read_document(root, id).unwrap(),
 			"Sing to me of the man, Muse."
 		);
+	}
+
+	/// Puts the file's modified time a minute back, so a later write is
+	/// always later whatever the clock's grain.
+	fn age(root: &Path, id: Uuid) {
+		let path = resolve(&read_manifest(root).unwrap(), root, id).unwrap();
+		let past = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+		fs::File::options()
+			.write(true)
+			.open(path)
+			.unwrap()
+			.set_modified(past)
+			.unwrap();
+	}
+
+	#[test]
+	fn a_save_with_the_time_it_read_goes_through() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+		age(&root, id);
+
+		let opened = open_document(root.clone(), id).unwrap();
+		let seen = save_document(root.clone(), id, "Mine.".to_owned(), Some(opened.seen)).unwrap();
+
+		assert!(seen > opened.seen);
+		assert_eq!(read_document(root.clone(), id).unwrap(), "Mine.");
+		save_document(root, id, "Again.".to_owned(), Some(seen)).unwrap();
+	}
+
+	#[test]
+	fn a_save_over_a_changed_file_is_refused_and_leaves_it() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
+		let id = first_document(&root).id;
+		age(&root, id);
+		let opened = open_document(root.clone(), id).unwrap();
+
+		write_document(root.clone(), id, "Theirs.".to_owned()).unwrap();
+		let err = save_document(root.clone(), id, "Mine.".to_owned(), Some(opened.seen))
+			.unwrap_err();
+
+		assert!(matches!(err, Error::ChangedOnDisk));
+		assert_eq!(read_document(root.clone(), id).unwrap(), "Theirs.");
+		save_document(root.clone(), id, "Mine.".to_owned(), None).unwrap();
+		assert_eq!(read_document(root, id).unwrap(), "Mine.");
 	}
 
 	#[test]

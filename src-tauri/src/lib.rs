@@ -160,6 +160,8 @@ pub fn run() {
 			document::read_document,
 			document::read_all_documents,
 			document::write_document,
+			document::open_document,
+			document::save_document,
 			document::restore_document,
 			document::folder_overview,
 			document::create_document,

@@ -394,6 +394,7 @@ pub enum Error {
 	SectionFixed,
 	MoveInsideItself,
 	DocumentMissing,
+	ChangedOnDisk,
 	DocumentExists,
 	BadDocumentPath,
 	OutsideProject,
@@ -456,6 +457,7 @@ impl fmt::Display for Error {
 				write!(f, "a folder cannot be moved inside itself")
 			}
 			Error::DocumentMissing => write!(f, "that document's file is no longer there"),
+			Error::ChangedOnDisk => write!(f, "Changed outside Aurora"),
 			Error::DocumentExists => {
 				write!(f, "a document of that name is already there")
 			}
@@ -528,6 +530,7 @@ impl Error {
 			Error::SectionFixed => "sectionFixed",
 			Error::MoveInsideItself => "moveInsideItself",
 			Error::DocumentMissing => "documentMissing",
+			Error::ChangedOnDisk => "changedOnDisk",
 			Error::DocumentExists => "documentExists",
 			Error::BadDocumentPath => "badDocumentPath",
 			Error::OutsideProject => "outsideProject",
@@ -584,6 +587,7 @@ impl std::error::Error for Error {
 			| Error::SectionFixed
 			| Error::MoveInsideItself
 			| Error::DocumentMissing
+			| Error::ChangedOnDisk
 			| Error::DocumentExists
 			| Error::BadDocumentPath
 			| Error::OutsideProject
@@ -2956,6 +2960,7 @@ mod tests {
 			Error::SectionFixed,
 			Error::MoveInsideItself,
 			Error::DocumentMissing,
+			Error::ChangedOnDisk,
 			Error::DocumentExists,
 			Error::BadDocumentPath,
 			Error::OutsideProject,
@@ -2991,6 +2996,7 @@ mod tests {
 			Error::SectionFixed,
 			Error::MoveInsideItself,
 			Error::DocumentMissing,
+			Error::ChangedOnDisk,
 			Error::DocumentExists,
 			Error::BadDocumentPath,
 			Error::OutsideProject,

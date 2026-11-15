@@ -166,6 +166,10 @@ type Props = {
 	onOutline: (outline: OutlineHandle | null) => void;
 	onMarks: (marks: MarksHandle | null) => void;
 	onRestore: () => void;
+	/** The file was written by something else since this tab read it. */
+	changed: boolean;
+	onReload: () => void;
+	onKeepMine: () => void;
 	onPreferences: (next: Preferences) => void;
 	onTarget: (target: number | null) => void;
 	/** Where the writer left this document last time, if anywhere. */
@@ -200,6 +204,9 @@ export default function Editor({
 	onOutline,
 	onMarks,
 	onRestore,
+	changed,
+	onReload,
+	onKeepMine,
 	onPreferences,
 	onTarget,
 	place,
@@ -572,7 +579,7 @@ export default function Editor({
 					</p>
 					<p
 						className={
-							wrong === null && !missing
+							wrong === null && !missing && !changed
 								? "editor__status"
 								: "editor__status editor__status--error"
 						}
@@ -587,6 +594,24 @@ export default function Editor({
 									onClick={onRestore}
 								>
 									Write it back
+								</button>
+							</>
+						) : changed ? (
+							<>
+								Changed outside Aurora{" "}
+								<button
+									type="button"
+									className="editor__restore"
+									onClick={onReload}
+								>
+									Reload
+								</button>{" "}
+								<button
+									type="button"
+									className="editor__restore"
+									onClick={onKeepMine}
+								>
+									Keep mine
 								</button>
 							</>
 						) : (

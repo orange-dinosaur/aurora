@@ -53,6 +53,7 @@ import { retag, tagged } from "./tags";
 import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import { documentsOf, firstScene, folderOf, rows } from "./tree";
+import type { Opened } from "./bindings/Opened";
 import type { Workspace } from "./bindings/Workspace";
 import {
 	act,
@@ -136,6 +137,9 @@ type Save =
 	// The file has gone from under the tab, so the text here is all there is
 	// left of it.
 	| { kind: "missing" }
+	// Something else wrote the file since this tab read it. Nothing is saved
+	// until the writer picks the file's text or their own.
+	| { kind: "changed" }
 	| { kind: "failed"; message: string };
 
 type DocumentTab = {
@@ -269,10 +273,15 @@ function strip(tab: Tab): TabView {
 	}
 }
 
-async function read(root: string, id: string): Promise<Content> {
+async function read(
+	root: string,
+	id: string,
+	seen: Map<string, number>,
+): Promise<Content> {
 	try {
-		const text = await invoke<string>("read_document", { root, id });
-		return { kind: "ready", text };
+		const opened = await invoke<Opened>("open_document", { root, id });
+		seen.set(id, opened.seen);
+		return { kind: "ready", text: opened.text };
 	} catch (error) {
 		return { kind: "error", message: failure(error).message };
 	}
@@ -543,6 +552,11 @@ export default function Project({
 	// writer has moved on to another one.
 	const timers = useRef(new Map<string, number>());
 
+	// The modified time of each open document's file as this page last saw it,
+	// which a save hands back so the file can refuse to be written over
+	// something it has not seen.
+	const seen = useRef(new Map<string, number>());
+
 	// Both layers of the session. A ref rather than state: the panel that shows
 	// them is drawn from the same keystroke that moves them, since holding the
 	// text is what renders this view anyway.
@@ -770,9 +784,21 @@ export default function Project({
 						path: tab.document.path,
 						text,
 					})
-				: invoke("write_document", { root, id: tab.document.id, text });
+				: save(tab.document.id, text, null);
 
 		return done.then(() => filed(root, tab.document.id, text));
+	}
+
+	// Writes a document and keeps the time its file now has. With a time
+	// passed the file refuses if something else has written it since.
+	async function save(id: string, text: string, expected: number | null) {
+		const now = await invoke<number>("save_document", {
+			root,
+			id,
+			text,
+			seen: expected,
+		});
+		seen.current.set(id, now);
 	}
 
 	// Every tab whose text is not on disk yet, with that text.
@@ -899,7 +925,7 @@ export default function Project({
 
 	async function fill(id: string) {
 		const [content, takes] = await Promise.all([
-			read(root, id),
+			read(root, id, seen.current),
 			readTakes(root, id),
 		]);
 		// Keyed by id, so a slow read can only ever fill in its own tab — and
@@ -1161,7 +1187,7 @@ export default function Project({
 
 		const text = retag(tab.content.text, from, to);
 		stopTimer(id);
-		await invoke("write_document", { root, id, text });
+		await save(id, text, null);
 
 		const key = freshKey();
 		patch(id, (open) => ({
@@ -1268,7 +1294,7 @@ export default function Project({
 					tab.kind === "document" && now.has(tab.document.id)
 						? [
 								Promise.all([
-									read(root, tab.document.id),
+									read(root, tab.document.id, seen.current),
 									readTakes(root, tab.document.id),
 								]).then(
 									([content, takes]) =>
@@ -1410,12 +1436,19 @@ export default function Project({
 				? {
 						...tab,
 						content: { kind: "ready", text },
-						save: { kind: "pending" },
+						save:
+							tab.save.kind === "changed"
+								? tab.save
+								: { kind: "pending" },
 					}
 				: tab,
 		);
 
 		stopTimer(id);
+		// Nothing is written over a file that changed until the writer chooses.
+		if (documentTab(id)?.save.kind === "changed") {
+			return;
+		}
 		timers.current.set(
 			id,
 			window.setTimeout(() => {
@@ -1464,18 +1497,21 @@ export default function Project({
 
 		let result: Save;
 		try {
-			await invoke("write_document", { root, id, text });
+			await save(id, text, seen.current.get(id) ?? null);
 			filed(root, id, text);
 			result = { kind: "clean" };
 			setWritten((times) => times + 1);
 		} catch (error) {
 			const { kind, message } = failure(error);
-			// The file going missing is the one failure the writer can do
-			// something about, so it gets its own state rather than a message.
+			// The file going missing or changing are the failures the writer
+			// can do something about, so each gets its own state rather than a
+			// message.
 			result =
 				kind === "documentMissing"
 					? { kind: "missing" }
-					: { kind: "failed", message };
+					: kind === "changedOnDisk"
+						? { kind: "changed" }
+						: { kind: "failed", message };
 		}
 
 		// Only the write that put down what the tab still holds may report on
@@ -1486,6 +1522,60 @@ export default function Project({
 				? { ...tab, save: result }
 				: tab,
 		);
+	}
+
+	// Takes the file's text over the tab's. The editor seeds itself from its
+	// text once, so the tab comes back under a fresh key, as it does after
+	// retagging.
+	async function reload(id: string) {
+		const tab = documentTab(id);
+		if (tab === undefined) {
+			return;
+		}
+
+		stopTimer(id);
+		const content = await read(root, id, seen.current);
+		if (content.kind !== "ready") {
+			patch(id, (open) => ({ ...open, content }));
+			return;
+		}
+
+		const key = freshKey();
+		patch(id, (open) => ({
+			...open,
+			key,
+			content,
+			save: { kind: "clean" },
+		}));
+		setOnPage((now) => rekey(now, new Map([[tab.key, key]])));
+		filed(root, id, content.text);
+	}
+
+	// Writes the tab's text over the file's, which the writer has seen and
+	// chosen to replace.
+	async function keepMine(id: string) {
+		const tab = documentTab(id);
+		if (tab === undefined || tab.content.kind !== "ready") {
+			return;
+		}
+
+		const text = tab.content.text;
+		patch(id, (open) => ({ ...open, save: { kind: "saving" } }));
+		try {
+			await save(id, text, null);
+			filed(root, id, text);
+			setWritten((times) => times + 1);
+			patch(id, (open) =>
+				open.content.kind === "ready" && open.content.text === text
+					? { ...open, save: { kind: "clean" } }
+					: { ...open, save: { kind: "pending" } },
+			);
+		} catch (error) {
+			patch(id, (open) => ({
+				...open,
+				save: { kind: "failed", message: failure(error).message },
+			}));
+		}
 	}
 
 	async function restore(id: string) {
@@ -1590,13 +1680,12 @@ export default function Project({
 			tab.save.kind !== "clean" &&
 			// A tab whose file has gone has nothing to flush to, and putting
 			// the file back only to trash it would be absurd.
-			tab.save.kind !== "missing"
+			tab.save.kind !== "missing" &&
+			// Nor does one whose file the writer has not yet chosen to
+			// overwrite.
+			tab.save.kind !== "changed"
 		) {
-			await invoke("write_document", {
-				root,
-				id,
-				text: tab.content.text,
-			});
+			await save(id, tab.content.text, seen.current.get(id) ?? null);
 			filed(root, id, tab.content.text);
 		}
 
@@ -1700,6 +1789,9 @@ export default function Project({
 					onOutline={setOutline}
 					onMarks={setMarks}
 					onRestore={() => void restore(tab.document.id)}
+					changed={tab.save.kind === "changed"}
+					onReload={() => void reload(tab.document.id)}
+					onKeepMine={() => void keepMine(tab.document.id)}
 					onPreferences={onPreferences}
 					onTarget={(target) =>
 						void retarget(tab.document.id, target)
