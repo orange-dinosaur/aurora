@@ -18,7 +18,7 @@ import { inManuscript } from "./tree";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
 import { progress } from "./RowProgress";
-import { TargetField } from "./Target";
+import { TargetField, type Aim } from "./Target";
 
 type Props = {
 	root: string;
@@ -36,7 +36,7 @@ type Props = {
 	onNew: (making: Making) => void;
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
-	onTarget: (target: number | null) => void;
+	onTarget: Aim;
 	onDelete: () => void;
 	onToggle: () => void;
 	onRetitle: (name: string) => void;

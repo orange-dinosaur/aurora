@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { MERGE_HOLDS } from "./branches";
 
+/** Sets a target. Rejects when it was refused, so the field stays open. */
+export type Aim = (target: number | null) => void | Promise<void>;
+
 type Props = {
 	words: number;
 	target: number | null;
-	onTarget: (target: number | null) => void;
+	onTarget: Aim;
 	merging: boolean;
 	/**
 	 * Keep the sentence while typing, editing only the target inside it. For
@@ -69,7 +72,7 @@ export default function Target({
 
 type FieldProps = {
 	target: number | null;
-	onTarget: (target: number | null) => void;
+	onTarget: Aim;
 	/** Called once the field is finished with, saved or abandoned. */
 	onDone: () => void;
 	/** For a binder row: no note beside it, which a row has no room for. */
@@ -109,8 +112,11 @@ export function TargetField({
 				event.preventDefault();
 				// An empty field is how a target is taken away; Rust reads a
 				// zero the same way.
-				onTarget(draft === "" ? null : Number(draft));
-				onDone();
+				// A refusal is said where the surface says things, and the
+				// typed number stays for another try.
+				Promise.resolve(
+					onTarget(draft === "" ? null : Number(draft)),
+				).then(onDone, () => input.current?.focus());
 			}}
 			onBlur={(event) => {
 				// Clicking away abandons it, the same as Escape, which a
@@ -131,6 +137,7 @@ export function TargetField({
 				autoFocus
 				value={draft}
 				inputMode="numeric"
+				maxLength={9}
 				aria-label="Word target"
 				placeholder={compact || sentence ? "no target" : "none"}
 				// In a sentence the field is as wide as what it holds, so the

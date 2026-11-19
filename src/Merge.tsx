@@ -37,7 +37,7 @@ import {
 	type Side,
 	type Sides,
 } from "./lib/merge";
-import { settleLines, type MergeUnderway } from "./lib/versions";
+import { fileKey, settleLines, type MergeUnderway } from "./lib/versions";
 import type { Conflict, Piece, TreeNode } from "./types";
 
 type Props = {
@@ -135,7 +135,12 @@ export default function Merge({
 	);
 	const lines = settleLines(merging, counts);
 	const documents = lines.filter((line) => line.kind === "document");
+	const files = lines.filter((line) => line.kind === "file");
 	const binder = lines.find((line) => line.kind === "binder");
+	const file = merging.conflicts.find(
+		(conflict) =>
+			conflict.kind === "file" && fileKey(conflict.path) === open,
+	);
 	const binderCards = cards(merging.conflicts);
 	const cardsOpen = cardsLeft(binderCards, sides);
 	const line = documents.find((document) => document.id === open);
@@ -221,8 +226,28 @@ export default function Merge({
 
 	// Once something is settled, on to the next thing left, or back to
 	// writing when nothing is.
+	// A file outside the binder settles at once, the way the writer picked.
+	async function settleFile(path: string, side: Side) {
+		setBusy(true);
+		try {
+			await onSettle(() =>
+				invoke("merge_file", {
+					root,
+					path,
+					side: side === "ours" ? "mine" : "theirs",
+				}),
+			);
+			await onMergeChanged();
+			finished();
+		} catch (reason) {
+			setError(failure(reason).message);
+		} finally {
+			setBusy(false);
+		}
+	}
+
 	function finished() {
-		const next = documents.find(
+		const next = [...documents, ...files].find(
 			(document) => document.id !== null && document.id !== open,
 		);
 		if (next?.id) {
@@ -311,6 +336,31 @@ export default function Merge({
 							</button>
 						);
 					})}
+					{files.map((line) => (
+						<button
+							key={line.key}
+							type="button"
+							className="merge__pick"
+							aria-current={line.id === open}
+							onClick={() => {
+								if (line.id !== null) {
+									onOpen(line.id);
+								}
+							}}
+						>
+							<span className="merge__pick-text">
+								<span className="merge__pick-name">
+									{line.name}
+								</span>
+								<span className="merge__pick-where">
+									{where(line.path)}
+								</span>
+							</span>
+							<span className="merge__pick-left">
+								{line.what}
+							</span>
+						</button>
+					))}
 					{binder !== undefined && (
 						<button
 							type="button"
@@ -358,6 +408,41 @@ export default function Merge({
 						onMergeChanged={onMergeChanged}
 						onFinished={finished}
 					/>
+				)}
+
+				{file?.kind === "file" && (
+					<>
+						<div className="merge__head">
+							<h1 className="merge__name">
+								{file.path.split("/").slice(-1)[0]}
+							</h1>
+							<span className="merge__detail">
+								Outside the binder · pick the side to keep
+							</span>
+						</div>
+						<div className="merge__scroll">
+							<div className="merge-cards">
+								<Card
+									root={root}
+									card={file}
+									names={new Map()}
+									into={into}
+									theirs={theirs}
+									side={null}
+									onSide={(side) => {
+										if (!busy) {
+											void settleFile(file.path, side);
+										}
+									}}
+								/>
+							</div>
+						</div>
+						<div className="merge__foot">
+							<p className="merge__note" role="alert">
+								{error ?? ""}
+							</p>
+						</div>
+					</>
 				)}
 
 				{line !== undefined && (
@@ -437,7 +522,7 @@ export default function Merge({
 					</>
 				)}
 
-				{open !== BINDER && (
+				{open !== BINDER && file === undefined && (
 					<div className="merge__foot">
 						{line !== undefined && total > 0 && (
 							<>
@@ -720,6 +805,13 @@ function Card({
 	switch (card.kind) {
 		case "text":
 			return null;
+		case "file":
+			kind = "Changed in both";
+			what = card.path.split("/").slice(-1)[0];
+			where = card.path;
+			mine = <Value text={card.ours ?? "Not text"} prose />;
+			other = <Value text={card.theirs ?? "Not text"} prose />;
+			break;
 		case "renamed":
 			kind = "Renamed on both";
 			what = names.get(card.id)?.name ?? card.ours;

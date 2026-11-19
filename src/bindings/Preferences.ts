@@ -20,14 +20,11 @@ toolbar: boolean,
 focus: boolean, 
 /**
  * Whether the line the caret is on is held in place and the page moves
- * under it. Defaulted on its own, so a store written before this field
- * existed still reads rather than falling back to an empty one.
+ * under it.
  */
 typewriter: boolean, 
 /**
- * Whether the list of documents is showing beside the writing. Needs a
- * default of its own: an older store has no such field, and falling back
- * to `false` would open Aurora with the sidebar gone.
+ * Whether the list of documents is showing beside the writing.
  */
 sidebar: boolean, 
 /**
@@ -40,9 +37,7 @@ rightSidebar: boolean,
  */
 rightSidebarTab: RightSidebarTab, versionsScope: VersionsScope, 
 /**
- * How wide the list of documents is, in pixels. Needs a default of its
- * own: a store written before this field existed would otherwise come
- * back with a sidebar no pixels wide.
+ * How wide the list of documents is, in pixels.
  */
 sidebarWidth: number, 
 /**
@@ -52,8 +47,7 @@ sidebarWidth: number,
 rightSidebarWidth: number, 
 /**
  * How much of a split the left side takes, in percent. One value for every
- * project, like the sidebar widths. Zero would hide the left side, hence
- * the default of its own.
+ * project, like the sidebar widths.
  */
 splitShare: number, 
 /**
@@ -85,19 +79,18 @@ defaultTarget: number | null,
  */
 idleMinutes: number, 
 /**
- * Whether the titlebar shows the running session. Defaulted on: it is the
- * only place a session is visible with both sidebars hidden.
+ * Whether the titlebar shows the running session. On by default: it is
+ * the only place a session is visible with both sidebars hidden.
  */
 sessionClock: boolean, 
 /**
- * Whether Aurora asks GitHub for a newer version when it starts.
- * Defaulted on, and on for a store written before this field existed: an
- * update nobody hears about fixes nothing.
+ * Whether Aurora asks GitHub for a newer version when it starts. On by
+ * default: an update nobody hears about fixes nothing.
  */
 checkForUpdates: boolean, 
 /**
  * Where new projects are created, or none while the writer has never been
- * asked. Absent from a store written before version 10.
+ * asked.
  */
 projectsFolder: string | null, 
 /**

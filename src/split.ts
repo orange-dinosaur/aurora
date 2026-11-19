@@ -310,6 +310,8 @@ export type Press = {
 	metaKey: boolean;
 	altKey: boolean;
 	shiftKey: boolean;
+	/** Held down, so the press is the same one again. */
+	repeat?: boolean;
 };
 
 /** Control with this toggles the split. */
@@ -326,7 +328,8 @@ export const CHORD: Record<string, Action> = {
 	q: "end",
 };
 
-const MODIFIERS = new Set(["Control", "Shift", "Alt", "Meta"]);
+// Lowercase, as `press` compares every key.
+const MODIFIERS = new Set(["control", "shift", "alt", "meta"]);
 
 /**
  * The split keys, Control+\ and the Control+W chord. Literal Control on every
@@ -335,6 +338,18 @@ const MODIFIERS = new Set(["Control", "Shift", "Alt", "Meta"]);
  * `swallow` says whether the press is the split's and should go no further.
  */
 export function press(
+	waiting: boolean,
+	event: Press,
+): { waiting: boolean; action: Action | null; swallow: boolean } {
+	const once = pressOnce(waiting, { ...event, key: event.key.toLowerCase() });
+	// A key held down acts once: the repeats are still swallowed, but move
+	// nothing on.
+	return event.repeat === true
+		? { waiting, action: null, swallow: once.swallow }
+		: once;
+}
+
+function pressOnce(
 	waiting: boolean,
 	event: Press,
 ): { waiting: boolean; action: Action | null; swallow: boolean } {

@@ -113,9 +113,11 @@ export type Side = "ours" | "theirs";
 /** A side per binder card, by `cardKey`. A card with none is still open. */
 export type Sides = Record<string, Side>;
 
-/** The conflicts outside the text, one card each. */
+/** The conflicts in the binder and the book's details, one card each. */
 export function cards(conflicts: Conflict[]): Conflict[] {
-	return conflicts.filter((conflict) => conflict.kind !== "text");
+	return conflicts.filter(
+		(conflict) => conflict.kind !== "text" && conflict.kind !== "file",
+	);
 }
 
 /**

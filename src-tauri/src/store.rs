@@ -18,78 +18,57 @@ pub const STORE_VERSION: u32 = 10;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
+// A field a store lacks takes its value from `Default` below, so a store
+// written before the field existed still reads whole.
+#[serde(default)]
 pub struct Preferences {
 	/// Whether the bar under the document title is showing.
 	pub toolbar: bool,
 	/// Whether everything but the paragraph being written is dimmed.
 	pub focus: bool,
 	/// Whether the line the caret is on is held in place and the page moves
-	/// under it. Defaulted on its own, so a store written before this field
-	/// existed still reads rather than falling back to an empty one.
-	#[serde(default)]
+	/// under it.
 	pub typewriter: bool,
-	/// Whether the list of documents is showing beside the writing. Needs a
-	/// default of its own: an older store has no such field, and falling back
-	/// to `false` would open Aurora with the sidebar gone.
-	#[serde(default = "shown")]
+	/// Whether the list of documents is showing beside the writing.
 	pub sidebar: bool,
 	/// Whether the panel about the open document or folder is showing. Closed
 	/// by default: it is the writing that should have the width.
-	#[serde(default)]
 	pub right_sidebar: bool,
 	/// Which of that panel's tabs is showing.
-	#[serde(default)]
 	pub right_sidebar_tab: RightSidebarTab,
-	#[serde(default)]
 	pub versions_scope: VersionsScope,
-	/// How wide the list of documents is, in pixels. Needs a default of its
-	/// own: a store written before this field existed would otherwise come
-	/// back with a sidebar no pixels wide.
-	#[serde(default = "sidebar_width")]
+	/// How wide the list of documents is, in pixels.
 	pub sidebar_width: u32,
 	/// How wide the panel about the open document is, in pixels. Wider than
 	/// the left one because its tabs have to sit side by side.
-	#[serde(default = "right_sidebar_width")]
 	pub right_sidebar_width: u32,
 	/// How much of a split the left side takes, in percent. One value for every
-	/// project, like the sidebar widths. Zero would hide the left side, hence
-	/// the default of its own.
-	#[serde(default = "split_share")]
+	/// project, like the sidebar widths.
 	pub split_share: u32,
 	/// Whether Aurora follows the desktop's light or dark setting, or is told
 	/// which to use.
-	#[serde(default)]
 	pub theme: Theme,
 	/// The face the manuscript is set in. The chrome is not affected.
-	#[serde(default)]
 	pub manuscript_font: ManuscriptFont,
 	/// What the Sprint field starts on, or none for an empty field. A writer
 	/// who sprints the same way every day then types nothing.
-	#[serde(default)]
 	pub default_sprint: Option<u32>,
 	/// What that sprint counts.
-	#[serde(default)]
 	pub default_sprint_unit: SprintUnit,
 	/// The target a new document is given, or none for a document that is not
 	/// aiming at anything.
-	#[serde(default)]
 	pub default_target: Option<u32>,
 	/// How long a silence has to run before it closes an automatic session,
 	/// in minutes.
-	#[serde(default = "idle_minutes")]
 	pub idle_minutes: u32,
-	/// Whether the titlebar shows the running session. Defaulted on: it is the
-	/// only place a session is visible with both sidebars hidden.
-	#[serde(default = "shown")]
+	/// Whether the titlebar shows the running session. On by default: it is
+	/// the only place a session is visible with both sidebars hidden.
 	pub session_clock: bool,
-	/// Whether Aurora asks GitHub for a newer version when it starts.
-	/// Defaulted on, and on for a store written before this field existed: an
-	/// update nobody hears about fixes nothing.
-	#[serde(default = "shown")]
+	/// Whether Aurora asks GitHub for a newer version when it starts. On by
+	/// default: an update nobody hears about fixes nothing.
 	pub check_for_updates: bool,
 	/// Where new projects are created, or none while the writer has never been
-	/// asked. Absent from a store written before version 10.
-	#[serde(default)]
+	/// asked.
 	pub projects_folder: Option<PathBuf>,
 	/// The width of the column of text, in characters.
 	pub measure: u32,
@@ -97,27 +76,6 @@ pub struct Preferences {
 	pub font_size: u32,
 	/// A multiple of the font size, as CSS takes it.
 	pub line_height: f32,
-}
-
-/// serde takes a field's default from a function, not from the type's `Default`.
-fn shown() -> bool {
-	true
-}
-
-fn sidebar_width() -> u32 {
-	248
-}
-
-fn right_sidebar_width() -> u32 {
-	300
-}
-
-fn split_share() -> u32 {
-	50
-}
-
-fn idle_minutes() -> u32 {
-	30
 }
 
 /// What a sprint counts. The pair the Stats tab already offers, named here so
@@ -187,19 +145,19 @@ impl Default for Preferences {
 			toolbar: true,
 			focus: false,
 			typewriter: false,
-			sidebar: shown(),
+			sidebar: true,
 			right_sidebar: false,
 			right_sidebar_tab: RightSidebarTab::Synopsis,
 			versions_scope: VersionsScope::Document,
-			sidebar_width: sidebar_width(),
-			right_sidebar_width: right_sidebar_width(),
-			split_share: split_share(),
+			sidebar_width: 248,
+			right_sidebar_width: 300,
+			split_share: 50,
 			theme: Theme::System,
 			manuscript_font: ManuscriptFont::Newsreader,
 			default_sprint: None,
 			default_sprint_unit: SprintUnit::Words,
 			default_target: None,
-			idle_minutes: idle_minutes(),
+			idle_minutes: 30,
 			session_clock: true,
 			check_for_updates: true,
 			projects_folder: None,
@@ -386,13 +344,29 @@ impl Store {
 }
 
 /// Reads the store, treating both a missing and an unreadable file as empty.
-/// The list is a convenience, so a damaged one must not stop Aurora starting.
+/// The list is a convenience, so a damaged one must not stop Aurora starting,
+/// but the file is moved aside rather than saved over.
 pub fn load(path: &Path) -> Result<Store> {
-	match fs::read(path) {
-		Ok(bytes) => Ok(migrate(serde_json::from_slice(&bytes).unwrap_or_default())),
-		Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Store::default()),
-		Err(e) => Err(Error::Io(e)),
+	let bytes = match fs::read(path) {
+		Ok(bytes) => bytes,
+		Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Store::default()),
+		Err(e) => return Err(Error::Io(e)),
+	};
+	let store: Store = match serde_json::from_slice(&bytes) {
+		Ok(store) => store,
+		Err(_) => {
+			let _ = fs::rename(path, path.with_file_name("store.damaged.json"));
+			return Ok(Store::default());
+		}
+	};
+	// A newer Aurora wrote this, and the next save drops what it added.
+	if store.version > STORE_VERSION {
+		let copy = path.with_file_name(format!("store.v{}.json", store.version));
+		if !copy.exists() {
+			let _ = fs::copy(path, copy);
+		}
 	}
+	Ok(migrate(store))
 }
 
 /// Version 1 had no `last`: whatever was at the head of the list was what
@@ -565,6 +539,35 @@ mod tests {
 		let path = dir.path().join("store.json");
 		fs::write(&path, "{ this is not json").unwrap();
 		assert_eq!(load(&path).unwrap(), Store::default());
+		assert_eq!(
+			fs::read_to_string(dir.path().join("store.damaged.json")).unwrap(),
+			"{ this is not json"
+		);
+	}
+
+	#[test]
+	fn a_store_missing_most_preferences_keeps_its_projects() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(
+			&path,
+			r#"{
+				"version": 10,
+				"recent": [
+					{
+						"name": "Ithaca",
+						"root": "/writing/Ithaca",
+						"lastOpened": "2023-11-14T22:13:20Z"
+					}
+				],
+				"preferences": { "toolbar": true }
+			}"#,
+		)
+		.unwrap();
+
+		let store = load(&path).unwrap();
+		assert_eq!(store.recent.len(), 1);
+		assert_eq!(store.preferences.measure, 68);
 	}
 
 	#[test]

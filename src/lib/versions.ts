@@ -254,9 +254,12 @@ export type SettleLine = {
 	key: string;
 	name: string;
 	what: string;
-	/** A conflicted document, or the one row for the binder and details. */
-	kind: "document" | "binder";
-	/** The document's id, null for the binder and for a file no manifest names. */
+	/**
+	 * A conflicted document, a file no manifest names, or the one row for the
+	 * binder and details.
+	 */
+	kind: "document" | "file" | "binder";
+	/** What opens the row: the document's id, or `fileKey` of a file's path. */
 	id: string | null;
 	/** Where the document sits, null for the binder. */
 	path: string | null;
@@ -272,6 +275,18 @@ export function settleLines(
 	spots: Record<string, number>,
 ): SettleLine[] {
 	const documents = merging.conflicts.flatMap((conflict): SettleLine[] => {
+		if (conflict.kind === "file") {
+			return [
+				{
+					key: conflict.path,
+					name: nameIn(conflict.path),
+					what: "Changed in both",
+					kind: "file",
+					id: fileKey(conflict.path),
+					path: conflict.path,
+				},
+			];
+		}
 		if (conflict.kind !== "text") {
 			return [];
 		}
@@ -305,6 +320,11 @@ export function settleLines(
 			path: null,
 		},
 	];
+}
+
+/** How the merge screen opens a file no manifest names, by its path. */
+export function fileKey(path: string): string {
+	return `file:${path}`;
 }
 
 /** The banner's line under "Merging X into Y". */

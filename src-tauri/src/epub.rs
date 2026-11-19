@@ -10,11 +10,11 @@
 use std::io;
 use std::slice;
 
-use pulldown_cmark::{Event, Options, Parser, Tag, html};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, html};
 use time::{OffsetDateTime, UtcOffset};
 
 use crate::archive::Archive;
-use crate::book::{Chapter, Compiled, Division, Prose, Scene, broken, told};
+use crate::book::{Chapter, Compiled, Division, Prose, Scene, told};
 use crate::project::{Book, Role};
 
 /// Where the package document sits in the zip. Every file it names is named
@@ -209,11 +209,17 @@ impl Pages<'_> {
 		}
 	}
 
-	/// Adds a page holding a heading and the prose under it.
-	fn prose(&mut self, title: &str, blocks: &[String]) -> Entry {
+	/// Adds a page holding a heading and its scenes under it, parted by breaks.
+	/// Each scene is read on its own, so a fence one leaves open ends with it.
+	fn prose(&mut self, title: &str, scenes: &[String]) -> Entry {
 		let heading = escaped(title);
-		let prose = rendered(&blocks.join("\n\n"), self.flavour);
-		let body = format!("<h1>{heading}</h1>\n{prose}");
+		let mut paragraphs = 0;
+		let prose: Vec<String> = scenes
+			.iter()
+			.enumerate()
+			.map(|(at, scene)| rendered(scene, at + 1, self.flavour, &mut paragraphs))
+			.collect();
+		let body = format!("<h1>{heading}</h1>\n{}", prose.join("<hr />\n"));
 		self.add(title, &body)
 	}
 
@@ -224,7 +230,7 @@ impl Pages<'_> {
 
 	/// Adds a chapter, its scenes parted by breaks.
 	fn chapter(&mut self, chapter: &Chapter, prose: &Prose) -> Entry {
-		self.prose(&chapter.title, &broken(&chapter.scenes, prose))
+		self.prose(&chapter.title, &told(&chapter.scenes, prose))
 	}
 }
 
@@ -318,34 +324,54 @@ fn id(at: usize) -> String {
 /// show as it came, a comment the writer left for themselves among it, and
 /// none of it was meant to be read in the book or can be trusted to be
 /// well-formed XML. For a Kobo, every sentence is marked as well.
-fn rendered(markdown: &str, flavour: Flavour) -> String {
-	let events = Parser::new_ext(markdown, options())
-		.filter(|event| !matches!(event, Event::Html(_) | Event::InlineHtml(_)));
+///
+/// `scene` is the scene's place on its page: footnote labels take it on, so
+/// two scenes' `[^1]` stay apart. `paragraphs` carries Kobo's paragraph count
+/// on from the scene before.
+fn rendered(markdown: &str, scene: usize, flavour: Flavour, paragraphs: &mut usize) -> String {
+	let markdown: String = markdown.chars().filter(|&c| legal(c)).collect();
+	let label = |label: &str| format!("{scene}-{label}").into();
+	let events = Parser::new_ext(&markdown, options()).filter_map(|event| match event {
+		Event::Html(_) | Event::InlineHtml(_) => None,
+		// An image keeps its description, which arrives as text.
+		Event::Start(Tag::Image { .. }) | Event::End(TagEnd::Image) => None,
+		Event::FootnoteReference(name) => Some(Event::FootnoteReference(label(&name))),
+		Event::Start(Tag::FootnoteDefinition(name)) => {
+			Some(Event::Start(Tag::FootnoteDefinition(label(&name))))
+		}
+		event => Some(event),
+	});
 	let mut out = String::new();
 	match flavour {
 		Flavour::Plain => html::push_html(&mut out, events),
-		Flavour::Kobo => html::push_html(&mut out, spanned(events).into_iter()),
+		Flavour::Kobo => html::push_html(&mut out, spanned(events, paragraphs).into_iter()),
 	}
 	out
+}
+
+/// Whether XML 1.0 can hold `c` at all.
+fn legal(c: char) -> bool {
+	matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}')
+		|| c >= '\u{10000}'
 }
 
 /// `events` with each sentence of text wrapped in one of Kobo's markers. A
 /// block starts the next paragraph number and each sentence in it the next
 /// sentence number, which is how a Kobo keeps its place and a highlight.
-fn spanned<'a>(events: impl Iterator<Item = Event<'a>>) -> Vec<Event<'a>> {
+fn spanned<'a>(events: impl Iterator<Item = Event<'a>>, paragraph: &mut usize) -> Vec<Event<'a>> {
 	let mut out = Vec::new();
-	let (mut paragraph, mut sentence) = (0, 0);
+	let mut sentence = 0;
 	for event in events {
 		match event {
 			Event::Start(tag) if block(&tag) => {
-				paragraph += 1;
+				*paragraph += 1;
 				sentence = 0;
 				out.push(Event::Start(tag));
 			}
 			Event::Text(text) if !text.trim().is_empty() => {
 				for piece in sentences(&text) {
 					sentence += 1;
-					out.push(Event::InlineHtml(kobo_span(paragraph, sentence).into()));
+					out.push(Event::InlineHtml(kobo_span(*paragraph, sentence).into()));
 					out.push(Event::Text(piece.to_owned().into()));
 					out.push(Event::InlineHtml("</span>".into()));
 				}
@@ -644,7 +670,7 @@ fn modified(now: OffsetDateTime) -> String {
 /// Text made safe to sit in XML, between tags or inside an attribute's quotes.
 pub fn escaped(text: &str) -> String {
 	let mut out = String::with_capacity(text.len());
-	for c in text.chars() {
+	for c in text.chars().filter(|&c| legal(c)) {
 		match c {
 			'&' => out.push_str("&amp;"),
 			'<' => out.push_str("&lt;"),
@@ -1016,5 +1042,55 @@ mod tests {
 		assert_eq!(sentences("“Go!” she said."), ["“Go!” ", "she said."]);
 		assert_eq!(sentences("Wait... what?"), ["Wait... ", "what?"]);
 		assert_eq!(sentences("It cost 3.50 in all"), ["It cost 3.50 in all"]);
+	}
+
+	/// The page of a chapter whose two scenes say `a` and `b`.
+	fn page_of(a: &str, b: &str, flavour: Flavour) -> String {
+		let compiled = alone(chapter("Home", vec![scene("a"), scene("b")]));
+		let prose = prose_of(&compiled, &[("a", a), ("b", b)]);
+		let epub = epub(
+			&Book::new("Ithaca"),
+			&compiled,
+			&prose,
+			None,
+			flavour,
+			now(),
+		)
+		.unwrap();
+		read(&epub, "EPUB/text-2.xhtml")
+	}
+
+	#[test]
+	fn each_scenes_footnotes_get_their_own_ids() {
+		let page = page_of("One[^1]\n\n[^1]: First.", "Two[^1]\n\n[^1]: Second.", Plain);
+
+		assert!(page.contains(r#"id="1-1""#), "{page}");
+		assert!(page.contains(r#"id="2-1""#), "{page}");
+	}
+
+	#[test]
+	fn a_fence_left_open_ends_with_its_scene_in_the_epub() {
+		let page = page_of("```\nCode", "Plain.", Plain);
+
+		assert!(page.contains("<p>Plain.</p>"), "{page}");
+	}
+
+	#[test]
+	fn characters_xml_cannot_hold_are_left_out() {
+		assert_eq!(escaped("a\u{c}b"), "ab");
+		let page = page_of("Vertical\u{b}tab", "Fine.", Plain);
+		assert!(
+			page.bytes()
+				.all(|byte| byte >= 0x20 || byte == b'\t' || byte == b'\n')
+		);
+	}
+
+	#[test]
+	fn an_image_keeps_only_its_description() {
+		for flavour in [Plain, Kobo] {
+			let page = page_of("![map](map.png)", "Fine.", flavour);
+			assert!(!page.contains("<img"), "{page}");
+			assert!(page.contains("map"));
+		}
 	}
 }

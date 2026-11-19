@@ -346,14 +346,22 @@ describe("settleLines", () => {
 		expect(rows.map((row) => row.kind)).toEqual(["document"]);
 	});
 
-	it("leaves the count off until it is known, and for a file with no id", () => {
-		const rows = settleLines(
-			merging([text("s2", "Notes/Scene 2.md"), text(null, "notes.txt")]),
-			{},
-		);
+	it("leaves the count off until it is known", () => {
+		const rows = settleLines(merging([text("s2", "Notes/Scene 2.md")]), {});
 		expect(rows.map(({ name, what, id }) => [name, what, id])).toEqual([
 			["Scene 2", "", "s2"],
-			["notes.txt", "", null],
+		]);
+	});
+
+	it("gives a file outside the binder its own row, not the binder's", () => {
+		const rows = settleLines(
+			merging([
+				{ kind: "file", path: "notes.txt", ours: "a", theirs: null },
+			]),
+			{},
+		);
+		expect(rows.map(({ name, kind, id }) => [name, kind, id])).toEqual([
+			["notes.txt", "file", "file:notes.txt"],
 		]);
 	});
 

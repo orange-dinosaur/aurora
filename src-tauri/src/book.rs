@@ -18,7 +18,9 @@ use uuid::Uuid;
 use crate::document::{DocumentView, NodeView, body, document_tree};
 use crate::docx::docx;
 use crate::epub::{Flavour, epub};
-use crate::project::{Book, ExportFormat, MANUSCRIPT, Result, cover_bytes, matter, read_manifest};
+use crate::project::{
+	Book, Error, ExportFormat, MANUSCRIPT, RESERVED, Result, cover_bytes, matter, read_manifest,
+};
 use crate::text::text;
 use crate::tree::FolderKind;
 
@@ -236,20 +238,28 @@ pub fn all_scenes(compiled: &Compiled) -> Vec<&Scene> {
 /// as nothing rather than stopping the export: the tree comes from the
 /// manifest, and the manifest can name a file that is no longer there.
 pub fn prose(root: &Path, compiled: &Compiled) -> Prose {
-	read_prose(root, compiled, |_| {})
+	read_prose(root, compiled, |_| {}).0
 }
 
-/// `prose`, telling `read` how many scenes it has been through after each one.
-fn read_prose(root: &Path, compiled: &Compiled, mut read: impl FnMut(usize)) -> Prose {
-	all_scenes(compiled)
-		.into_iter()
-		.enumerate()
-		.filter_map(|(at, scene)| {
-			let text = fs::read_to_string(root.join(&scene.path));
-			read(at + 1);
-			Some((scene.id, body(&text.ok()?).trim().to_owned()))
-		})
-		.collect()
+/// `prose`, telling `read` how many scenes it has been through after each one,
+/// along with the paths of the scenes it could not read.
+fn read_prose(
+	root: &Path,
+	compiled: &Compiled,
+	mut read: impl FnMut(usize),
+) -> (Prose, Vec<String>) {
+	let mut prose = Prose::new();
+	let mut unread = Vec::new();
+	for (at, scene) in all_scenes(compiled).into_iter().enumerate() {
+		match fs::read_to_string(root.join(&scene.path)) {
+			Ok(text) => {
+				prose.insert(scene.id, body(&text).trim().to_owned());
+			}
+			Err(_) => unread.push(scene.path.clone()),
+		}
+		read(at + 1);
+	}
+	(prose, unread)
 }
 
 /// The whole book as one Markdown document: the title and author, then what
@@ -396,24 +406,32 @@ pub fn export_book(
 
 /// The export itself. A file already there under the same name is replaced:
 /// exporting again into the same folder is asking for the new book, not a
-/// second copy beside the old one.
+/// second copy beside the old one. A scene that cannot be read stops it before
+/// anything is written, so no file ever leaves part of the book out.
 pub fn export(
 	root: &Path,
 	folder: &Path,
 	formats: &[ExportFormat],
 	mut report: impl FnMut(Progress),
 ) -> Result<Vec<String>> {
+	// Writing into the project would make the export part of the book.
+	if folder.canonicalize()?.starts_with(root.canonicalize()?) {
+		return Err(Error::ExportInsideProject);
+	}
 	let book = read_manifest(root)?.book;
 	let compiled = compile(&document_tree(root.to_path_buf())?);
 	let scenes = all_scenes(&compiled).len();
 	let total = scenes + formats.len();
-	let prose = read_prose(root, &compiled, |done| {
+	let (prose, unread) = read_prose(root, &compiled, |done| {
 		report(Progress::Reading {
 			done,
 			total,
 			scenes,
 		})
 	});
+	if !unread.is_empty() {
+		return Err(Error::ScenesUnreadable(unread));
+	}
 	let stem = file_stem(&book.title);
 	let epub_for = |flavour| {
 		// A cover that has gone missing leaves the book without one rather
@@ -432,14 +450,29 @@ pub fn export(
 			name: name.clone(),
 		});
 
-		let bytes = match format {
-			ExportFormat::Markdown => markdown(&book, &compiled, &prose).into_bytes(),
-			ExportFormat::Epub => epub_for(Flavour::Plain)?,
-			ExportFormat::Kepub => epub_for(Flavour::Kobo)?,
-			ExportFormat::Docx => docx(&book, &compiled, &prose)?,
-			ExportFormat::Text => text(&book, &compiled, &prose).into_bytes(),
-		};
-		fs::write(folder.join(&name), bytes)?;
+		let made = (|| -> Result<()> {
+			let bytes = match format {
+				ExportFormat::Markdown => markdown(&book, &compiled, &prose).into_bytes(),
+				ExportFormat::Epub => epub_for(Flavour::Plain)?,
+				ExportFormat::Kepub => epub_for(Flavour::Kobo)?,
+				ExportFormat::Docx => docx(&book, &compiled, &prose)?,
+				ExportFormat::Text => text(&book, &compiled, &prose).into_bytes(),
+			};
+			// Whole or not at all: a reader never finds half a file under the
+			// book's name.
+			let part = folder.join(format!("{name}.part"));
+			let done = fs::write(&part, bytes).and_then(|()| fs::rename(&part, folder.join(&name)));
+			if done.is_err() {
+				let _ = fs::remove_file(&part);
+			}
+			Ok(done?)
+		})();
+		if let Err(cause) = made {
+			return Err(Error::ExportStopped {
+				written,
+				cause: Box::new(cause),
+			});
+		}
 		written.push(name);
 	}
 	Ok(written)
@@ -464,11 +497,21 @@ fn file_stem(title: &str) -> String {
 		.chars()
 		.filter(|c| !c.is_control() && !r#"/\:*?"<>|"#.contains(*c))
 		.collect();
-	// A leading dot would hide the file.
-	let stem = kept.trim().trim_start_matches('.').trim();
+	// A leading dot would hide the file, and Windows drops a trailing one.
+	let mut stem = kept.trim().trim_matches('.').trim();
+	// Room for the longest extension and `.part` inside a 255-byte name.
+	while stem.len() > 200 {
+		let mut end = 200;
+		while !stem.is_char_boundary(end) {
+			end -= 1;
+		}
+		stem = stem[..end].trim_end_matches('.').trim_end();
+	}
 
 	if stem.is_empty() {
 		"Untitled".to_owned()
+	} else if RESERVED.iter().any(|name| stem.eq_ignore_ascii_case(name)) {
+		format!("{stem}_")
 	} else {
 		stem.to_owned()
 	}
@@ -1103,6 +1146,9 @@ mod tests {
 		assert_eq!(file_stem("Either/Or: A Fragment"), "EitherOr A Fragment");
 		assert_eq!(file_stem(".hidden"), "hidden");
 		assert_eq!(file_stem("  ?  "), "Untitled");
+		assert_eq!(file_stem("CON"), "CON_");
+		assert_eq!(file_stem("Title."), "Title");
+		assert!(file_stem(&"é".repeat(300)).len() <= 200);
 	}
 
 	#[test]
@@ -1362,17 +1408,48 @@ mod tests {
 	}
 
 	#[test]
-	fn a_scene_whose_file_is_gone_is_left_out() {
-		let root = tempfile::tempdir().unwrap();
-		let compiled = compile(&tree(vec![doc("Manuscript/Missing.md")]));
+	fn a_scene_whose_file_is_gone_stops_the_export_by_name() {
+		let parent = tempfile::tempdir().unwrap();
+		let out = tempfile::tempdir().unwrap();
+		let root = ithaca(parent.path());
+		let compiled = compile(&document_tree(root.clone()).unwrap());
+		let gone = all_scenes(&compiled)[0].path.clone();
+		fs::remove_file(root.join(&gone)).unwrap();
 
-		let held = prose(root.path(), &compiled);
+		let refused = export(&root, out.path(), &[ExportFormat::Markdown], |_| {});
 
-		assert!(held.is_empty());
-		assert_eq!(
-			markdown(&book("Ithaca", ""), &compiled, &held),
-			"# Ithaca\n\n## Missing\n"
+		assert!(matches!(refused, Err(Error::ScenesUnreadable(paths)) if paths == [gone]));
+		assert_eq!(fs::read_dir(out.path()).unwrap().count(), 0);
+	}
+
+	#[test]
+	fn an_export_into_the_project_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = ithaca(parent.path());
+
+		let refused = export(&root, &root, &[ExportFormat::Markdown], |_| {});
+
+		assert!(matches!(refused, Err(Error::ExportInsideProject)));
+	}
+
+	#[test]
+	fn an_export_that_stops_names_what_it_wrote_and_leaves_no_part() {
+		let parent = tempfile::tempdir().unwrap();
+		let out = tempfile::tempdir().unwrap();
+		fs::create_dir(out.path().join("Ithaca.docx")).unwrap();
+
+		let stopped = export(
+			&ithaca(parent.path()),
+			out.path(),
+			&[ExportFormat::Markdown, ExportFormat::Docx],
+			|_| {},
 		);
+
+		let Err(Error::ExportStopped { written, .. }) = stopped else {
+			panic!("the export should stop at the docx");
+		};
+		assert_eq!(written, ["Ithaca.md"]);
+		assert!(!out.path().join("Ithaca.docx.part").exists());
 	}
 
 	#[test]

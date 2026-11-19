@@ -258,8 +258,9 @@ export function start(
 	at: number,
 	words: number,
 	limit?: Limit,
+	gap: number = IDLE_GAP,
 ): Step {
-	const { sessions: now, closed } = tick(sessions, at, words);
+	const { sessions: now, closed } = tick(sessions, at, words, gap);
 	if (now.deliberate) {
 		closed.push(shut(now.deliberate, at, false, words));
 	}
@@ -279,8 +280,13 @@ export function start(
  * written between the two; the deliberate one ends here, because the writer
  * held it open until here.
  */
-export function ended(sessions: Sessions, at: number, words: number): Step {
-	const { sessions: now, closed } = tick(sessions, at, words);
+export function ended(
+	sessions: Sessions,
+	at: number,
+	words: number,
+	gap: number = IDLE_GAP,
+): Step {
+	const { sessions: now, closed } = tick(sessions, at, words, gap);
 	if (now.automatic) {
 		closed.push(shut(now.automatic, now.automatic.last, false, words));
 	}
@@ -313,8 +319,13 @@ export function recorded(session: Closed): SessionRecord {
  * Stop session. A sprint stopped by hand did not meet its limit. The automatic
  * layer underneath runs on: the writer ended a session, not the writing.
  */
-export function stop(sessions: Sessions, at: number, words: number): Step {
-	const { sessions: now, closed } = tick(sessions, at, words);
+export function stop(
+	sessions: Sessions,
+	at: number,
+	words: number,
+	gap: number = IDLE_GAP,
+): Step {
+	const { sessions: now, closed } = tick(sessions, at, words, gap);
 	if (now.deliberate) {
 		closed.push(shut(now.deliberate, at, false, words));
 	}

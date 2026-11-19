@@ -136,10 +136,10 @@ type Props = {
 	onDelete: (id: string) => Promise<void>;
 	onDeleteFolder: (id: string) => Promise<void>;
 	/** Sets or clears (with null) this folder's word target. */
-	onRetarget: (target: number | null) => void;
+	onRetarget: (target: number | null) => Promise<void>;
 	/** The same for a document or a folder shown as a card. */
-	onRetargetDocument: (id: string, target: number | null) => void;
-	onRetargetFolder: (id: string, target: number | null) => void;
+	onRetargetDocument: (id: string, target: number | null) => Promise<void>;
+	onRetargetFolder: (id: string, target: number | null) => Promise<void>;
 };
 
 export default function FolderView({
@@ -166,6 +166,13 @@ export default function FolderView({
 	// The card whose target is being typed, if one is.
 	const [aiming, setAiming] = useState<string | null>(null);
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
+	// A target refused is said in the alert line, and the field stays open.
+	function aimed(done: Promise<void>) {
+		return done.catch((error: unknown) => {
+			setStatus({ kind: "error", message: failure(error).message });
+			throw error;
+		});
+	}
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
 	// The cards flow across the overview rather than down it, so a landing
@@ -321,7 +328,7 @@ export default function FolderView({
 						<Target
 							words={summary.words}
 							target={target}
-							onTarget={onRetarget}
+							onTarget={(target) => aimed(onRetarget(target))}
 							merging={merging}
 							inline
 						/>
@@ -414,9 +421,11 @@ export default function FolderView({
 												words={card.words}
 												target={card.target}
 												onTarget={(target) =>
-													onRetargetFolder(
-														card.id,
-														target,
+													aimed(
+														onRetargetFolder(
+															card.id,
+															target,
+														),
 													)
 												}
 												onDone={() => setAiming(null)}
@@ -524,9 +533,11 @@ export default function FolderView({
 											words={document.words}
 											target={document.target}
 											onTarget={(target) =>
-												onRetargetDocument(
-													document.id,
-													target,
+												aimed(
+													onRetargetDocument(
+														document.id,
+														target,
+													),
 												)
 											}
 											onDone={() => setAiming(null)}

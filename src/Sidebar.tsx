@@ -108,8 +108,8 @@ type Props = {
 	onRenamed: (document: ProjectDocument, was: string) => void;
 	onFolderRenamed: (folder: FolderNode) => void;
 	/** Sets or clears (with null) the word target of a document or a folder. */
-	onRetarget: (id: string, target: number | null) => void;
-	onRetargetFolder: (id: string, target: number | null) => void;
+	onRetarget: (id: string, target: number | null) => Promise<void>;
+	onRetargetFolder: (id: string, target: number | null) => Promise<void>;
 	/** The manifest changed in a way every listing of it has to read again. */
 	onChanged: () => void;
 	/** The same, plus the paths of open documents may have changed under them. */
@@ -192,6 +192,13 @@ export default function Sidebar({
 	useDismissal(floating, panel, onDismiss, opener);
 	const [tree, setTree] = useState<TreeNode[]>([]);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
+	// A target refused is said in the status line, and the field stays open.
+	function aimed(done: Promise<void>) {
+		return done.catch((error: unknown) => {
+			setStatus({ kind: "error", message: failure(error).message });
+			throw error;
+		});
+	}
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
 	// The folders drawn open. A project the writer has expanded nothing in
@@ -623,9 +630,11 @@ export default function Sidebar({
 															})
 														}
 														onTarget={(target) =>
-															onRetargetFolder(
-																row.id,
-																target,
+															aimed(
+																onRetargetFolder(
+																	row.id,
+																	target,
+																),
 															)
 														}
 														onDelete={() =>
@@ -713,9 +722,11 @@ export default function Sidebar({
 														})
 													}
 													onTarget={(target) =>
-														onRetarget(
-															row.document.id,
-															target,
+														aimed(
+															onRetarget(
+																row.document.id,
+																target,
+															),
 														)
 													}
 													onDelete={() =>

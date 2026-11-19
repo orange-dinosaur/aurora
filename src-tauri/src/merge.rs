@@ -63,6 +63,13 @@ pub enum Conflict {
 		ours: Option<String>,
 		theirs: Option<String>,
 	},
+	/// A file no manifest names, changed on both. Each side's text is none
+	/// when that side deleted it, or it is not text, or it is too long to show.
+	File {
+		path: String,
+		ours: Option<String>,
+		theirs: Option<String>,
+	},
 }
 
 impl Conflict {
@@ -74,10 +81,11 @@ impl Conflict {
 			Self::Renamed { id, .. } | Self::Moved { id, .. } | Self::Deleted { id, .. } => {
 				Some(*id)
 			}
-			Self::Cover { .. } => None,
+			Self::Cover { .. } | Self::File { .. } => None,
 		};
 		let field = match self {
 			Self::Field { field, .. } => Some(field.as_str()),
+			Self::File { path, .. } => Some(path.as_str()),
 			_ => None,
 		};
 		(std::mem::discriminant(self), id, field)
@@ -236,7 +244,11 @@ fn merge_takes(node: &mut Node, base: &Node, ours: &Node, theirs: &Node) {
 		.collect();
 	*chosen = three_way(base_chosen, our_chosen, their_chosen).unwrap_or(*our_chosen);
 
-	if takes.len() < 2 {
+	if takes.len() == 1 && takes.keys().all(|take| !o.contains_key(take)) {
+		// The one left is the other version's, and the text here is a take of
+		// its own beside it.
+		*chosen = Some(crate::takes::add(takes, None));
+	} else if takes.len() < 2 {
 		takes.clear();
 		*chosen = None;
 	} else if !chosen.is_some_and(|take| takes.contains_key(&take)) {
@@ -562,6 +574,23 @@ pub fn manifests(base: &Side, ours: &Side, theirs: &Side, chosen: &[Conflict]) -
 			if let Some((parent, _)) = merge.theirs.nodes.get(&other) {
 				merge.parents.insert(other, *parent);
 			}
+		}
+	}
+
+	// The other version moved a node into a folder this one deleted, so it
+	// stays where this version has it, if that folder survived.
+	let ids: Vec<Uuid> = merge.ours.walk.clone();
+	for id in ids {
+		let Some(Some(folder)) = merge.parents.get(&id).copied() else {
+			continue;
+		};
+		if merge.nodes.contains_key(&folder) {
+			continue;
+		}
+		if let Some((ours, _)) = merge.ours.nodes.get(&id)
+			&& ours.is_none_or(|ours| merge.nodes.contains_key(&ours))
+		{
+			merge.parents.insert(id, *ours);
 		}
 	}
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import History from "./History";
-import Target from "./Target";
+import Target, { type Aim } from "./Target";
 import { failure } from "./errors";
 import { dayTally, running, today, unexplained } from "./lib/stats";
 import type { Tally } from "./lib/stats";
@@ -25,10 +25,12 @@ type Props = {
 	root: string;
 	/** Bumped when a session has been written to the history file. */
 	logged: number;
+	/** Whether a closed session is still waiting to reach the history file. */
+	unrecorded: boolean;
 	/** Bumped whenever the project changes on disk. */
 	changed: number;
 	/** The target the writer typed over the number, for whichever is open. */
-	onTarget: (target: number | null) => void;
+	onTarget: Aim;
 	merging: boolean;
 };
 
@@ -92,6 +94,7 @@ export default function Stats({
 	words: held,
 	root,
 	logged,
+	unrecorded,
 	changed,
 	onTarget,
 	merging,
@@ -199,13 +202,17 @@ export default function Stats({
 			/>
 
 			<h3 className="stats__heading">Today</h3>
-			{trouble === null ? (
+			{/* Today is read from the history file, so a session missing from
+			    it leaves these numbers short. */}
+			{trouble === null && !unrecorded ? (
 				<>
 					<Layer name="Automatic" total={day.automatic} />
 					<Layer name="Session" total={day.deliberate} />
 				</>
 			) : (
-				<p className="stats__trouble">{trouble}</p>
+				<p className="stats__trouble">
+					{trouble ?? "A session could not be recorded"}
+				</p>
 			)}
 
 			{/* The three numbers are project-wide because that is where net is

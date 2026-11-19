@@ -15,7 +15,7 @@ import type { Draggable } from "./reorder";
 import type { Retitling } from "./rows";
 import { indent } from "./rows";
 import { progress } from "./RowProgress";
-import { TargetField } from "./Target";
+import { TargetField, type Aim } from "./Target";
 
 type Props = {
 	root: string;
@@ -35,7 +35,7 @@ type Props = {
 	onTry: () => void;
 	onMove: (parentId: string, index: number) => void;
 	onRename: () => void;
-	onTarget: (target: number | null) => void;
+	onTarget: Aim;
 	onDelete: () => void;
 	onRetitle: (name: string) => void;
 	onCancelRetitle: () => void;

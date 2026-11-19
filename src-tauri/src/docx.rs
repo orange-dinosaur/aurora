@@ -12,7 +12,7 @@ use std::slice;
 use pulldown_cmark::{Alignment, Event, Parser, Tag, TagEnd};
 
 use crate::archive::Archive;
-use crate::book::{Chapter, Compiled, Division, Prose, Scene, broken, told};
+use crate::book::{Chapter, Compiled, Division, Prose, Scene, told};
 use crate::epub::{escaped, options, title_of};
 use crate::project::Book;
 
@@ -284,7 +284,15 @@ impl Manuscript {
 	/// A chapter: its title on a fresh page, then its scenes parted by breaks.
 	fn chapter(&mut self, chapter: &Chapter, prose: &Prose) {
 		self.body.push(heading(&chapter.title));
-		self.write(&broken(&chapter.scenes, prose).join("\n\n"));
+		// Each scene is read on its own, so a fence one leaves open and the
+		// footnote labels one uses end with it.
+		for (at, scene) in told(&chapter.scenes, prose).iter().enumerate() {
+			if at > 0 {
+				self.body
+					.push(paragraph("SceneBreak", &run("#", Marks::default())));
+			}
+			self.write(scene);
+		}
 	}
 
 	/// A piece of front or back matter, which is laid out as a chapter is.
@@ -453,7 +461,11 @@ impl<'a> Converter<'a> {
 	/// Opens a link. One inside a footnote stays text, since a hyperlink there
 	/// would need relationships of the footnotes' own.
 	fn open_link(&mut self, url: &str) {
-		let linked = !url.is_empty() && !self.in_footnote();
+		// Word refuses the whole file over a relationship it cannot parse.
+		let followable = !url
+			.chars()
+			.any(|c| c.is_whitespace() || c.is_control() || "<>\"{}|\\^`".contains(c));
+		let linked = !url.is_empty() && followable && !self.in_footnote();
 		if linked {
 			let id = self.manuscript.link(url);
 			self.runs.push_str(&format!(r#"<w:hyperlink r:id="{id}">"#));
@@ -468,7 +480,8 @@ impl<'a> Converter<'a> {
 			Tag::Heading { .. } => Block::Heading,
 			Tag::CodeBlock(_) => Block::Code,
 			Tag::List(start) => {
-				let depth = self.depth();
+				// Word numbers nine levels, 0 to 8.
+				let depth = self.depth().min(8);
 				let num = self.manuscript.list(start, depth);
 				Block::List { num, depth }
 			}
@@ -1194,5 +1207,67 @@ mod tests {
 		assert_eq!(surname("Penelope Weaver"), Some("Weaver"));
 		assert_eq!(surname("Homer"), Some("Homer"));
 		assert_eq!(surname("  "), None);
+	}
+
+	/// A manuscript holding one chapter whose scenes say `said`, in order.
+	fn chaptered(said: &[&str]) -> Manuscript {
+		let scenes: Vec<Scene> = said
+			.iter()
+			.map(|_| Scene {
+				id: Uuid::new_v4(),
+				title: "Scene".to_owned(),
+				path: "Manuscript/Scene.md".to_owned(),
+			})
+			.collect();
+		let prose: Prose = scenes
+			.iter()
+			.zip(said)
+			.map(|(scene, text)| (scene.id, (*text).to_owned()))
+			.collect();
+		let chapter = Chapter {
+			id: Uuid::new_v4(),
+			title: "Home".to_owned(),
+			scenes,
+		};
+		let mut manuscript = Manuscript::default();
+		manuscript.chapter(&chapter, &prose);
+		manuscript
+	}
+
+	#[test]
+	fn each_scenes_footnotes_get_their_own_numbers() {
+		let manuscript = chaptered(&["One[^1]\n\n[^1]: First.", "Two[^1]\n\n[^1]: Second."]);
+
+		let body = manuscript.body.join("");
+		assert!(body.contains(r#"w:footnoteReference w:id="1""#));
+		assert!(body.contains(r#"w:footnoteReference w:id="2""#));
+	}
+
+	#[test]
+	fn a_fence_left_open_ends_with_its_scene() {
+		let manuscript = chaptered(&["```\nCode", "Plain."]);
+
+		assert_eq!(manuscript.body.last(), written("Plain.").body.last());
+	}
+
+	#[test]
+	fn a_link_no_reader_could_follow_stays_text() {
+		let manuscript = written("[Away](<http://a b>) and [On](`x`)");
+
+		assert!(manuscript.links.iter().all(|link| !link.contains(' ')));
+		assert!(manuscript.links.is_empty());
+	}
+
+	#[test]
+	fn lists_nest_no_deeper_than_word_allows() {
+		let nested: Vec<String> = (0..10)
+			.map(|level| format!("{}- Level {level}", "  ".repeat(level)))
+			.collect();
+
+		let manuscript = written(&nested.join("\n"));
+
+		let body = manuscript.body.join("");
+		assert!(body.contains(r#"<w:ilvl w:val="8"/>"#));
+		assert!(!body.contains(r#"<w:ilvl w:val="9"/>"#));
 	}
 }

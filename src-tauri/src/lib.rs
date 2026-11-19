@@ -195,6 +195,7 @@ pub fn run() {
 			versions::merge_spots,
 			versions::settle_document,
 			versions::settle_binder,
+			versions::merge_file,
 			versions::merge_cover,
 			versions::nested_notice_shown,
 			versions::version_changes,

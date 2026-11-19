@@ -79,6 +79,32 @@ export default function BookView({
 		};
 	}, [root]);
 
+	// A version switch, a put back or a refresh can change the book under the
+	// page, so it reads again, after writing down anything still waiting.
+	const opened = useRef(moved);
+	useEffect(() => {
+		if (opened.current === moved) {
+			return;
+		}
+		opened.current = moved;
+		let gone = false;
+		void flush()
+			.then(() => invoke<Book>("read_book", { root: where.current }))
+			.then((read) => {
+				// Typing since the read began wins.
+				if (!gone && pending.current === null) {
+					setBook(read);
+				}
+			})
+			.catch(() => {
+				// The first read reports trouble; a later one failing leaves
+				// the page as it was.
+			});
+		return () => {
+			gone = true;
+		};
+	}, [moved]);
+
 	// Closing the tab is not a reason to lose the last thing typed into it.
 	useEffect(
 		() => () => {

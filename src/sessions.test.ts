@@ -364,3 +364,17 @@ describe("sprints", () => {
 		expect(sessions.deliberate?.limit).toBeUndefined();
 	});
 });
+
+describe("the writer's own gap", () => {
+	const hour = 60 * 60 * 1000;
+
+	test("starting, stopping and leaving close nothing inside it", () => {
+		const { sessions } = wrote(IDLE, change(0, 12), 900, hour);
+
+		expect(start(sessions, at(40), 912, undefined, hour).closed).toEqual(
+			[],
+		);
+		expect(stop(sessions, at(40), 912, hour).closed).toEqual([]);
+		expect(ended(sessions, at(40), 912, hour).closed).toHaveLength(1);
+	});
+});

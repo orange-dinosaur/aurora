@@ -23,3 +23,17 @@ export function holdUnsaved(flush: () => Promise<void>): () => void {
 export async function flushAll(): Promise<void> {
 	await Promise.allSettled([...holders].map((flush) => flush()));
 }
+
+/**
+ * Write everything held but `except`, which is the caller's own flush, before
+ * anything reads the project from disk.
+ */
+export async function flushOthers(
+	except: (() => Promise<void>) | null,
+): Promise<void> {
+	await Promise.allSettled(
+		[...holders]
+			.filter((flush) => flush !== except)
+			.map((flush) => flush()),
+	);
+}

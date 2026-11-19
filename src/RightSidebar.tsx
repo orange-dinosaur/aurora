@@ -19,6 +19,7 @@ import type { OutlineHandle } from "./lib/outline";
 import type { MergeUnderway, Overwrites } from "./lib/versions";
 import { MANUSCRIPT } from "./kinds";
 import { isSubject } from "./subjects";
+import type { Aim } from "./Target";
 import type {
 	ProjectDocument,
 	RightSidebarTab,
@@ -69,7 +70,7 @@ type Props = {
 	/** The folder whose overview is showing, when it is one of those. */
 	folder: FolderRef | null;
 	/** A target typed over the number in the Stats tab. */
-	onTarget: (target: number | null) => void;
+	onTarget: Aim;
 	/** Whether a merge waits, which stills targets and a folder's fields. */
 	merging: boolean;
 	/** The two layers of the session as they stand. */
@@ -81,6 +82,8 @@ type Props = {
 	onWidth: (width: number) => void;
 	/** Bumped when a session has reached the history file and kept a version. */
 	logged: number;
+	/** Whether a closed session is still waiting to reach the history file. */
+	unrecorded: boolean;
 	tab: RightSidebarTab;
 	/** Opens the panel on that tab. */
 	onTab: (tab: RightSidebarTab) => void;
@@ -134,6 +137,7 @@ export default function RightSidebar({
 	width,
 	onWidth,
 	logged,
+	unrecorded,
 	tab,
 	onTab,
 	versionsScope,
@@ -239,6 +243,7 @@ export default function RightSidebar({
 								words={words}
 								root={root}
 								logged={logged}
+								unrecorded={unrecorded}
 								changed={changed}
 								onTarget={onTarget}
 								merging={merging}

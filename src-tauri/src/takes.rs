@@ -46,10 +46,19 @@ pub struct TakeView {
 /// Where a document's takes are kept. The folder is made if it is missing, and
 /// one linked out of the project is refused.
 fn folder(root: &Path, id: Uuid) -> Result<PathBuf> {
-	let folder = root.join(TAKES_DIR).join(id.to_string());
+	let folder = place(root, id)?;
 	fs::create_dir_all(&folder)?;
 	within(root, &folder)?;
 	Ok(folder)
+}
+
+/// Where a document's takes are kept, without making anything, for a read.
+fn place(root: &Path, id: Uuid) -> Result<PathBuf> {
+	let takes = root.join(TAKES_DIR);
+	if takes.exists() {
+		within(root, &takes)?;
+	}
+	Ok(takes.join(id.to_string()))
 }
 
 fn within(root: &Path, path: &Path) -> Result<()> {
@@ -106,7 +115,7 @@ fn prose(root: &Path, manifest: &Manifest, id: Uuid, take: Uuid) -> Result<Strin
 		let text = read(&resolve(manifest, root, id)?)?;
 		Ok(body(&text).to_owned())
 	} else {
-		read(&file(root, id, take)?)
+		read(&place(root, id)?.join(format!("{take}.md")))
 	}
 }
 
@@ -256,7 +265,7 @@ pub(crate) fn purge(root: &Path, at: &str) -> Result<()> {
 }
 
 /// Adds a take with the next number, named after it.
-fn add(takes: &mut BTreeMap<Uuid, Take>, from: Option<Uuid>) -> Uuid {
+pub(crate) fn add(takes: &mut BTreeMap<Uuid, Take>, from: Option<Uuid>) -> Uuid {
 	let number = takes.values().map(|take| take.number).max().unwrap_or(0) + 1;
 	let id = Uuid::new_v4();
 	let name = format!("Take {number}");
@@ -265,8 +274,9 @@ fn add(takes: &mut BTreeMap<Uuid, Take>, from: Option<Uuid>) -> Uuid {
 }
 
 /// Puts a waiting take's text in the document, under its front matter. The text
-/// leaving goes to its take's file first.
-fn bring_in(root: &Path, manifest: &Manifest, id: Uuid, take: Uuid) -> Result<()> {
+/// leaving goes to its take's file first. Hands back the document's file and
+/// the text it held, to put back if what follows fails.
+fn bring_in(root: &Path, manifest: &Manifest, id: Uuid, take: Uuid) -> Result<(PathBuf, String)> {
 	let (_, chosen) = takes_of(manifest, id)?;
 	let path = resolve(manifest, root, id)?;
 	let text = read(&path)?;
@@ -274,7 +284,24 @@ fn bring_in(root: &Path, manifest: &Manifest, id: Uuid, take: Uuid) -> Result<()
 	if let Some(leaving) = chosen {
 		write_atomic(&file(root, id, leaving)?, body(&text).as_bytes())?;
 	}
-	write_atomic(&path, with_body(&text, &arriving).as_bytes())
+	write_atomic(&path, with_body(&text, &arriving).as_bytes())?;
+	Ok((path, text))
+}
+
+/// Writes the manifest, or puts the document's text back as it was before
+/// `bring_in` when that fails, so the text and the chosen take still agree.
+fn keep_or_undo(
+	root: &Path,
+	manifest: &mut Manifest,
+	was: Option<(PathBuf, String)>,
+) -> Result<()> {
+	let written = write_manifest(root, manifest);
+	if written.is_err()
+		&& let Some((path, text)) = was
+	{
+		let _ = write_atomic(&path, text.as_bytes());
+	}
+	written
 }
 
 #[tauri::command]
@@ -323,10 +350,12 @@ fn start(
 	write_atomic(&file(root, id, from)?, body(&text).as_bytes())?;
 	let arriving = prose.unwrap_or(body(&text));
 	write_atomic(&file(root, id, new)?, arriving.as_bytes())?;
+	// The document changes last, so a manifest that cannot be written leaves
+	// its text as it was.
+	write_manifest(root, &mut manifest)?;
 	if prose.is_some() {
 		write_atomic(&path, with_body(&text, arriving).as_bytes())?;
 	}
-	write_manifest(root, &mut manifest)?;
 	views(root, &manifest, id)
 }
 
@@ -355,9 +384,9 @@ pub fn choose_take(root: PathBuf, id: Uuid, take: Uuid) -> Result<Vec<TakeView>>
 	}
 
 	if chosen != Some(take) {
-		bring_in(&root, &manifest, id, take)?;
+		let was = bring_in(&root, &manifest, id, take)?;
 		*takes_mut(&mut manifest, id)?.1 = Some(take);
-		write_manifest(&root, &mut manifest)?;
+		keep_or_undo(&root, &mut manifest, Some(was))?;
 	}
 	views(&root, &manifest, id)
 }
@@ -400,9 +429,10 @@ pub fn delete_take(root: PathBuf, id: Uuid, take: Uuid) -> Result<Vec<TakeView>>
 		.get(if at == 0 { 1 } else { at - 1 })
 		.map(|(one, _)| *one);
 
+	let mut was = None;
 	let next = if chosen == Some(take) {
 		if let Some(neighbour) = neighbour {
-			bring_in(&root, &manifest, id, neighbour)?;
+			was = Some(bring_in(&root, &manifest, id, neighbour)?);
 		}
 		neighbour
 	} else {
@@ -417,12 +447,15 @@ pub fn delete_take(root: PathBuf, id: Uuid, take: Uuid) -> Result<Vec<TakeView>>
 		takes.clear();
 		*chosen = None;
 	}
-	write_manifest(&root, &mut manifest)?;
+	keep_or_undo(&root, &mut manifest, was)?;
 
+	let place = place(&root, id)?;
 	if ordinary {
-		fs::remove_dir_all(folder(&root, id)?)?;
+		if place.exists() {
+			fs::remove_dir_all(place)?;
+		}
 	} else {
-		let path = file(&root, id, take)?;
+		let path = place.join(format!("{take}.md"));
 		if path.exists() {
 			fs::remove_file(path)?;
 		}
@@ -1068,5 +1101,35 @@ mod tests {
 
 		let back = list_takes(root.clone(), at(&root, &path)).unwrap();
 		assert_eq!(names(&back), names(&takes));
+	}
+
+	#[test]
+	fn reading_a_take_whose_folder_is_gone_makes_nothing() {
+		let (_dir, root) = project();
+		let id = scene(&root);
+		let takes = try_something(root.clone(), id).unwrap();
+		let folder = root.join(TAKES_DIR).join(id.to_string());
+		fs::remove_dir_all(&folder).unwrap();
+
+		assert!(take_text(root.clone(), id, takes[0].id).is_err());
+		assert!(!folder.exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn choosing_a_take_the_manifest_cannot_record_leaves_the_text_alone() {
+		use std::os::unix::fs::PermissionsExt;
+		let (_dir, root) = project();
+		let id = scene(&root);
+		let takes = try_something(root.clone(), id).unwrap();
+		write_document(root.clone(), id, SCENE.replace("held", "broke")).unwrap();
+		let before = read_document(root.clone(), id).unwrap();
+		fs::set_permissions(&root, fs::Permissions::from_mode(0o555)).unwrap();
+
+		let refused = choose_take(root.clone(), id, takes[0].id);
+
+		fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
+		assert!(refused.is_err());
+		assert_eq!(read_document(root.clone(), id).unwrap(), before);
 	}
 }

@@ -467,4 +467,18 @@ describe("press", () => {
 			swallow: false,
 		});
 	});
+
+	test("a held key acts once", () => {
+		expect(press(false, key("w", { ...control, repeat: true }))).toEqual({
+			waiting: false,
+			action: null,
+			swallow: true,
+		});
+		expect(press(true, key("v", { repeat: true })).action).toBeNull();
+	});
+
+	test("caps lock does not change the keys", () => {
+		expect(press(false, key("W", control)).waiting).toBe(true);
+		expect(press(true, key("V")).action).toBe("split");
+	});
 });

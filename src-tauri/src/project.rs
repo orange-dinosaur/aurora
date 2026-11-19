@@ -386,7 +386,10 @@ pub enum Error {
 	NoConfigDir,
 	NoHomeDir,
 	NotAProject,
-	UnsupportedVersion { found: u32, supported: u32 },
+	UnsupportedVersion {
+		found: u32,
+		supported: u32,
+	},
 	UnknownDocument,
 	UnknownSection,
 	UnknownFolder,
@@ -416,6 +419,15 @@ pub enum Error {
 	TakeExists,
 	UnsupportedFormat(Format),
 	StartOutOfRange,
+	NothingToKeep,
+	NameStaged,
+	NoManifest,
+	ScenesUnreadable(Vec<String>),
+	ExportInsideProject,
+	ExportStopped {
+		written: Vec<String>,
+		cause: Box<Error>,
+	},
 	Trash(trash::Error),
 	Git(git2::Error),
 	Io(io::Error),
@@ -504,6 +516,21 @@ impl fmt::Display for Error {
 				"a structure takes 1 to {MAX_PARTS} parts, at least one chapter a part and at \
 				 most {MAX_CHAPTERS} in all, and 0 to {MAX_SCENES} scenes a chapter"
 			),
+			Error::NothingToKeep => write!(f, "Nothing has changed since the last checkpoint"),
+			Error::NameStaged => write!(f, "Stage the other renamed row too"),
+			Error::NoManifest => write!(f, "that version holds no Aurora project to merge"),
+			Error::ScenesUnreadable(paths) => {
+				write!(f, "these scenes could not be read: {}", paths.join(", "))
+			}
+			Error::ExportInsideProject => write!(f, "Pick a folder outside the project"),
+			Error::ExportStopped { written, cause } if written.is_empty() => {
+				write!(f, "the export stopped before writing anything: {cause}")
+			}
+			Error::ExportStopped { written, cause } => write!(
+				f,
+				"the export stopped after writing {}: {cause}",
+				written.join(", ")
+			),
 			Error::Trash(e) => write!(f, "the desktop's trash would not take the folder: {e}"),
 			Error::Git(e) => write!(f, "Aurora could not keep this project's versions: {e}"),
 			Error::Io(e) => write!(f, "{e}"),
@@ -552,6 +579,12 @@ impl Error {
 			Error::TakeExists => "takeExists",
 			Error::UnsupportedFormat(_) => "unsupportedFormat",
 			Error::StartOutOfRange => "startOutOfRange",
+			Error::NothingToKeep => "nothingToKeep",
+			Error::NameStaged => "nameStaged",
+			Error::NoManifest => "noManifest",
+			Error::ScenesUnreadable(_) => "scenesUnreadable",
+			Error::ExportInsideProject => "exportInsideProject",
+			Error::ExportStopped { .. } => "exportStopped",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",
 			Error::Io(_) => "io",
@@ -608,7 +641,13 @@ impl std::error::Error for Error {
 			| Error::NotInManuscript
 			| Error::TakeExists
 			| Error::UnsupportedFormat(_)
-			| Error::StartOutOfRange => None,
+			| Error::StartOutOfRange
+			| Error::NothingToKeep
+			| Error::NameStaged
+			| Error::NoManifest
+			| Error::ScenesUnreadable(_)
+			| Error::ExportInsideProject => None,
+			Error::ExportStopped { cause, .. } => Some(cause.as_ref()),
 			Error::Trash(e) => Some(e),
 			Error::Git(e) => Some(e),
 			Error::Io(e) => Some(e),
@@ -678,7 +717,7 @@ pub const MAX_NAME_BYTES: usize = 255;
 const ILLEGAL: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
 /// Windows refuses these as filenames whatever the extension.
-const RESERVED: &[&str] = &[
+pub(crate) const RESERVED: &[&str] = &[
 	"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
 	"COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];

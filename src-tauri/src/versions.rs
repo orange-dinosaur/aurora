@@ -72,9 +72,18 @@ pub const NESTED_NOTICE_SHOWN: &str = "aurora.nestedNoticeShown";
 
 /// Kept out of every version, so going back never rolls back Stats or the
 /// Trash. Written to `.git/info/exclude` so the project folder gains no file.
-fn excluded() -> [String; 2] {
-	[format!("/{HISTORY_FILE}"), format!("/{TRASH_DIR}/")]
+fn excluded() -> [String; 5] {
+	[
+		format!("/{HISTORY_FILE}"),
+		format!("/{TRASH_DIR}/"),
+		DESKTOP_FILES[0].to_owned(),
+		DESKTOP_FILES[1].to_owned(),
+		DESKTOP_FILES[2].to_owned(),
+	]
 }
+
+/// What file managers leave in any folder they show.
+const DESKTOP_FILES: [&str; 3] = [".DS_Store", "Thumbs.db", "desktop.ini"];
 
 /// Opens the repository at `root`, making one on Main with nothing kept yet
 /// when there is none. Returns the folder of a repository the project sits
@@ -95,6 +104,11 @@ pub fn ensure_repository(root: &Path) -> Result<Option<PathBuf>> {
 		}
 		Err(e) => return Err(e.into()),
 	};
+	// An adopted repository gets the same unless it says otherwise itself.
+	let mut own = repo.config()?.open_level(git2::ConfigLevel::Local)?;
+	if own.get_entry("core.autocrlf").is_err() {
+		own.set_bool("core.autocrlf", false)?;
+	}
 	exclude(&repo)?;
 	enclosing(root, &repo)
 }
@@ -136,11 +150,14 @@ fn exclude(repo: &Repository) -> Result<()> {
 }
 
 fn signature(author: &str) -> Result<Signature<'static>> {
-	let name = if author.trim().is_empty() {
-		"Aurora"
-	} else {
-		author
-	};
+	// libgit2 refuses angle brackets and newlines anywhere, and a name that is
+	// only punctuation once it trims its own list from the ends.
+	let name: String = author
+		.chars()
+		.filter(|c| !matches!(c, '<' | '>' | '\n' | '\r'))
+		.collect();
+	let name = name.trim_matches(|c: char| c <= ' ' || ".,:;\"\\'".contains(c));
+	let name = if name.is_empty() { "Aurora" } else { name };
 	// libgit2 refuses an empty email, and a writer has none to give.
 	Ok(Signature::now(name, AUTHOR_EMAIL)?)
 }
@@ -151,6 +168,11 @@ fn working(repo: &Repository) -> Result<Index> {
 	let mut index = repo.index()?;
 	index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
 	index.update_all(["*"], None)?;
+	// Copies kept before they were excluded leave with the next checkpoint.
+	let patterns = DESKTOP_FILES
+		.iter()
+		.flat_map(|name| [name.to_string(), format!("**/{name}")]);
+	index.remove_all(patterns, None)?;
 	Ok(index)
 }
 
@@ -247,6 +269,13 @@ fn checkpoint(root: &Path, message: &str, author: &str) -> Result<Oid> {
 	let signature = signature(author)?;
 	let head = head_commit(&repo)?;
 	let merged = merge_head(&repo)?;
+	if merged.is_none()
+		&& head
+			.as_ref()
+			.is_some_and(|head| head.tree_id() == tree.id())
+	{
+		return Err(Error::NothingToKeep);
+	}
 	let parents: Vec<&Commit> = head.iter().chain(merged.iter()).collect();
 	let id = repo.commit(
 		Some("HEAD"),
@@ -444,6 +473,9 @@ fn version_name(repo: &Repository, slug: &str) -> Result<String> {
 /// Only `HEAD` moves, so changes not yet in a checkpoint come along.
 fn new_branch(root: &Path, name: &str) -> Result<String> {
 	let slug = slug(name)?;
+	if slug == MAIN || slug == MASTER {
+		return Err(Error::VersionExists);
+	}
 	let repo = Repository::open(root)?;
 	refuse_while_merging(&repo)?;
 	let Some(head) = head_commit(&repo)? else {
@@ -466,6 +498,9 @@ fn renamed_branch(root: &Path, slug: &str, name: &str) -> Result<String> {
 		return Err(Error::MainFixed);
 	}
 	let renamed = self::slug(name)?;
+	if renamed == MAIN || renamed == MASTER {
+		return Err(Error::VersionExists);
+	}
 	let mut branch = repo.find_branch(slug, BranchType::Local)?;
 	if renamed != slug {
 		match branch.rename(&renamed, false) {
@@ -653,17 +688,24 @@ fn staged_side(repo: &Repository) -> Result<(Tree<'_>, Manifest)> {
 /// A tree and the manifest it holds. With no tree, nothing at all, so
 /// everything on the other side reads as added.
 fn with_manifest<'r>(repo: &'r Repository, tree: Option<Tree<'r>>) -> Result<(Tree<'r>, Manifest)> {
-	let Some(tree) = tree else {
-		let empty = repo.find_tree(repo.treebuilder(None)?.write()?)?;
+	let nothing = || {
 		let mut nothing = Manifest {
 			nodes: Vec::new(),
 			..Manifest::new("", Format::Novel, OffsetDateTime::UNIX_EPOCH)
 		};
 		// Otherwise random, and nothing must equal nothing.
 		nothing.book.identifier = Uuid::nil();
-		return Ok((empty, nothing));
+		nothing
 	};
-	let manifest = repo.find_blob(tree.get_path(Path::new(MANIFEST_FILE))?.id())?;
+	let Some(tree) = tree else {
+		let empty = repo.find_tree(repo.treebuilder(None)?.write()?)?;
+		return Ok((empty, nothing()));
+	};
+	// A commit from before the project was an Aurora project holds no binder.
+	let Ok(manifest) = tree.get_path(Path::new(MANIFEST_FILE)) else {
+		return Ok((tree, nothing()));
+	};
+	let manifest = repo.find_blob(manifest.id())?;
 	let manifest = serde_json::from_slice(manifest.content())?;
 	Ok((tree, manifest))
 }
@@ -898,6 +940,17 @@ fn carry(root: &Path, row: Row, staging: bool) -> Result<()> {
 		},
 	}
 
+	// Half of a swap of names would put two nodes on one path.
+	let mut placed = Vec::new();
+	place(&is.nodes, None, "", &mut placed);
+	let mut paths = HashSet::new();
+	if !placed
+		.iter()
+		.all(|(_, node)| paths.insert(node.path.clone()))
+	{
+		return Err(Error::NameStaged);
+	}
+
 	let files = |manifest: &Manifest, blobs: &HashMap<Uuid, Oid>, cover: Option<Oid>| {
 		let mut files: HashMap<String, Oid> = manifest
 			.documents()
@@ -989,6 +1042,15 @@ fn take(from: &[Node], into: &mut Vec<Node>, id: Uuid) {
 	for folder in above {
 		if tree::find(into, folder.id()).is_none() {
 			insert(from, into, bare(folder));
+		}
+	}
+	// A folder that holds this node in `from` but sits inside it in `into`
+	// comes out first, or removing the node below would take it along.
+	for folder in above {
+		let inside = tree::trail(into, folder.id())
+			.is_some_and(|trail| trail.iter().any(|node| node.id() == id));
+		if inside {
+			take(from, into, folder.id());
 		}
 	}
 
@@ -1184,6 +1246,14 @@ pub fn settle_binder(root: PathBuf, theirs: Vec<merge::Conflict>) -> Result<()> 
 	settle_rest(&root, &theirs)
 }
 
+#[tauri::command]
+pub fn merge_file(root: PathBuf, path: String, side: String) -> Result<()> {
+	if !root.is_absolute() {
+		return Err(Error::RelativePath);
+	}
+	settle_file(&root, &path, &side)
+}
+
 /// One side's cover while a merge is under way, as raw bytes like
 /// `read_cover`.
 #[tauri::command]
@@ -1285,6 +1355,18 @@ fn open_for_putting_back(root: &Path) -> Result<Repository> {
 	Ok(repo)
 }
 
+/// Keeps changes not yet in a checkpoint, so putting back never loses them.
+/// Putting back to the last checkpoint is how the writer drops those changes,
+/// so that keeps nothing.
+fn keep_before_putting_back(root: &Path, version: &str) -> Result<()> {
+	if version != "HEAD" && pending(root)? {
+		// Everything, not just what the writer staged, or the rest still goes.
+		stage(&Repository::open(root)?)?;
+		checkpoint(root, "Before putting back", &author(root)?)?;
+	}
+	Ok(())
+}
+
 /// Where a version had a document: the nearest of its old folders the project
 /// still has, and its place there, after the document it used to follow if
 /// that is in the same folder now.
@@ -1319,6 +1401,7 @@ fn destination(then: &Manifest, now: &Manifest, id: Uuid) -> Result<(Uuid, usize
 #[tauri::command]
 pub fn put_back_document(root: PathBuf, version: String, id: Uuid) -> Result<()> {
 	let repo = open_for_putting_back(&root)?;
+	keep_before_putting_back(&root, &version)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	let now = read_manifest(&root)?;
 	let Some(node @ Node::Document { takes, chosen, .. }) = tree::find(&then.nodes, id) else {
@@ -1343,13 +1426,25 @@ pub fn put_back_document(root: PathBuf, version: String, id: Uuid) -> Result<()>
 		None => recreate_document(&root, parent, index, node.clone(), &text)?,
 		Some(Node::Folder { .. }) => return Err(Error::UnknownDocument),
 		Some(Node::Document { name, .. }) => {
+			let text = String::from_utf8(text).map_err(|_| Error::NotText)?;
+			let here = tree::parent(&now.nodes, id).map(Node::id);
+			let moving = here != Some(parent);
+			// Another document here may have the old name by now, so it is
+			// taken back only once this one has left.
+			let taken_here = here
+				.and_then(|here| tree::children(&now.nodes, here))
+				.unwrap_or_default()
+				.iter()
+				.any(|other| other.id() != id && other.name() == node.name());
+			if moving && taken_here {
+				move_node(root.clone(), id, parent, index)?;
+			}
 			if name != node.name() {
 				rename_document(root.clone(), id, node.name().to_owned())?;
 			}
-			if tree::parent(&now.nodes, id).map(Node::id) != Some(parent) {
+			if moving && !taken_here {
 				move_node(root.clone(), id, parent, index)?;
 			}
-			let text = String::from_utf8(text).map_err(|_| Error::NotText)?;
 			write_document(root.clone(), id, text)?;
 		}
 	}
@@ -1409,6 +1504,7 @@ pub fn put_back_everything_removes(root: PathBuf, version: String) -> Result<Vec
 #[tauri::command]
 pub fn put_back_book(root: PathBuf, version: String) -> Result<()> {
 	let repo = open_for_putting_back(&root)?;
+	keep_before_putting_back(&root, &version)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	for name in COVER_NAMES {
 		match blob_at(&files, name).filter(|_| then.book.cover == name) {
@@ -1429,6 +1525,7 @@ pub fn put_back_book(root: PathBuf, version: String) -> Result<()> {
 #[tauri::command]
 pub fn put_back_everything(root: PathBuf, version: String) -> Result<()> {
 	let repo = open_for_putting_back(&root)?;
+	keep_before_putting_back(&root, &version)?;
 	let (files, then) = side(&repo, Some(&version))?;
 	let was = read_manifest(&root)?;
 
@@ -1455,17 +1552,30 @@ fn settle_folders(root: &Path, was: &Manifest, is: &Manifest) -> Result<()> {
 		placed
 			.into_iter()
 			.filter(|(_, node)| node.folder)
-			.map(|(_, node)| node.path)
+			.map(|(id, node)| (id, node.path))
 			// The manifest is a file the writer can edit.
-			.filter(|path| {
+			.filter(|(_, path)| {
 				Path::new(path)
 					.components()
 					.all(|c| matches!(c, Component::Normal(_)))
 			})
 			.collect::<Vec<_>>()
 	};
-	let was = folders(was);
-	let is = folders(is);
+	let (was, is) = (folders(was), folders(is));
+	// A folder renamed only in case is the same folder to a filesystem that
+	// ignores case, so the checkout left it under its old name.
+	let new: HashMap<Uuid, &String> = is.iter().map(|(id, path)| (*id, path)).collect();
+	for (id, old) in &was {
+		if let Some(new) = new.get(id)
+			&& *new != old
+			&& new.to_lowercase() == old.to_lowercase()
+		{
+			// On a filesystem that tells case apart, both exist and this fails.
+			let _ = fs::rename(root.join(old), root.join(new));
+		}
+	}
+	let was: Vec<String> = was.into_iter().map(|(_, path)| path).collect();
+	let is: Vec<String> = is.into_iter().map(|(_, path)| path).collect();
 	let mut gone: Vec<&String> = was.iter().filter(|path| !is.contains(path)).collect();
 	gone.sort_by_key(|path| std::cmp::Reverse(path.len()));
 	for path in gone {
@@ -1505,10 +1615,17 @@ fn switch(root: &Path, slug: &str) -> Result<()> {
 	// Nothing differs from `HEAD`, so a forced checkout loses no writing. It
 	// removes what the target does not hold, updates the index to match, and
 	// leaves ignored files alone.
-	repo.checkout_tree(files.as_object(), Some(CheckoutBuilder::new().force()))?;
-	settle_folders(root, &was, &is)?;
+	if let Err(e) = repo.checkout_tree(files.as_object(), Some(CheckoutBuilder::new().force())) {
+		// Back to where the writer was, as far as that goes.
+		if let Ok(Some(head)) = head_commit(&repo) {
+			let _ = repo.checkout_tree(head.as_object(), Some(CheckoutBuilder::new().force()));
+		}
+		return Err(e.into());
+	}
+	// The files are the target's now, so `HEAD` says so even if a folder
+	// below cannot be made.
 	repo.set_head(&format!("refs/heads/{slug}"))?;
-	Ok(())
+	settle_folders(root, &was, &is)
 }
 
 /// A merge waiting for its conflicts to be settled.
@@ -1603,6 +1720,7 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 	if pending(root)? {
 		return Err(Error::ChangesPending);
 	}
+	let signature = signature(author)?;
 	let repo = Repository::open(root)?;
 	let Some(head) = head_commit(&repo)? else {
 		return Err(Error::NothingKept);
@@ -1614,6 +1732,9 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 	let base = merge_base(&repo, &head, &theirs)?;
 	if base.as_ref().map(Commit::id) == Some(theirs.id()) {
 		return Err(Error::AlreadyMerged);
+	}
+	if theirs.tree()?.get_path(Path::new(MANIFEST_FILE)).is_err() {
+		return Err(Error::NoManifest);
 	}
 	let (base_tree, base) = merge_side(&repo, base.as_ref())?;
 	let (our_tree, ours) = merge_side(&repo, Some(&head))?;
@@ -1686,6 +1807,11 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 	if let Some(cover) = merged.cover {
 		index.add(&staged_entry(&repo, &merged.manifest.book.cover, cover, 0)?)?;
 	}
+	// From here on the project is changing, so the merge is recorded first and
+	// whatever fails below leaves one to abort.
+	let message = format!("Merged {}", version_name(&repo, slug)?);
+	fs::write(repo.path().join("MERGE_MSG"), format!("{message}\n"))?;
+	fs::write(repo.path().join("MERGE_HEAD"), format!("{}\n", theirs.id()))?;
 	settle_takes(
 		&repo,
 		root,
@@ -1712,6 +1838,7 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 
 	// Nothing was pending, so removing untracked files only takes what the
 	// merge moved away. Stats and the Trash are excluded and stay.
+	index.write()?;
 	repo.checkout_index(
 		Some(&mut index),
 		Some(
@@ -1722,18 +1849,13 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 				.remove_untracked(true),
 		),
 	)?;
-	index.write()?;
 	settle_folders(root, &ours.manifest, &merged.manifest)?;
 
-	let message = format!("Merged {}", version_name(&repo, slug)?);
 	if index.has_conflicts() {
-		fs::write(repo.path().join("MERGE_HEAD"), format!("{}\n", theirs.id()))?;
-		fs::write(repo.path().join("MERGE_MSG"), format!("{message}\n"))?;
 		return merging(root);
 	}
 
 	let tree = repo.find_tree(index.write_tree()?)?;
-	let signature = signature(author)?;
 	repo.commit(
 		Some("HEAD"),
 		&signature,
@@ -1742,6 +1864,7 @@ fn merge(root: &Path, slug: &str, author: &str) -> Result<Option<Merging>> {
 		&tree,
 		&[&head, &theirs],
 	)?;
+	repo.cleanup_state()?;
 	Ok(None)
 }
 
@@ -1758,15 +1881,16 @@ fn settle_takes(
 	ours: &Tree,
 	theirs: &Tree,
 ) -> Result<()> {
-	let named: HashSet<String> = tree::walk(&manifest.nodes)
+	let owners: HashMap<String, Uuid> = tree::walk(&manifest.nodes)
 		.flat_map(|node| match node {
 			Node::Document { id, takes, .. } => takes
 				.keys()
-				.map(|take| format!("{}/{take}.md", takes_folder(*id)))
+				.map(|take| (format!("{}/{take}.md", takes_folder(*id)), *id))
 				.collect(),
 			Node::Folder { .. } => Vec::new(),
 		})
 		.collect();
+	let named: HashSet<String> = owners.keys().cloned().collect();
 	let held: Vec<(String, u16)> = index
 		.iter()
 		.map(|entry| {
@@ -1796,7 +1920,23 @@ fn settle_takes(
 		if index.get_path(Path::new(&path), 0).is_some() {
 			continue;
 		}
-		let Some(blob) = blob_at(ours, &path).or_else(|| blob_at(theirs, &path)) else {
+		// A take the merge made has no file in either version: it stands for
+		// the document's merged text.
+		let made = || -> Result<Option<Oid>> {
+			let Some(document) = tree::path(&manifest.nodes, owners[&path]) else {
+				return Ok(None);
+			};
+			let held = index
+				.get_path(Path::new(&document), 0)
+				.or_else(|| index.get_path(Path::new(&document), 2));
+			let Some(held) = held else {
+				return Ok(None);
+			};
+			let text = String::from_utf8_lossy(repo.find_blob(held.id)?.content()).into_owned();
+			Ok(Some(repo.blob(body(&text).as_bytes())?))
+		};
+		let found = blob_at(ours, &path).or_else(|| blob_at(theirs, &path));
+		let Some(blob) = found.map_or_else(made, |blob| Ok(Some(blob)))? else {
 			continue;
 		};
 		index.add(&staged_entry(repo, &path, blob, 0)?)?;
@@ -1806,6 +1946,50 @@ fn settle_takes(
 		}
 		write_atomic(&file, repo.find_blob(blob)?.content())?;
 	}
+	Ok(())
+}
+
+/// The longest file outside the binder a merge card shows as text.
+const SHOWN_FILE_SIZE: usize = 64 * 1024;
+
+/// Settles a file no manifest names the way one side has it, `"mine"` or
+/// `"theirs"`, on disk and in the next checkpoint.
+fn settle_file(root: &Path, path: &str, side: &str) -> Result<()> {
+	let repo = Repository::open(root)?;
+	let mut index = repo.index()?;
+	let mut found = None;
+	for conflict in index.conflicts()? {
+		let conflict = conflict?;
+		let sides = [&conflict.our, &conflict.their, &conflict.ancestor];
+		if sides
+			.into_iter()
+			.flatten()
+			.any(|entry| entry.path == path.as_bytes())
+		{
+			found = Some(conflict);
+		}
+	}
+	// Only a path git has conflicted is touched, so the frontend cannot name
+	// any other file. With no merge under way there is none.
+	let conflict = found.ok_or(Error::BadDocumentPath)?;
+	let kept = match side {
+		"mine" => conflict.our,
+		"theirs" => conflict.their,
+		_ => return Err(Error::BadDocumentPath),
+	};
+	let file = root.join(path);
+	index.conflict_remove(Path::new(path))?;
+	match kept {
+		Some(entry) => {
+			if let Some(folder) = file.parent() {
+				fs::create_dir_all(folder)?;
+			}
+			write_atomic(&file, repo.find_blob(entry.id)?.content())?;
+			index.add(&staged_entry(&repo, path, entry.id, 0)?)?;
+		}
+		None => remove_if_there(&file)?,
+	}
+	index.write()?;
 	Ok(())
 }
 
@@ -1840,7 +2024,8 @@ fn merging(root: &Path) -> Result<Option<Merging>> {
 	let mut manifest = false;
 	for conflict in repo.index()?.conflicts()? {
 		let conflict = conflict?;
-		let Some(side) = conflict.our.or(conflict.their).or(conflict.ancestor) else {
+		let sides = [&conflict.our, &conflict.their, &conflict.ancestor];
+		let Some(side) = sides.into_iter().flatten().next() else {
 			continue;
 		};
 		let path = String::from_utf8_lossy(&side.path).into_owned();
@@ -1848,9 +2033,22 @@ fn merging(root: &Path) -> Result<Option<Merging>> {
 			manifest = true;
 			continue;
 		}
-		conflicts.push(merge::Conflict::Text {
-			id: ids.get(&path).copied(),
-			path,
+		let shown = |side: &Option<IndexEntry>| -> Result<Option<String>> {
+			let Some(side) = side else {
+				return Ok(None);
+			};
+			let blob = repo.find_blob(side.id)?;
+			Ok(Some(blob.content())
+				.filter(|bytes| bytes.len() <= SHOWN_FILE_SIZE)
+				.and_then(|bytes| String::from_utf8(bytes.to_vec()).ok()))
+		};
+		conflicts.push(match ids.get(&path) {
+			Some(&id) => merge::Conflict::Text { id: Some(id), path },
+			None => merge::Conflict::File {
+				ours: shown(&conflict.our)?,
+				theirs: shown(&conflict.their)?,
+				path,
+			},
 		});
 	}
 	// The rest are worked out again from the three versions, which do not
@@ -1865,7 +2063,8 @@ fn merging(root: &Path) -> Result<Option<Merging>> {
 
 	Ok(Some(Merging {
 		name,
-		message: fs::read_to_string(repo.path().join("MERGE_MSG"))?
+		message: fs::read_to_string(repo.path().join("MERGE_MSG"))
+			.unwrap_or_default()
 			.trim_end()
 			.to_owned(),
 		conflicts,
@@ -2001,10 +2200,20 @@ fn settle_rest(root: &Path, theirs: &[merge::Conflict]) -> Result<()> {
 	let (_, base) = merge_side(&repo, base.as_ref())?;
 	let (our_tree, ours) = merge_side(&repo, Some(&head))?;
 	let (their_tree, other) = merge_side(&repo, Some(&merged))?;
-	let settled = merge::manifests(&base, &ours, &other, theirs);
+	let mut settled = merge::manifests(&base, &ours, &other, theirs);
 	// ponytail: the binder is merged afresh, so a rename or move made while
 	// the merge was under way is lost; carry `was` over if writers do that.
+	// A document no checkpoint holds is the one exception: it is carried over
+	// where it stands, or its file would be deleted below.
 	let was = read_manifest(root)?;
+	for document in was.documents() {
+		let known = [&base, &ours, &other]
+			.iter()
+			.any(|side| tree::find(&side.manifest.nodes, document.id).is_some());
+		if !known {
+			take(&was.nodes, &mut settled.manifest.nodes, document.id);
+		}
+	}
 
 	let paths = |manifest: &Manifest| -> HashMap<Uuid, String> {
 		manifest
@@ -2225,7 +2434,8 @@ mod tests {
 
 		assert_eq!(repo.head().unwrap().target(), Some(theirs));
 		assert_eq!(versions(&repo), 1);
-		assert_eq!(own_autocrlf(&repo), None);
+		// The one setting Aurora adds, so checkouts never rewrite line endings.
+		assert_eq!(own_autocrlf(&repo), Some(false));
 	}
 
 	/// The setting in the repository's own config, whatever the machine says.
@@ -2613,6 +2823,65 @@ mod tests {
 	}
 
 	#[test]
+	fn a_version_named_main_never_takes_mains_place() {
+		let (_parent, root, _, _, _) = novel();
+		adopted(&root);
+
+		assert!(matches!(
+			new_branch(&root, "Main"),
+			Err(Error::VersionExists)
+		));
+		let draft = new_branch(&root, "Draft").unwrap();
+		assert!(matches!(
+			renamed_branch(&root, &draft, "Master"),
+			Err(Error::VersionExists)
+		));
+	}
+
+	#[test]
+	fn any_author_can_sign_a_checkpoint() {
+		for author in ["A <b>", "...", "<>", "Line\nbreak"] {
+			assert!(signature(author).is_ok(), "{author:?}");
+		}
+		assert_eq!(signature("<>").unwrap().name().ok(), Some("Aurora"));
+	}
+
+	#[test]
+	fn a_checkpoint_with_nothing_new_is_refused() {
+		let (_parent, root, _, _, _) = novel();
+		let refused = checkpoint(&root, "Again", "");
+		assert!(matches!(refused, Err(Error::NothingToKeep)));
+	}
+
+	#[test]
+	fn a_desktop_file_never_counts_as_a_change() {
+		let (_parent, root, _, _, _) = novel();
+		fs::write(root.join(".DS_Store"), "junk").unwrap();
+		fs::write(root.join("Manuscript/Thumbs.db"), "junk").unwrap();
+		assert!(!pending(&root).unwrap());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn a_switch_that_fails_partway_still_names_the_version_reached() {
+		use std::os::unix::fs::PermissionsExt;
+		let (_parent, root, _, here, _) = novel();
+		new_branch(&root, "Draft").unwrap();
+		create_folder(root.clone(), here, "Empty".to_owned(), None).unwrap();
+		checkpoint(&root, "On Draft", "").unwrap();
+		switch(&root, "main").unwrap();
+		let folder = root.join(tree::path(&read_manifest(&root).unwrap().nodes, here).unwrap());
+		fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+
+		let failed = switch(&root, "draft");
+
+		fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+		assert!(failed.is_err());
+		let repo = Repository::open(&root).unwrap();
+		assert_eq!(current_branch(&repo).unwrap().as_deref(), Some("draft"));
+	}
+
+	#[test]
 	fn master_beside_main_is_a_version_like_any_other() {
 		let (_parent, root, _, _, _) = novel();
 		let repo = Repository::open(&root).unwrap();
@@ -2635,6 +2904,7 @@ mod tests {
 		let repo = Repository::open(&root).unwrap();
 		let head = repo.head().unwrap().peel_to_commit().unwrap();
 		repo.set_head_detached(head.id()).unwrap();
+		fs::write(root.join("notes.txt"), "Only here").unwrap();
 		let kept = checkpoint(&root, "Only here", "").unwrap();
 
 		let found = branches(&root).unwrap();
@@ -2661,7 +2931,9 @@ mod tests {
 	fn unmerged_counts_the_checkpoints_only_one_version_reaches() {
 		let (_parent, root, _, _, _) = novel();
 		new_branch(&root, "Draft").unwrap();
+		fs::write(root.join("notes.txt"), "One").unwrap();
 		checkpoint(&root, "One", "").unwrap();
+		fs::write(root.join("notes.txt"), "Two").unwrap();
 		let draft = checkpoint(&root, "Two", "").unwrap();
 
 		let unmerged = |root: &Path| -> Vec<(String, u32)> {
@@ -2999,7 +3271,16 @@ mod tests {
 	}
 
 	fn kept(root: &Path) -> String {
-		checkpoint(root, "Kept", "").unwrap().to_string()
+		held(root, "Kept").to_string()
+	}
+
+	/// A checkpoint, or the last one when nothing has changed since.
+	fn held(root: &Path, message: &str) -> Oid {
+		match checkpoint(root, message, "") {
+			Ok(id) => id,
+			Err(Error::NothingToKeep) => repo_head(root),
+			Err(e) => panic!("{e}"),
+		}
 	}
 
 	fn change_of(changes: &Changes, id: Uuid) -> Option<&Change> {
@@ -3587,7 +3868,7 @@ mod tests {
 	#[test]
 	fn a_document_brings_its_new_folder_and_the_folder_takes_it_back() {
 		let (_parent, root, _, here, _) = novel();
-		checkpoint(&root, "Set up", "").unwrap();
+		held(&root, "Set up");
 		let act = create_folder(root.clone(), here, "Act".to_owned(), None)
 			.unwrap()
 			.id();
@@ -3612,7 +3893,7 @@ mod tests {
 	#[test]
 	fn unstaging_writes_back_what_the_last_checkpoint_had() {
 		let (_parent, root, seeded, _, there) = novel();
-		checkpoint(&root, "Set up", "").unwrap();
+		held(&root, "Set up");
 		write_document(root.clone(), seeded, "Edited".to_owned()).unwrap();
 		rename_document(root.clone(), seeded, "Renamed".to_owned()).unwrap();
 		move_node(root.clone(), seeded, there, 0).unwrap();
@@ -3802,6 +4083,18 @@ mod tests {
 		(repo_head(root), index)
 	}
 
+	/// Putting back kept the changes it was about to overwrite in checkpoints
+	/// of their own, one a put back, straight after the one before.
+	fn kept_first(root: &Path, (head, _): (Oid, Oid)) {
+		let repo = Repository::open(root).unwrap();
+		let mut now = repo.head().unwrap().peel_to_commit().unwrap();
+		assert_eq!(now.message().ok(), Some("Before putting back"));
+		while now.message().ok() == Some("Before putting back") {
+			now = now.parent(0).unwrap();
+		}
+		assert_eq!(now.id(), head);
+	}
+
 	#[test]
 	fn a_document_comes_back_with_its_text_name_and_folder() {
 		let (_parent, root, seeded, _, there) = novel();
@@ -3817,7 +4110,7 @@ mod tests {
 
 		assert!(changes(&root, Some(&first), None).unwrap().nodes.is_empty());
 		assert_eq!(body_now(&root, seeded), "First");
-		assert_eq!(checkpoint_and_index(&root), before);
+		kept_first(&root, before);
 	}
 
 	#[test]
@@ -3843,7 +4136,7 @@ mod tests {
 		assert!(changes(&root, Some(&start), None).unwrap().nodes.is_empty());
 		assert_eq!(body_now(&root, doomed), "Kept");
 		assert_eq!(list_trash(root.clone()).unwrap().len(), 2);
-		assert_eq!(checkpoint_and_index(&root), before);
+		kept_first(&root, before);
 	}
 
 	fn takes_on_disk(root: &Path, id: Uuid) -> PathBuf {
@@ -3937,6 +4230,30 @@ mod tests {
 		assert_eq!(body_now(&root, seeded), "Kept");
 		assert!(!takes_on_disk(&root, seeded).exists());
 		assert_eq!(checkpoint_and_index(&root), before);
+	}
+
+	#[test]
+	fn putting_back_keeps_unkept_changes_in_a_checkpoint_first() {
+		let put_backs: [fn(PathBuf, String, Uuid) -> Result<()>; 3] = [
+			put_back_document,
+			|root, version, _| put_back_book(root, version),
+			|root, version, _| put_back_everything(root, version),
+		];
+		for put_back in put_backs {
+			let (_parent, root, seeded, ..) = novel();
+			let first = repo_head(&root).to_string();
+			write_document(root.clone(), seeded, "Not yet kept".to_owned()).unwrap();
+
+			put_back(root.clone(), first, seeded).unwrap();
+
+			let repo = Repository::open(&root).unwrap();
+			let head = repo.head().unwrap().peel_to_commit().unwrap();
+			assert_eq!(head.message().unwrap(), "Before putting back");
+			let then = text(&root, &head.id().to_string(), seeded)
+				.unwrap()
+				.unwrap();
+			assert_eq!(body(&then), "Not yet kept");
+		}
 	}
 
 	#[test]
@@ -4124,7 +4441,7 @@ mod tests {
 		assert!(!changes.book && !changes.cover);
 		assert!(root.join("cover.png").is_file());
 		assert!(!root.join("cover.jpg").exists());
-		assert_eq!(checkpoint_and_index(&root), before);
+		kept_first(&root, before);
 	}
 
 	#[test]
@@ -4164,19 +4481,19 @@ mod tests {
 		assert!(!root.join(&later_path).exists());
 		assert_eq!(fs::read_to_string(root.join(HISTORY_FILE)).unwrap(), "[]");
 		assert_eq!(list_trash(root.clone()).unwrap().len(), 1);
-		assert_eq!(checkpoint_and_index(&root), before);
+		kept_first(&root, before);
 	}
 
 	/// Keeps the project, does `there` in a new version "Act two" and `here`
 	/// on Main, each kept, then merges Act two into Main.
 	fn diverged(root: &Path, there: impl FnOnce(), here: impl FnOnce()) -> Vec<merge::Conflict> {
-		checkpoint(root, "Base", "").unwrap();
+		held(root, "Base");
 		new_branch(root, "Act two").unwrap();
 		there();
-		checkpoint(root, "In Act two", "").unwrap();
+		held(root, "In Act two");
 		switch(root, "main").unwrap();
 		here();
-		checkpoint(root, "On Main", "").unwrap();
+		held(root, "On Main");
 		let conflicts = merge(root, "act-two", "")
 			.unwrap()
 			.map_or_else(Vec::new, |merging| merging.conflicts);
@@ -4481,7 +4798,7 @@ mod tests {
 	}
 
 	#[test]
-	fn settling_the_binder_deletes_a_document_created_meanwhile() {
+	fn settling_the_binder_keeps_a_document_created_meanwhile() {
 		let (_parent, root, _, here, _) = novel();
 		titles_conflict(&root);
 		assert!(matches!(
@@ -4505,8 +4822,9 @@ mod tests {
 
 		settle_rest(&root, &[]).unwrap();
 
-		assert!(tree::find(&read_manifest(&root).unwrap().nodes, added).is_none());
-		assert!(!file.exists());
+		let manifest = read_manifest(&root).unwrap();
+		assert_eq!(tree::path(&manifest.nodes, added), Some(path));
+		assert!(file.exists());
 	}
 
 	#[test]
@@ -4787,7 +5105,7 @@ mod tests {
 	}
 
 	#[test]
-	fn a_document_merged_down_to_one_take_is_ordinary_again() {
+	fn a_document_merged_down_to_the_other_versions_new_take_keeps_it_beside_its_text() {
 		let (_parent, root, seeded, ..) = novel();
 		write_document(root.clone(), seeded, "One\n".to_owned()).unwrap();
 		let takes = try_something(root.clone(), seeded).unwrap();
@@ -4803,11 +5121,9 @@ mod tests {
 		);
 
 		assert_eq!(conflicts, []);
-		assert!(take_names(&root, seeded).is_empty());
+		assert_eq!(take_names(&root, seeded), ["Take 3", "Take 4"]);
 		takes_whole(&root);
 		assert!(!pending(&root).unwrap());
-		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
-		assert!(!json.contains("takes"));
 	}
 
 	#[test]
@@ -5087,5 +5403,204 @@ mod tests {
 		assert_eq!(parents(&root).len(), 2);
 		assert!(!pending(&root).unwrap());
 		assert_eq!(body_now(&root, seeded), "One, settled.\n\nTwo.\n\nThree.\n");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn a_merge_that_fails_partway_can_be_aborted() {
+		use std::os::unix::fs::PermissionsExt;
+		let (_parent, root, _, here, _) = novel();
+		held(&root, "Base");
+		new_branch(&root, "Act two").unwrap();
+		create_folder(root.clone(), here, "Empty".to_owned(), None).unwrap();
+		held(&root, "In Act two");
+		switch(&root, "main").unwrap();
+		let main = repo_head(&root);
+		let folder = root.join(tree::path(&read_manifest(&root).unwrap().nodes, here).unwrap());
+		fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+
+		let failed = merge(&root, "act-two", "");
+
+		fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+		assert!(failed.is_err());
+		assert!(merging(&root).unwrap().is_some());
+		abort(&root).unwrap();
+		assert_eq!(repo_head(&root), main);
+		assert!(!pending(&root).unwrap());
+		assert_eq!(merge_state_of(&root), RepositoryState::Clean);
+	}
+
+	#[test]
+	fn a_merge_whose_message_went_missing_is_still_under_way() {
+		let (_parent, root, ..) = conflicted();
+		let repo = Repository::open(&root).unwrap();
+		fs::remove_file(repo.path().join("MERGE_MSG")).unwrap();
+
+		let merging = merging(&root).unwrap().unwrap();
+
+		assert_eq!(merging.message, "");
+	}
+
+	#[test]
+	fn a_document_moved_into_a_folder_deleted_here_stays_where_this_version_had_it() {
+		let (_parent, root, _, here, _) = novel();
+		let f = create_folder(root.clone(), here, "F".to_owned(), None)
+			.unwrap()
+			.id();
+		create_document(root.clone(), f, "Inside".to_owned()).unwrap();
+		let x = create_document(root.clone(), here, "X".to_owned())
+			.unwrap()
+			.id;
+
+		diverged(
+			&root,
+			|| move_node(root.clone(), x, f, 0).unwrap(),
+			|| delete_folder(root.clone(), f).unwrap(),
+		);
+
+		assert_eq!(placed(&root, x).0, Some(here));
+	}
+
+	#[test]
+	fn the_one_take_left_from_the_other_version_keeps_its_text() {
+		let (_parent, root, seeded, ..) = novel();
+		let first = try_something(root.clone(), seeded).unwrap();
+		let mut added = None;
+
+		diverged(
+			&root,
+			|| added = Some(try_something(root.clone(), seeded).unwrap()[2].id),
+			|| {
+				delete_take(root.clone(), seeded, first[0].id).unwrap();
+			},
+		);
+
+		let takes = list_takes(root.clone(), seeded).unwrap();
+		assert_eq!(takes.len(), 2);
+		assert!(takes.iter().any(|take| Some(take.id) == added));
+	}
+
+	#[test]
+	fn a_file_outside_the_binder_settles_either_way() {
+		for (side, kept) in [("mine", "Mine"), ("theirs", "Theirs")] {
+			let (_parent, root, ..) = novel();
+			let notes = root.join("notes.txt");
+			let conflicts = diverged(
+				&root,
+				|| fs::write(&notes, "Theirs").unwrap(),
+				|| fs::write(&notes, "Mine").unwrap(),
+			);
+			assert_eq!(
+				conflicts,
+				[merge::Conflict::File {
+					path: "notes.txt".to_owned(),
+					ours: Some("Mine".to_owned()),
+					theirs: Some("Theirs".to_owned()),
+				}]
+			);
+
+			settle_file(&root, "notes.txt", side).unwrap();
+
+			assert_eq!(fs::read_to_string(&notes).unwrap(), kept);
+			let repo = Repository::open(&root).unwrap();
+			assert!(!repo.index().unwrap().has_conflicts());
+		}
+	}
+
+	#[test]
+	fn a_commit_with_no_binder_reads_as_holding_nothing() {
+		let (_parent, root, ..) = novel();
+		let repo = Repository::open(&root).unwrap();
+		let mut builder = repo.treebuilder(None).unwrap();
+		builder
+			.insert("README", repo.blob(b"Read me").unwrap(), 0o100644)
+			.unwrap();
+		let tree = repo.find_tree(builder.write().unwrap()).unwrap();
+		let signature = signature("").unwrap();
+		let readme = repo
+			.commit(None, &signature, &signature, "README", &tree, &[])
+			.unwrap()
+			.to_string();
+
+		let changes = changes(&root, Some(&readme), Some("HEAD")).unwrap();
+
+		let mut placed = Vec::new();
+		place(&read_manifest(&root).unwrap().nodes, None, "", &mut placed);
+		assert_eq!(changes.nodes.len(), placed.len());
+		assert!(changes.nodes.iter().all(|change| change.before.is_none()));
+	}
+
+	#[test]
+	fn staging_half_a_swap_of_names_is_refused() {
+		let (_parent, root, _, here, _) = novel();
+		let add = |name: &str| {
+			create_document(root.clone(), here, name.to_owned())
+				.unwrap()
+				.id
+		};
+		let (a, b) = (add("A"), add("B"));
+		held(&root, "Two");
+		rename_document(root.clone(), a, "Spare".to_owned()).unwrap();
+		rename_document(root.clone(), b, "A".to_owned()).unwrap();
+		rename_document(root.clone(), a, "B".to_owned()).unwrap();
+		let before = checkpoint_and_index(&root);
+
+		let refused = carry(&root, Row::Node { id: a }, true);
+
+		assert!(matches!(refused, Err(Error::NameStaged)));
+		assert_eq!(checkpoint_and_index(&root), before);
+	}
+
+	fn folder_node(id: Uuid, name: &str, children: Vec<Node>) -> Node {
+		Node::Folder {
+			id,
+			name: name.to_owned(),
+			kind: None,
+			target: None,
+			fields: tree::Fields::new(),
+			children,
+		}
+	}
+
+	#[test]
+	fn taking_a_folder_out_of_one_it_now_holds_keeps_both() {
+		let (p, f, d) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+		let document = Node::Document {
+			id: d,
+			name: "d.md".to_owned(),
+			target: None,
+			takes: BTreeMap::new(),
+			chosen: None,
+		};
+		let from = vec![folder_node(
+			p,
+			"P",
+			vec![folder_node(f, "F", vec![document.clone()])],
+		)];
+		let mut into = vec![folder_node(
+			f,
+			"F",
+			vec![document, folder_node(p, "P", vec![])],
+		)];
+
+		take(&from, &mut into, f);
+
+		assert_eq!(tree::path(&into, d).as_deref(), Some("P/F/d.md"));
+	}
+
+	#[test]
+	fn a_document_comes_back_under_its_old_name_another_has_taken_since() {
+		let (_parent, root, _, here, there) = novel();
+		let a = create_document(root.clone(), here, "A".to_owned())
+			.unwrap()
+			.id;
+		let start = kept(&root);
+		move_node(root.clone(), a, there, 0).unwrap();
+		rename_document(root.clone(), a, "B".to_owned()).unwrap();
+		create_document(root.clone(), there, "A".to_owned()).unwrap();
+
+		put_back_document(root.clone(), start, a).unwrap();
+
+		assert_eq!(placed(&root, a), (Some(here), "A.md".to_owned()));
 	}
 }

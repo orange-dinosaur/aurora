@@ -39,7 +39,7 @@ import { split } from "./frontmatter";
 import { baseline } from "./lib/compare";
 import Marks from "./Marks";
 import TakeStrip, { type MarksHandle } from "./TakeStrip";
-import Target from "./Target";
+import Target, { type Aim } from "./Target";
 import Toolbar from "./Toolbar";
 import Typewriter from "./Typewriter";
 import Typography from "./Typography";
@@ -171,7 +171,7 @@ type Props = {
 	onReload: () => void;
 	onKeepMine: () => void;
 	onPreferences: (next: Preferences) => void;
-	onTarget: (target: number | null) => void;
+	onTarget: Aim;
 	/** Where the writer left this document last time, if anywhere. */
 	place: Place | null;
 	/** Where the caret and page are now, whenever either moves. */
