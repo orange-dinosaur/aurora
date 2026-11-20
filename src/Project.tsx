@@ -1,5 +1,4 @@
 import {
-	useCallback,
 	useEffect,
 	useMemo,
 	useRef,
@@ -22,7 +21,6 @@ import Sidebar, { type BinderDrag } from "./Sidebar";
 import SubjectView from "./SubjectView";
 import TagView from "./TagView";
 import Tabs from "./Tabs";
-import type { TabView } from "./Tabs";
 import Titlebar from "./Titlebar";
 import Trash from "./Trash";
 import BookView from "./Book";
@@ -33,24 +31,14 @@ import Icon from "./Icon";
 import { divider, share, SIDE_MIN, standing } from "./panels";
 import Overwrite from "./Overwrite";
 import Merge from "./Merge";
-import type { Choices, Sides } from "./lib/merge";
-import {
-	overwritten,
-	type MergeUnderway,
-	type Overwrites,
-} from "./lib/versions";
+import { overwritten, type Overwrites } from "./lib/versions";
 import type {
-	Branch,
-	DocumentText,
 	FolderNode,
-	Merging,
 	Preferences,
 	ProjectDocument,
 	Status,
 	TreeNode,
 } from "./types";
-import { retag, tagged } from "./tags";
-import { timed } from "./timing";
 import type { FolderRef } from "./tree";
 import { documentsOf, firstScene, folderOf, rows } from "./tree";
 import type { Opened } from "./bindings/Opened";
@@ -78,8 +66,13 @@ import {
 	type Trail,
 } from "./split";
 import { remembered, reopen, type Place } from "./workspace";
-import { deleteDocument, deleteFolder } from "./documents";
-import type { TakeView } from "./bindings/TakeView";
+import {
+	deleteDocument,
+	deleteFolder,
+	documentTree,
+	restoreDocument,
+	writeDocument,
+} from "./documents";
 import {
 	chooseTake,
 	deleteTake,
@@ -91,24 +84,20 @@ import {
 import type { Seed } from "./lib/find";
 import type { OutlineHandle } from "./lib/outline";
 import type { MarksHandle } from "./TakeStrip";
-// `changed` under another name: this file already has one of its own.
-import {
-	changed as asChange,
-	ended,
-	gapOf,
-	recorded,
-	start,
-	stop,
-	tick,
-	wrote,
-	IDLE,
-	type Limit,
-	type Running,
-	type Sessions,
-	type Step,
-} from "./sessions";
+import { ended, gapOf, tick } from "./sessions";
+import { useMergeState } from "./useMergeState";
+import { useRetagging } from "./useRetagging";
+import { useSessions } from "./useSessions";
 import { failure } from "./errors";
-import { repointed, without } from "./tabs";
+import {
+	repointed,
+	strip,
+	without,
+	type Content,
+	type DocumentTab,
+	type Save,
+	type Tab,
+} from "./tabs";
 import { pressed, SEARCH, SESSION } from "./formatting";
 
 type Props = {
@@ -123,70 +112,8 @@ type Props = {
 	onSettings: (keyboard: boolean) => void;
 	onLogin: () => void;
 	onProfile: () => void;
-	onPreferences: (next: Preferences) => void;
+	onPreferences: (change: Partial<Preferences>) => void;
 };
-
-type Content =
-	| { kind: "loading" }
-	| { kind: "ready"; text: string }
-	| { kind: "error"; message: string };
-
-type Save =
-	| { kind: "clean" }
-	| { kind: "pending" }
-	| { kind: "saving" }
-	// The file has gone from under the tab, so the text here is all there is
-	// left of it.
-	| { kind: "missing" }
-	// Something else wrote the file since this tab read it. Nothing is saved
-	// until the writer picks the file's text or their own.
-	| { kind: "changed" }
-	| { kind: "failed"; message: string };
-
-type DocumentTab = {
-	kind: "document";
-	key: string;
-	document: ProjectDocument;
-	content: Content;
-	save: Save;
-	/** What search asked Find to open on here, or null if nothing did. */
-	seed: Seed | null;
-	/** Here rather than in the strip, so one mounted again keeps its line. */
-	/** Null when the list could not be read. */
-	takes: TakeView[] | null;
-};
-
-type FolderTab = {
-	kind: "folder";
-	key: string;
-	/** The folder the overview is of, and what may be made inside it. */
-	folder: FolderRef;
-};
-
-type BookTab = {
-	kind: "book";
-	key: string;
-};
-
-type TrashTab = {
-	kind: "trash";
-	key: string;
-};
-
-type TagTab = {
-	kind: "tag";
-	key: string;
-	tag: string;
-};
-
-type SubjectTab = {
-	kind: "subject";
-	key: string;
-	/** The subject's own document, which the page is a reading of. */
-	subject: ProjectDocument;
-};
-
-type Tab = DocumentTab | FolderTab | BookTab | TrashTab | TagTab | SubjectTab;
 
 /**
  * Where an opened tab goes: the current side, across a split, beside, or the
@@ -197,17 +124,6 @@ type Landing = "here" | "across" | "beside" | "left" | "right";
 /** What is being dragged toward the page. */
 type Dragged = { kind: "tab"; key: string } | BinderDrag;
 
-/**
- * What is being offered after a document was renamed out from under the tags
- * pointing at it. `from` and `to` are the titles; `ids` are the documents
- * wearing the old one.
- */
-type Retagging =
-	| { kind: "no" }
-	| { kind: "asking"; from: string; to: string; ids: string[] }
-	| { kind: "writing"; from: string; to: string; ids: string[] }
-	| { kind: "failed"; message: string };
-
 /** How long the writer has to stop typing before the tab is written to disk. */
 const AUTOSAVE_MS = 800;
 
@@ -216,67 +132,6 @@ const CHORD_PAUSE_MS = 1500;
 
 // Where the sidebar floats, which the stylesheet's own query has to match.
 const NARROW = "(max-width: 820px)";
-
-/**
- * One tab as the strip shows it. The kind travels with it: a folder called
- * `Notes` and a document called `Notes` are not the same tab, and the strip
- * used to have only the missing `folder/` prefix to tell them apart. Only a
- * document can be unsaved.
- */
-function strip(tab: Tab): TabView {
-	switch (tab.kind) {
-		case "document":
-			return {
-				key: tab.key,
-				kind: "document",
-				// A tab has room for the folder holding it, not the whole trail
-				// down to it.
-				folder: tab.document.trail.slice(-1)[0] ?? null,
-				title: tab.document.title,
-				dirty: tab.save.kind !== "clean",
-			};
-		case "folder":
-			return {
-				key: tab.key,
-				kind: "folder",
-				folder: null,
-				title: tab.folder.name,
-				dirty: false,
-			};
-		case "book":
-			return {
-				key: tab.key,
-				kind: "book",
-				folder: null,
-				title: "Book",
-				dirty: false,
-			};
-		case "trash":
-			return {
-				key: tab.key,
-				kind: "trash",
-				folder: null,
-				title: "Trash",
-				dirty: false,
-			};
-		case "tag":
-			return {
-				key: tab.key,
-				kind: "tag",
-				folder: null,
-				title: tab.tag,
-				dirty: false,
-			};
-		case "subject":
-			return {
-				key: tab.key,
-				kind: "subject",
-				folder: null,
-				title: tab.subject.title,
-				dirty: false,
-			};
-	}
-}
 
 async function read(
 	root: string,
@@ -324,7 +179,7 @@ export default function Project({
 
 		if (justCreated) {
 			setPickedUp(true);
-			invoke<TreeNode[]>("document_tree", { root })
+			documentTree(root)
 				.then((tree) => {
 					const first = firstScene(tree);
 					if (first !== null) {
@@ -338,7 +193,7 @@ export default function Project({
 
 		Promise.all([
 			invoke<Workspace | null>("read_workspace", { root }),
-			invoke<TreeNode[]>("document_tree", { root }),
+			documentTree(root),
 		])
 			.then(([saved, tree]) => {
 				if (saved === null) {
@@ -454,7 +309,7 @@ export default function Project({
 	// out the same and React would see nothing to write.
 	function divide(splitShare: number) {
 		panes.current?.style.setProperty("--split", `${splitShare}%`);
-		onPreferences({ ...preferences, splitShare });
+		onPreferences({ splitShare });
 	}
 
 	// Bumped when a split key moves the current side, so the editor now in
@@ -553,9 +408,6 @@ export default function Project({
 	useEffect(() => {
 		refile(root);
 	}, [root, listing]);
-	// The one thing a rename cannot decide on its own: what to do with the tags
-	// that were pointing at the old title.
-	const [retagging, setRetagging] = useState<Retagging>({ kind: "no" });
 	// The open document's front matter, handed up by whichever editor is
 	// showing. The panel that displays it is rendered out here, beside the
 	// editor rather than inside it, so it cannot read the editor for itself.
@@ -602,22 +454,25 @@ export default function Project({
 	// The write of each document still under way, which the next one waits for.
 	const chain = useRef(new Map<string, Promise<unknown>>());
 
-	// Both layers of the session. A ref rather than state: the panel that shows
-	// them is drawn from the same keystroke that moves them, since holding the
-	// text is what renders this view anyway.
-	const sessions = useRef<Sessions>(IDLE);
-
-	// The deliberate layer again, as state this time. The titlebar draws it and
-	// is nowhere near the keystroke that moves it, so it needs telling; the ref
-	// above stays the one the model is handed.
-	const [deliberate, setDeliberate] = useState<Running | null>(null);
-
-	// Bumped every time a closed session reaches the history file, so the
-	// bar and the Stats tab read it again.
-	const [logged, setLogged] = useState(0);
-	// Closed sessions the history file would not take yet.
-	const unrecorded = useRef<ReturnType<typeof recorded>[]>([]);
-	const [unrecordedCount, setUnrecordedCount] = useState(0);
+	// The silence that ends an automatic session, as the writer set it. Every
+	// call into the model is handed this rather than letting it fall back to
+	// its own constant.
+	const gap = gapOf(preferences.idleMinutes);
+	const {
+		sessions,
+		words,
+		ahead,
+		idle,
+		deliberate,
+		logged,
+		unrecordedCount,
+		measured,
+		keep,
+		record,
+		startSession,
+		stopSession,
+		tickSession,
+	} = useSessions(root, gap);
 
 	// Bumped when Book details has written the book, which the binder leads with.
 	const [bookWritten, setBookWritten] = useState(0);
@@ -648,30 +503,25 @@ export default function Project({
 		return () => query.removeEventListener("change", changed);
 	}, []);
 
-	// The version the compare view opened on. It takes the whole window and
-	// reads now from disk, so every editor is written before it opens.
-	// The checkpoint compare opens at, the document it opens on across the
-	// whole project, and the version whose checkpoints it lists (null for the
-	// one the writer is in).
-	const [comparing, setComparing] = useState<{
-		checkpoint: string;
-		pick: string | null;
-		slug: string | null;
-	} | null>(null);
+	const {
+		pieces,
+		piecesFailed,
+		comparing,
+		setComparing,
+		merge,
+		settling,
+		setSettling,
+		choices,
+		setChoices,
+		sides,
+		setSides,
+		readMerge,
+	} = useMergeState(root);
 	// The put back question while it waits for an answer.
 	const [asking, setAsking] = useState<{
 		names: string[];
 		answer: (go: boolean) => void;
 	} | null>(null);
-	// The merge waiting to be settled, which the titlebar and the Versions
-	// tab both show.
-	const [merge, setMerge] = useState<MergeUnderway | null>(null);
-	// The document open on the merge screen, and what the writer has chosen
-	// for each document's spots and the binder's cards. Choices last until
-	// the merge ends.
-	const [settling, setSettling] = useState<string | null>(null);
-	const [choices, setChoices] = useState<Record<string, Choices>>({});
-	const [sides, setSides] = useState<Sides>({});
 	// What the book menu over Compare or Merge could not do, said in the
 	// binder once the writer is back there. A fresh object each time, so the
 	// same failure twice is said twice.
@@ -682,37 +532,12 @@ export default function Project({
 	// A floating list closes on any way in or out, and on a pick in Merge.
 	useEffect(() => setListOpen(false), [comparing, settling]);
 
-	async function readMerge() {
-		try {
-			const merging = await invoke<Merging | null>("merge_state", {
-				root,
-			});
-			if (merging === null) {
-				setMerge(null);
-				setSettling(null);
-				setChoices({});
-				setSides({});
-				return;
-			}
-			const versions = await invoke<Branch[]>("list_branches", { root });
-			const into = versions.find((version) => version.current);
-			setMerge({ merging, into: into?.name ?? "" });
-		} catch {
-			// The Versions tab reads the same repository and says what is wrong.
-		}
-	}
-
-	useEffect(() => {
-		void readMerge();
-	}, [root]);
-
 	// What a merge needs next is in the Versions panel, so it opens there. Once,
 	// so the writer can still close it.
 	const underway = merge !== null;
 	useEffect(() => {
 		if (underway) {
 			onPreferences({
-				...preferences,
 				rightSidebar: true,
 				rightSidebarTab: "versions",
 				versionsScope: "changes",
@@ -723,127 +548,11 @@ export default function Project({
 	// Why a folder's target was refused, when one was.
 	const [aiming, setAiming] = useState<string | null>(null);
 
-	// What the project holds, which is where a session's net comes from. The
-	// sidebar says where it stands every time it reads the manifest, and the
-	// editor's changes carry it forward in between, so knowing this costs no
-	// reading of its own.
-	const words = useRef(0);
-
-	// Stable on purpose: the sidebar reloads its whole tree whenever the
-	// handlers it was given change.
-	// The sidebar counts the files, so what each document has gained since
-	// its last save is added on.
-	const ahead = useRef(new Map<string, number>());
-	const measured = useCallback((total: number) => {
-		let unsaved = 0;
-		ahead.current.forEach((delta) => {
-			unsaved += delta;
-		});
-		words.current = total + unsaved;
-	}, []);
-
-	// The layers the model left behind are what runs from here, and whatever it
-	// closed goes to the history file. Nothing reports a failure: it is written
-	// behind the writer's back and there is nowhere to say so.
-	// A session that could not be written is held and tried again with the
-	// next, and Stats says so meanwhile.
-	async function keep(step: Step) {
-		sessions.current = step.sessions;
-		setDeliberate(step.sessions.deliberate);
-		const worth = step.closed.filter(
-			(session) =>
-				session.layer === "deliberate" ||
-				session.written > 0 ||
-				session.removed > 0,
-		);
-		const due = [...unrecorded.current, ...worth.map(recorded)];
-		unrecorded.current = [];
-		if (due.length === 0) {
-			return;
-		}
-
-		const results = await Promise.allSettled(
-			due.map((session) => invoke("append_session", { root, session })),
-		);
-		const failed = due.filter((_, at) => results[at].status === "rejected");
-		unrecorded.current.push(...failed);
-		setUnrecordedCount(unrecorded.current.length);
-		setLogged((times) => times + 1);
-	}
-
-	// The silence that ends an automatic session, as the writer set it. Every
-	// call into the model below is handed this rather than letting it fall
-	// back to its own constant.
-	const gap = gapOf(preferences.idleMinutes);
-
-	// What a change added or removed, handed to the model, which decides which
-	// sessions it opens, feeds and closes.
-	function record(id: string, delta: number) {
-		void keep(
-			wrote(
-				sessions.current,
-				asChange(id, Date.now(), delta),
-				words.current,
-				gap,
-			),
-		);
-		words.current += delta;
-		ahead.current.set(id, (ahead.current.get(id) ?? 0) + delta);
-	}
-
-	// Opening a session by hand. A limit makes it a sprint, which closes itself
-	// once the limit is met; without one it runs until the writer says stop.
-	function startSession(limit?: Limit) {
-		void keep(
-			start(
-				sessions.current,
-				Date.now(),
-				words.current,
-				limit,
-				idle.current,
-			),
-		);
-	}
-
-	function stopSession() {
-		void keep(
-			stop(sessions.current, Date.now(), words.current, idle.current),
-		);
-	}
-
-	// What the clock alone has closed. The titlebar asks every second while a
-	// session is running, so a sprint on minutes ends at its deadline rather
-	// than at the next beat of the minute timer below.
-	function tickSession() {
-		void keep(tick(sessions.current, Date.now(), words.current, gap));
-	}
-
-	// Nobody else notices that a session has gone quiet, since going quiet is
-	// the writer doing nothing. A minute is fine enough for a gap measured in
-	// them, and it costs nothing when there is no session to close. Remade
-	// when the gap changes, so the beat is never closing sessions by a length
-	// the writer has moved on from.
-	useEffect(() => {
-		const beat = window.setInterval(
-			() =>
-				void keep(
-					tick(sessions.current, Date.now(), words.current, gap),
-				),
-			60 * 1000,
-		);
-		return () => window.clearInterval(beat);
-	}, [root, gap]);
-
-	// The tabs, the idle gap and the preferences as they stand now. The
-	// handlers below are registered once and would otherwise go on seeing
-	// what they were born with.
+	// The tabs as they stand now. The handlers below are registered once and
+	// would otherwise go on seeing what they were born with.
 	const latest = useRef(tabs);
-	const idle = useRef(gap);
-	const held = useRef(preferences);
 	useEffect(() => {
 		latest.current = tabs;
-		idle.current = gap;
-		held.current = preferences;
 	});
 
 	// Through `latest`, since callers often ask after an await.
@@ -858,11 +567,9 @@ export default function Project({
 	function put(tab: DocumentTab, text: string) {
 		const done =
 			tab.save.kind === "missing"
-				? invoke("restore_document", {
-						root,
-						path: tab.document.path,
-						text,
-					}).then(() => seen.current.delete(tab.document.id))
+				? restoreDocument(root, tab.document.path, text).then(() =>
+						seen.current.delete(tab.document.id),
+					)
 				: save(tab.document.id, text, false);
 
 		return done.then(() => filed(root, tab.document.id, text));
@@ -1081,46 +788,45 @@ export default function Project({
 		await openDocument(document, null, landing);
 	}
 
-	function openFolder(folder: FolderRef, landing: Landing = "here") {
-		const already = tabs.find(
-			(tab) => tab.kind === "folder" && tab.folder.id === folder.id,
-		);
+	// Raises the tab `match` finds, or opens the one `make` builds.
+	function raise(
+		match: (tab: Tab) => boolean,
+		make: (key: string) => Tab,
+		landing: Landing,
+	) {
+		const already = latest.current.find(match);
 		if (already !== undefined) {
 			show(already.key, landing);
 			return;
 		}
 
-		const opening: FolderTab = {
-			kind: "folder",
-			key: freshKey(),
-			folder,
-		};
+		const opening = make(freshKey());
 		setTabs((open) => [...open, opening]);
 		show(opening.key, landing);
+	}
+
+	function openFolder(folder: FolderRef, landing: Landing = "here") {
+		raise(
+			(tab) => tab.kind === "folder" && tab.folder.id === folder.id,
+			(key) => ({ kind: "folder", key, folder }),
+			landing,
+		);
 	}
 
 	function openBook(landing: Landing = "here") {
-		const already = tabs.find((tab) => tab.kind === "book");
-		if (already !== undefined) {
-			show(already.key, landing);
-			return;
-		}
-
-		const opening: BookTab = { kind: "book", key: freshKey() };
-		setTabs((open) => [...open, opening]);
-		show(opening.key, landing);
+		raise(
+			(tab) => tab.kind === "book",
+			(key) => ({ kind: "book", key }),
+			landing,
+		);
 	}
 
 	function openTrash(landing: Landing = "here") {
-		const already = tabs.find((tab) => tab.kind === "trash");
-		if (already !== undefined) {
-			show(already.key, landing);
-			return;
-		}
-
-		const opening: TrashTab = { kind: "trash", key: freshKey() };
-		setTabs((open) => [...open, opening]);
-		show(opening.key, landing);
+		raise(
+			(tab) => tab.kind === "trash",
+			(key) => ({ kind: "trash", key }),
+			landing,
+		);
 	}
 
 	/**
@@ -1135,7 +841,7 @@ export default function Project({
 	 */
 	async function openTag(tag: string, landing: Landing = "here") {
 		try {
-			const tree = await invoke<TreeNode[]>("document_tree", { root });
+			const tree = await documentTree(root);
 			const named = documentsOf(tree).find(
 				(document) => document.title === tag,
 			);
@@ -1148,17 +854,11 @@ export default function Project({
 			// this. The list is the honest answer, and reports its own trouble.
 		}
 
-		const already = latest.current.find(
+		raise(
 			(tab) => tab.kind === "tag" && tab.tag === tag,
+			(key) => ({ kind: "tag", key, tag }),
+			landing,
 		);
-		if (already !== undefined) {
-			show(already.key, landing);
-			return;
-		}
-
-		const opening: TagTab = { kind: "tag", key: freshKey(), tag };
-		setTabs((open) => [...open, opening]);
-		show(opening.key, landing);
 	}
 
 	/**
@@ -1167,21 +867,11 @@ export default function Project({
 	 * file, and the writer should be able to keep both.
 	 */
 	function openSubject(subject: ProjectDocument, landing: Landing = "here") {
-		const already = tabs.find(
+		raise(
 			(tab) => tab.kind === "subject" && tab.subject.id === subject.id,
+			(key) => ({ kind: "subject", key, subject }),
+			landing,
 		);
-		if (already !== undefined) {
-			show(already.key, landing);
-			return;
-		}
-
-		const opening: SubjectTab = {
-			kind: "subject",
-			key: freshKey(),
-			subject,
-		};
-		setTabs((open) => [...open, opening]);
-		show(opening.key, landing);
 	}
 
 	/**
@@ -1208,11 +898,8 @@ export default function Project({
 		);
 	}
 
-	// Reached from the window as well as from the titlebar, so it reads the
-	// preferences through the ref rather than closing over them.
 	function openSearch() {
 		onPreferences({
-			...held.current,
 			rightSidebar: true,
 			rightSidebarTab: "search",
 		});
@@ -1268,6 +955,18 @@ export default function Project({
 		setListing((version) => version + 1);
 	}
 
+	// What a rename cannot decide on its own: what to do with the tags that
+	// were pointing at the old title.
+	const { retagging, countTags, retagAll, dismiss } = useRetagging(root, {
+		documentTab,
+		stopTimer,
+		save,
+		patch,
+		freshKey,
+		setOnPage,
+		written: () => setWritten((times) => times + 1),
+	});
+
 	// A rename gives a document a new path and title but not a new id, so a
 	// tab holding it is re-pointed where it stands. Its key is its own, so
 	// neither the strip nor the editor is torn down for this.
@@ -1280,87 +979,6 @@ export default function Project({
 		}
 	}
 
-	/**
-	 * Whether anything was filed under the title this document has just left.
-	 * A tag is the writer's word and not a reference Aurora maintains, so the
-	 * rename lands either way and this only offers to follow it.
-	 */
-	async function countTags(from: string, to: string) {
-		try {
-			const all = await timed(
-				"retag scan",
-				invoke<DocumentText[]>("read_all_documents", { root }),
-			);
-			const ids = all.flatMap(({ id, text }) =>
-				text !== null && tagged(text, from) ? [id] : [],
-			);
-
-			if (ids.length > 0) {
-				setRetagging({ kind: "asking", from, to, ids });
-			}
-		} catch {
-			// The rename itself landed. Nothing is offered if the rest of the
-			// project could not be read, and nothing is said about it either:
-			// a warning about a question that was never asked is noise.
-		}
-	}
-
-	/**
-	 * Rewrites one document's tag. A document with a tab open is written from
-	 * what the tab holds rather than from the file, which may be up to 800 ms
-	 * behind it, and then comes back under a fresh key: an editor seeds itself
-	 * from its text once and owns it from there, so the only way to show it the
-	 * new tag is to mount it again. That costs the tab its undo history, which
-	 * is why nothing here touches a document that is merely open.
-	 */
-	async function retagOne(id: string, from: string, to: string) {
-		const tab = documentTab(id);
-
-		if (tab === undefined || tab.content.kind !== "ready") {
-			const text = retag(
-				await invoke<string>("read_document", { root, id }),
-				from,
-				to,
-			);
-			await invoke("write_document", { root, id, text });
-			return;
-		}
-
-		const text = retag(tab.content.text, from, to);
-		stopTimer(id);
-		await save(id, text, false);
-
-		const key = freshKey();
-		patch(id, (open) => ({
-			...open,
-			key,
-			content: { kind: "ready", text },
-			save: { kind: "clean" },
-		}));
-		setOnPage((now) => rekey(now, new Map([[tab.key, key]])));
-	}
-
-	// This is the one write that is not told to the corpus a document at a
-	// time. Handing over hundreds of texts in a loop would redraw everything
-	// looking at the corpus once per document, and recognition reads the whole
-	// project each time it is redrawn. One read at the end is cheaper than the
-	// patches, and retagging is rare enough to pay for it.
-	async function retagAll(from: string, to: string, ids: string[]) {
-		setRetagging({ kind: "writing", from, to, ids });
-		try {
-			for (const id of ids) {
-				await retagOne(id, from, to);
-			}
-			setRetagging({ kind: "no" });
-			setWritten((times) => times + 1);
-		} catch (error) {
-			setRetagging({ kind: "failed", message: failure(error).message });
-		} finally {
-			// A run that failed part way still rewrote what it got to.
-			refile(root);
-		}
-	}
-
 	// A move changes the path of everything under what moved, which can be a
 	// whole chapter of open scenes. Rather than work out which, the tabs are
 	// re-pointed from the tree: ids are what a tab holds on to, and a move
@@ -1368,7 +986,7 @@ export default function Project({
 	async function moved() {
 		setListing((version) => version + 1);
 		try {
-			repoint(await invoke<TreeNode[]>("document_tree", { root }));
+			repoint(await documentTree(root));
 		} catch {
 			// The listing above reads the same manifest and shows whatever went
 			// wrong with it, so there is nothing to say twice.
@@ -1431,7 +1049,7 @@ export default function Project({
 		setListing((version) => version + 1);
 		let tree: TreeNode[];
 		try {
-			tree = await invoke<TreeNode[]>("document_tree", { root });
+			tree = await documentTree(root);
 		} catch {
 			// The listing reads the same manifest and says what went wrong.
 			return;
@@ -1629,7 +1247,7 @@ export default function Project({
 	// Counted like any other save, so the page reads back what it wrote and
 	// lets go of the text it was holding.
 	async function writeLoose(id: string, text: string) {
-		await invoke("write_document", { root, id, text });
+		await writeDocument(root, id, text);
 		if (loose.current.get(id) === text) {
 			loose.current.delete(id);
 		}
@@ -1735,11 +1353,7 @@ export default function Project({
 
 		let restored: ProjectDocument;
 		try {
-			restored = await invoke<ProjectDocument>("restore_document", {
-				root,
-				path: tab.document.path,
-				text,
-			});
+			restored = await restoreDocument(root, tab.document.path, text);
 		} catch (error) {
 			patch(id, (open) => ({
 				...open,
@@ -1902,7 +1516,7 @@ export default function Project({
 	// written down first and closed afterwards: its own overview, the overviews
 	// of the folders under it, and every scene in any of them.
 	async function removeFolder(id: string) {
-		const tree = await invoke<TreeNode[]>("document_tree", { root });
+		const tree = await documentTree(root);
 		const folder = folderOf(tree, id);
 		const inside = folder === null ? [] : rows(folder.children, id);
 
@@ -2280,7 +1894,7 @@ export default function Project({
 					if (narrow) {
 						setFloating(open);
 					} else {
-						onPreferences({ ...preferences, sidebar: open });
+						onPreferences({ sidebar: open });
 					}
 				}}
 				sidebarButton={sidebarButton}
@@ -2337,7 +1951,7 @@ export default function Project({
 				}
 				onSearch={openSearch}
 				theme={preferences.theme}
-				onTheme={(theme) => onPreferences({ ...preferences, theme })}
+				onTheme={(theme) => onPreferences({ theme })}
 				onSettings={onSettings}
 				onLogin={onLogin}
 				onProfile={onProfile}
@@ -2368,7 +1982,7 @@ export default function Project({
 					onDismiss={() => setListOpen(false)}
 					opener={listButton}
 					onScope={(versionsScope) =>
-						onPreferences({ ...preferences, versionsScope })
+						onPreferences({ versionsScope })
 					}
 					onBack={() => setComparing(null)}
 					onPutBack={putBack}
@@ -2394,6 +2008,8 @@ export default function Project({
 					onBack={() => setSettling(null)}
 					onSettle={putBack}
 					onMergeChanged={readMerge}
+					pieces={pieces}
+					piecesFailed={piecesFailed}
 				/>
 			)}
 
@@ -2407,9 +2023,7 @@ export default function Project({
 					onDismiss={() => setFloating(false)}
 					opener={sidebarButton}
 					width={preferences.sidebarWidth}
-					onWidth={(sidebarWidth) =>
-						onPreferences({ ...preferences, sidebarWidth })
-					}
+					onWidth={(sidebarWidth) => onPreferences({ sidebarWidth })}
 					root={root}
 					name={name}
 					reload={listing + written}
@@ -2606,7 +2220,7 @@ export default function Project({
 								type="button"
 								className="retag__do"
 								disabled={retagging.kind === "writing"}
-								onClick={() => setRetagging({ kind: "no" })}
+								onClick={dismiss}
 							>
 								{retagging.kind === "asking"
 									? "Leave"
@@ -2646,27 +2260,25 @@ export default function Project({
 					words={words.current}
 					width={preferences.rightSidebarWidth}
 					onWidth={(rightSidebarWidth) =>
-						onPreferences({
-							...preferences,
-							rightSidebarWidth,
-						})
+						onPreferences({ rightSidebarWidth })
 					}
 					logged={logged}
 					unrecorded={unrecordedCount > 0}
 					tab={preferences.rightSidebarTab}
 					onTab={(tab) =>
 						onPreferences({
-							...preferences,
 							rightSidebar: true,
 							rightSidebarTab: tab,
 						})
 					}
 					versionsScope={preferences.versionsScope}
 					onVersionsScope={(versionsScope) =>
-						onPreferences({ ...preferences, versionsScope })
+						onPreferences({ versionsScope })
 					}
 					enclosing={enclosingRepository}
 					merge={merge}
+					pieces={pieces}
+					piecesFailed={piecesFailed}
 					onMergeChanged={readMerge}
 					onSettle={setSettling}
 					onBeforeKeep={allWritten}
@@ -2700,12 +2312,7 @@ export default function Project({
 							openSubject(active.document, "across");
 						}
 					}}
-					onClose={() =>
-						onPreferences({
-							...preferences,
-							rightSidebar: false,
-						})
-					}
+					onClose={() => onPreferences({ rightSidebar: false })}
 				/>
 			</div>
 

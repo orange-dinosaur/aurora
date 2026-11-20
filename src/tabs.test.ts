@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { repointed, without } from "./tabs";
+import { repointed, strip, without, type Tab } from "./tabs";
 import type { ProjectDocument, TreeNode } from "./types";
 
 function folder(id: string, name: string, children: TreeNode[]): TreeNode {
@@ -102,5 +102,38 @@ describe("without", () => {
 
 	it("ignores a key no tab has", () => {
 		expect(without(tabs, ["9"])).toEqual(tabs);
+	});
+});
+
+describe("strip", () => {
+	const scene = document("a", "Manuscript/Act one/Home.md");
+
+	it("shows a document with its folder and whether it is unsaved", () => {
+		const tab: Tab = {
+			kind: "document",
+			key: "1",
+			document: scene,
+			content: { kind: "ready", text: "" },
+			save: { kind: "pending" },
+			seed: null,
+			takes: [],
+		};
+		expect(strip(tab)).toEqual({
+			key: "1",
+			kind: "document",
+			folder: "Act one",
+			title: "Home",
+			dirty: true,
+		});
+	});
+
+	it("shows a tag by its name and never as unsaved", () => {
+		expect(strip({ kind: "tag", key: "2", tag: "elena" })).toEqual({
+			key: "2",
+			kind: "tag",
+			folder: null,
+			title: "elena",
+			dirty: false,
+		});
 	});
 });

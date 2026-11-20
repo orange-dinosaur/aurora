@@ -4,7 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { failure } from "./errors";
-import { BINDER } from "./lib/merge";
+import { BINDER, spotCounts } from "./lib/merge";
 import Icon from "./Icon";
 import { Abort } from "./Merge";
 import PutBack from "./PutBack";
@@ -43,6 +43,9 @@ type Props = {
 	enclosing: string | null;
 	/** The merge waiting to be settled, if there is one. */
 	merge: MergeUnderway | null;
+	/** The merge's conflicted documents in order, and why they could not be read. */
+	pieces: Record<string, Piece[]>;
+	piecesFailed: string | null;
 	/** Reads the merge again after a checkpoint or Abort merge ended it. */
 	onMergeChanged: () => Promise<void>;
 	/** Opens the merge screen on a conflicted document. */
@@ -68,6 +71,8 @@ export default function Versions({
 	onScope,
 	enclosing,
 	merge,
+	pieces,
+	piecesFailed,
 	onMergeChanged,
 	onSettle,
 	onBeforeKeep,
@@ -83,9 +88,8 @@ export default function Versions({
 	const [asked, setAsked] = useState(0);
 	const [status, setStatus] = useState<Status | null>(null);
 	const [message, setMessage] = useState("");
-	// How many spots each conflicted document has, by id.
-	const [spots, setSpots] = useState<Record<string, number>>({});
 	const merging = merge?.merging ?? null;
+	const spots = spotCounts(pieces);
 
 	// The checkpoint that finishes a merge says so, until the writer changes it.
 	useEffect(() => {
@@ -93,44 +97,6 @@ export default function Versions({
 			setMessage(merging.message);
 		}
 	}, [merging?.message]);
-
-	useEffect(() => {
-		if (merging === null) {
-			setSpots({});
-			return;
-		}
-		let current = true;
-		const ids = merging.conflicts.flatMap((conflict) =>
-			conflict.kind === "text" && conflict.id !== null
-				? [conflict.id]
-				: [],
-		);
-		Promise.all(
-			ids.map(async (id) => {
-				const pieces = await invoke<Piece[] | null>("merge_spots", {
-					root,
-					id,
-				});
-				const count = (pieces ?? []).filter(
-					(piece) => piece.kind === "spot",
-				).length;
-				return [id, count] as const;
-			}),
-		)
-			.then((counted) => {
-				if (current) {
-					setSpots(Object.fromEntries(counted));
-				}
-			})
-			.catch((reason: unknown) => {
-				if (current) {
-					setError(failure(reason).message);
-				}
-			});
-		return () => {
-			current = false;
-		};
-	}, [root, merging]);
 
 	// A folder overview has no document of its own to narrow to.
 	const document = scope === "document" && page !== null ? page.id : null;
@@ -367,7 +333,7 @@ export default function Versions({
 			{/* Laid over the foot of the panel, so a message does not push
 			    the list down. */}
 			<p className="right-sidebar__trouble" role="alert">
-				{error ?? ""}
+				{error ?? piecesFailed ?? ""}
 			</p>
 
 			{scope === "changes" && (

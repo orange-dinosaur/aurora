@@ -14,6 +14,7 @@ import {
 	nextOpen,
 	settled,
 	spotCount,
+	spotCounts,
 	spotsLeft,
 	theirSides,
 } from "./merge";
@@ -79,6 +80,7 @@ describe("joined", () => {
 describe("what is left", () => {
 	it("counts the spots not chosen yet", () => {
 		expect(spotCount(pieces)).toBe(2);
+		expect(spotCounts({ a: pieces, b: [] })).toEqual({ a: 2, b: 0 });
 		expect(left(pieces, [])).toBe(2);
 		expect(left(pieces, [null, "ours"])).toBe(1);
 		expect(left(pieces, ["ours", "theirs", "ours"])).toBe(0);

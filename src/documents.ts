@@ -74,6 +74,40 @@ export function moveNode(
 	return invoke<void>("move_node", { root, id, parentId, index });
 }
 
+/** The project's tree, every node in the order the sidebar shows them. */
+export function documentTree(root: string): Promise<TreeNode[]> {
+	return invoke<TreeNode[]>("document_tree", { root });
+}
+
+/** A document's text as its file holds it, front matter and all. */
+export function readDocument(root: string, id: string): Promise<string> {
+	return invoke<string>("read_document", { root, id });
+}
+
+/**
+ * Writes a document's text without checking the file first. The caller tells
+ * the corpus what it wrote, or leaves that to a read of its own.
+ */
+export function writeDocument(
+	root: string,
+	id: string,
+	text: string,
+): Promise<void> {
+	return invoke<void>("write_document", { root, id, text });
+}
+
+/**
+ * Writes a document whose file has gone back to where its path says it was,
+ * and answers with the document the project now holds.
+ */
+export function restoreDocument(
+	root: string,
+	path: string,
+	text: string,
+): Promise<ProjectDocument> {
+	return invoke<ProjectDocument>("restore_document", { root, path, text });
+}
+
 /** Moves a document into the project's trash. */
 export function deleteDocument(root: string, id: string): Promise<void> {
 	return invoke<void>("delete_document", { root, id });

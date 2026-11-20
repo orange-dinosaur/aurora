@@ -12,8 +12,9 @@ use std::slice;
 use pulldown_cmark::{Alignment, Event, Parser, Tag, TagEnd};
 
 use crate::archive::Archive;
-use crate::book::{Chapter, Compiled, Division, Prose, Scene, told};
-use crate::epub::{escaped, options, title_of};
+use crate::book::{
+	Chapter, Compiled, Prose, Scene, Section, escaped, options, sections, title_of, told,
+};
 use crate::project::Book;
 
 /// WordprocessingML's namespace, and the one relationships are named in.
@@ -225,22 +226,17 @@ pub fn docx(book: &Book, compiled: &Compiled, prose: &Prose) -> io::Result<Vec<u
 		body: title_page(book),
 		..Manuscript::default()
 	};
-	for scene in &compiled.front {
-		manuscript.piece(scene, prose);
-	}
-	for division in &compiled.body {
-		match division {
-			Division::Part(part) => {
+	for section in sections(compiled) {
+		match section {
+			Section::Matter(scene) => manuscript.piece(scene, prose),
+			Section::Part(part) => {
 				manuscript.body.push(heading(&part.title));
 				for chapter in &part.chapters {
 					manuscript.chapter(chapter, prose);
 				}
 			}
-			Division::Chapter(chapter) => manuscript.chapter(chapter, prose),
+			Section::Chapter(chapter) => manuscript.chapter(chapter, prose),
 		}
-	}
-	for scene in &compiled.back {
-		manuscript.piece(scene, prose);
 	}
 
 	let rels = document_rels(&manuscript.links);
@@ -1004,7 +1000,7 @@ mod tests {
 	use zip::ZipArchive;
 
 	use super::*;
-	use crate::book::Part;
+	use crate::book::{Division, Part};
 
 	#[test]
 	fn the_title_page_names_the_author_without_a_by() {

@@ -55,6 +55,15 @@ export function spotCount(pieces: Piece[]): number {
 	return pieces.filter((piece) => piece.kind === "spot").length;
 }
 
+/** How many spots each document has, by id. */
+export function spotCounts(
+	pieces: Record<string, Piece[]>,
+): Record<string, number> {
+	return Object.fromEntries(
+		Object.entries(pieces).map(([id, found]) => [id, spotCount(found)]),
+	);
+}
+
 /** How many of the document's spots are still to choose. */
 export function left(pieces: Piece[], choices: Choices): number {
 	const total = spotCount(pieces);

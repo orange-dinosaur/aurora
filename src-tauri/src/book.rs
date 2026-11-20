@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use pulldown_cmark::Options;
 use serde::Serialize;
 use tauri::ipc::Channel;
 use time::OffsetDateTime;
@@ -218,19 +219,80 @@ pub type Prose = HashMap<Uuid, String>;
 /// what it would have written itself.
 const BREAK: &str = "---";
 
-/// Every scene the book holds, in reading order.
-pub fn all_scenes(compiled: &Compiled) -> Vec<&Scene> {
-	let chapters = compiled.body.iter().flat_map(|division| match division {
-		Division::Part(part) => part.chapters.iter().collect::<Vec<_>>(),
-		Division::Chapter(chapter) => vec![chapter],
+/// One stretch of the book as a writer draws it: a piece of front or back
+/// matter, a part with its chapters, or a chapter outside any part.
+pub enum Section<'a> {
+	Matter(&'a Scene),
+	Part(&'a Part),
+	Chapter(&'a Chapter),
+}
+
+/// The book's sections in reading order.
+pub fn sections(compiled: &Compiled) -> Vec<Section<'_>> {
+	let body = compiled.body.iter().map(|division| match division {
+		Division::Part(part) => Section::Part(part),
+		Division::Chapter(chapter) => Section::Chapter(chapter),
 	});
 
 	compiled
 		.front
 		.iter()
-		.chain(chapters.flat_map(|chapter| chapter.scenes.iter()))
-		.chain(compiled.back.iter())
+		.map(Section::Matter)
+		.chain(body)
+		.chain(compiled.back.iter().map(Section::Matter))
 		.collect()
+}
+
+/// Every scene the book holds, in reading order.
+pub fn all_scenes(compiled: &Compiled) -> Vec<&Scene> {
+	sections(compiled)
+		.into_iter()
+		.flat_map(|section| match section {
+			Section::Matter(scene) => vec![scene],
+			Section::Part(part) => part
+				.chapters
+				.iter()
+				.flat_map(|chapter| &chapter.scenes)
+				.collect(),
+			Section::Chapter(chapter) => chapter.scenes.iter().collect(),
+		})
+		.collect()
+}
+
+/// What the Markdown parser is asked to read beyond the core. The editor
+/// writes strikethrough, and keeps a pasted table or footnote as it came.
+pub fn options() -> Options {
+	Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES
+}
+
+/// The title the book goes by. A reader has to be given one.
+pub fn title_of(book: &Book) -> &str {
+	match book.title.trim() {
+		"" => "Untitled",
+		title => title,
+	}
+}
+
+/// Whether XML 1.0 can hold `c` at all.
+pub fn legal(c: char) -> bool {
+	matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}')
+		|| c >= '\u{10000}'
+}
+
+/// Text made safe to sit in XML, between tags or inside an attribute's quotes.
+pub fn escaped(text: &str) -> String {
+	let mut out = String::with_capacity(text.len());
+	for c in text.chars().filter(|&c| legal(c)) {
+		match c {
+			'&' => out.push_str("&amp;"),
+			'<' => out.push_str("&lt;"),
+			'>' => out.push_str("&gt;"),
+			'"' => out.push_str("&quot;"),
+			'\'' => out.push_str("&apos;"),
+			c => out.push(c),
+		}
+	}
+	out
 }
 
 /// Reads the prose of every scene in the book, with each one's front matter
@@ -281,22 +343,17 @@ pub fn markdown(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
 		blocks.push(author.to_owned());
 	}
 
-	for scene in &compiled.front {
-		piece(&mut blocks, scene, prose);
-	}
-	for division in &compiled.body {
-		match division {
-			Division::Part(part) => {
+	for section in sections(compiled) {
+		match section {
+			Section::Matter(scene) => piece(&mut blocks, scene, prose),
+			Section::Part(part) => {
 				blocks.push(format!("# {}", part.title));
 				for chapter in &part.chapters {
 					chapter_blocks(&mut blocks, chapter, prose);
 				}
 			}
-			Division::Chapter(chapter) => chapter_blocks(&mut blocks, chapter, prose),
+			Section::Chapter(chapter) => chapter_blocks(&mut blocks, chapter, prose),
 		}
-	}
-	for scene in &compiled.back {
-		piece(&mut blocks, scene, prose);
 	}
 
 	// One blank line between blocks, and a newline at the end: a text file ends

@@ -24,6 +24,7 @@ import type {
 	ProjectDocument,
 	RightSidebarTab,
 	Checkpoint,
+	Piece,
 	VersionsScope,
 } from "./types";
 
@@ -93,6 +94,8 @@ type Props = {
 	enclosing: string | null;
 	/** The merge waiting to be settled, if there is one. */
 	merge: MergeUnderway | null;
+	pieces: Record<string, Piece[]>;
+	piecesFailed: string | null;
 	/** Reads the merge again after something here settled or ended it. */
 	onMergeChanged: () => Promise<void>;
 	/** Opens the merge screen on a conflicted document. */
@@ -144,6 +147,8 @@ export default function RightSidebar({
 	onVersionsScope,
 	enclosing,
 	merge,
+	pieces,
+	piecesFailed,
 	onMergeChanged,
 	onSettle,
 	onBeforeKeep,
@@ -232,6 +237,8 @@ export default function RightSidebar({
 								onScope={onVersionsScope}
 								enclosing={enclosing}
 								merge={merge}
+								pieces={pieces}
+								piecesFailed={piecesFailed}
 								onMergeChanged={onMergeChanged}
 								onSettle={onSettle}
 								onBeforeKeep={onBeforeKeep}

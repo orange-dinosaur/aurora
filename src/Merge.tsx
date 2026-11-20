@@ -31,6 +31,7 @@ import {
 	nextOpen,
 	settled,
 	spotCount,
+	spotCounts,
 	spotsLeft,
 	theirSides,
 	type Choice,
@@ -68,6 +69,9 @@ type Props = {
 	onSettle: (task: () => Promise<unknown>) => Promise<boolean>;
 	/** Reads the merge again once a document is settled. */
 	onMergeChanged: () => Promise<void>;
+	/** The conflicted documents in order, and why they could not be read. */
+	pieces: Record<string, Piece[]>;
+	piecesFailed: string | null;
 };
 
 /** The folder a document sits in, by name. */
@@ -91,53 +95,23 @@ export default function Merge({
 	onBack,
 	onSettle,
 	onMergeChanged,
+	pieces,
+	piecesFailed,
 }: Props) {
 	const list = useRef<HTMLElement>(null);
 	useDismissal(floating, list, onDismiss, opener);
 	const { merging, into } = merge;
 	const theirs = merging.name ?? "the other version";
-	const [pieces, setPieces] = useState<Record<string, Piece[]>>({});
 	const [current, setCurrent] = useState(0);
 	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	const [failed, setFailed] = useState<string | null>(null);
+	const error = failed ?? piecesFailed;
 	const spots = useRef<(HTMLDivElement | null)[]>([]);
 
-	useEffect(() => {
-		let live = true;
-		const ids = merging.conflicts.flatMap((conflict) =>
-			conflict.kind === "text" && conflict.id !== null
-				? [conflict.id]
-				: [],
-		);
-		Promise.all(
-			ids.map(async (id) => {
-				const found = await invoke<Piece[] | null>("merge_spots", {
-					root,
-					id,
-				});
-				return [id, found ?? []] as const;
-			}),
-		)
-			.then((found) => {
-				if (live) {
-					setPieces(Object.fromEntries(found));
-					setError(null);
-				}
-			})
-			.catch((reason: unknown) => {
-				if (live) {
-					setError(failure(reason).message);
-				}
-			});
-		return () => {
-			live = false;
-		};
-	}, [root, merging]);
+	// A fresh read of the pieces clears what an earlier action said.
+	useEffect(() => setFailed(null), [pieces]);
 
-	const counts = Object.fromEntries(
-		Object.entries(pieces).map(([id, found]) => [id, spotCount(found)]),
-	);
-	const lines = settleLines(merging, counts);
+	const lines = settleLines(merging, spotCounts(pieces));
 	const documents = lines.filter((line) => line.kind === "document");
 	const files = lines.filter((line) => line.kind === "file");
 	const binder = lines.find((line) => line.kind === "binder");
@@ -212,7 +186,7 @@ export default function Merge({
 			await onMergeChanged();
 			finished();
 		} catch (reason) {
-			setError(failure(reason).message);
+			setFailed(failure(reason).message);
 		} finally {
 			setBusy(false);
 		}
@@ -224,7 +198,7 @@ export default function Merge({
 			await onSettle(() => invoke("abort_merge", { root }));
 			await onMergeChanged();
 		} catch (reason) {
-			setError(failure(reason).message);
+			setFailed(failure(reason).message);
 		}
 	}
 
@@ -244,7 +218,7 @@ export default function Merge({
 			await onMergeChanged();
 			finished();
 		} catch (reason) {
-			setError(failure(reason).message);
+			setFailed(failure(reason).message);
 		} finally {
 			setBusy(false);
 		}

@@ -10,11 +10,13 @@
 use std::io;
 use std::slice;
 
-use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd, html};
+use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd, html};
 use time::{OffsetDateTime, UtcOffset};
 
 use crate::archive::Archive;
-use crate::book::{Chapter, Compiled, Division, Prose, Scene, told};
+use crate::book::{
+	Chapter, Compiled, Prose, Scene, Section, escaped, legal, options, sections, title_of, told,
+};
 use crate::project::{Book, Role};
 
 /// Where the package document sits in the zip. Every file it names is named
@@ -90,12 +92,6 @@ pub enum Flavour {
 	Kobo,
 }
 
-/// What the Markdown parser is asked to read beyond the core. The editor
-/// writes strikethrough, and keeps a pasted table or footnote as it came.
-pub fn options() -> Options {
-	Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES
-}
-
 /// One line of the contents: a page, and the pages listed under it.
 struct Entry {
 	href: String,
@@ -133,23 +129,18 @@ pub fn epub(
 	if let Some(notice) = copyright_page(book) {
 		contents.push(pages.add("Copyright", &notice));
 	}
-	for scene in &compiled.front {
-		contents.push(pages.piece(scene, prose));
-	}
-	for division in &compiled.body {
-		contents.push(match division {
-			Division::Part(part) => {
+	for section in sections(compiled) {
+		contents.push(match section {
+			Section::Matter(scene) => pages.piece(scene, prose),
+			Section::Part(part) => {
 				let mut entry = pages.prose(&part.title, &[]);
 				for chapter in &part.chapters {
 					entry.under.push(pages.chapter(chapter, prose));
 				}
 				entry
 			}
-			Division::Chapter(chapter) => pages.chapter(chapter, prose),
+			Section::Chapter(chapter) => pages.chapter(chapter, prose),
 		});
-	}
-	for scene in &compiled.back {
-		contents.push(pages.piece(scene, prose));
 	}
 
 	let mut archive = Archive::default();
@@ -167,14 +158,6 @@ pub fn epub(
 		archive.deflate(&format!("EPUB/{}.xhtml", id(at)), text.as_bytes())?;
 	}
 	archive.finish()
-}
-
-/// The title the book goes by. A reader has to be given one.
-pub fn title_of(book: &Book) -> &str {
-	match book.title.trim() {
-		"" => "Untitled",
-		title => title,
-	}
 }
 
 /// The language the book is in. One not yet chosen is left undetermined,
@@ -369,12 +352,6 @@ fn lowered(level: HeadingLevel) -> HeadingLevel {
 		HeadingLevel::H3 => HeadingLevel::H5,
 		_ => HeadingLevel::H6,
 	}
-}
-
-/// Whether XML 1.0 can hold `c` at all.
-fn legal(c: char) -> bool {
-	matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}')
-		|| c >= '\u{10000}'
 }
 
 /// `events` with each sentence of text wrapped in one of Kobo's markers. A
@@ -701,22 +678,6 @@ fn modified(now: OffsetDateTime) -> String {
 	format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
-/// Text made safe to sit in XML, between tags or inside an attribute's quotes.
-pub fn escaped(text: &str) -> String {
-	let mut out = String::with_capacity(text.len());
-	for c in text.chars().filter(|&c| legal(c)) {
-		match c {
-			'&' => out.push_str("&amp;"),
-			'<' => out.push_str("&lt;"),
-			'>' => out.push_str("&gt;"),
-			'"' => out.push_str("&quot;"),
-			'\'' => out.push_str("&apos;"),
-			c => out.push(c),
-		}
-	}
-	out
-}
-
 #[cfg(test)]
 mod tests {
 	use std::io::{Cursor, Read};
@@ -725,7 +686,7 @@ mod tests {
 	use zip::ZipArchive;
 
 	use super::*;
-	use crate::book::{Part, all_scenes};
+	use crate::book::{Division, Part, all_scenes};
 	use crate::epub::Flavour::{Kobo, Plain};
 	use crate::project::Contributor;
 

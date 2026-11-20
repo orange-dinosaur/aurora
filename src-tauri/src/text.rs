@@ -7,8 +7,7 @@ use std::slice;
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
-use crate::book::{Chapter, Compiled, Division, Prose, Scene, told};
-use crate::epub::options;
+use crate::book::{Chapter, Compiled, Prose, Scene, Section, options, sections, told};
 use crate::project::Book;
 
 /// The line a scene break is centred on. Paragraphs are not wrapped to it: a
@@ -30,22 +29,17 @@ pub fn text(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
 		blocks.push(author.to_owned());
 	}
 
-	for scene in &compiled.front {
-		piece(&mut blocks, scene, prose);
-	}
-	for division in &compiled.body {
-		match division {
-			Division::Part(part) => {
+	for section in sections(compiled) {
+		match section {
+			Section::Matter(scene) => piece(&mut blocks, scene, prose),
+			Section::Part(part) => {
 				blocks.push(title(&part.title));
 				for chapter in &part.chapters {
 					chapter_blocks(&mut blocks, chapter, prose);
 				}
 			}
-			Division::Chapter(chapter) => chapter_blocks(&mut blocks, chapter, prose),
+			Section::Chapter(chapter) => chapter_blocks(&mut blocks, chapter, prose),
 		}
-	}
-	for scene in &compiled.back {
-		piece(&mut blocks, scene, prose);
 	}
 
 	let mut out = blocks.join("\n\n").trim_start_matches('\n').to_owned();
@@ -288,7 +282,7 @@ mod tests {
 	use uuid::Uuid;
 
 	use super::*;
-	use crate::book::Part;
+	use crate::book::{Division, Part};
 
 	fn scene(title: &str) -> Scene {
 		Scene {

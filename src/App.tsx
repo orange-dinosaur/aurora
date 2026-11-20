@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Welcome from "./Welcome";
 import Project from "./Project";
@@ -50,6 +50,8 @@ type Boot =
 function App() {
 	const [boot, setBoot] = useState<Boot>({ kind: "loading" });
 	const [preferences, setPreferences] = useState<Preferences>(DEFAULTS);
+	// Two changes in one tick each build on the one before.
+	const latest = useRef(preferences);
 	const [settings, setSettings] = useState(false);
 	// Whatever the keyboard opened skips the motion.
 	const [settingsInstant, setSettingsInstant] = useState(false);
@@ -70,6 +72,7 @@ function App() {
 			invoke<Preferences>("read_preferences").catch(() => DEFAULTS),
 		])
 			.then(async ([last, saved]) => {
+				latest.current = saved;
 				setPreferences(saved);
 				if (last.kind === "open") {
 					setBoot({
@@ -135,7 +138,9 @@ function App() {
 
 	// A write that fails costs the setting sticking, and neither a writing
 	// screen nor the dialog over it has anywhere to say so.
-	function save(next: Preferences) {
+	function save(change: Partial<Preferences>) {
+		const next = { ...latest.current, ...change };
+		latest.current = next;
 		setPreferences(next);
 		void invoke("write_preferences", { preferences: next });
 	}
@@ -175,10 +180,10 @@ function App() {
 							onProfile={() => setProfile(true)}
 							onSettings={openSettings}
 							theme={preferences.theme}
-							onTheme={(theme) => save({ ...preferences, theme })}
+							onTheme={(theme) => save({ theme })}
 							projectsFolder={preferences.projectsFolder}
 							onProjectsFolder={(projectsFolder) =>
-								save({ ...preferences, projectsFolder })
+								save({ projectsFolder })
 							}
 						/>
 					)
@@ -203,7 +208,7 @@ function App() {
 				<Login
 					onBack={() => setLogin(false)}
 					theme={preferences.theme}
-					onTheme={(theme) => save({ ...preferences, theme })}
+					onTheme={(theme) => save({ theme })}
 				/>
 			)}
 			{profile && (
@@ -215,7 +220,7 @@ function App() {
 					}
 					onBack={() => setProfile(false)}
 					theme={preferences.theme}
-					onTheme={(theme) => save({ ...preferences, theme })}
+					onTheme={(theme) => save({ theme })}
 				/>
 			)}
 
