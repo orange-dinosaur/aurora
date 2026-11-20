@@ -4,4 +4,4 @@
  * One stretch of a conflicted document: text both versions agree on, or a
  * spot where each has its own.
  */
-export type Piece = { "kind": "clean", text: string, } | { "kind": "spot", ours: string, theirs: string, };
+export type Piece = { "kind": "clean", text: string, } | { "kind": "spot", ours: string, theirs: string, field: string | null, };

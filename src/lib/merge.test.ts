@@ -5,6 +5,7 @@ import {
 	cards,
 	cardsLeft,
 	fieldText,
+	fieldName,
 	fieldTitle,
 	joined,
 	left,
@@ -19,9 +20,19 @@ import {
 
 const pieces: Piece[] = [
 	{ kind: "clean", text: "One.\n\n" },
-	{ kind: "spot", ours: "Two, mine.\n", theirs: "Two, theirs.\n" },
+	{
+		kind: "spot",
+		ours: "Two, mine.\n",
+		theirs: "Two, theirs.\n",
+		field: null,
+	},
 	{ kind: "clean", text: "\nThree.\n\n" },
-	{ kind: "spot", ours: "Four, mine.\n", theirs: "Four, theirs.\n" },
+	{
+		kind: "spot",
+		ours: "Four, mine.\n",
+		theirs: "Four, theirs.\n",
+		field: null,
+	},
 ];
 
 describe("settled", () => {
@@ -205,6 +216,8 @@ describe("fields", () => {
 		);
 		expect(fieldTitle("target", "Chapter 2")).toBe("Target of Chapter 2");
 		expect(fieldTitle("POV", "Chapter 2")).toBe("POV of Chapter 2");
+		expect(fieldName("target")).toBe("Target");
+		expect(fieldName("mood")).toBe("mood");
 	});
 
 	it("read as text, lists joined and nothing empty", () => {

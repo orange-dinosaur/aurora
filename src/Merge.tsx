@@ -22,6 +22,7 @@ import {
 	cards,
 	cardsLeft,
 	fieldText,
+	fieldName,
 	fieldTitle,
 	joined,
 	left,
@@ -511,8 +512,12 @@ export default function Merge({
 										<Settled
 											key={index}
 											place={place}
-											text={settled(piece, choice)}
-											note={`Spot ${at + 1} · ${took(choice)} · `}
+											text={
+												piece.field === null
+													? settled(piece, choice)
+													: ""
+											}
+											note={`${piece.field === null ? `Spot ${at + 1}` : fieldName(piece.field)} · ${took(choice)} · `}
 											onChange={() => change(at)}
 										/>
 									);
@@ -1021,7 +1026,7 @@ function Spot({
 	onChoose,
 	place,
 }: {
-	spot: { ours: string; theirs: string };
+	spot: { ours: string; theirs: string; field: string | null };
 	at: number;
 	total: number;
 	current: boolean;
@@ -1031,6 +1036,44 @@ function Spot({
 	/** Hands the spot's element over, so stepping can scroll to it. */
 	place: (element: HTMLDivElement | null) => void;
 }) {
+	if (spot.field !== null) {
+		// A field in the file's own head settles like a field outside it.
+		const value = (text: string) =>
+			text.slice(text.indexOf(":") + 1).trim();
+		return (
+			<section
+				ref={place}
+				className={
+					current ? "merge-card merge-spot--current" : "merge-card"
+				}
+			>
+				<header className="merge-card__head">
+					<span className="merge-card__kind">Changed on both</span>
+					<span className="merge-card__what">
+						{fieldName(spot.field)}
+					</span>
+				</header>
+				<div className="merge-card__options">
+					{(
+						[
+							["ours", `${into} · yours`, spot.ours],
+							["theirs", theirs, spot.theirs],
+						] as const
+					).map(([choice, label, text]) => (
+						<button
+							key={choice}
+							type="button"
+							className="merge-card__option"
+							onClick={() => onChoose(choice)}
+						>
+							<span className="merge-card__side">{label}</span>
+							<Value text={value(text)} prose />
+						</button>
+					))}
+				</div>
+			</section>
+		);
+	}
 	return (
 		<div
 			ref={place}

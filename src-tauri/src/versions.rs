@@ -2086,8 +2086,15 @@ fn merging(root: &Path) -> Result<Option<Merging>> {
 #[serde(tag = "kind", rename_all = "camelCase")]
 #[ts(export)]
 pub enum Piece {
-	Clean { text: String },
-	Spot { ours: String, theirs: String },
+	Clean {
+		text: String,
+	},
+	/// `field` names the front matter field a spot inside the head is about.
+	Spot {
+		ours: String,
+		theirs: String,
+		field: Option<String>,
+	},
 }
 
 /// Long enough that no line a writer types is taken for a marker.
@@ -2170,6 +2177,7 @@ fn pieces(merged: &str, label: &str) -> Vec<Piece> {
 				pieces.push(Piece::Spot {
 					ours: std::mem::take(&mut ours),
 					theirs: std::mem::take(&mut theirs),
+					field: None,
 				});
 				side = None;
 			}
@@ -2181,7 +2189,41 @@ fn pieces(merged: &str, label: &str) -> Vec<Piece> {
 	if !clean.is_empty() {
 		pieces.push(Piece::Clean { text: clean });
 	}
+	name_fields(&mut pieces);
 	pieces
+}
+
+/// Names each spot that sits inside the front matter after the field it
+/// changes, taken from the first line either side has.
+fn name_fields(pieces: &mut [Piece]) {
+	let in_head = |before: &str| {
+		let mut lines = before.lines();
+		lines.next().is_some_and(|line| line.trim_end() == "---")
+			&& lines.all(|line| line.trim_end() != "---")
+	};
+	let mut before = String::new();
+	for piece in pieces {
+		match piece {
+			Piece::Clean { text } => before.push_str(text),
+			Piece::Spot {
+				ours,
+				theirs,
+				field,
+			} => {
+				if in_head(&before) {
+					let line = if ours.is_empty() { &*theirs } else { &*ours };
+					*field = line
+						.lines()
+						.next()
+						.and_then(|line| line.split_once(':'))
+						.map(|(key, _)| key)
+						.filter(|key| !key.is_empty() && !key.starts_with([' ', '\t', '-', '#']))
+						.map(str::to_owned);
+				}
+				before.push_str(ours);
+			}
+		}
+	}
 }
 
 /// Writes a conflicted document as the writer settled it and puts it in the
@@ -3236,6 +3278,7 @@ mod tests {
 				Piece::Spot {
 					ours: "One, on Main.\n".to_owned(),
 					theirs: "One, in Act two.\n".to_owned(),
+					field: None,
 				},
 				Piece::Clean {
 					text: "\nTwo.\n\n<<<<<<< typed\n\n".to_owned(),
@@ -3243,10 +3286,43 @@ mod tests {
 				Piece::Spot {
 					ours: "Three, on Main.\n".to_owned(),
 					theirs: "Three, in Act two.\n".to_owned(),
+					field: None,
 				},
 			])
 		);
 		assert_eq!(spots(&root, other).unwrap(), None);
+	}
+
+	#[test]
+	fn a_spot_inside_the_front_matter_is_named_for_its_field() {
+		let open = format!("{} x", "<".repeat(MARKER_SIZE));
+		let middle = "=".repeat(MARKER_SIZE);
+		let close = format!("{} x", ">".repeat(MARKER_SIZE));
+		let merged = format!(
+			"---\n{open}\nmood: wary\n{middle}\nmood: tense\n{close}\n---\n\n{open}\nOne.\n{middle}\nUno.\n{close}\n"
+		);
+
+		assert_eq!(
+			pieces(&merged, "x"),
+			[
+				Piece::Clean {
+					text: "---\n".to_owned()
+				},
+				Piece::Spot {
+					ours: "mood: wary\n".to_owned(),
+					theirs: "mood: tense\n".to_owned(),
+					field: Some("mood".to_owned()),
+				},
+				Piece::Clean {
+					text: "---\n\n".to_owned()
+				},
+				Piece::Spot {
+					ours: "One.\n".to_owned(),
+					theirs: "Uno.\n".to_owned(),
+					field: None,
+				},
+			]
+		);
 	}
 
 	#[test]

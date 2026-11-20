@@ -188,8 +188,13 @@ const fieldNames: Record<string, string> = {
 
 /** A "Changed on both" card's title: the field, then whose it is. */
 export function fieldTitle(field: string, owner: string | null): string {
-	const name = fieldNames[field] ?? field;
+	const name = fieldName(field);
 	return owner === null ? `${name} of the book` : `${name} of ${owner}`;
+}
+
+/** A field as the writer knows it: Aurora's own name for it, else its key. */
+export function fieldName(field: string): string {
+	return fieldNames[field] ?? field;
 }
 
 /** A field's value as a card shows it, empty when the side has none. */
