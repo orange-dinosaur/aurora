@@ -974,12 +974,19 @@ fn make_inside(base: &Path, dir: &Path) -> Result<()> {
 	Ok(())
 }
 
+/// Refuses a project folder given as a relative path.
+fn absolute(root: &Path) -> Result<()> {
+	if root.is_absolute() {
+		Ok(())
+	} else {
+		Err(Error::RelativePath)
+	}
+}
+
 /// The text of one document.
 #[tauri::command]
 pub fn read_document(root: PathBuf, id: Uuid) -> Result<String> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	let path = resolve(&manifest, &root, id)?;
@@ -991,9 +998,7 @@ pub fn read_document(root: PathBuf, id: Uuid) -> Result<String> {
 /// vanished is a different thing to ask for.
 #[tauri::command]
 pub fn write_document(root: PathBuf, id: Uuid, text: String) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	let path = resolve(&manifest, &root, id)?;
@@ -1023,9 +1028,7 @@ fn modified(path: &Path) -> Result<i64> {
 /// save rather than going unseen.
 #[tauri::command]
 pub fn open_document(root: PathBuf, id: Uuid) -> Result<Opened> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	let path = resolve(&manifest, &root, id)?;
@@ -1040,9 +1043,7 @@ pub fn open_document(root: PathBuf, id: Uuid) -> Result<Opened> {
 /// written.
 #[tauri::command]
 pub fn save_document(root: PathBuf, id: Uuid, text: String, seen: Option<i64>) -> Result<i64> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	let path = resolve(&manifest, &root, id)?;
@@ -1245,9 +1246,7 @@ pub fn create_folder(
 /// project is this one, however much of it the caller draws.
 #[tauri::command(async)]
 pub fn document_tree(root: PathBuf) -> Result<Vec<NodeView>> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 	Ok(views(&canonical(&root), &read_manifest(&root)?.nodes, "").0)
 }
 
@@ -1256,15 +1255,11 @@ pub fn document_tree(root: PathBuf) -> Result<Vec<NodeView>> {
 /// Nothing comes back: whoever asked reads the tree again afterwards.
 #[tauri::command]
 pub fn refresh_documents(root: PathBuf) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 	refresh(&root)?;
 	Ok(())
 }
 
-/// Gives a document a new title, which is to say a new file name. It stays in
-/// its section, and keeps its id and its place in the order.
 /// Whether going from `from` to `to` changes nothing but the case of the name.
 fn case_only(from: &Path, to: &Path) -> bool {
 	from != to && from.to_string_lossy().to_lowercase() == to.to_string_lossy().to_lowercase()
@@ -1291,6 +1286,18 @@ fn taken(from: &Path, to: &Path) -> Result<bool> {
 	Ok(false)
 }
 
+/// The view of one document, as the manifest has it now.
+fn view_of(manifest: &Manifest, id: Uuid) -> Result<DocumentView> {
+	manifest
+		.documents()
+		.iter()
+		.find(|d| d.id == id)
+		.map(DocumentView::from)
+		.ok_or(Error::UnknownDocument)
+}
+
+/// Gives a document a new title, which is to say a new file name. It stays in
+/// its section, and keeps its id and its place in the order.
 #[tauri::command]
 pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<DocumentView> {
 	let mut manifest = editable(&root)?;
@@ -1312,19 +1319,10 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 		None => return Err(Error::BadDocumentPath),
 	};
 
-	let view = |manifest: &Manifest| {
-		manifest
-			.documents()
-			.iter()
-			.find(|d| d.id == id)
-			.map(DocumentView::from)
-			.ok_or(Error::UnknownDocument)
-	};
-
 	// Being renamed to what it is already called is not a collision with
 	// itself.
 	if path == was {
-		return view(&manifest);
+		return view_of(&manifest, id);
 	}
 
 	let to = document_path(&manifest, &root, &path)?;
@@ -1341,7 +1339,7 @@ pub fn rename_document(root: PathBuf, id: Uuid, name: String) -> Result<Document
 		_ => return Err(Error::UnknownDocument),
 	}
 	write_manifest(&root, &mut manifest)?;
-	view(&manifest)
+	view_of(&manifest, id)
 }
 
 /// Gives a folder a new name, which is to say a new directory name. Everything
@@ -1444,12 +1442,7 @@ pub fn set_document_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Resu
 	}
 
 	write_manifest(&root, &mut manifest)?;
-	manifest
-		.documents()
-		.iter()
-		.find(|d| d.id == id)
-		.map(DocumentView::from)
-		.ok_or(Error::UnknownDocument)
+	view_of(&manifest, id)
 }
 
 /// Sets the word target a folder is written towards, or clears it with `None`.
@@ -1487,9 +1480,7 @@ pub struct FolderProgress {
 /// sidebar rather than for this.
 #[tauri::command]
 pub fn folder_progress(root: PathBuf, id: Uuid) -> Result<FolderProgress> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	let Some(Node::Folder {
@@ -1511,9 +1502,7 @@ pub fn folder_progress(root: PathBuf, id: Uuid) -> Result<FolderProgress> {
 /// only the panel wants it, and reading it costs a manifest and no files.
 #[tauri::command]
 pub fn folder_fields(root: PathBuf, id: Uuid) -> Result<Fields> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	match tree::find(&read_manifest(&root)?.nodes, id) {
 		Some(Node::Folder { fields, .. }) => Ok(fields.clone()),
@@ -1603,9 +1592,7 @@ fn tidy(top: &Path, from: &Path) {
 ///
 /// The name keeps its stamp so that deleting two things called the same thing
 /// does not lose the first.
-fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
-	let mut manifest = read_manifest(root)?;
-
+fn trash(root: &Path, mut manifest: Manifest, id: Uuid, at: OffsetDateTime) -> Result<()> {
 	let folder = match tree::find(&manifest.nodes, id) {
 		Some(Node::Folder { .. }) => true,
 		Some(Node::Document { .. }) => false,
@@ -1665,7 +1652,7 @@ pub fn delete_document(root: PathBuf, id: Uuid) -> Result<()> {
 	if !matches!(tree::find(&manifest.nodes, id), Some(Node::Document { .. })) {
 		return Err(Error::UnknownDocument);
 	}
-	trash(&root, id, OffsetDateTime::now_utc())
+	trash(&root, manifest, id, OffsetDateTime::now_utc())
 }
 
 /// Deletes a folder and everything in it. The subtree goes into the trash as
@@ -1676,7 +1663,7 @@ pub fn delete_folder(root: PathBuf, id: Uuid) -> Result<()> {
 	if !matches!(tree::find(&manifest.nodes, id), Some(Node::Folder { .. })) {
 		return Err(Error::UnknownFolder);
 	}
-	trash(&root, id, OffsetDateTime::now_utc())
+	trash(&root, manifest, id, OffsetDateTime::now_utc())
 }
 
 /// Puts a node at a given place inside a folder, which may be the one it is
@@ -1918,9 +1905,7 @@ fn gather_trash(dir: &Path, at: &str, section: &str, found: &mut Vec<TrashEntry>
 /// Everything in the project's trash, most recently deleted first.
 #[tauri::command]
 pub fn list_trash(root: PathBuf) -> Result<Vec<TrashEntry>> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	let trash = root.join(TRASH_DIR);
@@ -1952,20 +1937,23 @@ fn trash_entry(manifest: &Manifest, root: &Path, path: &str) -> Result<PathBuf> 
 /// section at its head is the last resort, and something the writer deleted
 /// three folders down comes back as near to where it was as is left.
 fn nearest_folder(manifest: &Manifest, path: &str) -> String {
-	let parts: Vec<&str> = path.split('/').collect();
+	let mut level = manifest.nodes.as_slice();
+	let mut matched: Vec<&str> = Vec::new();
 
-	for depth in (1..=parts.len()).rev() {
-		let above = parts[..depth].join("/");
-		let there = tree::walk(&manifest.nodes).any(|node| {
-			matches!(node, Node::Folder { .. })
-				&& tree::path(&manifest.nodes, node.id()).as_deref() == Some(above.as_str())
-		});
-		if there {
-			return above;
-		}
+	for part in path.split('/') {
+		let Some(Node::Folder { children, .. }) = level.iter().find(|node| node.name() == part)
+		else {
+			break;
+		};
+		matched.push(part);
+		level = children;
 	}
 
-	parts[0].to_owned()
+	if matched.is_empty() {
+		path.split('/').next().unwrap_or_default().to_owned()
+	} else {
+		matched.join("/")
+	}
 }
 
 /// Puts a deleted document or folder back where it came from, under the name it
@@ -2066,9 +2054,7 @@ fn put_node_back(root: &Path, landed: &str, mut node: Node, name: &str) -> Resul
 /// went into it.
 #[tauri::command]
 pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	let file = trash_entry(&manifest, &root, &path)?;
@@ -2092,9 +2078,7 @@ pub fn purge_trash_entry(root: PathBuf, path: String) -> Result<()> {
 /// does.
 #[tauri::command(async)]
 pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	// The folder's own path, which is the prefix of everything it holds. Ask
@@ -2102,7 +2086,7 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 	// folder to look inside.
 	let prefix = match tree::find(&manifest.nodes, id) {
 		Some(Node::Folder { .. }) => tree::path(&manifest.nodes, id).unwrap_or_default(),
-		_ => return Err(Error::UnknownSection),
+		_ => return Err(Error::UnknownFolder),
 	};
 
 	let counting_root = canonical(&root);
@@ -2153,9 +2137,7 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 /// first query, and a round trip per file would be the bulk of that cost.
 #[tauri::command(async)]
 pub fn read_all_documents(root: PathBuf) -> Result<Vec<DocumentText>> {
-	if !root.is_absolute() {
-		return Err(Error::RelativePath);
-	}
+	absolute(&root)?;
 
 	let manifest = read_manifest(&root)?;
 	let base = canonical(&root);
@@ -2181,6 +2163,10 @@ mod tests {
 	use crate::project::{Format, NameError, create};
 	use crate::tree::{self, Value, tree_from_flat};
 	use time::OffsetDateTime;
+
+	fn trash(root: &Path, id: Uuid, at: OffsetDateTime) -> Result<()> {
+		super::trash(root, read_manifest(root)?, id, at)
+	}
 
 	fn fixed_time() -> OffsetDateTime {
 		OffsetDateTime::from_unix_timestamp(1_700_000_000).unwrap()
@@ -3305,7 +3291,7 @@ mod tests {
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();
 
 		let err = folder_overview(root, Uuid::new_v4()).unwrap_err();
-		assert!(matches!(err, Error::UnknownSection));
+		assert!(matches!(err, Error::UnknownFolder));
 	}
 
 	#[test]
@@ -3315,7 +3301,7 @@ mod tests {
 		let chapter = first_document(&root).id;
 
 		let err = folder_overview(root, chapter).unwrap_err();
-		assert!(matches!(err, Error::UnknownSection));
+		assert!(matches!(err, Error::UnknownFolder));
 	}
 
 	#[test]

@@ -772,10 +772,19 @@ fn take_files(repo: &Repository, tree: &Tree, id: Uuid) -> HashMap<String, Oid> 
 		.collect()
 }
 
+/// Opens the repository for a look at the project as it stands. The trees and
+/// blobs that comparing builds go to memory, so each look leaves no loose
+/// objects behind in `.git`.
+fn reading(root: &Path) -> Result<Repository> {
+	let repo = Repository::open(root)?;
+	repo.odb()?.add_new_mempack_backend(1000)?;
+	Ok(repo)
+}
+
 /// What changed from version `a` to version `b`, where none is the project as
 /// it stands on disk and `HEAD` is the latest checkpoint.
 pub fn changes(root: &Path, a: Option<&str>, b: Option<&str>) -> Result<Changes> {
-	let repo = Repository::open(root)?;
+	let repo = reading(root)?;
 	Ok(compare(&side(&repo, a)?, &side(&repo, b)?))
 }
 
@@ -791,7 +800,7 @@ pub struct Status {
 }
 
 pub fn status(root: &Path) -> Result<Status> {
-	let repo = Repository::open(root)?;
+	let repo = reading(root)?;
 	let staged = staged_side(&repo)?;
 	Ok(Status {
 		staged: compare(&side(&repo, Some("HEAD"))?, &staged),
@@ -2226,8 +2235,10 @@ fn settle_rest(root: &Path, theirs: &[merge::Conflict]) -> Result<()> {
 	let mut index = repo.index()?;
 	// Every file that moves is read before any is written, so one taking
 	// another's old name loses nothing. The text on disk goes, so writing
-	// done during the merge comes along.
+	// done during the merge comes along. The old files go once the new ones
+	// are down, so a failed write loses no text.
 	let mut moving = Vec::new();
+	let mut gone = Vec::new();
 	for (id, old) in &from {
 		let new = to.get(id);
 		if new == Some(old) {
@@ -2243,8 +2254,14 @@ fn settle_rest(root: &Path, theirs: &[merge::Conflict]) -> Result<()> {
 		}
 		if let Some(new) = new {
 			moving.push((new, fs::read(&file)?, entries));
+			// Where the file system ignores case, a new name differing only
+			// by case is this same file, which has to go before it is written.
+			if new.to_lowercase() == old.to_lowercase() {
+				remove_if_there(&file)?;
+				continue;
+			}
 		}
-		remove_if_there(&file)?;
+		gone.push((old, file));
 	}
 	for (id, new) in &to {
 		if from.contains_key(id) {
@@ -2256,14 +2273,20 @@ fn settle_rest(root: &Path, theirs: &[merge::Conflict]) -> Result<()> {
 		let entries = vec![staged_entry(&repo, new, blob, 0)?];
 		moving.push((new, repo.find_blob(blob)?.content().to_vec(), entries));
 	}
-	for (path, text, entries) in moving {
+	let written: HashSet<&String> = moving.iter().map(|(path, ..)| *path).collect();
+	for (path, text, entries) in &moving {
 		let file = document_path(&settled.manifest, root, path)?;
 		if let Some(folder) = file.parent() {
 			fs::create_dir_all(folder)?;
 		}
-		write_atomic(&file, &text)?;
+		write_atomic(&file, text)?;
 		for entry in entries {
-			index.add(&staged_entry(&repo, path, entry.id, stage_of(&entry))?)?;
+			index.add(&staged_entry(&repo, path, entry.id, stage_of(entry))?)?;
+		}
+	}
+	for (old, file) in gone {
+		if !written.contains(old) {
+			remove_if_there(&file)?;
 		}
 	}
 
@@ -3462,6 +3485,31 @@ mod tests {
 			assert!(change.after.is_some());
 		}
 		assert!(!root.join(".git/index").exists());
+	}
+
+	fn loose_objects(root: &Path) -> usize {
+		fs::read_dir(root.join(".git/objects"))
+			.unwrap()
+			.flatten()
+			.filter(|entry| entry.file_name().len() == 2)
+			.map(|entry| fs::read_dir(entry.path()).unwrap().count())
+			.sum()
+	}
+
+	#[test]
+	fn looking_at_the_changes_writes_nothing_to_the_object_store() {
+		let (_parent, root, seeded, ..) = novel();
+		write_document(root.clone(), seeded, "Unkept".to_owned()).unwrap();
+		status(&root).unwrap();
+		let before = loose_objects(&root);
+
+		for round in 0..10 {
+			write_document(root.clone(), seeded, format!("Unkept {round}")).unwrap();
+			status(&root).unwrap();
+			changes(&root, Some("HEAD"), None).unwrap();
+		}
+
+		assert_eq!(loose_objects(&root), before);
 	}
 
 	#[test]
