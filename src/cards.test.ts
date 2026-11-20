@@ -57,6 +57,7 @@ describe("a document card's count", () => {
 describe("how far a row is along its target", () => {
 	test("no target draws no line", () => {
 		expect(reached(900, null)).toBeNull();
+		expect(reached(5, 0)).toBeNull();
 	});
 
 	test("the share is the words over the target", () => {

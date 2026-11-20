@@ -8,17 +8,18 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	fieldNames,
 	parse,
+	pooled,
 	serialize,
 	type Fields,
 	type Value,
 } from "./frontmatter";
+import { useCorpus } from "./corpus";
 import { failure } from "./errors";
 import { $frontMatter, $setFrontMatter } from "./markdown";
 import { subjectNames } from "./subjects";
 import { timed } from "./timing";
-import type { DocumentText, TreeNode } from "./types";
+import type { TreeNode } from "./types";
 
 /** Setting a field, or dropping it when the value is null. */
 export type SetField = (key: string, value: Value | null) => void;
@@ -233,43 +234,34 @@ export function useFields(): FieldsHandle {
 	);
 }
 
+/** No open tabs to merge in: a name only counts once it has reached disk. */
+const NO_TABS = new Map<string, string>();
+
 /**
  * The field names already used somewhere in the project, for the Add field box
  * to suggest.
  *
- * Reading them opens every file, so it happens when the box is asked for rather
- * than when the panel appears, and the answer is kept until something reaches
- * disk. Failing quietly is deliberate: a suggestion is a convenience, and the
- * writer can always type the name out.
+ * They come from the shared reading of the project, which is only started when
+ * the box is asked for rather than when the panel appears. Failing quietly is
+ * deliberate: a suggestion is a convenience, and the writer can always type
+ * the name out.
  */
 export function useFieldNames(
 	root: string,
 	changed: number,
 ): { names: string[]; ask: () => void } {
-	const [names, setNames] = useState<string[]>([]);
-	const read = useRef(-1);
-
-	const ask = useCallback(() => {
-		if (read.current === changed) {
-			return;
-		}
-		read.current = changed;
-
-		void timed(
-			"field names",
-			invoke<DocumentText[]>("read_all_documents", { root }),
-		)
-			.then((documents) =>
-				setNames(
-					fieldNames(
-						documents.flatMap(({ text }) =>
-							text === null ? [] : [text],
-						),
-					),
-				),
-			)
-			.catch(() => {});
-	}, [root, changed]);
+	const [wanted, setWanted] = useState(false);
+	const { corpus } = useCorpus({
+		root,
+		moved: changed,
+		live: NO_TABS,
+		wanted,
+	});
+	const names = useMemo(
+		() => (corpus.kind === "ready" ? pooled(corpus.keys.values()) : []),
+		[corpus],
+	);
+	const ask = useCallback(() => setWanted(true), []);
 
 	return { names, ask };
 }

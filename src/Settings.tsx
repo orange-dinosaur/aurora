@@ -78,8 +78,8 @@ export default function Settings({
 	const [section, setSection] = useState<Section>("appearance");
 	const dialog = useRef<HTMLDivElement>(null);
 
-	// So Escape and the rail's arrows have somewhere to land: what had focus
-	// is behind the dialog now, and a key pressed there would reach the app.
+	// So Escape has somewhere to land: what had focus is behind the dialog
+	// now, and a key pressed there would reach the app.
 	useEffect(() => {
 		if (!closing) {
 			dialog.current?.focus();

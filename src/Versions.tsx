@@ -58,7 +58,7 @@ type Props = {
 	onPutBack: (
 		task: () => Promise<unknown>,
 		target?: Overwrites,
-	) => Promise<void>;
+	) => Promise<boolean>;
 };
 
 export default function Versions({
@@ -182,7 +182,8 @@ export default function Versions({
 	// Shown once: from the next opening on, Rust stops reporting it.
 	useEffect(() => {
 		if (enclosing !== null) {
-			void invoke("nested_notice_shown", { root });
+			// Not worth a message: the notice only shows once more.
+			invoke("nested_notice_shown", { root }).catch(() => {});
 		}
 	}, [root, enclosing]);
 

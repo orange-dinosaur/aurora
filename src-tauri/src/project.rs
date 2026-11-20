@@ -336,10 +336,8 @@ impl Manifest {
 }
 
 /// A manifest as it might be found on disk, of any version Aurora has written.
-/// Version 2 recorded a list of section names and a flat list of documents;
-/// version 3 records one tree; version 4 adds the book. Which fields are there
-/// decides how it is read, rather than the version number, because that number
-/// is a line in a file the writer can edit.
+/// Which fields are there decides how it is read, rather than the version
+/// number, because that number is a line in a file the writer can edit.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Stored {
@@ -607,51 +605,12 @@ impl Serialize for Error {
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::InvalidName(_)
-			| Error::RelativePath
-			| Error::NoConfigDir
-			| Error::NoHomeDir
-			| Error::NotAProject
-			| Error::UnsupportedVersion { .. }
-			| Error::UnknownDocument
-			| Error::UnknownSection
-			| Error::UnknownFolder
-			| Error::FolderNotAllowed
-			| Error::SectionFixed
-			| Error::MoveInsideItself
-			| Error::DocumentMissing
-			| Error::ChangedOnDisk
-			| Error::DocumentExists
-			| Error::BadDocumentPath
-			| Error::OutsideProject
-			| Error::NotText
-			| Error::NotAnImage
-			| Error::CoverMissing
-			| Error::AlreadyExists
-			| Error::EmptyMessage
-			| Error::VersionName
-			| Error::VersionExists
-			| Error::NothingKept
-			| Error::MainFixed
-			| Error::CurrentVersion
-			| Error::AlreadyMerged
-			| Error::ConflictsRemain
-			| Error::ChangesPending
-			| Error::MergeUnderway
-			| Error::NotInManuscript
-			| Error::TakeExists
-			| Error::UnsupportedFormat(_)
-			| Error::StartOutOfRange
-			| Error::NothingToKeep
-			| Error::NameStaged
-			| Error::NoManifest
-			| Error::ScenesUnreadable(_)
-			| Error::ExportInsideProject => None,
 			Error::ExportStopped { cause, .. } => Some(cause.as_ref()),
 			Error::Trash(e) => Some(e),
 			Error::Git(e) => Some(e),
 			Error::Io(e) => Some(e),
 			Error::Json(e) => Some(e),
+			_ => None,
 		}
 	}
 }
@@ -977,6 +936,16 @@ fn resolve_last(store_path: &Path) -> Result<LastProject> {
 	}
 }
 
+/// Drops what the store keeps for folders that no longer exist. Saves only
+/// when something went.
+fn prune_gone(store_path: &Path) -> Result<()> {
+	let mut store = store::load(store_path)?;
+	if store.prune(Path::exists) {
+		store::save(store_path, &store)?;
+	}
+	Ok(())
+}
+
 fn forget(store_path: &Path, root: &Path) -> Result<()> {
 	let mut store = store::load(store_path)?;
 	store.forget(root);
@@ -1082,13 +1051,13 @@ fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Resu
 
 /// Only projects that are still on disk, so the list never offers a button that
 /// cannot work.
-fn available_recents(store_path: &Path) -> Result<Vec<store::RecentProject>> {
-	let store = store::load(store_path)?;
-	Ok(store
+fn available_recents(store: &store::Store) -> Vec<store::RecentProject> {
+	store
 		.recent
-		.into_iter()
+		.iter()
 		.filter(|project| project.root.join(MANIFEST_FILE).is_file())
-		.collect())
+		.cloned()
+		.collect()
 }
 
 /// A book as the welcome screen shows it: where it is and when it was last
@@ -1125,8 +1094,6 @@ pub struct RecentSummary {
 	pub left_off: Option<String>,
 }
 
-/// Every word in a project. Nothing caches this, so it opens each document
-/// once and keeps only the count.
 /// What the welcome screen says about a project. All of it comes out of one
 /// read of the manifest, since nothing ever wants only part of it.
 struct Measure {
@@ -1273,7 +1240,7 @@ fn summarise_recents(store_path: &Path) -> Result<Vec<RecentSummary>> {
 	let mut seen = HashSet::new();
 	let mut shelf = Vec::new();
 
-	for project in available_recents(store_path)? {
+	for project in available_recents(&store) {
 		let real = on_disk(&project.root);
 		if !seen.insert(real.clone()) {
 			continue;
@@ -1320,7 +1287,10 @@ pub fn recent_projects(app: AppHandle) -> Result<Vec<RecentSummary>> {
 
 #[tauri::command]
 pub fn last_project(app: AppHandle) -> Result<LastProject> {
-	resolve_last(&store_path(&app)?)
+	let store = store_path(&app)?;
+	// Tidying is not worth stopping a launch for.
+	let _ = prune_gone(&store);
+	resolve_last(&store)
 }
 
 #[tauri::command]
@@ -2786,7 +2756,7 @@ mod tests {
 		close(&store).unwrap();
 
 		assert_eq!(resolve_last(&store).unwrap(), LastProject::None);
-		assert_eq!(available_recents(&store).unwrap().len(), 1);
+		assert_eq!(available_recents(&store::load(&store).unwrap()).len(), 1);
 	}
 
 	#[test]
@@ -3076,7 +3046,7 @@ mod tests {
 
 		let err = open_and_remember(&store, &root, fixed_time()).unwrap_err();
 		assert!(matches!(err, Error::UnsupportedVersion { .. }));
-		assert!(available_recents(&store).unwrap().is_empty());
+		assert!(available_recents(&store::load(&store).unwrap()).is_empty());
 	}
 
 	#[test]
@@ -3108,7 +3078,7 @@ mod tests {
 		.unwrap();
 		fs::remove_dir_all(&gone).unwrap();
 
-		let recents = available_recents(&store).unwrap();
+		let recents = available_recents(&store::load(&store).unwrap());
 		assert_eq!(recents.len(), 1);
 		assert_eq!(recents[0].name, "Penelope");
 	}
@@ -3235,6 +3205,24 @@ mod tests {
 			beside: None,
 		};
 		assert_eq!(left_off(&nothing_open, &nodes), None);
+	}
+
+	#[test]
+	fn the_store_forgets_tabs_for_a_folder_that_is_gone() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let there = parent.path().join("there");
+		let gone = parent.path().join("gone");
+		fs::create_dir(&there).unwrap();
+		let mut loaded = store::load(&store).unwrap();
+		loaded.expanded.insert(there.clone(), Vec::new());
+		loaded.expanded.insert(gone, Vec::new());
+		store::save(&store, &loaded).unwrap();
+
+		prune_gone(&store).unwrap();
+
+		let kept = store::load(&store).unwrap();
+		assert_eq!(kept.expanded.keys().collect::<Vec<_>>(), vec![&there]);
 	}
 
 	/// A projects folder inside `parent`, set in the store.

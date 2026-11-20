@@ -156,7 +156,7 @@ export type MentionResults = {
  * Its own page is skipped: a character page is full of her name and saying so
  * on the page itself would be no use. Tags are matched against the same names
  * and with the same case sensitivity as the prose, so a document tagged `elena`
- * is not Elena's until step 12 decides otherwise.
+ * is not counted as Elena's.
  */
 export function mentionsIn(
 	subject: Subject,

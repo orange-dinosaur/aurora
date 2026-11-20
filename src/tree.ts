@@ -247,6 +247,15 @@ export function folderOf(nodes: TreeNode[], id: string): FolderNode | null {
 	return null;
 }
 
+/** `open` without the folders the tree no longer has, so a deleted folder's id
+ * is not kept for good. */
+export function pruned(
+	open: ReadonlySet<string>,
+	nodes: TreeNode[],
+): ReadonlySet<string> {
+	return new Set([...open].filter((id) => folderOf(nodes, id) !== null));
+}
+
 /** What a tab needs to open the folder with this id, as the sidebar builds it. */
 export function folderRef(
 	nodes: TreeNode[],

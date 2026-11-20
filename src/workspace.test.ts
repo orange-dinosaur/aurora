@@ -319,4 +319,8 @@ describe("locate", () => {
 	test("lands at the end when the text has shrunk", () => {
 		expect(locate([5, 3], 40)).toEqual({ run: 1, offset: 3 });
 	});
+
+	test("finds nothing in an empty list", () => {
+		expect(locate([], 4)).toBeNull();
+	});
 });

@@ -207,6 +207,12 @@ export default function Tabs({
 									<Icon name={mark} className="tab__mark" />
 								)}
 								{tab.title}
+								{tab.dirty && (
+									<span className="visually-hidden">
+										{" "}
+										(unsaved)
+									</span>
+								)}
 							</button>
 							<button
 								type="button"

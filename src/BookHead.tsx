@@ -39,7 +39,7 @@ type Props = BookProps & {
 	/** Writes every open tab, so asking what is not in a checkpoint sees it. */
 	onBeforeSwitch: () => Promise<void>;
 	/** Runs a switch the way put back runs, catching the tabs up after it. */
-	onSwitch: (task: () => Promise<unknown>) => Promise<void>;
+	onSwitch: (task: () => Promise<unknown>) => Promise<boolean>;
 	/** Reads the merge again after a switch or a merge from here. */
 	onMergeChanged: () => Promise<void>;
 };
@@ -74,8 +74,8 @@ export default function BookHead({
 	// Whether there are changes the writer has to decide about first. With
 	// none, the switch or the merge is already under way.
 	async function choose(slug: string, merge: boolean): Promise<boolean> {
-		await onBeforeSwitch();
 		try {
+			await onBeforeSwitch();
 			if (await invoke<boolean>("changes_pending", { root })) {
 				return true;
 			}

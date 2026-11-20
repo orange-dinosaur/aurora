@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MERGE_HOLDS } from "./branches";
+import { counted } from "./cards";
 
 /** Sets a target. Rejects when it was refused, so the field stays open. */
 export type Aim = (target: number | null) => void | Promise<void>;
@@ -18,13 +19,12 @@ type Props = {
 
 /** The words half of the status line: how many there are, and how many are wanted. */
 export function reading(words: number, target: number | null): string {
-	const counted = words.toLocaleString();
-	if (target === null) {
-		return words === 1 ? "1 word" : `${counted} words`;
+	if (target === null || target <= 0) {
+		return counted(words, null);
 	}
 
 	const share = Math.round((words / target) * 100);
-	return `${counted} of ${target.toLocaleString()} words · ${share}%`;
+	return `${counted(words, target)} · ${share}%`;
 }
 
 /**

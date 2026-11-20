@@ -477,17 +477,18 @@ export function custom(fields: Fields): string[] {
  * suggest, so the same field ends up spelled the same way on every page.
  */
 export function fieldNames(texts: string[]): string[] {
-	const names: string[] = [];
+	return pooled(texts.map((file) => custom(parse(split(file).block))));
+}
 
-	for (const file of texts) {
-		for (const key of custom(parse(split(file).block))) {
-			if (!names.includes(key)) {
-				names.push(key);
-			}
+/** Lists of field names as one list: each name once, in alphabetical order. */
+export function pooled(lists: Iterable<string[]>): string[] {
+	const names = new Set<string>();
+	for (const list of lists) {
+		for (const key of list) {
+			names.add(key);
 		}
 	}
-
-	return names.sort((one, other) => one.localeCompare(other));
+	return [...names].sort((one, other) => one.localeCompare(other));
 }
 
 /** The fields a front matter block sets, fences and all. */

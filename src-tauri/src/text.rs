@@ -22,11 +22,12 @@ const WIDTH: usize = 72;
 pub fn text(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
 	let mut blocks = Vec::new();
 
-	if !book.title.is_empty() {
-		blocks.push(book.title.clone());
+	let (called, author) = (book.title.trim(), book.author.trim());
+	if !called.is_empty() {
+		blocks.push(called.to_owned());
 	}
-	if !book.author.is_empty() {
-		blocks.push(format!("by {}", book.author));
+	if !author.is_empty() {
+		blocks.push(author.to_owned());
 	}
 
 	for scene in &compiled.front {
@@ -340,7 +341,7 @@ mod tests {
 		assert_eq!(
 			text(&book, &compiled, &prose),
 			format!(
-				"Ithaca\n\nby Ada Lovelace\n\n\nDedication\n\nFor Penelope.\n\n\nBook One\n\n\n\
+				"Ithaca\n\nAda Lovelace\n\n\nDedication\n\nFor Penelope.\n\n\nBook One\n\n\n\
 				 Arrival\n\nThe ship came in.\n\n{}\n\nNobody knew him.\n\n\nHome\n\nHe was home.\n",
 				centred_hash()
 			)
@@ -363,6 +364,10 @@ mod tests {
 		assert_eq!(
 			text(&Book::new(""), &Compiled::default(), &Prose::new()),
 			""
+		);
+		assert_eq!(
+			text(&Book::new(" "), &compiled, &prose),
+			"Home\n\nHe was home.\n"
 		);
 	}
 

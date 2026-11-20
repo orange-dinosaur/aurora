@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { creatable, folderKinds, mayHold } from "./kinds";
+import { creatable, documentPlaceholder, folderKinds, mayHold } from "./kinds";
 import type { FolderKind } from "./types";
 
 /** What the + would offer, written the way the menu reads. */
@@ -150,5 +150,13 @@ describe("what a folder may hold", () => {
 		["nowhere else takes matter", false, null, "front-matter", false],
 	] as const)("%s", (_what, inManuscript, parent, kind, allowed) => {
 		expect(mayHold(inManuscript, parent, kind)).toBe(allowed);
+	});
+});
+
+describe("what a rename field suggests for a document", () => {
+	test("a scene in the Manuscript, a document elsewhere", () => {
+		expect(documentPlaceholder("Manuscript")).toBe("Scene 2");
+		expect(documentPlaceholder("Notes")).toBe("Ideas");
+		expect(documentPlaceholder(undefined)).toBe("Ideas");
 	});
 });

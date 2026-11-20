@@ -132,10 +132,15 @@ export function lineOf(
 
 /** The hits in one document's prose, in reading order. */
 function hitsIn(runs: Run[], query: string): Hit[] {
+	const found = matches(runs, query);
+	if (found.length === 0) {
+		return [];
+	}
+
 	const located = locate(runs);
 	const hits: Hit[] = [];
 
-	for (const match of matches(runs, query)) {
+	for (const match of found) {
 		const where = lineOf(located, match);
 		if (where !== null) {
 			hits.push({ ordinal: hits.length, ...where });

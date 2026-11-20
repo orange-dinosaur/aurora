@@ -1214,8 +1214,7 @@ body,
 }
 
 /* Lines to write on, like the sprint field and a new version's name. */
-.dialog__input,
-.dialog__folder {
+.dialog__input {
 	display: block;
 	width: 100%;
 	margin-top: var(--space-xxs);
@@ -1229,22 +1228,10 @@ body,
 	border-radius: 0;
 }
 
-.dialog__input:focus,
-.dialog__folder:focus-visible {
+.dialog__input:focus {
 	outline: none;
 	border-bottom-color: var(--accent-text);
 	box-shadow: 0 1px 0 var(--accent-text);
-}
-
-.dialog__folder {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	cursor: pointer;
-}
-
-.dialog__folder:hover {
-	border-bottom-color: var(--accent-text);
 }
 
 /* A folder and the Change… beside it, in the labels' type. A long path wraps
@@ -3995,12 +3982,6 @@ button.compare__pick:focus-visible {
 	margin-left: auto;
 }
 
-/* The foot sits on the window's edge, so the question opens upward. */
-.compare__acts .menu__items {
-	top: auto;
-	bottom: calc(100% + var(--space-xxs));
-}
-
 .compare__take {
 	padding: 5px var(--space-sm);
 	font: inherit;
@@ -4376,6 +4357,11 @@ button.compare__pick:focus-visible {
 	font-size: 0.6875rem;
 	line-height: 1.4;
 	color: var(--text-dim);
+}
+
+/* A line that is kept whether or not it has something to say. */
+.field__hint--held {
+	min-height: 1.4em;
 }
 
 .field__box,
@@ -6348,16 +6334,6 @@ button.compare__pick:focus-visible {
 	box-shadow: var(--shadow-float);
 }
 
-.editor__find-step {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	padding: 0;
-	border-radius: var(--radius-xs);
-}
-
 .menu {
 	position: absolute;
 }
@@ -6448,16 +6424,6 @@ button.compare__pick:focus-visible {
 	cursor: default;
 }
 
-.menu__items {
-	position: absolute;
-	top: 100%;
-	right: 0;
-	z-index: 5;
-	display: flex;
-	flex-direction: column;
-	min-width: 8rem;
-}
-
 /* Opened at the pointer: placed against the window rather than a trigger,
    over everything but a dialog. */
 .menu__items.menu__items--pointer {
@@ -6469,9 +6435,16 @@ button.compare__pick:focus-visible {
 	transform-origin: top left;
 }
 
-/* A menu listing folders can run past the window, so it scrolls rather than
-   growing off the bottom of a deep project. */
+/* Hangs under its trigger. A menu listing folders can run past the window, so
+   it scrolls rather than growing off the bottom of a deep project. */
 .menu__items {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	min-width: 8rem;
 	max-height: 60vh;
 	padding: var(--space-xxs);
 	font: var(--text-ui);
@@ -6522,7 +6495,10 @@ button.compare__pick:focus-visible {
 	transform-origin: bottom left;
 }
 
+/* The foot sits on the window's edge, so the question opens upward. */
 .compare__acts .menu__items {
+	top: auto;
+	bottom: calc(100% + var(--space-xxs));
 	transform-origin: bottom right;
 }
 
@@ -7522,6 +7498,13 @@ button.compare__pick:focus-visible {
 }
 
 .editor__find-step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border-radius: var(--radius-xs);
 	font: inherit;
 	color: var(--text);
 	background: none;
@@ -7810,8 +7793,13 @@ button.compare__pick:focus-visible {
 	overflow-wrap: anywhere;
 }
 
+.scrim:has(> .settings) {
+	padding: var(--space-md);
+}
+
 /* The dim over the app while a dialog is open, and the thing that catches a
-   click aimed at nothing in particular. */
+   click aimed at nothing in particular. The opacity sits on the scrim, so the
+   blur fades with it and the dialog needs only its scale. */
 .scrim {
 	position: fixed;
 	inset: 0;
@@ -7822,15 +7810,6 @@ button.compare__pick:focus-visible {
 	padding: 3rem;
 	background: var(--scrim);
 	backdrop-filter: blur(2px);
-}
-
-.scrim:has(> .settings) {
-	padding: var(--space-md);
-}
-
-/* The opacity sits on the scrim, so the blur fades with it and the dialog
-   needs only its scale. */
-.scrim {
 	transition: opacity 200ms var(--ease-open);
 }
 
@@ -8510,17 +8489,6 @@ button.compare__pick:focus-visible {
 	letter-spacing: normal;
 }
 
-/* A line of its own is underlined. Only what runs to several lines needs edges
-   to type inside. */
-.book__pick {
-	padding: 4px 0;
-	font: var(--text-ui);
-	background: none;
-	border: 0;
-	border-bottom: 1px solid var(--graphic-faint);
-	border-radius: 0;
-}
-
 .book__pick:focus-visible {
 	outline: none;
 	border-bottom-color: var(--accent-text);
@@ -8609,8 +8577,14 @@ button.compare__pick:focus-visible {
 
 /* Shaped like the lines above it rather than like a menu trigger: it is one
    more field, and only answers from a list because a language tag is not
-   something to be typed by hand. */
+   something to be typed by hand. A line of its own is underlined. */
 .book__pick {
+	padding: 4px 0;
+	font: var(--text-ui);
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--graphic-faint);
+	border-radius: 0;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;

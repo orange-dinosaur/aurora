@@ -159,11 +159,17 @@ export default function Info({
 				names={names.filter((name) => !own.includes(name))}
 				onAsk={ask}
 				// A name Aurora already has a control for, or one this document
-				// carries, is ignored: the field is on the page either way.
+				// carries, is refused with the reason: the field is on the
+				// page either way.
 				onAdd={(name) => {
-					if (!BUILT_IN.includes(name) && !fields.has(name)) {
-						setField(name, "");
+					if (name === "names" && !subject) {
+						return "Only subject pages have names";
 					}
+					if (BUILT_IN.includes(name) || fields.has(name)) {
+						return "Already on this page";
+					}
+					setField(name, "");
+					return null;
 				}}
 			/>
 		</>

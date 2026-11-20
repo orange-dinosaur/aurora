@@ -142,6 +142,14 @@ export function folderPlaceholder(kind: FolderKind | null): string {
 }
 
 /**
+ * What an empty rename field suggests for a document in this section: a scene
+ * in the Manuscript, a plain document anywhere else.
+ */
+export function documentPlaceholder(section: string | undefined): string {
+	return (section === MANUSCRIPT ? SCENE : DOCUMENT).placeholder;
+}
+
+/**
  * Whether a folder of this kind may sit inside a folder that is itself
  * `parent`, where `inManuscript` says whether that folder is the Manuscript or
  * sits somewhere under it. Rust holds the same rules in `tree::may_hold` and

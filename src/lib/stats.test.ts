@@ -96,11 +96,12 @@ describe("what a document has gained", () => {
 			}),
 		];
 
-		expect(today(history, typed("scene", 25), "scene", NOON)).toEqual({
+		const todays = onDay(history, NOON);
+		expect(today(todays, typed("scene", 25), "scene")).toEqual({
 			automatic: 65,
 			deliberate: 60,
 		});
-		expect(today(history, IDLE, "notes", NOON)).toEqual({
+		expect(today(todays, IDLE, "notes")).toEqual({
 			automatic: 0,
 			deliberate: 15,
 		});
@@ -109,7 +110,7 @@ describe("what a document has gained", () => {
 	test("a session that touched no document adds nothing", () => {
 		const history = [past("automatic", at(4, 9), {})];
 
-		expect(today(history, IDLE, "scene", NOON)).toEqual({
+		expect(today(onDay(history, NOON), IDLE, "scene")).toEqual({
 			automatic: 0,
 			deliberate: 0,
 		});
@@ -334,7 +335,7 @@ describe("the project's day, across the three numbers", () => {
 			}),
 		];
 
-		expect(dayTally(history, IDLE, 0, NOON)).toEqual({
+		expect(dayTally(onDay(history, NOON), IDLE, 0, NOON)).toEqual({
 			automatic: { written: 600, removed: 40, net: 560 },
 			deliberate: { written: 300, removed: 20, net: 280 },
 		});

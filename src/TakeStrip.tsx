@@ -21,7 +21,7 @@ type Props = {
 	onChoose: (take: string) => void;
 	onTry: () => void;
 	/** Rejects with what Rust made of the name, which the field shows. */
-	onRename: (take: string, name: string) => Promise<void>;
+	onRename: (take: string, name: string) => Promise<unknown>;
 	onDelete: (take: string) => void;
 };
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { contextOf, type Context } from "./context";
 import { useCorpus } from "./corpus";
 import type { Seed } from "./lib/find";
@@ -117,20 +117,27 @@ export default function Search({
 		}
 	}, [asked, active]);
 
+	// The field answers every keystroke at once; the sweep over the whole
+	// project follows when there is time, and what is drawn is about this.
+	const shown = useDeferredValue(query);
 	const results = useMemo(
-		() => (corpus.kind === "ready" ? search(documents, query) : null),
-		[corpus.kind, documents, query],
+		() => (corpus.kind === "ready" ? search(documents, shown) : null),
+		[corpus.kind, documents, shown],
 	);
 
 	// Choices made against an older query are not choices about these results.
-	const view = opened.query === query ? opened : FRESH;
+	const view = opened.query === shown ? opened : FRESH;
 
 	function collapse(id: string) {
-		setOpened({ ...view, query, collapsed: toggled(view.collapsed, id) });
+		setOpened({
+			...view,
+			query: shown,
+			collapsed: toggled(view.collapsed, id),
+		});
 	}
 
 	function showAll(id: string) {
-		setOpened({ ...view, query, full: new Set(view.full).add(id) });
+		setOpened({ ...view, query: shown, full: new Set(view.full).add(id) });
 	}
 
 	// A row that is on screen came out of the corpus, so its document is in
@@ -227,7 +234,7 @@ export default function Search({
 															<Line
 																{...inTitle(
 																	group.title,
-																	query,
+																	shown,
 																)}
 															/>
 														</span>
@@ -245,7 +252,7 @@ export default function Search({
 														className="search__hit"
 														onClick={() =>
 															openTab(group.id, {
-																query,
+																query: shown,
 																ordinal:
 																	hit.ordinal,
 															})

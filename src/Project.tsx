@@ -440,9 +440,6 @@ export default function Project({
 		return () => watcher.disconnect();
 	}, []);
 
-	// The drag leaves pixels on the element. Put a share back, so the sides
-	// keep their proportion as the window changes, even when the share comes
-	// out the same and React would see nothing to write.
 	// The tab or binder row being dragged toward the page, and the zone it is
 	// over.
 	const [dragged, setDragged] = useState<Dragged | null>(null);
@@ -452,6 +449,9 @@ export default function Project({
 		setZone(null);
 	}
 
+	// The drag leaves pixels on the element. Put a share back, so the sides
+	// keep their proportion as the window changes, even when the share comes
+	// out the same and React would see nothing to write.
 	function divide(splitShare: number) {
 		panes.current?.style.setProperty("--split", `${splitShare}%`);
 		onPreferences({ ...preferences, splitShare });
@@ -750,7 +750,13 @@ export default function Project({
 	async function keep(step: Step) {
 		sessions.current = step.sessions;
 		setDeliberate(step.sessions.deliberate);
-		const due = [...unrecorded.current, ...step.closed.map(recorded)];
+		const worth = step.closed.filter(
+			(session) =>
+				session.layer === "deliberate" ||
+				session.written > 0 ||
+				session.removed > 0,
+		);
+		const due = [...unrecorded.current, ...worth.map(recorded)];
 		unrecorded.current = [];
 		if (due.length === 0) {
 			return;
@@ -807,7 +813,7 @@ export default function Project({
 
 	// What the clock alone has closed. The titlebar asks every second while a
 	// session is running, so a sprint on minutes ends at its deadline rather
-	// than at the next beat of the minute timer above.
+	// than at the next beat of the minute timer below.
 	function tickSession() {
 		void keep(tick(sessions.current, Date.now(), words.current, gap));
 	}
@@ -828,8 +834,9 @@ export default function Project({
 		return () => window.clearInterval(beat);
 	}, [root, gap]);
 
-	// The tabs, the idle gap and the preferences as they stand now. The handlers below are
-	// registered once and would otherwise go on seeing what they were born with.
+	// The tabs, the idle gap and the preferences as they stand now. The
+	// handlers below are registered once and would otherwise go on seeing
+	// what they were born with.
 	const latest = useRef(tabs);
 	const idle = useRef(gap);
 	const held = useRef(preferences);
@@ -1391,8 +1398,11 @@ export default function Project({
 	// thrown back to the surface that asked, after the tabs have caught up with
 	// whatever part of it did happen.
 	// With a target, asks first when the put back would write over changes
-	// not in a checkpoint. A switch passes none.
-	async function putBack(task: () => Promise<unknown>, target?: Overwrites) {
+	// not in a checkpoint. A switch passes none. False when the writer declined.
+	async function putBack(
+		task: () => Promise<unknown>,
+		target?: Overwrites,
+	): Promise<boolean> {
 		await allWritten();
 		if (target !== undefined) {
 			const names = overwritten(
@@ -1405,7 +1415,7 @@ export default function Project({
 				);
 				setAsking(null);
 				if (!go) {
-					return;
+					return false;
 				}
 			}
 		}
@@ -1414,6 +1424,7 @@ export default function Project({
 		} finally {
 			await caughtUp();
 		}
+		return true;
 	}
 
 	async function caughtUp() {
@@ -1837,8 +1848,10 @@ export default function Project({
 	// first so the copy in the trash is the one they were looking at, then the
 	// file moves, then the tab goes. A failure is thrown back to the surface,
 	// which has somewhere to show it.
-	// Writes a document's tab down before its file is taken away, and hands
-	// back the tab so the caller can close it once the file has gone.
+	//
+	// This is the first part: it writes a document's tab down before its file
+	// is taken away, and hands back the tab so the caller can close it once
+	// the file has gone.
 	async function settle(id: string) {
 		const tab = documentTab(id);
 		stopTimer(id);

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { removesNote } from "./lib/versions";
-import { MenuItem, useDismissal } from "./Menu";
+import { focusWasLeft, MenuItem, useDismissal, walkMenu } from "./Menu";
 
 type Props = {
 	className: string;
@@ -28,6 +28,7 @@ export default function PutBack({
 	const [names, setNames] = useState<string[] | null>(null);
 	const wrapper = useRef<HTMLDivElement>(null);
 	const items = useRef<HTMLDivElement>(null);
+	const opener = useRef<HTMLButtonElement>(null);
 	const note = useRef<HTMLParagraphElement>(null);
 	const asking = names !== null;
 
@@ -36,10 +37,17 @@ export default function PutBack({
 	// The note claims the keyboard rather than a button, so Enter puts nothing
 	// back. Both surfaces scroll, so one near the bottom opens past the edge.
 	useEffect(() => {
-		if (asking) {
-			items.current?.scrollIntoView({ block: "nearest" });
-			note.current?.focus();
+		if (!asking) {
+			return;
 		}
+		const list = items.current;
+		list?.scrollIntoView({ block: "nearest" });
+		note.current?.focus();
+		return () => {
+			if (focusWasLeft(list)) {
+				opener.current?.focus();
+			}
+		};
 	}, [asking]);
 
 	// A second click while the first is still counting what a put back would
@@ -68,6 +76,7 @@ export default function PutBack({
 	return (
 		<div ref={wrapper} className="putback">
 			<button
+				ref={opener}
 				type="button"
 				className={className}
 				disabled={disabled === true || onPutBack === null}
@@ -76,7 +85,12 @@ export default function PutBack({
 				{children}
 			</button>
 			{names !== null && (
-				<div ref={items} className="menu__items" role="menu">
+				<div
+					ref={items}
+					className="menu__items"
+					role="menu"
+					onKeyDown={(event) => walkMenu(event, () => setNames(null))}
+				>
 					<p ref={note} className="takes__note" tabIndex={-1}>
 						{removesNote(names)}
 					</p>

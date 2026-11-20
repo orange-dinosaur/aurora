@@ -756,7 +756,7 @@ fn title_page(book: &Book) -> Vec<String> {
 	let mut page = vec![paragraph("BookTitle", &run(title_of(book), plain))];
 	let author = book.author.trim();
 	if !author.is_empty() {
-		page.push(paragraph("Byline", &run(&format!("by {author}"), plain)));
+		page.push(paragraph("Byline", &run(author, plain)));
 	}
 	page
 }
@@ -1005,6 +1005,17 @@ mod tests {
 
 	use super::*;
 	use crate::book::Part;
+
+	#[test]
+	fn the_title_page_names_the_author_without_a_by() {
+		let mut book = Book::new("Ithaca");
+		book.author = "Ada Lovelace".to_owned();
+
+		let page = title_page(&book).concat();
+
+		assert!(page.contains("Ada Lovelace"));
+		assert!(!page.contains("by "));
+	}
 
 	/// A run of `text` with nothing set on it.
 	fn plain(text: &str) -> String {

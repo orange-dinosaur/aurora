@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AccountChip } from "./Account";
 import Icon from "./Icon";
 import Session from "./Session";
 import { SEARCH, SESSION, shortcutLabel } from "./formatting";
-import { dayTally } from "./lib/stats";
+import { dayTally, onDay } from "./lib/stats";
 import type { Limit, Running, Sessions } from "./sessions";
 import ThemeToggle from "./ThemeToggle";
 import type { Merging, PastSession, SprintUnit, Theme } from "./types";
@@ -184,12 +184,22 @@ function Today({
 		};
 	}, [root, logged]);
 
+	// Worked out again only when something it reads changes, with the day in
+	// the list so the count starts over at midnight.
+	const at = Date.now();
+	const day = new Date(at).toDateString();
+	const written = useMemo(
+		() =>
+			history === null
+				? 0
+				: dayTally(onDay(history, at), sessions, words, at).automatic
+						.written,
+		[history, sessions, words, day],
+	);
+
 	if (history === null) {
 		return null;
 	}
-
-	const at = Date.now();
-	const { written } = dayTally(history, sessions, words, at).automatic;
 
 	return (
 		<span

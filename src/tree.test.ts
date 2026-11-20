@@ -8,6 +8,7 @@ import {
 	folderOf,
 	inManuscript,
 	inside,
+	pruned,
 	rows,
 	sections,
 	wordsIn,
@@ -558,6 +559,27 @@ describe("counting a whole project", () => {
 
 	test("a project with nothing in it holds no words", () => {
 		expect(wordsIn([])).toBe(0);
+	});
+});
+
+describe("forgetting folders that have gone", () => {
+	const tree = [folder("Manuscript", [folder("Part One")])];
+
+	test("an open folder the tree no longer has is dropped", () => {
+		const open = new Set(["id-Manuscript", "id-Gone", "id-Part One"]);
+
+		expect([...pruned(open, tree)].sort()).toEqual([
+			"id-Manuscript",
+			"id-Part One",
+		]);
+	});
+
+	test("an id that names a document is dropped too", () => {
+		const withDocument = [folder("Notes", [document("Notes/Ideas.md")])];
+
+		expect([
+			...pruned(new Set(["id-Notes/Ideas.md"]), withDocument),
+		]).toEqual([]);
 	});
 });
 

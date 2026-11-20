@@ -14,7 +14,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { failure } from "./errors";
-import { list, parse, split } from "./frontmatter";
+import { custom, list, parse, split } from "./frontmatter";
 import type { Mentionable } from "./lib/mentions";
 import { runsOf } from "./runs";
 import { timed } from "./timing";
@@ -32,6 +32,8 @@ export type Corpus =
 			 * the read that found it left one.
 			 */
 			known: Map<string, ProjectDocument>;
+			/** The names of the fields each document sets beyond the built-in ones. */
+			keys: Map<string, string[]>;
 	  }
 	| { kind: "failed"; message: string };
 
@@ -60,6 +62,11 @@ function readIn(text: string | null): {
 	};
 }
 
+/** The names of a document's own fields, for the Add field box to suggest. */
+function keysOf(text: string | null): string[] {
+	return text === null ? [] : custom(parse(split(text).block));
+}
+
 /** Reads every document in the project and parses it, or says why it could not. */
 async function sweep(root: string): Promise<Corpus> {
 	try {
@@ -82,6 +89,7 @@ async function sweep(root: string): Promise<Corpus> {
 					document,
 				]),
 			),
+			keys: new Map(documents.map(({ id, text }) => [id, keysOf(text)])),
 		};
 	} catch (error) {
 		return { kind: "failed", message: failure(error).message };
@@ -199,6 +207,7 @@ export function filed(root: string, id: string, text: string): void {
 		documents: held.corpus.documents.map((document) =>
 			document.id === id ? { ...document, ...readIn(text) } : document,
 		),
+		keys: new Map(held.corpus.keys).set(id, keysOf(text)),
 	});
 }
 

@@ -1,7 +1,7 @@
 // Everything Aurora can do to a piece of text, declared once. The bar that
-// floats over a selection reads from here, and so will the bar under the title
-// and the slash menu — so none of them can offer different things, or disagree
-// about what the caret is already inside.
+// floats over a selection, the bar under the title and the slash menu all read
+// from here, so none of them offers different things or disagrees about what
+// the caret is already inside.
 
 import { $createHorizontalRuleNode } from "@lexical/extension";
 import {
@@ -235,7 +235,6 @@ export const INSERTS: Action[] = [
 /** Everything a key press could be asking for, marks first. */
 export const ACTIONS: Action[] = [...MARKS, ...BLOCKS, ...INSERTS];
 
-/** Whether a key press is asking for this shortcut, and nothing else. */
 /** Whether the key that was pressed was pressed into a field. The manuscript
  * is left out on purpose: it is editable too, but it is what the writer is
  * looking at, and a key that works anywhere should work from it. A name being
@@ -247,6 +246,7 @@ export function inAField(target: EventTarget | null): boolean {
 	);
 }
 
+/** Whether a key press is asking for this shortcut, and nothing else. */
 export function pressed(event: KeyboardEvent, keys: Keys): boolean {
 	const command = IS_APPLE ? event.metaKey : event.ctrlKey;
 	const wrong = IS_APPLE ? event.ctrlKey : event.metaKey;

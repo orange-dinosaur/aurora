@@ -11,7 +11,6 @@ import {
 	leftLabel,
 	named,
 	nextOpen,
-	paragraphs,
 	settled,
 	spotCount,
 	spotsLeft,
@@ -216,14 +215,5 @@ describe("fields", () => {
 		expect(fieldText([{ name: "Ana", role: "translator" }])).toBe(
 			"Ana, translator",
 		);
-	});
-});
-
-describe("paragraphs", () => {
-	it("parts text on blank lines and drops the empty ones", () => {
-		expect(paragraphs("\nOne.\nstill one.\n\n \nTwo.\n\n")).toEqual([
-			"One.\nstill one.",
-			"Two.",
-		]);
 	});
 });

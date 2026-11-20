@@ -126,7 +126,7 @@ export function reopen(
 export function locate(
 	lengths: number[],
 	offset: number,
-): { run: number; offset: number } {
+): { run: number; offset: number } | null {
 	let left = Math.max(0, offset);
 	for (const [run, length] of lengths.entries()) {
 		if (left <= length) {
@@ -134,8 +134,11 @@ export function locate(
 		}
 		left -= length;
 	}
+	if (lengths.length === 0) {
+		return null;
+	}
 	const last = lengths.length - 1;
-	return { run: last, offset: lengths[last] ?? 0 };
+	return { run: last, offset: lengths[last] };
 }
 
 function reopened(

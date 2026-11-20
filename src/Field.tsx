@@ -368,13 +368,17 @@ type AddProps = {
 	names: string[];
 	/** Read those names, which is put off until the box is used. */
 	onAsk: () => void;
-	onAdd: (name: string) => void;
+	/** Null when the field was added, otherwise why it was not. */
+	onAdd: (name: string) => string | null;
 };
 
 /** The box that gives a document a field of the writer's own. */
 export function AddField({ names, onAsk, onAdd }: AddProps) {
 	const [draft, setDraft] = useState("");
 	const [open, setOpen] = useState(false);
+	// Why the last name was refused. The line is always there, so saying it
+	// moves nothing.
+	const [refused, setRefused] = useState<string | null>(null);
 
 	const wanted = draft.trim().toLowerCase();
 	const offered = names
@@ -383,8 +387,13 @@ export function AddField({ names, onAsk, onAdd }: AddProps) {
 
 	function add(name: string) {
 		if (name.trim() !== "") {
-			onAdd(name.trim());
+			const reason = onAdd(name.trim());
+			if (reason !== null) {
+				setRefused(reason);
+				return;
+			}
 		}
+		setRefused(null);
 		setDraft("");
 	}
 
@@ -401,7 +410,10 @@ export function AddField({ names, onAsk, onAdd }: AddProps) {
 					setOpen(true);
 					onAsk();
 				}}
-				onChange={(event) => setDraft(event.target.value)}
+				onChange={(event) => {
+					setDraft(event.target.value);
+					setRefused(null);
+				}}
 				onKeyDown={(event) => {
 					if (event.key === "Enter") {
 						event.preventDefault();
@@ -409,13 +421,18 @@ export function AddField({ names, onAsk, onAdd }: AddProps) {
 					} else if (event.key === "Escape") {
 						event.preventDefault();
 						setDraft("");
+						setRefused(null);
 					}
 				}}
 				onBlur={() => {
 					setOpen(false);
 					setDraft("");
+					setRefused(null);
 				}}
 			/>
+			<span className="field__hint field__hint--held" role="status">
+				{refused}
+			</span>
 			{open && offered.length > 0 && (
 				<ul className="suggestions">
 					{offered.map((name) => (

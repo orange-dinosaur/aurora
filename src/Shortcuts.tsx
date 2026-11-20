@@ -1,6 +1,6 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { COMMAND_PRIORITY_NORMAL, KEY_DOWN_COMMAND } from "lexical";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
 	ACTIONS,
 	FIND,
@@ -33,6 +33,12 @@ export default function Shortcuts({
 	onReplace,
 }: Props) {
 	const [editor] = useLexicalComposerContext();
+	// The callbacks change with the preferences, and the handler is not
+	// registered again each time they do.
+	const held = useRef({ onToolbar, onOutline, onFind, onReplace });
+	useEffect(() => {
+		held.current = { onToolbar, onOutline, onFind, onReplace };
+	});
 
 	useEffect(
 		() =>
@@ -46,25 +52,25 @@ export default function Shortcuts({
 
 					if (pressed(event, TOOLBAR)) {
 						event.preventDefault();
-						onToolbar();
+						held.current.onToolbar();
 						return true;
 					}
 
 					if (pressed(event, OUTLINE)) {
 						event.preventDefault();
-						onOutline();
+						held.current.onOutline();
 						return true;
 					}
 
 					if (pressed(event, FIND)) {
 						event.preventDefault();
-						onFind();
+						held.current.onFind();
 						return true;
 					}
 
 					if (pressed(event, REPLACE)) {
 						event.preventDefault();
-						onReplace();
+						held.current.onReplace();
 						return true;
 					}
 
@@ -84,7 +90,7 @@ export default function Shortcuts({
 				// bold, italic and underline live.
 				COMMAND_PRIORITY_NORMAL,
 			),
-		[editor, onToolbar, onOutline, onFind, onReplace],
+		[editor],
 	);
 
 	return null;

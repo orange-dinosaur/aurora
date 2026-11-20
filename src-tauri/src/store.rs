@@ -341,6 +341,20 @@ impl Store {
 			self.forgotten.push(root.to_path_buf());
 		}
 	}
+
+	/// Drops what is kept about folders that `there` says are gone: the
+	/// forgotten list, the open and folded groups and the tabs. The recent
+	/// list is left for the shelf to filter. True when anything was dropped.
+	pub fn prune(&mut self, there: impl Fn(&Path) -> bool) -> bool {
+		let before =
+			self.forgotten.len() + self.expanded.len() + self.folded.len() + self.workspace.len();
+		self.forgotten.retain(|root| there(root));
+		self.expanded.retain(|root, _| there(root));
+		self.folded.retain(|root, _| there(root));
+		self.workspace.retain(|root, _| there(root));
+		before
+			!= self.forgotten.len() + self.expanded.len() + self.folded.len() + self.workspace.len()
+	}
 }
 
 /// Reads the store, treating both a missing and an unreadable file as empty.
@@ -1103,6 +1117,27 @@ mod tests {
 			None,
 			"one project's tabs are not another's"
 		);
+	}
+
+	#[test]
+	fn pruning_drops_what_is_kept_for_a_folder_that_has_gone() {
+		let mut store = Store::default();
+		let gone = PathBuf::from("/writing/Gone");
+		let here = PathBuf::from("/writing/Here");
+		for root in [&gone, &here] {
+			store.forgotten.push(root.clone());
+			store.expanded.insert(root.clone(), Vec::new());
+			store.folded.insert(root.clone(), Vec::new());
+			store.workspace.insert(root.clone(), left_open());
+		}
+
+		assert!(store.prune(|root| root == here));
+
+		assert_eq!(store.forgotten, vec![here.clone()]);
+		assert_eq!(store.expanded.keys().collect::<Vec<_>>(), vec![&here]);
+		assert_eq!(store.folded.keys().collect::<Vec<_>>(), vec![&here]);
+		assert_eq!(store.workspace.keys().collect::<Vec<_>>(), vec![&here]);
+		assert!(!store.prune(|root| root == here), "nothing left to drop");
 	}
 
 	#[test]

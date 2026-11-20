@@ -13,7 +13,8 @@ import {
 	type RefObject,
 } from "react";
 import { failure } from "./errors";
-import { split } from "./frontmatter";
+import { blocks } from "./lib/compare";
+import { draw, type Look } from "./Blocks";
 import { MenuItem, useDismissal } from "./Menu";
 import {
 	BINDER,
@@ -27,7 +28,6 @@ import {
 	leftLabel,
 	named,
 	nextOpen,
-	paragraphs,
 	settled,
 	spotCount,
 	spotsLeft,
@@ -39,6 +39,9 @@ import {
 } from "./lib/merge";
 import { fileKey, settleLines, type MergeUnderway } from "./lib/versions";
 import type { Conflict, Piece, TreeNode } from "./types";
+
+// Text with nothing washed over it.
+const plain: Look = () => "";
 
 type Props = {
 	root: string;
@@ -61,7 +64,7 @@ type Props = {
 	opener: RefObject<HTMLButtonElement | null>;
 	onBack: () => void;
 	/** Writes everything down, runs the task, and catches the tabs up. */
-	onSettle: (task: () => Promise<unknown>) => Promise<void>;
+	onSettle: (task: () => Promise<unknown>) => Promise<boolean>;
 	/** Reads the merge again once a document is settled. */
 	onMergeChanged: () => Promise<void>;
 };
@@ -478,19 +481,17 @@ export default function Merge({
 							<div className="merge__prose">
 								{numbered.map(({ piece, at }, index) => {
 									if (piece.kind === "clean") {
-										// The file's own fields are not prose.
-										const text =
-											index === 0
-												? split(piece.text).body
-												: piece.text;
-										return paragraphs(text).map(
-											(paragraph, n) => (
-												<p key={`${index}-${n}`}>
-													{paragraph}
-												</p>
-											),
+										// `blocks` leaves the file's own fields
+										// out, which are not prose.
+										return blocks(piece.text, []).map(
+											(block, n) => draw(block, n, plain),
 										);
 									}
+									const place = (
+										element: HTMLDivElement | null,
+									) => {
+										spots.current[at] = element;
+									};
 									const choice = chosen[at] ?? null;
 									return choice === null ? (
 										<Spot
@@ -504,13 +505,12 @@ export default function Merge({
 											onChoose={(choice) =>
 												choose(at, choice)
 											}
-											place={(element) => {
-												spots.current[at] = element;
-											}}
+											place={place}
 										/>
 									) : (
 										<Settled
 											key={index}
+											place={place}
 											text={settled(piece, choice)}
 											note={`Spot ${at + 1} · ${took(choice)} · `}
 											onChange={() => change(at)}
@@ -652,7 +652,7 @@ function Binder({
 	theirs: string;
 	/** What went wrong outside these cards, such as an abort. */
 	trouble: string | null;
-	onSettle: (task: () => Promise<unknown>) => Promise<void>;
+	onSettle: (task: () => Promise<unknown>) => Promise<boolean>;
 	onMergeChanged: () => Promise<void>;
 	onFinished: () => void;
 }) {
@@ -1086,17 +1086,17 @@ function Spot({
 function Settled({
 	text,
 	note,
+	place,
 	onChange,
 }: {
 	text: string;
 	note: string;
+	place: (element: HTMLDivElement | null) => void;
 	onChange: () => void;
 }) {
 	return (
-		<div className="merge__settled">
-			{paragraphs(text).map((paragraph, n) => (
-				<p key={n}>{paragraph}</p>
-			))}
+		<div ref={place} className="merge__settled">
+			{blocks(text, []).map((block, n) => draw(block, n, plain))}
 			<div className="merge__settled-note">
 				{note}
 				<button type="button" className="quiet" onClick={onChange}>

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import History from "./History";
 import Target, { type Aim } from "./Target";
 import { failure } from "./errors";
-import { dayTally, running, today, unexplained } from "./lib/stats";
+import { dayTally, onDay, running, today, unexplained } from "./lib/stats";
 import type { Tally } from "./lib/stats";
 import type { Sessions } from "./sessions";
 import { timed } from "./timing";
@@ -104,6 +104,10 @@ export default function Stats({
 	const [trouble, setTrouble] = useState<string | null>(null);
 	const counted = useMemo(() => words(prose(text)), [text]);
 	const id = folder?.id ?? null;
+	// Picked out of the history once a day rather than on every keystroke.
+	const at = Date.now();
+	const day = new Date(at).toDateString();
+	const todays = useMemo(() => onDay(history, at), [history, day]);
 
 	// Read when the tab opens and again whenever a session has been added to
 	// the file. Nothing else changes it.
@@ -178,10 +182,9 @@ export default function Stats({
 		);
 	}
 
-	const at = Date.now();
 	const now = running(sessions, page.id);
-	const day = today(history, sessions, page.id, at);
-	const project = dayTally(history, sessions, held, at);
+	const total = today(todays, sessions, page.id);
+	const project = dayTally(todays, sessions, held, at);
 
 	return (
 		<div className="stats">
@@ -206,8 +209,8 @@ export default function Stats({
 			    it leaves these numbers short. */}
 			{trouble === null && !unrecorded ? (
 				<>
-					<Layer name="Automatic" total={day.automatic} />
-					<Layer name="Session" total={day.deliberate} />
+					<Layer name="Automatic" total={total.automatic} />
+					<Layer name="Session" total={total.deliberate} />
 				</>
 			) : (
 				<p className="stats__trouble">

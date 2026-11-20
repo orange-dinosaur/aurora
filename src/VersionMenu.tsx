@@ -180,9 +180,11 @@ export default function VersionMenu({
 	}
 
 	function pick(slug: string, merge: boolean) {
-		void onChoose(slug, merge).then((ask) =>
-			ask ? setDoing({ kind: "switching", slug, merge }) : close(),
-		);
+		onChoose(slug, merge)
+			.then((ask) =>
+				ask ? setDoing({ kind: "switching", slug, merge }) : close(),
+			)
+			.catch((failed: unknown) => onFailure(failure(failed).message));
 	}
 
 	const others = versions.filter((version) => !version.current);

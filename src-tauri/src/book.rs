@@ -273,11 +273,12 @@ fn read_prose(
 pub fn markdown(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
 	let mut blocks = Vec::new();
 
-	if !book.title.is_empty() {
-		blocks.push(format!("# {}", book.title));
+	let (title, author) = (book.title.trim(), book.author.trim());
+	if !title.is_empty() {
+		blocks.push(format!("# {title}"));
 	}
-	if !book.author.is_empty() {
-		blocks.push(format!("by {}", book.author));
+	if !author.is_empty() {
+		blocks.push(author.to_owned());
 	}
 
 	for scene in &compiled.front {
@@ -311,7 +312,34 @@ pub fn markdown(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
 /// back matter is. It keeps its title, unlike a scene.
 fn piece(blocks: &mut Vec<String>, scene: &Scene, prose: &Prose) {
 	blocks.push(format!("# {}", scene.title));
-	blocks.extend(told(std::slice::from_ref(scene), prose));
+	blocks.extend(
+		told(std::slice::from_ref(scene), prose)
+			.iter()
+			.map(|text| demoted(text)),
+	);
+}
+
+/// A scene's own headings, two levels down, so they sit under the chapter's
+/// title instead of beside it. Lines inside a fenced block are code and stay
+/// as they are, and a heading already at five or six is left alone.
+fn demoted(text: &str) -> String {
+	let mut fenced = false;
+	let lines: Vec<String> = text
+		.split('\n')
+		.map(|line| {
+			if line.trim_start().starts_with("```") {
+				fenced = !fenced;
+			}
+			let hashes = line.bytes().take_while(|byte| *byte == b'#').count();
+			let heading = (1..=4).contains(&hashes) && line[hashes..].starts_with(' ');
+			if !fenced && heading {
+				format!("##{line}")
+			} else {
+				line.to_owned()
+			}
+		})
+		.collect();
+	lines.join("\n")
 }
 
 fn chapter_blocks(blocks: &mut Vec<String>, chapter: &Chapter, prose: &Prose) {
@@ -326,7 +354,7 @@ pub fn broken(scenes: &[Scene], prose: &Prose) -> Vec<String> {
 		if at > 0 {
 			blocks.push(BREAK.to_owned());
 		}
-		blocks.push(text);
+		blocks.push(demoted(&text));
 	}
 	blocks
 }
@@ -1274,7 +1302,30 @@ mod tests {
 
 		assert_eq!(
 			markdown(&book("Ithaca", "Ada Lovelace"), &compiled, &prose),
-			"# Ithaca\n\nby Ada Lovelace\n\n## Opening\n\nShe ran.\n"
+			"# Ithaca\n\nAda Lovelace\n\n## Opening\n\nShe ran.\n"
+		);
+	}
+
+	#[test]
+	fn a_blank_title_writes_no_title_line() {
+		let compiled = compile(&tree(vec![doc("Opening.md")]));
+		let prose = prose_of(&compiled, &[("Opening", "She ran.")]);
+
+		assert_eq!(
+			markdown(&book(" ", " "), &compiled, &prose),
+			"## Opening\n\nShe ran.\n"
+		);
+	}
+
+	#[test]
+	fn a_scenes_headings_go_two_levels_down_except_in_code() {
+		let compiled = compile(&tree(vec![doc("Opening.md")]));
+		let text = "# Later\n\n#hashtag\n\n```\n# not a heading\n```\n\n##### Deep";
+		let prose = prose_of(&compiled, &[("Opening", text)]);
+
+		assert_eq!(
+			markdown(&book("", ""), &compiled, &prose),
+			"## Opening\n\n### Later\n\n#hashtag\n\n```\n# not a heading\n```\n\n##### Deep\n"
 		);
 	}
 

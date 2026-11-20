@@ -101,7 +101,7 @@ function Fields({
 }
 
 /** The headings, sent the same way and for the same reason as the fields. */
-function Outline({
+function OutlineReporter({
 	onOutline,
 }: {
 	onOutline: (outline: OutlineHandle | null) => void;
@@ -155,10 +155,10 @@ type Props = {
 	takes: TakeView[] | null;
 	merging: boolean;
 	preferences: Preferences;
-	onChooseTake: (take: string) => Promise<void>;
+	onChooseTake: (take: string) => Promise<unknown>;
 	onTry: () => Promise<void>;
-	onRenameTake: (take: string, name: string) => Promise<void>;
-	onDeleteTake: (take: string) => Promise<void>;
+	onRenameTake: (take: string, name: string) => Promise<unknown>;
+	onDeleteTake: (take: string) => Promise<unknown>;
 	onTakeText: (take: string) => Promise<string>;
 	onChange: (text: string) => void;
 	/** How many words a change added, or took away when it is negative. */
@@ -249,7 +249,7 @@ export default function Editor({
 	);
 	// A take refused goes in the status line, which has room whatever it says.
 	const [refused, setRefused] = useState<string | null>(null);
-	const attempt = (task: () => Promise<void>) => {
+	const attempt = (task: () => Promise<unknown>) => {
 		setRefused(null);
 		task().catch((failed: unknown) => setRefused(failure(failed).message));
 	};
@@ -545,7 +545,9 @@ export default function Editor({
 									onChange={edited}
 								/>
 								{active && <Fields onFields={onFields} />}
-								{active && <Outline onOutline={onOutline} />}
+								{active && (
+									<OutlineReporter onOutline={onOutline} />
+								)}
 								<Shortcuts
 									onToolbar={toggle}
 									onOutline={outline}

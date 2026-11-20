@@ -205,11 +205,3 @@ export function fieldText(value: unknown): string {
 	}
 	return String(value);
 }
-
-/** The paragraphs of a stretch of text, blank lines being what parts them. */
-export function paragraphs(text: string): string[] {
-	return text
-		.split(/\n[ \t]*\n/)
-		.map((paragraph) => paragraph.trim())
-		.filter((paragraph) => paragraph !== "");
-}

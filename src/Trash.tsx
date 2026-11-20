@@ -49,6 +49,19 @@ export default function Trash({ root, reload, onChanged, merging }: Props) {
 		void load();
 	}, [load, reload]);
 
+	useEffect(() => {
+		if (asking.kind === "no") {
+			return;
+		}
+		function escape(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				setAsking({ kind: "no" });
+			}
+		}
+		document.addEventListener("keydown", escape);
+		return () => document.removeEventListener("keydown", escape);
+	}, [asking.kind]);
+
 	// Both actions leave the list as it was and let the reload that follows
 	// redraw it, so there is only ever one account of what is in the trash.
 	async function act(work: Promise<unknown>) {
@@ -117,6 +130,7 @@ export default function Trash({ root, reload, onChanged, merging }: Props) {
 										<button
 											type="button"
 											className="quiet"
+											autoFocus
 											onClick={() =>
 												setAsking({ kind: "no" })
 											}

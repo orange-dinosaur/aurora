@@ -69,7 +69,7 @@ type Props = {
 	onPutBack: (
 		task: () => Promise<unknown>,
 		target?: Overwrites,
-	) => Promise<void>;
+	) => Promise<boolean>;
 };
 
 // A document's text at A and on disk, which is B. Null `then` is a version
@@ -310,8 +310,11 @@ export default function Compare({
 		measure();
 		// Wrapping changes with the window's width, and every height with it.
 		const observer = new ResizeObserver(measure);
-		observer.observe(a);
-		observer.observe(b);
+		// The columns keep their size as the text inside them rewraps, so it is
+		// the text that is watched.
+		for (const column of [a, b]) {
+			observer.observe(column.querySelector(".compare__text") ?? column);
+		}
 		return () => observer.disconnect();
 	}, [found, sides]);
 
@@ -394,8 +397,7 @@ export default function Compare({
 		setBusy(true);
 		setRefused(null);
 		try {
-			await onPutBack(task, target);
-			return true;
+			return await onPutBack(task, target);
 		} catch (reason) {
 			setRefused(failure(reason).message);
 			return false;
@@ -429,10 +431,18 @@ export default function Compare({
 		}
 	}
 
-	const removes = (id: string) => () =>
-		invoke<string[]>("put_back_removes", { ...asked, id });
-	const removesEverything = () =>
-		invoke<string[]>("put_back_everything_removes", { ...asked });
+	// Nothing to ask while a put back cannot run.
+	const removes = (id: string) =>
+		asked === null
+			? undefined
+			: () => invoke<string[]>("put_back_removes", { ...asked, id });
+	const removesEverything =
+		asked === null
+			? undefined
+			: () =>
+					invoke<string[]>("put_back_everything_removes", {
+						...asked,
+					});
 	const refuse = (reason: unknown) => setRefused(failure(reason).message);
 
 	// Nothing is overwritten, since the text leaving stays as a take, so this

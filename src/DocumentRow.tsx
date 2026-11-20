@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { abbreviated } from "./cards";
 import DocumentMenu from "./DocumentMenu";
+import { documentPlaceholder } from "./kinds";
 import { useRightClick } from "./Menu";
 import NameField from "./NameField";
 import { isSubject } from "./subjects";
@@ -73,6 +74,7 @@ export default function DocumentRow({
 				data-dirty={unsaved ? "" : undefined}
 				aria-hidden="true"
 			/>
+			{unsaved && <span className="visually-hidden"> (unsaved)</span>}
 		</>
 	);
 
@@ -82,7 +84,7 @@ export default function DocumentRow({
 				<div className="sidebar__field">
 					<NameField
 						label={`New name for ${document.title}`}
-						placeholder="Chapter 2"
+						placeholder={documentPlaceholder(document.trail[0])}
 						initial={document.title}
 						busy={renaming.busy}
 						working="Renaming…"

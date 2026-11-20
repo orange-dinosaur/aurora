@@ -14,6 +14,7 @@ import {
 	type Formatting,
 } from "./formatting";
 import Icon from "./Icon";
+import { walkMenu } from "./Menu";
 
 // What the caret is sitting in, kept in step with the editor. The reading is
 // only replaced when the answer actually changes, so a bar does not redraw
@@ -59,6 +60,27 @@ export default function Controls({ hidden = false, onHold }: Props) {
 	// string is a field the writer has cleared, which is how a link is removed.
 	const [address, setAddress] = useState<string | null>(null);
 	const block = useRef<HTMLDivElement>(null);
+	const turn = useRef<HTMLButtonElement>(null);
+	const list = useRef<HTMLDivElement>(null);
+	// Whether the keyboard opened the menu, which is what puts focus in it.
+	const byKey = useRef(false);
+
+	// A press on Escape closes the menu, and focus goes back to the button
+	// when it was inside the list.
+	function shut() {
+		if (list.current?.contains(document.activeElement)) {
+			turn.current?.focus();
+		}
+		setOpen(false);
+	}
+
+	useEffect(() => {
+		if (open && byKey.current) {
+			list.current
+				?.querySelector<HTMLButtonElement>("button:enabled")
+				?.focus();
+		}
+	}, [open]);
 
 	useEffect(() => {
 		if (hidden) {
@@ -84,7 +106,7 @@ export default function Controls({ hidden = false, onHold }: Props) {
 
 		function escape(event: KeyboardEvent) {
 			if (event.key === "Escape") {
-				setOpen(false);
+				shut();
 			}
 		}
 
@@ -157,10 +179,14 @@ export default function Controls({ hidden = false, onHold }: Props) {
 		>
 			<div ref={block} className="controls__block">
 				<button
+					ref={turn}
 					type="button"
 					className="controls__turn"
 					aria-expanded={open}
-					onClick={() => setOpen((was) => !was)}
+					onClick={(event) => {
+						byKey.current = event.detail === 0;
+						setOpen((was) => !was);
+					}}
 				>
 					{name}
 					<span className="controls__caret">
@@ -169,7 +195,14 @@ export default function Controls({ hidden = false, onHold }: Props) {
 				</button>
 
 				{open && (
-					<div className="controls__list" role="menu">
+					<div
+						ref={list}
+						className="controls__list"
+						role="menu"
+						onKeyDown={(event) =>
+							walkMenu(event, () => setOpen(false))
+						}
+					>
 						{BLOCKS.map((action) =>
 							option(action, formatting?.block === action),
 						)}

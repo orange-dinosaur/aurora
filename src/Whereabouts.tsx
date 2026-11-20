@@ -119,5 +119,7 @@ function $putCaret(caret: Caret) {
 		texts.map((text) => text.getTextContentSize()),
 		caret.offset,
 	);
-	texts[at.run].select(at.offset, at.offset);
+	if (at !== null) {
+		texts[at.run].select(at.offset, at.offset);
+	}
 }

@@ -41,7 +41,7 @@ export default function Grip({
 }: Props) {
 	// Where the drag has reached, so letting go hands over what the moves
 	// agreed on rather than the width this render was built with.
-	const reached = useRef(width);
+	const reached = useRef(0);
 
 	function grab(grabbed: number) {
 		const from = width;
@@ -61,7 +61,10 @@ export default function Grip({
 			document.removeEventListener("mousemove", move);
 			document.removeEventListener("mouseup", drop);
 			document.body.classList.remove("dragging");
-			onWidth(reached.current);
+			// A click on the edge that moved nothing is not a new width.
+			if (reached.current !== from) {
+				onWidth(reached.current);
+			}
 		}
 
 		// The class carries the cursor and stops the writing being selected

@@ -10,7 +10,7 @@
 use std::io;
 use std::slice;
 
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, html};
+use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd, html};
 use time::{OffsetDateTime, UtcOffset};
 
 use crate::archive::Archive;
@@ -339,6 +339,18 @@ fn rendered(markdown: &str, scene: usize, flavour: Flavour, paragraphs: &mut usi
 		Event::Start(Tag::FootnoteDefinition(name)) => {
 			Some(Event::Start(Tag::FootnoteDefinition(label(&name))))
 		}
+		Event::Start(Tag::Heading {
+			level,
+			id,
+			classes,
+			attrs,
+		}) => Some(Event::Start(Tag::Heading {
+			level: lowered(level),
+			id,
+			classes,
+			attrs,
+		})),
+		Event::End(TagEnd::Heading(level)) => Some(Event::End(TagEnd::Heading(lowered(level)))),
 		event => Some(event),
 	});
 	let mut out = String::new();
@@ -347,6 +359,16 @@ fn rendered(markdown: &str, scene: usize, flavour: Flavour, paragraphs: &mut usi
 		Flavour::Kobo => html::push_html(&mut out, spanned(events, paragraphs).into_iter()),
 	}
 	out
+}
+
+/// A heading in a scene, two levels down so it sits under the chapter's own.
+fn lowered(level: HeadingLevel) -> HeadingLevel {
+	match level {
+		HeadingLevel::H1 => HeadingLevel::H3,
+		HeadingLevel::H2 => HeadingLevel::H4,
+		HeadingLevel::H3 => HeadingLevel::H5,
+		_ => HeadingLevel::H6,
+	}
 }
 
 /// Whether XML 1.0 can hold `c` at all.
@@ -634,7 +656,11 @@ fn isbn(typed: &str) -> Option<String> {
 		.filter(|c| c.is_ascii_digit() || matches!(*c, 'x' | 'X'))
 		.collect();
 
-	if matches!(digits.len(), 10 | 13) {
+	// An X is a check digit, so it can only end a ten-digit number.
+	let x = digits.find(['x', 'X']);
+	let placed = x.is_none() || (digits.len() == 10 && x == Some(9));
+
+	if placed && matches!(digits.len(), 10 | 13) {
 		Some(digits.to_uppercase())
 	} else {
 		None
@@ -654,6 +680,14 @@ fn w3c_date(typed: &str) -> Option<&str> {
 		if part.len() != width || !part.bytes().all(|byte| byte.is_ascii_digit()) {
 			return None;
 		}
+	}
+	let in_range = |at: usize, most: u32| {
+		parts
+			.get(at)
+			.is_none_or(|part| part.parse::<u32>().is_ok_and(|n| (1..=most).contains(&n)))
+	};
+	if !in_range(1, 12) || !in_range(2, 31) {
+		return None;
 	}
 	Some(typed)
 }
@@ -970,6 +1004,16 @@ mod tests {
 		assert_eq!(w3c_date("10/09/2026"), None);
 		assert_eq!(w3c_date("2026-9-10"), None);
 		assert_eq!(w3c_date(""), None);
+		assert_eq!(w3c_date("2024-13-45"), None);
+		assert_eq!(w3c_date("2024-00"), None);
+		assert_eq!(w3c_date("2024-12-32"), None);
+	}
+
+	#[test]
+	fn a_scenes_headings_go_two_levels_down() {
+		let html = rendered("# Later\n\n###### Deep", 0, Plain, &mut 0);
+		assert!(html.contains("<h3>Later</h3>"));
+		assert!(html.contains("<h6>Deep</h6>"));
 	}
 
 	#[test]
@@ -977,6 +1021,8 @@ mod tests {
 		assert_eq!(isbn("978-0-14-026886-7").as_deref(), Some("9780140268867"));
 		assert_eq!(isbn("0 14 026886 x").as_deref(), Some("014026886X"));
 		assert_eq!(isbn("pending"), None);
+		assert_eq!(isbn("X123456789"), None);
+		assert_eq!(isbn("123456789012X"), None);
 	}
 
 	#[test]

@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
 	CSSProperties,
+	KeyboardEvent as ReactKeyboardEvent,
 	MouseEvent as ReactMouseEvent,
 	ReactNode,
 	RefObject,
@@ -159,6 +160,54 @@ export function useDismissal(
 // What is open now, oldest first, so Escape can tell which is on top.
 const opened: object[] = [];
 
+/**
+ * The keys a list of items answers to: the arrows move between the enabled
+ * buttons and wrap, Home and End jump, and Tab closes the list.
+ */
+export function walkMenu(
+	event: ReactKeyboardEvent<HTMLElement>,
+	close: () => void,
+) {
+	if (event.key === "Tab") {
+		close();
+		return;
+	}
+	const buttons = [
+		...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+			"button:enabled",
+		),
+	];
+	if (buttons.length === 0) {
+		return;
+	}
+	const at = buttons.findIndex((button) => button === document.activeElement);
+	const last = buttons.length - 1;
+	const next = (
+		{
+			ArrowDown: at >= last ? 0 : at + 1,
+			ArrowUp: at <= 0 ? last : at - 1,
+			Home: 0,
+			End: last,
+		} as Record<string, number | undefined>
+	)[event.key];
+	if (next !== undefined) {
+		event.preventDefault();
+		buttons[next].focus();
+	}
+}
+
+/**
+ * Whether focus was left inside `list`, or nowhere, when it closed. Only then
+ * does the trigger take it back: a writer who clicked into another field has
+ * gone there on purpose.
+ */
+export function focusWasLeft(list: HTMLElement | null): boolean {
+	const now = document.activeElement;
+	return (
+		now === null || now === document.body || list?.contains(now) === true
+	);
+}
+
 /** How long a closing menu takes to fade, which the stylesheet says too. */
 export const MENU_FADE = 100;
 
@@ -204,6 +253,7 @@ export default function Menu({
 	const drawn = useLingering(open, MENU_FADE);
 	const menu = useRef<HTMLDivElement>(null);
 	const items = useRef<HTMLDivElement>(null);
+	const opener = useRef<HTMLButtonElement>(null);
 
 	useDismissal(open, menu, () => setOpen(false));
 
@@ -220,6 +270,11 @@ export default function Menu({
 		items.current
 			?.querySelector<HTMLButtonElement>("button:enabled")
 			?.focus();
+		return () => {
+			if (focusWasLeft(items.current)) {
+				opener.current?.focus();
+			}
+		};
 	}, [open]);
 
 	const glyph = icon === undefined ? null : <Icon name={icon} />;
@@ -230,6 +285,7 @@ export default function Menu({
 			className={wrapper === undefined ? "menu" : `menu ${wrapper}`}
 		>
 			<button
+				ref={opener}
 				type="button"
 				className={className ?? "menu__trigger"}
 				aria-label={label}
@@ -264,6 +320,7 @@ export default function Menu({
 					data-closing={open ? undefined : ""}
 					data-instant={instant ? "" : undefined}
 					inert={!open}
+					onKeyDown={(event) => walkMenu(event, () => setOpen(false))}
 				>
 					{children(() => setOpen(false))}
 				</div>
@@ -296,12 +353,14 @@ export function PointerMenu({
 	useDismissal(open, items, onClose);
 
 	// Measured before it is painted, so it never shows past the edge first.
-	// Closing leaves it where it was while it fades.
+	// Closing leaves it where it was while it fades. Focus goes back to
+	// whatever had it when the menu opened.
 	useLayoutEffect(() => {
 		const box = items.current;
 		if (at === null || box === null) {
 			return;
 		}
+		const before = document.activeElement;
 
 		const spot = inward(
 			at,
@@ -311,6 +370,11 @@ export function PointerMenu({
 		box.style.left = `${spot.x}px`;
 		box.style.top = `${spot.y}px`;
 		box.querySelector<HTMLButtonElement>("button:enabled")?.focus();
+		return () => {
+			if (before instanceof HTMLElement && focusWasLeft(box)) {
+				before.focus();
+			}
+		};
 	}, [at]);
 
 	if (!drawn) {
@@ -328,6 +392,7 @@ export function PointerMenu({
 			aria-label={label}
 			data-closing={open ? undefined : ""}
 			inert={!open}
+			onKeyDown={(event) => walkMenu(event, onClose)}
 			onContextMenu={(event) => {
 				event.preventDefault();
 				event.stopPropagation();

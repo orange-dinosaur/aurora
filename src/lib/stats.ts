@@ -181,12 +181,12 @@ function sofar(session: Running | null, words: number, at: number): Tally {
  * running.
  */
 export function dayTally(
-	history: PastSession[],
+	todays: PastSession[],
 	sessions: Sessions,
 	words: number,
 	at: number,
 ): { automatic: Tally; deliberate: Tally } {
-	return onDay(history, at).reduce(
+	return todays.reduce(
 		(all, session) => {
 			const tally = {
 				written: session.written,
@@ -286,12 +286,11 @@ export function firstOf(days: Day[], cap: number): Day[] {
  * down until a session closes.
  */
 export function today(
-	history: PastSession[],
+	todays: PastSession[],
 	sessions: Sessions,
 	document: string,
-	at: number,
 ): Totals {
-	return onDay(history, at).reduce(
+	return todays.reduce(
 		(all, session) => {
 			const written = session.documents?.[document]?.written ?? 0;
 			return session.layer === "automatic"

@@ -39,6 +39,7 @@ import {
 	folded,
 	foldersAbove,
 	inside,
+	pruned,
 	rows,
 	sections,
 	wordsIn,
@@ -132,7 +133,7 @@ type Props = {
 	/** Writes every open tab, so asking what is not in a checkpoint sees it. */
 	onBeforeSwitch: () => Promise<void>;
 	/** Runs a switch the way put back runs, catching the tabs up after it. */
-	onSwitch: (task: () => Promise<unknown>) => Promise<void>;
+	onSwitch: (task: () => Promise<unknown>) => Promise<boolean>;
 	/** Reads the merge again after a switch or a merge from here. */
 	onMergeChanged: () => Promise<void>;
 };
@@ -212,8 +213,14 @@ export default function Sidebar({
 	// book menu's refresh, which bumps `reload` once it has done so.
 	// Counts the reads, so a slow one that finishes after a newer one cannot
 	// put the older tree back. Saying nothing while it reads keeps a message
-	// from somewhere else from being wiped by a reload.
+	// from somewhere else from being wiped by a reload. The word count goes
+	// out through a ref, so a new function from the parent does not read the
+	// manifest again.
 	const reads = useRef(0);
+	const told = useRef(onWords);
+	useEffect(() => {
+		told.current = onWords;
+	});
 	const load = useCallback(async () => {
 		reads.current += 1;
 		const mine = reads.current;
@@ -226,13 +233,13 @@ export default function Sidebar({
 				return;
 			}
 			setTree(read);
-			onWords(wordsIn(read));
+			told.current(wordsIn(read));
 		} catch (error) {
 			if (mine === reads.current) {
 				setStatus({ kind: "error", message: failure(error).message });
 			}
 		}
-	}, [root, onWords]);
+	}, [root]);
 
 	useEffect(() => {
 		void load();
@@ -294,7 +301,7 @@ export default function Sidebar({
 		if (!next.delete(id)) {
 			next.add(id);
 		}
-		await keep(next);
+		await keep(pruned(next, tree));
 	}
 
 	// Every section folded, or every one open when none of them is. Bound on
@@ -302,7 +309,7 @@ export default function Sidebar({
 	// there whatever has focus, and a writer folding the tree is usually
 	// looking at it rather than typing into it.
 	const fold = useCallback(
-		() => keep(folded(open, tree)),
+		() => keep(pruned(folded(open, tree), tree)),
 		[open, tree, keep],
 	);
 

@@ -60,7 +60,11 @@ export default function Export({
 	const opener = useRef<HTMLButtonElement>(null);
 	const dialog = useRef<HTMLDivElement>(null);
 
+	// Counting reads every scene, so it waits until the dialog is open.
 	useEffect(() => {
+		if (!asking) {
+			return;
+		}
 		let gone = false;
 
 		invoke<Extent>("book_extent", { root })
@@ -76,7 +80,7 @@ export default function Export({
 		return () => {
 			gone = true;
 		};
-	}, [root, changed]);
+	}, [root, changed, asking]);
 
 	// So a key has somewhere to land: what had focus is behind the dialog now.
 	useEffect(() => {

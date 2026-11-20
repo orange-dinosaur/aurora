@@ -104,7 +104,7 @@ type Props = {
 	onPutBack: (
 		task: () => Promise<unknown>,
 		target?: Overwrites,
-	) => Promise<void>;
+	) => Promise<boolean>;
 	onOpen: (document: ProjectDocument, seed: Seed | null) => void;
 	/** Counts the times search has been asked for, so a second ask can answer. */
 	asked: number;
@@ -194,7 +194,12 @@ export default function RightSidebar({
 					aria-label="About what is open"
 					style={{ width }}
 					data-fading={fading ? "" : undefined}
-					onTransitionEnd={() => setFading(false)}
+					onTransitionEnd={(event) => {
+						// A child's transition bubbles up to here.
+						if (event.target === event.currentTarget) {
+							setFading(false);
+						}
+					}}
 				>
 					<h2 className="right-sidebar__title">
 						{TABS.find(({ name }) => name === tab)?.label}
@@ -249,11 +254,7 @@ export default function RightSidebar({
 								merging={merging}
 							/>
 						) : tab === "mentions" ? (
-							about === null ? (
-								<p className="right-sidebar__empty">
-									Nothing here yet.
-								</p>
-							) : (
+							about !== null && (
 								<Mentions
 									root={root}
 									about={about}

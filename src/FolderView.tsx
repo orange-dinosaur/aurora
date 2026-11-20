@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
@@ -7,9 +7,16 @@ import NameField from "./NameField";
 import NewMenu from "./NewMenu";
 import type { FolderNode, OverviewCard, ProjectDocument } from "./types";
 import type { Making } from "./kinds";
-import { folderKinds, folderPlaceholder } from "./kinds";
+import { documentPlaceholder, folderKinds, folderPlaceholder } from "./kinds";
 import type { FolderRef } from "./tree";
-import { band, counted, described, previewed, summarised } from "./cards";
+import {
+	band,
+	counted,
+	described,
+	previewed,
+	reached,
+	summarised,
+} from "./cards";
 import {
 	createDocument,
 	createFolder,
@@ -54,18 +61,15 @@ function Card({
  * real report, and there is nothing to draw until a target is set.
  */
 function bar(words: number, target: number | null) {
-	if (target === null) {
+	const share = reached(words, target);
+	if (share === null) {
 		return null;
 	}
 	return (
 		<span
 			className="editor__progress card__progress"
-			data-band={band(words / target)}
-			style={
-				{
-					"--progress": `${Math.min(100, (words / target) * 100)}%`,
-				} as CSSProperties
-			}
+			data-band={band(share)}
+			style={{ "--progress": `${share * 100}%` } as CSSProperties}
 		/>
 	);
 }
@@ -161,6 +165,23 @@ export default function FolderView({
 	onRetargetFolder,
 }: Props) {
 	const [cards, setCards] = useState<OverviewCard[]>([]);
+	// Worked out once per read rather than on every keystroke in a name field.
+	const previews = useMemo(
+		() =>
+			new Map(
+				cards.flatMap((card) =>
+					card.node === "document"
+						? [
+								[
+									card.id,
+									previewed(card.front, card.excerpt),
+								] as const,
+							]
+						: [],
+				),
+			),
+		[cards],
+	);
 	const [target, setTarget] = useState<number | null>(null);
 	// The card whose target is being typed, if one is.
 	const [aiming, setAiming] = useState<string | null>(null);
@@ -283,6 +304,7 @@ export default function FolderView({
 	}
 
 	async function move(id: string, parentId: string, index: number) {
+		setStatus({ kind: "idle" });
 		try {
 			await moveNode(root, id, parentId, index);
 			onMoved();
@@ -292,6 +314,7 @@ export default function FolderView({
 	}
 
 	async function remove(id: string, what: Making["what"]) {
+		setStatus({ kind: "idle" });
 		try {
 			await (what === "folder" ? onDeleteFolder(id) : onDelete(id));
 		} catch (error) {
@@ -300,6 +323,7 @@ export default function FolderView({
 	}
 
 	async function startTake(document: ProjectDocument) {
+		setStatus({ kind: "idle" });
 		try {
 			await onTry(document);
 		} catch (error) {
@@ -492,7 +516,9 @@ export default function FolderView({
 							>
 								<NameField
 									label={`New name for ${document.title}`}
-									placeholder="Chapter 2"
+									placeholder={documentPlaceholder(
+										folder.section,
+									)}
 									initial={document.title}
 									busy={renaming.kind === "saving"}
 									error={
@@ -533,10 +559,7 @@ export default function FolderView({
 									{document.title}
 								</span>
 								<span className="card__excerpt">
-									{previewed(
-										document.front,
-										document.excerpt,
-									)}
+									{previews.get(document.id)}
 								</span>
 								<span className="card__meta">
 									{aiming === document.id ? (
