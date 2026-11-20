@@ -912,10 +912,8 @@ fn create_and_remember(
 		return Err(Error::RelativePath);
 	}
 
-	let mut store = store::load(store_path)?;
 	let root = create_from(parent, name, format, start, at)?;
-	store.remember(name, root.clone(), at);
-	store::save(store_path, &store)?;
+	store::update(store_path, |store| store.remember(name, root.clone(), at))?;
 	Ok(root)
 }
 
@@ -939,23 +937,17 @@ fn resolve_last(store_path: &Path) -> Result<LastProject> {
 /// Drops what the store keeps for folders that no longer exist. Saves only
 /// when something went.
 fn prune_gone(store_path: &Path) -> Result<()> {
-	let mut store = store::load(store_path)?;
-	if store.prune(Path::exists) {
-		store::save(store_path, &store)?;
-	}
-	Ok(())
+	store::update(store_path, |store| {
+		store.prune(Path::exists);
+	})
 }
 
 fn forget(store_path: &Path, root: &Path) -> Result<()> {
-	let mut store = store::load(store_path)?;
-	store.forget(root);
-	store::save(store_path, &store)
+	store::update(store_path, |store| store.forget(root))
 }
 
 fn close(store_path: &Path) -> Result<()> {
-	let mut store = store::load(store_path)?;
-	store.close();
-	store::save(store_path, &store)
+	store::update(store_path, store::Store::close)
 }
 
 #[tauri::command]
@@ -1038,9 +1030,9 @@ fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Resu
 	let manifest = refresh(root)?;
 	// Every way into a project comes through here, a new one included.
 	let enclosing_repository = versions::ensure_repository(root)?;
-	let mut store = store::load(store_path)?;
-	store.remember(manifest.name.clone(), root.to_path_buf(), at);
-	store::save(store_path, &store)?;
+	store::update(store_path, |store| {
+		store.remember(manifest.name.clone(), root.to_path_buf(), at)
+	})?;
 
 	Ok(OpenedProject {
 		name: manifest.name,
@@ -3214,10 +3206,11 @@ mod tests {
 		let there = parent.path().join("there");
 		let gone = parent.path().join("gone");
 		fs::create_dir(&there).unwrap();
-		let mut loaded = store::load(&store).unwrap();
-		loaded.expanded.insert(there.clone(), Vec::new());
-		loaded.expanded.insert(gone, Vec::new());
-		store::save(&store, &loaded).unwrap();
+		store::update(&store, |loaded| {
+			loaded.expanded.insert(there.clone(), Vec::new());
+			loaded.expanded.insert(gone, Vec::new());
+		})
+		.unwrap();
 
 		prune_gone(&store).unwrap();
 
@@ -3229,9 +3222,10 @@ mod tests {
 	fn books_folder(store: &Path, parent: &Path) -> PathBuf {
 		let folder = parent.join("Books");
 		fs::create_dir(&folder).unwrap();
-		let mut loaded = store::load(store).unwrap();
-		loaded.preferences.projects_folder = Some(folder.clone());
-		store::save(store, &loaded).unwrap();
+		store::update(store, |loaded| {
+			loaded.preferences.projects_folder = Some(folder.clone());
+		})
+		.unwrap();
 		folder
 	}
 

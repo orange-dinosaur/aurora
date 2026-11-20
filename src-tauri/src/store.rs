@@ -407,12 +407,24 @@ fn migrate(mut store: Store) -> Store {
 
 /// Writes through a temporary file, so an interrupted save cannot leave a
 /// half-written store behind.
-pub fn save(path: &Path, store: &Store) -> Result<()> {
+fn save(path: &Path, store: &Store) -> Result<()> {
 	if let Some(parent) = path.parent() {
 		fs::create_dir_all(parent)?;
 	}
 
 	write_json(path, store)
+}
+
+/// Loads the store, applies the change and saves it, leaving the file alone
+/// when the change left the store as it was.
+pub fn update(path: &Path, change: impl FnOnce(&mut Store)) -> Result<()> {
+	let mut store = load(path)?;
+	let before = store.clone();
+	change(&mut store);
+	if store == before {
+		return Ok(());
+	}
+	save(path, &store)
 }
 
 /// A damaged store reads as an empty one, so this always answers.
@@ -421,9 +433,7 @@ fn preferences(path: &Path) -> Result<Preferences> {
 }
 
 fn set_preferences(path: &Path, preferences: Preferences) -> Result<()> {
-	let mut store = load(path)?;
-	store.preferences = preferences;
-	save(path, &store)
+	update(path, |store| store.preferences = preferences)
 }
 
 #[tauri::command]
@@ -460,9 +470,9 @@ fn expanded(path: &Path, root: &Path) -> Result<Option<Vec<Uuid>>> {
 /// who folds everything shut is not taken on the next launch for one who has
 /// never touched the sidebar.
 fn set_expanded(path: &Path, root: PathBuf, open: Vec<Uuid>) -> Result<()> {
-	let mut store = load(path)?;
-	store.expanded.insert(root, open);
-	save(path, &store)
+	update(path, |store| {
+		store.expanded.insert(root, open);
+	})
 }
 
 /// The folders left open in one project, or `null` for a project the writer
@@ -484,15 +494,13 @@ fn folded(path: &Path, root: &Path) -> Result<Vec<String>> {
 /// Nothing folded drops the project's entry, the same way the sidebar's does:
 /// a page with every group open is the page nobody has touched.
 fn set_folded(path: &Path, root: PathBuf, shut: Vec<String>) -> Result<()> {
-	let mut store = load(path)?;
-
-	if shut.is_empty() {
-		store.folded.remove(&root);
-	} else {
-		store.folded.insert(root, shut);
-	}
-
-	save(path, &store)
+	update(path, |store| {
+		if shut.is_empty() {
+			store.folded.remove(&root);
+		} else {
+			store.folded.insert(root, shut);
+		}
+	})
 }
 
 /// The groups folded shut on one project's Book page, which is none at all for
@@ -512,9 +520,9 @@ fn workspace(path: &Path, root: &Path) -> Result<Option<Workspace>> {
 }
 
 fn set_workspace(path: &Path, root: PathBuf, workspace: Workspace) -> Result<()> {
-	let mut store = load(path)?;
-	store.workspace.insert(root, workspace);
-	save(path, &store)
+	update(path, |store| {
+		store.workspace.insert(root, workspace);
+	})
 }
 
 /// The tabs one project was left with, or `null` for a project that has never
