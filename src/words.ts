@@ -4,14 +4,52 @@
 
 import { split } from "./frontmatter";
 
+// A line of dashes, stars or underscores, which is a scene break.
+const BREAK = /^\s*([-*_])(\s*\1){2,}\s*$/;
+// What a line opens with that is not writing: quote marks, then a heading's
+// hashes or a list's bullet or number.
+const OPENING = /^\s*(?:>\s*)*(?:#{1,6}(?=\s|$)|[-*+](?=\s)|\d+\.(?=\s))?/;
+const PUNCTUATION = /[!-/:-@[-`{-~]/;
+
+/** One line with its emphasis markers, backticks and escapes taken off. */
+function unmarked(line: string): string {
+	let out = "";
+	for (let at = 0; at < line.length; at += 1) {
+		const mark = line[at];
+		if (mark === "\\" && PUNCTUATION.test(line[at + 1] ?? "")) {
+			at += 1;
+			out += line[at];
+		} else if (mark === "~" && line[at + 1] === "~") {
+			at += 1;
+		} else if (mark !== "*" && mark !== "_" && mark !== "`") {
+			out += mark;
+		}
+	}
+	return out;
+}
+
+/**
+ * Markdown with its markers taken off: heading hashes, quote marks, list
+ * bullets, scene breaks, emphasis, backticks and the backslashes that escape.
+ * What is left is the words the reader meets. The Rust `plain` does the same,
+ * and both are held to one table of cases.
+ */
+export function plain(markdown: string): string {
+	return markdown
+		.split("\n")
+		.filter((line) => !BREAK.test(line))
+		.map((line) => unmarked(line.replace(OPENING, "")))
+		.join("\n");
+}
+
 /**
  * A document's own writing: everything but the front matter, which is data
- * about the page rather than words in it. Rust counts a file this way too,
- * through `body`, so both ends agree about how long a chapter is and naming a
- * field is not the same as writing a sentence.
+ * about the page rather than words in it, and without the markdown markers.
+ * Rust counts a file this way too, so both ends agree about how long a chapter
+ * is.
  */
 export function prose(text: string): string {
-	return split(text).body;
+	return plain(split(text).body);
 }
 
 // `split_whitespace` breaks on Unicode's White_Space property, which is not

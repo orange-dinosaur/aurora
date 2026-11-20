@@ -48,8 +48,7 @@ import type { FolderRef, Row } from "./tree";
 /** Nothing is being dragged, so no row is inside anything. */
 const NONE: ReadonlySet<string> = new Set();
 
-type Status =
-	{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
+type Status = { kind: "idle" } | { kind: "error"; message: string };
 
 // At most one thing is being named at a time, so where it is going and what it
 // is ride along with the state rather than sitting beside it.
@@ -211,18 +210,27 @@ export default function Sidebar({
 
 	// Reads the manifest as it stands. Looking at the folder again is the
 	// book menu's refresh, which bumps `reload` once it has done so.
+	// Counts the reads, so a slow one that finishes after a newer one cannot
+	// put the older tree back. Saying nothing while it reads keeps a message
+	// from somewhere else from being wiped by a reload.
+	const reads = useRef(0);
 	const load = useCallback(async () => {
-		setStatus({ kind: "busy" });
+		reads.current += 1;
+		const mine = reads.current;
 		try {
 			const read = await timed(
 				"document tree",
 				invoke<TreeNode[]>("document_tree", { root }),
 			);
+			if (mine !== reads.current) {
+				return;
+			}
 			setTree(read);
 			onWords(wordsIn(read));
-			setStatus({ kind: "idle" });
 		} catch (error) {
-			setStatus({ kind: "error", message: failure(error).message });
+			if (mine === reads.current) {
+				setStatus({ kind: "error", message: failure(error).message });
+			}
 		}
 	}, [root, onWords]);
 
@@ -267,34 +275,36 @@ export default function Sidebar({
 			.catch(() => setOpen(new Set()));
 	}, [root, tree]);
 
+	// Draws these folders open and remembers them for next time.
+	const keep = useCallback(
+		async (next: ReadonlySet<string>) => {
+			setOpen(next);
+
+			try {
+				await invoke("write_expanded", { root, open: [...next] });
+			} catch (error) {
+				setStatus({ kind: "error", message: failure(error).message });
+			}
+		},
+		[root],
+	);
+
 	async function toggle(id: string) {
 		const next = new Set(open);
 		if (!next.delete(id)) {
 			next.add(id);
 		}
-		setOpen(next);
-
-		try {
-			await invoke("write_expanded", { root, open: [...next] });
-		} catch (error) {
-			setStatus({ kind: "error", message: failure(error).message });
-		}
+		await keep(next);
 	}
 
 	// Every section folded, or every one open when none of them is. Bound on
 	// the window rather than on an editor, the way search is: the sidebar is
 	// there whatever has focus, and a writer folding the tree is usually
 	// looking at it rather than typing into it.
-	const fold = useCallback(async () => {
-		const next = folded(open, tree);
-		setOpen(next);
-
-		try {
-			await invoke("write_expanded", { root, open: [...next] });
-		} catch (error) {
-			setStatus({ kind: "error", message: failure(error).message });
-		}
-	}, [open, tree, root]);
+	const fold = useCallback(
+		() => keep(folded(open, tree)),
+		[open, tree, keep],
+	);
 
 	useEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
@@ -368,6 +378,10 @@ export default function Sidebar({
 				onChanged();
 			}
 			setNaming({ kind: "closed" });
+			// Whatever was made sits inside `at`, so it opens to show it.
+			if (!open.has(at)) {
+				void keep(new Set(open).add(at));
+			}
 		} catch (error) {
 			// A name Rust would not take leaves the field open, holding what
 			// was typed, so it can be corrected rather than typed again.

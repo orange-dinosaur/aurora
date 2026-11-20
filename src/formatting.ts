@@ -12,8 +12,10 @@ import {
 } from "@lexical/link";
 import {
 	$isListNode,
+	$removeList,
 	INSERT_ORDERED_LIST_COMMAND,
 	INSERT_UNORDERED_LIST_COMMAND,
+	REMOVE_LIST_COMMAND,
 } from "@lexical/list";
 import {
 	$createHeadingNode,
@@ -130,9 +132,16 @@ function turnInto(create: () => ElementNode) {
 	return (editor: LexicalEditor) =>
 		editor.update(() => {
 			const selection = $getSelection();
-			if ($isRangeSelection(selection)) {
-				$setBlocksType(selection, create);
+			if (!$isRangeSelection(selection)) {
+				return;
 			}
+			// A heading or quote cannot sit directly in a list, so a list item
+			// leaves its list first.
+			const inList = $blocksOf(selection).some($isListNode);
+			if (inList) {
+				$removeList();
+			}
+			$setBlocksType(selection, create);
 		});
 }
 
@@ -152,13 +161,20 @@ function list(
 	digit: string,
 	command: LexicalCommand<void>,
 ): Action {
-	return block(
-		kind,
-		label,
-		digit,
-		(node) => $isListNode(node) && node.getListType() === kind,
-		(editor) => editor.dispatchCommand(command, undefined),
-	);
+	const matches = (node: LexicalNode) =>
+		$isListNode(node) && node.getListType() === kind;
+	return block(kind, label, digit, matches, (editor) => {
+		// The same key again takes the list back off.
+		const on = editor.getEditorState().read(() => {
+			const selection = $getSelection();
+			if (!$isRangeSelection(selection)) {
+				return false;
+			}
+			const blocks = $blocksOf(selection);
+			return blocks.length > 0 && blocks.every(matches);
+		});
+		editor.dispatchCommand(on ? REMOVE_LIST_COMMAND : command, undefined);
+	});
 }
 
 /** What a whole paragraph can be turned into. */

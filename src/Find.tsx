@@ -16,6 +16,8 @@ import { $runs } from "./runs";
 type Props = {
 	/** Counts the times find has been asked for, so a second ask can answer. */
 	asked: number;
+	/** Whether this is the tab being looked at. Only that one paints or answers Escape. */
+	active: boolean;
 	/** What a hit clicked in search asked to be found, or null for a plain open. */
 	seed: Seed | null;
 	replacing: boolean;
@@ -28,10 +30,17 @@ type Props = {
 const OTHERS = "aurora-find";
 const CURRENT = "aurora-find-current";
 
-// Lexical renders every run of text as a span with a single text node inside
-// it, which is what a Range has to be built from.
+// Lexical renders a run of text as an element holding a text node, and bold or
+// struck text wraps that in another element or two. A Range has to be built
+// from the text node itself.
 function textOf(element: HTMLElement | null): Text | null {
-	const first = element?.firstChild;
+	if (element === null) {
+		return null;
+	}
+
+	const first = document
+		.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+		.nextNode();
 	return first instanceof Text ? first : null;
 }
 
@@ -48,18 +57,30 @@ function ranged(editor: LexicalEditor, match: Match): Range | null {
 	return range;
 }
 
-function clear() {
-	if ("highlights" in CSS) {
+// The paint layers are global to the page, so two panels open in a split would
+// otherwise clear each other's tint. Whoever painted last owns them.
+let owner: object | null = null;
+
+function clear(by: object) {
+	if ("highlights" in CSS && owner === by) {
 		CSS.highlights.delete(OTHERS);
 		CSS.highlights.delete(CURRENT);
+		owner = null;
 	}
 }
 
 /** Tints every match, the current one differently. False if the webview cannot. */
-function paint(editor: LexicalEditor, found: Match[], at: number): boolean {
+function paint(
+	by: object,
+	editor: LexicalEditor,
+	found: Match[],
+	at: number,
+): boolean {
 	if (!("highlights" in CSS)) {
 		return false;
 	}
+
+	owner = by;
 
 	const others: Range[] = [];
 	const current: Range[] = [];
@@ -118,12 +139,14 @@ function land(editor: LexicalEditor, match: Match) {
  */
 export default function Find({
 	asked,
+	active,
 	seed,
 	replacing,
 	onReplacing,
 	onClose,
 }: Props) {
 	const [editor] = useLexicalComposerContext();
+	const me = useRef({}).current;
 	const [query, setQuery] = useState("");
 	const [into, setInto] = useState("");
 	const [found, setFound] = useState<Match[]>([]);
@@ -169,20 +192,20 @@ export default function Find({
 	const match = found[here];
 
 	useEffect(() => {
-		if (match === undefined) {
-			clear();
+		if (match === undefined || !active) {
+			clear(me);
 			return;
 		}
 
-		paint(editor, found, here);
+		paint(me, editor, found, here);
 		editor.getElementByKey(match.fromKey)?.scrollIntoView({
 			block: "center",
 		});
-	}, [editor, found, here, match]);
+	}, [editor, found, here, match, active, me]);
 
 	// The tint belongs to the panel, not to the document, so it goes when the
 	// panel does.
-	useEffect(() => clear, []);
+	useEffect(() => () => clear(me), [me]);
 
 	function step(by: number) {
 		if (found.length === 0) {
@@ -226,6 +249,12 @@ export default function Find({
 
 		if (all) {
 			setAt(0);
+		} else if (
+			match !== undefined &&
+			into.toLowerCase().includes(query.toLowerCase())
+		) {
+			// The replacement holds the query, so the same spot would match again.
+			setAt(here + 1);
 		}
 	}
 
@@ -244,6 +273,7 @@ export default function Find({
 		function escape(event: KeyboardEvent) {
 			const at = event.target;
 			if (
+				!active ||
 				event.key !== "Escape" ||
 				event.defaultPrevented ||
 				!(at instanceof Node)
@@ -279,7 +309,10 @@ export default function Find({
 						setReading({});
 					}}
 					onKeyDown={(event) => {
-						if (event.key === "Enter") {
+						if (
+							event.key === "Enter" &&
+							!event.nativeEvent.isComposing
+						) {
 							event.preventDefault();
 							step(event.shiftKey ? -1 : 1);
 						}
@@ -346,7 +379,10 @@ export default function Find({
 						placeholder="Replace with"
 						onChange={(event) => setInto(event.target.value)}
 						onKeyDown={(event) => {
-							if (event.key === "Enter") {
+							if (
+								event.key === "Enter" &&
+								!event.nativeEvent.isComposing
+							) {
 								event.preventDefault();
 								replace(event.shiftKey);
 							}

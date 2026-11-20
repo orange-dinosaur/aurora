@@ -55,6 +55,9 @@ export default function Whereabouts({
 					scroller.current.scrollTop = left.scroll;
 				}
 			});
+			// Once only: an effect that runs again must not put the caret back
+			// over where the writer has moved it since.
+			back.current = null;
 		}
 
 		return editor.registerUpdateListener(({ editorState }) =>

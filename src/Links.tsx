@@ -2,11 +2,17 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { CLICK_COMMAND, COMMAND_PRIORITY_LOW } from "lexical";
 import { useEffect } from "react";
+import { failure } from "./errors";
 import { openable } from "./formatting";
 
 // A plain click puts the caret in the words, as it does everywhere else in the
 // text; holding the command key follows the link instead.
-export default function Links() {
+export default function Links({
+	onFailed,
+}: {
+	/** Told why the desktop would not open an address. */
+	onFailed: (message: string) => void;
+}) {
 	const [editor] = useLexicalComposerContext();
 
 	useEffect(
@@ -27,12 +33,14 @@ export default function Links() {
 						return false;
 					}
 					event.preventDefault();
-					void openUrl(url);
+					openUrl(url).catch((failed: unknown) =>
+						onFailed(failure(failed).message),
+					);
 					return true;
 				},
 				COMMAND_PRIORITY_LOW,
 			),
-		[editor],
+		[editor, onFailed],
 	);
 
 	return null;

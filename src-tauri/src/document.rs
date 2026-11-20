@@ -295,7 +295,7 @@ fn tally_of(root: &Path, relative: &str) -> Tally {
 	};
 	let text = String::from_utf8(bytes).unwrap_or_default();
 	let tally = Tally {
-		words: body(&text).split_whitespace().count(),
+		words: words_of(body(&text)),
 		in_book: in_book(&text),
 	};
 
@@ -712,6 +712,92 @@ pub(crate) fn body(text: &str) -> &str {
 	split(text).1
 }
 
+/// Whether a line is only dashes, stars or underscores: a scene break.
+fn scene_break(line: &str) -> bool {
+	let mut marks = line.trim().chars().filter(|c| !c.is_whitespace());
+	let Some(first) = marks.next().filter(|c| matches!(c, '-' | '*' | '_')) else {
+		return false;
+	};
+	let mut count = 1;
+	for mark in marks {
+		if mark != first {
+			return false;
+		}
+		count += 1;
+	}
+	count >= 3
+}
+
+/// A line without the quote marks, heading hashes, bullet or number it opens
+/// with.
+fn without_opening(line: &str) -> &str {
+	let mut rest = line.trim_start();
+	while let Some(after) = rest.strip_prefix('>') {
+		rest = after.trim_start();
+	}
+
+	let spaced = |after: &str| after.chars().next().is_none_or(char::is_whitespace);
+
+	let hashes = rest.chars().take_while(|c| *c == '#').count();
+	if (1..=6).contains(&hashes) && spaced(&rest[hashes..]) {
+		return &rest[hashes..];
+	}
+
+	let mut chars = rest.chars();
+	if let Some(first) = chars.next()
+		&& matches!(first, '-' | '*' | '+')
+		&& chars.next().is_some_and(char::is_whitespace)
+	{
+		return &rest[1..];
+	}
+
+	let digits = rest.chars().take_while(char::is_ascii_digit).count();
+	if digits > 0
+		&& rest[digits..].starts_with('.')
+		&& rest.len() > digits + 1
+		&& spaced(&rest[digits + 1..])
+	{
+		return &rest[digits + 1..];
+	}
+
+	rest
+}
+
+/// One line with its emphasis markers, backticks and escapes taken off.
+fn without_marks(line: &str) -> String {
+	let mut out = String::with_capacity(line.len());
+	let mut chars = line.chars().peekable();
+	while let Some(mark) = chars.next() {
+		match mark {
+			'\\' if chars.peek().is_some_and(char::is_ascii_punctuation) => {
+				out.extend(chars.next());
+			}
+			'~' if chars.peek() == Some(&'~') => {
+				chars.next();
+			}
+			'*' | '_' | '`' => {}
+			_ => out.push(mark),
+		}
+	}
+	out
+}
+
+/// Markdown with its markers taken off, leaving the words a reader meets. The
+/// editor's `plain` in `words.ts` does the same, and both run one table of cases.
+pub(crate) fn plain(markdown: &str) -> String {
+	markdown
+		.split('\n')
+		.filter(|line| !scene_break(line))
+		.map(|line| without_marks(without_opening(line)))
+		.collect::<Vec<_>>()
+		.join("\n")
+}
+
+/// How many words a document's body holds, counted from what a reader sees.
+pub(crate) fn words_of(markdown: &str) -> usize {
+	plain(markdown).split_whitespace().count()
+}
+
 /// A document with its prose replaced and its front matter block as it was. A
 /// block that closes at the very end of the file needs a newline to stay a block.
 pub(crate) fn with_body(text: &str, prose: &str) -> String {
@@ -824,7 +910,7 @@ fn summarise(document: &Document, path: &Path) -> DocumentSummary {
 
 	DocumentSummary {
 		document: document.into(),
-		words: prose.split_whitespace().count(),
+		words: words_of(prose),
 		excerpt: excerpt(prose),
 		front: front.to_owned(),
 		modified,
@@ -2182,6 +2268,37 @@ mod tests {
 				"Manuscript/Scene 1.md",
 			]
 		);
+	}
+
+	/// The same table is in `words.test.ts`: the status line and the section
+	/// cards must count markdown alike.
+	#[test]
+	fn markdown_markers_are_not_words() {
+		let table = [
+			("# Title", 1),
+			("###### Deep heading", 2),
+			("####### seven hashes", 3),
+			("# Title\n\n* * *\n\nHello world", 3),
+			("---", 0),
+			("***", 0),
+			("_ _ _", 0),
+			("> quoted line", 2),
+			("> > nested quote", 2),
+			("- one\n- two", 2),
+			("* one\n+ two", 2),
+			("1. one\n2. two", 2),
+			("**bold** and _italic_", 3),
+			("~~gone~~ now", 2),
+			("`code` here", 2),
+			("a \\*b c", 3),
+			("Elena\\.", 1),
+			("2024. A year", 2),
+			("2024.5 is a number", 4),
+		];
+
+		for (markdown, count) in table {
+			assert_eq!(words_of(markdown), count, "{markdown:?}");
+		}
 	}
 
 	#[test]

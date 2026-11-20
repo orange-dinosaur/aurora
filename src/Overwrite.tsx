@@ -1,7 +1,8 @@
 // The question before a put back that would write over changes not in a
 // checkpoint. It floats over the window, so asking never moves what is under it.
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useDismissal } from "./Menu";
 import { overwriteQuestion } from "./lib/versions";
 
 export default function Overwrite({
@@ -14,26 +15,8 @@ export default function Overwrite({
 	const [listed, setListed] = useState(false);
 	const box = useRef<HTMLDivElement>(null);
 
-	// Watched on the document, as a menu is: a click anywhere else cancels.
-	useEffect(() => {
-		function away(event: MouseEvent) {
-			const at = event.target;
-			if (!(at instanceof Node) || !box.current?.contains(at)) {
-				onAnswer(false);
-			}
-		}
-		function escape(event: KeyboardEvent) {
-			if (event.key === "Escape") {
-				onAnswer(false);
-			}
-		}
-		document.addEventListener("mousedown", away);
-		document.addEventListener("keydown", escape);
-		return () => {
-			document.removeEventListener("mousedown", away);
-			document.removeEventListener("keydown", escape);
-		};
-	}, [onAnswer]);
+	// A click anywhere else cancels, as it does for a menu.
+	useDismissal(true, box, () => onAnswer(false));
 
 	return (
 		<div

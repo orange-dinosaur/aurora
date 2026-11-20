@@ -532,7 +532,7 @@ fn dropped_branch(root: &Path, slug: &str) -> Result<()> {
 /// Counted the way the rest of Aurora counts a document: its body only.
 fn words_in(bytes: &[u8]) -> u32 {
 	let text = String::from_utf8_lossy(bytes);
-	body(&text).split_whitespace().count() as u32
+	crate::document::words_of(body(&text)) as u32
 }
 
 /// How one document or folder differs between two versions. Matched by id, so

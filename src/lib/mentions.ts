@@ -54,19 +54,35 @@ function namesOf(subject: Subject): string[] {
  */
 export function mentions(subjects: Subject[], runs: Run[]): Mention[] {
 	const found: Mention[] = [];
+	const order = new Map(runs.map((run, index) => [run.key, index]));
+	// A place in the text as one number, so two places compare with `<`.
+	const place = (key: string, offset: number) =>
+		(order.get(key) ?? 0) * 2 ** 32 + offset;
 
 	for (const subject of subjects) {
+		// Names run longest first, so a shorter one that sits inside a hit
+		// already taken is the same mention and is not counted again.
+		const taken: Mention[] = [];
 		for (const name of namesOf(subject)) {
 			for (const at of matches(runs, name, RECOGNITION)) {
-				found.push({ subject: subject.id, name, at });
+				const from = place(at.fromKey, at.fromOffset);
+				const to = place(at.toKey, at.toOffset);
+				const inside = taken.some(
+					(each) =>
+						place(each.at.fromKey, each.at.fromOffset) <= from &&
+						to <= place(each.at.toKey, each.at.toOffset),
+				);
+				if (!inside) {
+					taken.push({ subject: subject.id, name, at });
+				}
 			}
 		}
+		found.push(...taken);
 	}
 
 	// Each subject's hits come out in reading order but the subjects were
 	// walked one after another, so the whole list has to be put back in the
 	// order a reader would meet them.
-	const order = new Map(runs.map((run, index) => [run.key, index]));
 
 	return found.sort((one, other) => {
 		const run =
@@ -168,13 +184,16 @@ export function mentionsIn(
 		const hits: MentionHit[] = [];
 
 		for (const { name, at } of mentions([subject], runs)) {
+			// Counted before the line is looked up, because Find numbers every
+			// occurrence of the name, including one that has no line to show.
+			const ordinal = seen.get(name) ?? 0;
+			seen.set(name, ordinal + 1);
+
 			const where = lineOf(located, at);
 			if (where === null) {
 				continue;
 			}
 
-			const ordinal = seen.get(name) ?? 0;
-			seen.set(name, ordinal + 1);
 			hits.push({ name, ordinal, ...where });
 		}
 

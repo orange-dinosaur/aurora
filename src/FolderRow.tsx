@@ -73,6 +73,7 @@ export default function FolderRow({
 						placeholder={folderPlaceholder(row.folderKind)}
 						initial={row.name}
 						busy={renaming.busy}
+						working="Renaming…"
 						error={renaming.error}
 						onSubmit={onRetitle}
 						onCancel={onCancelRetitle}

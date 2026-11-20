@@ -285,6 +285,11 @@ export default function RightSidebar({
 											about?.kind === "document" &&
 											isSubject(about.page.trail)
 										}
+										title={
+											about?.kind === "document"
+												? about.page.title
+												: null
+										}
 										manuscript={inManuscript(about)}
 										root={root}
 										changed={changed}

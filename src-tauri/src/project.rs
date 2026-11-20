@@ -1202,7 +1202,7 @@ fn measure(root: &Path, workspace: Option<&store::Workspace>) -> Option<Measure>
 				}
 
 				fs::read_to_string(root.join(relative))
-					.map(|text| text.split_whitespace().count())
+					.map(|text| crate::document::words_of(crate::document::body(&text)))
 					.unwrap_or(0)
 			})
 			.sum(),

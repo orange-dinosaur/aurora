@@ -430,6 +430,7 @@ function NewProject({
 	formats,
 	structures,
 	busy,
+	error,
 	onCancel,
 	onChange,
 	onCreate,
@@ -444,6 +445,8 @@ function NewProject({
 	formats: FormatOption[];
 	structures: StructureLayout[];
 	busy: boolean;
+	/** Why the last attempt was refused, or null. */
+	error: string | null;
 	/** Where new projects go, or null until the writer has said, in which
 	 * case the dialog asks first. */
 	projectsFolder: string | null;
@@ -849,6 +852,10 @@ function NewProject({
 							</button>
 						</p>
 
+						<p className="dialog__problem" role="alert">
+							{error}
+						</p>
+
 						<div className="dialog__foot">
 							<button
 								type="button"
@@ -944,15 +951,29 @@ export default function Welcome({
 		start: Start | null,
 	) {
 		setStatus({ kind: "busy" });
+		let root: string;
 		try {
-			const root = await invoke<string>("create_project", {
+			root = await invoke<string>("create_project", {
 				parent,
 				name,
 				format,
 				start,
 			});
+		} catch (error) {
+			setStatus({ kind: "error", message: failure(error).message });
+			return;
+		}
+
+		try {
 			onOpened(await invoke<OpenProject>("open_project", { root }), true);
 		} catch (error) {
+			// The project exists now, so the dialog has nothing left to ask:
+			// it closes, the shelf shows the new book and the reason is said
+			// at the foot.
+			setCreating(false);
+			invoke<RecentSummary[]>("recent_projects")
+				.then(setRecents)
+				.catch(() => {});
 			setStatus({ kind: "error", message: failure(error).message });
 		}
 	}
@@ -1024,6 +1045,7 @@ export default function Welcome({
 					formats={formats}
 					structures={structures}
 					busy={busy}
+					error={status.kind === "error" ? status.message : null}
 					onCancel={() => {
 						setCreating(false);
 						setStatus({ kind: "idle" });

@@ -85,6 +85,7 @@ export default function DocumentRow({
 						placeholder="Chapter 2"
 						initial={document.title}
 						busy={renaming.busy}
+						working="Renaming…"
 						error={renaming.error}
 						onSubmit={onRetitle}
 						onCancel={onCancelRetitle}

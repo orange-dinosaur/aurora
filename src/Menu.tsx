@@ -100,13 +100,28 @@ export function useDismissal(
 	 */
 	trigger?: RefObject<HTMLElement | null>,
 ) {
+	// Callers pass a new function every render, so the listeners read it from
+	// here rather than being set up again each time.
+	const closing = useRef(close);
+	useEffect(() => {
+		closing.current = close;
+	});
+
 	useEffect(() => {
 		if (!open) {
 			return;
 		}
 
+		const me = {};
+		opened.push(me);
+
 		function away(event: MouseEvent) {
 			const at = event.target;
+			// A right-click menu is drawn outside whatever opened it, but a
+			// press in it is no press away from that.
+			if (at instanceof Element && at.closest(".menu__items--pointer")) {
+				return;
+			}
 			if (
 				!(at instanceof Node) ||
 				!(
@@ -114,24 +129,35 @@ export function useDismissal(
 					trigger?.current?.contains(at)
 				)
 			) {
-				close();
+				closing.current();
 			}
 		}
 
+		// One press closes one thing: the newest of what is open, and only if
+		// nothing nearer the key has already used it.
 		function escape(event: KeyboardEvent) {
-			if (event.key === "Escape") {
-				close();
+			if (
+				event.key === "Escape" &&
+				!event.defaultPrevented &&
+				opened[opened.length - 1] === me
+			) {
+				event.preventDefault();
+				closing.current();
 			}
 		}
 
 		document.addEventListener("mousedown", away);
 		document.addEventListener("keydown", escape);
 		return () => {
+			opened.splice(opened.indexOf(me), 1);
 			document.removeEventListener("mousedown", away);
 			document.removeEventListener("keydown", escape);
 		};
-	}, [open, within, close, trigger]);
+	}, [open, within, trigger]);
 }
+
+// What is open now, oldest first, so Escape can tell which is on top.
+const opened: object[] = [];
 
 /** How long a closing menu takes to fade, which the stylesheet says too. */
 export const MENU_FADE = 100;

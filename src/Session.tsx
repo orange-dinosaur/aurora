@@ -14,7 +14,7 @@ import type { SprintUnit } from "./types";
 export const UNITS: SprintUnit[] = ["words", "minutes"];
 
 /** What an empty sprint field stands for, and what it shows in grey. */
-const USUAL_SPRINT = 500;
+const USUAL_SPRINT: Record<SprintUnit, number> = { words: 500, minutes: 30 };
 
 type Props = {
 	/** The deliberate session running now, or null when there is none. */
@@ -158,8 +158,8 @@ function Sprint({
 		defaultAmount === null ? "" : String(defaultAmount),
 	);
 	const [unit, setUnit] = useState<SprintUnit>(defaultUnit);
-	const usual = (defaultAmount ?? USUAL_SPRINT).toLocaleString();
-	const limit = amount === "" ? USUAL_SPRINT : Number(amount);
+	const usual = (defaultAmount ?? USUAL_SPRINT[defaultUnit]).toLocaleString();
+	const limit = amount === "" ? USUAL_SPRINT[unit] : Number(amount);
 
 	// The form takes the row's place rather than opening under it, so the menu
 	// stays the size it was.
@@ -189,7 +189,7 @@ function Sprint({
 				value={amount}
 				inputMode="numeric"
 				aria-label="Sprint limit"
-				placeholder={String(USUAL_SPRINT)}
+				placeholder={String(USUAL_SPRINT[unit])}
 				autoFocus
 				onFocus={(event) => event.target.select()}
 				// Digits only: a limit is a count either way, and refusing the

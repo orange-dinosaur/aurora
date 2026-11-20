@@ -193,6 +193,7 @@ export function Chips({
 								event.preventDefault();
 								add();
 							} else if (event.key === "Escape") {
+								event.preventDefault();
 								setDraft("");
 							} else if (
 								event.key === "Backspace" &&
@@ -325,6 +326,7 @@ export function TieList({
 						event.preventDefault();
 						add(draft);
 					} else if (event.key === "Escape") {
+						event.preventDefault();
 						setDraft("");
 					}
 				}}
@@ -405,6 +407,7 @@ export function AddField({ names, onAsk, onAdd }: AddProps) {
 						event.preventDefault();
 						add(draft);
 					} else if (event.key === "Escape") {
+						event.preventDefault();
 						setDraft("");
 					}
 				}}

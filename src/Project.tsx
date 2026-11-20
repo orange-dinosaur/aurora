@@ -152,7 +152,8 @@ type DocumentTab = {
 	/** What search asked Find to open on here, or null if nothing did. */
 	seed: Seed | null;
 	/** Here rather than in the strip, so one mounted again keeps its line. */
-	takes: TakeView[];
+	/** Null when the list could not be read. */
+	takes: TakeView[] | null;
 };
 
 type FolderTab = {
@@ -1057,7 +1058,7 @@ export default function Project({
 	async function fill(id: string) {
 		const [content, takes] = await Promise.all([
 			read(root, id, seen.current),
-			readTakes(root, id).catch(() => []),
+			readTakes(root, id),
 		]);
 		// Keyed by id, so a slow read can only ever fill in its own tab — and
 		// quietly does nothing if that tab was closed while it was in flight.
@@ -1432,9 +1433,7 @@ export default function Project({
 						? [
 								Promise.all([
 									read(root, tab.document.id, seen.current),
-									readTakes(root, tab.document.id).catch(
-										() => [],
-									),
+									readTakes(root, tab.document.id),
 								]).then(
 									([content, takes]) =>
 										[
@@ -2339,6 +2338,7 @@ export default function Project({
 
 			{comparing !== null && (
 				<Compare
+					key={`${comparing.checkpoint}\n${comparing.slug ?? ""}\n${comparing.pick ?? ""}`}
 					root={root}
 					book={bookMenu}
 					document={
@@ -2388,6 +2388,7 @@ export default function Project({
 			    every editor comes back with its cursor and its undo history. */}
 			<div className="project__body" hidden={covered}>
 				<Sidebar
+					key={root}
 					hidden={!sidebar}
 					floating={floating}
 					onDismiss={() => setFloating(false)}

@@ -1263,6 +1263,15 @@ body,
 	overflow-wrap: anywhere;
 }
 
+/* A fixed two lines, so a refusal appearing does not push the buttons. */
+.dialog__problem {
+	height: 2lh;
+	margin: var(--space-xs) 0 0;
+	overflow: hidden;
+	font: var(--text-caption);
+	color: var(--danger);
+}
+
 .dialog__saved .welcome__back {
 	flex: none;
 	font: inherit;

@@ -62,11 +62,8 @@ export default function UpdateNotice() {
 	async function install() {
 		setNotice(starting);
 		try {
-			// Everything half-typed has to be on disk before the application
-			// is replaced underneath it.
-			await flushAll();
-
 			if (FAKE) {
+				await flushAll();
 				await new Promise((done) =>
 					window.setTimeout(done, PRETEND_MS),
 				);
@@ -77,7 +74,12 @@ export default function UpdateNotice() {
 				return;
 			}
 
-			await found.current?.downloadAndInstall();
+			// Downloaded first, then flushed, so what was typed while the
+			// download ran is on disk before the application is replaced
+			// underneath it.
+			await found.current?.download();
+			await flushAll();
+			await found.current?.install();
 			await relaunch();
 		} catch (error) {
 			console.error(error);

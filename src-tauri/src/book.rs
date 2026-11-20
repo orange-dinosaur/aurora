@@ -15,7 +15,7 @@ use tauri::ipc::Channel;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::document::{DocumentView, NodeView, body, document_tree};
+use crate::document::{DocumentView, NodeView, body, document_tree, words_of};
 use crate::docx::docx;
 use crate::epub::{Flavour, epub};
 use crate::project::{
@@ -359,7 +359,7 @@ pub fn book_extent(root: PathBuf) -> Result<Extent> {
 	let compiled = compile(&document_tree(root.clone())?);
 	let words = prose(&root, &compiled)
 		.values()
-		.map(|text| text.split_whitespace().count())
+		.map(|text| words_of(text))
 		.sum();
 
 	Ok(Extent {

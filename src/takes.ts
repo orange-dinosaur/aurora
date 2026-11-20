@@ -3,9 +3,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { TakeView } from "./bindings/TakeView";
 
-/** A list that cannot be read shows no strip. The text is read apart from it. */
-export function readTakes(root: string, id: string): Promise<TakeView[]> {
-	return invoke<TakeView[]>("list_takes", { root, id }).catch(() => []);
+/** Null when the list could not be read, which is not the same as no takes. */
+export function readTakes(
+	root: string,
+	id: string,
+): Promise<TakeView[] | null> {
+	return invoke<TakeView[]>("list_takes", { root, id }).catch(() => null);
 }
 
 export function takeText(

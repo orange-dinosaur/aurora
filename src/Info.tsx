@@ -18,6 +18,8 @@ type Props = FieldsHandle & {
 	subject: boolean;
 	/** Whether this is inside the Manuscript, which is what gets exported. */
 	manuscript: boolean;
+	/** The page's own title, which a relationship cannot point back at. */
+	title: string | null;
 	root: string;
 	/** Bumped whenever the project changes, so the suggestions are read again. */
 	changed: number;
@@ -31,6 +33,7 @@ export default function Info({
 	setField,
 	subject,
 	manuscript,
+	title,
 	root,
 	changed,
 	onOpenTag,
@@ -108,7 +111,7 @@ export default function Info({
 					hint="Who else this page is tied to, and how."
 					placeholder="Add a subject"
 					values={ties(fields, "relationships")}
-					names={subjects}
+					names={subjects.filter((name) => name !== title)}
 					onAsk={askSubjects}
 					onChange={(next) =>
 						setField("relationships", next.size === 0 ? null : next)

@@ -7,10 +7,10 @@ on:
       - release
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 defaults:
@@ -24,6 +24,8 @@ jobs:
   prepare:
     needs: checks
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       build: ${{ steps.release.outputs.build }}
@@ -78,6 +80,8 @@ jobs:
     if: needs.prepare.outputs.build == 'true'
     name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -161,6 +165,8 @@ jobs:
     needs: [prepare, verify]
     if: ${{ !cancelled() && needs.verify.result == 'success' && github.ref == 'refs/heads/release' }}
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_ID: ${{ needs.prepare.outputs.release_id }}

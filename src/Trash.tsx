@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TrashEntry } from "./types";
 import { MERGE_HOLDS } from "./branches";
 import { listTrash, purgeTrashEntry, restoreFromTrash } from "./documents";
@@ -26,13 +26,22 @@ export default function Trash({ root, reload, onChanged, merging }: Props) {
 	const [status, setStatus] = useState<Status>({ kind: "busy" });
 	const [asking, setAsking] = useState<Asking>({ kind: "no" });
 
+	// Counts the reads, so only the newest one is drawn.
+	const reads = useRef(0);
 	const load = useCallback(async () => {
+		reads.current += 1;
+		const mine = reads.current;
 		setStatus({ kind: "busy" });
 		try {
-			setEntries(await listTrash(root));
-			setStatus({ kind: "idle" });
+			const listed = await listTrash(root);
+			if (mine === reads.current) {
+				setEntries(listed);
+				setStatus({ kind: "idle" });
+			}
 		} catch (error) {
-			setStatus({ kind: "error", message: failure(error).message });
+			if (mine === reads.current) {
+				setStatus({ kind: "error", message: failure(error).message });
+			}
 		}
 	}, [root]);
 

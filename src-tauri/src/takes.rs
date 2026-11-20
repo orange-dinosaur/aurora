@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::document::{TRASH_DIR, body, resolve, with_body};
+use crate::document::{TRASH_DIR, body, resolve, with_body, words_of};
 use crate::project::{
 	Error, MANUSCRIPT, Manifest, NameError, Result, editable, read_manifest, write_atomic,
 	write_manifest,
@@ -130,8 +130,7 @@ fn views(root: &Path, manifest: &Manifest, id: Uuid) -> Result<Vec<TakeView>> {
 			name: details.name.clone(),
 			from: details.from,
 			chosen: chosen == Some(take),
-			words: prose(root, manifest, id, take)
-				.map_or(0, |text| text.split_whitespace().count()),
+			words: prose(root, manifest, id, take).map_or(0, |text| words_of(&text)),
 		})
 		.collect())
 }

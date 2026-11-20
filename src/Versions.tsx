@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { failure } from "./errors";
 import { BINDER } from "./lib/merge";
 import Icon from "./Icon";
+import { Abort } from "./Merge";
 import PutBack from "./PutBack";
 import {
 	behind,
@@ -380,14 +381,12 @@ export default function Versions({
 							<p className="merge-banner__text">
 								{settleBanner(settle.length)}
 							</p>
-							<button
-								type="button"
+							<Abort
+								into={merge.into}
 								className="merge-banner__abort"
 								disabled={busy}
-								onClick={abort}
-							>
-								Abort merge
-							</button>
+								onAbort={abort}
+							/>
 						</div>
 					)}
 

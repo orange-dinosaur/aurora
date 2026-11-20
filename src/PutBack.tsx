@@ -42,7 +42,15 @@ export default function PutBack({
 		}
 	}, [asking]);
 
+	// A second click while the first is still counting what a put back would
+	// remove would ask the question twice.
+	const checking = useRef(false);
+
 	async function click() {
+		if (checking.current) {
+			return;
+		}
+		checking.current = true;
 		try {
 			const found = (await removes?.()) ?? [];
 			if (found.length === 0) {
@@ -52,6 +60,8 @@ export default function PutBack({
 			}
 		} catch (reason) {
 			onRefused(reason);
+		} finally {
+			checking.current = false;
 		}
 	}
 

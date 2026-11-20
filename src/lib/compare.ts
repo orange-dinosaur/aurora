@@ -27,6 +27,7 @@ const HEADING = /^(#{1,6})\s+/;
 const QUOTE = /^>\s?/;
 const ITEM = /^\s*(?:[-*+]|\d+\.)\s+/;
 const MARKER = /\*\*|__|\*|_/g;
+const WORDY = /[\p{L}\p{N}]/u;
 
 /**
  * The body of `text` as blocks, washed by `spans`, which are indexed like the
@@ -102,6 +103,8 @@ function runs(
 	const found: Run[] = [];
 	let strong = false;
 	let em = false;
+	// Offsets of the backslashes that escaped a marker, left out of the text.
+	const dropped = new Set<number>();
 
 	function covering(at: number): number | null {
 		const index = spans.findIndex(
@@ -130,7 +133,11 @@ function runs(
 			const next = cuts[index + 1];
 			if (next !== undefined) {
 				found.push({
-					text: text.slice(cut, next),
+					text: text
+						.slice(cut, next)
+						.split("")
+						.filter((_, at) => !dropped.has(cut + at))
+						.join(""),
 					strong,
 					em,
 					difference: covering(cut),
@@ -151,7 +158,22 @@ function runs(
 		let last = range.from;
 		const line = text.slice(range.from, range.to);
 		for (const marker of line.matchAll(MARKER)) {
-			const start = range.from + (marker.index ?? 0);
+			const index = marker.index ?? 0;
+			const start = range.from + index;
+			// A backslash makes the marker a plain character, and is not
+			// shown itself.
+			if (line[index - 1] === "\\") {
+				dropped.add(start - 1);
+				continue;
+			}
+			// An underscore inside a word, as in snake_case, is not emphasis.
+			if (
+				marker[0].startsWith("_") &&
+				WORDY.test(line[index - 1] ?? "") &&
+				WORDY.test(line[index + marker[0].length] ?? "")
+			) {
+				continue;
+			}
 			pieces(last, start);
 			if (marker[0].length === 2) {
 				strong = !strong;

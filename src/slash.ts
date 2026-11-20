@@ -2,6 +2,7 @@
 // and which of the blocks answer to what has been typed after it. Kept apart
 // from the component so it can be tested without a browser.
 
+import { $isCodeNode } from "@lexical/code";
 import { $findMatchingParent } from "@lexical/utils";
 import {
 	$getSelection,
@@ -44,7 +45,7 @@ export function $slashAt(): string | null {
 	}
 	const node = anchor.getNode();
 	const block = $findMatchingParent(node, isBlock);
-	if (block === null) {
+	if (block === null || $isCodeNode(block)) {
 		return null;
 	}
 	return slashQuery(
@@ -63,10 +64,12 @@ export function matching(query: string): Action[] {
 	if (wanted === "") {
 		return OFFERED;
 	}
-	return OFFERED.filter((action) =>
-		action.label
-			.toLowerCase()
-			.split(" ")
-			.some((word) => word.startsWith(wanted)),
-	);
+	// Any run of the label's words can start with the query, so a two-word
+	// query like "heading 1" finds Heading 1.
+	return OFFERED.filter((action) => {
+		const words = action.label.toLowerCase().split(" ");
+		return words.some((_, at) =>
+			words.slice(at).join(" ").startsWith(wanted),
+		);
+	});
 }

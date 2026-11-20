@@ -130,6 +130,21 @@ describe("blocks", () => {
 		]);
 	});
 
+	it("takes an escaped marker as a plain character", () => {
+		expect(blocks("a \\*b c", [])).toEqual([
+			{
+				kind: "paragraph",
+				runs: [{ ...plain, text: "a *b c" }],
+			},
+		]);
+	});
+
+	it("leaves an underscore inside a word alone", () => {
+		expect(blocks("snake_case", [])).toEqual([
+			{ kind: "paragraph", runs: [{ ...plain, text: "snake_case" }] },
+		]);
+	});
+
 	it("breaks the body into the blocks the editor draws", () => {
 		const text = "# Title\n\nFirst\nline\n\n> quoted\n\n* * *\n\n- item";
 		expect(blocks(text, [])).toEqual([

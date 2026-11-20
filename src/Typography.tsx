@@ -33,7 +33,8 @@ export default function Typography({ preferences, onPreferences }: Props) {
 		}
 
 		function escape(event: KeyboardEvent) {
-			if (event.key === "Escape") {
+			if (event.key === "Escape" && !event.defaultPrevented) {
+				event.preventDefault();
 				setOpen(false);
 			}
 		}

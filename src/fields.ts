@@ -80,21 +80,39 @@ export function useFolderFields(
 	const held = useRef(fields);
 	held.current = fields;
 
+	// Typing makes many changes and the manifest takes the whole map each time,
+	// so a change waits for a pause. `before` is what the folder held when the
+	// first unsent change was made, which is what a refusal puts back.
+	const unsent = useRef<{
+		root: string;
+		id: string;
+		fields: Fields;
+		before: Fields;
+	} | null>(null);
+	const timer = useRef<number | null>(null);
+	// Counts the changes, so only the newest can roll back and a read that
+	// began before one is not allowed to overwrite it.
+	const writes = useRef(0);
+
 	useEffect(() => {
 		if (id === null) {
 			return;
 		}
 
 		let wanted = true;
+		const began = writes.current;
 		void invoke<Record<string, Value>>("folder_fields", { root, id })
 			.then((said) => {
-				if (wanted) {
+				if (wanted && began === writes.current) {
 					setRead({ id, fields: new Map(Object.entries(said)) });
 					setTrouble(null);
 				}
 			})
 			.catch((error: unknown) => {
 				if (wanted) {
+					// Not live again until a read lands: a write from the empty
+					// map would replace every other field in the manifest.
+					setRead(null);
 					setTrouble(failure(error).message);
 				}
 			});
@@ -105,6 +123,36 @@ export function useFolderFields(
 			wanted = false;
 		};
 	}, [root, id, changed]);
+
+	const send = useCallback(() => {
+		if (timer.current !== null) {
+			window.clearTimeout(timer.current);
+			timer.current = null;
+		}
+		const sending = unsent.current;
+		unsent.current = null;
+		if (sending === null) {
+			return;
+		}
+
+		const mine = writes.current;
+		void invoke("set_folder_fields", {
+			root: sending.root,
+			id: sending.id,
+			fields: Object.fromEntries(sending.fields),
+		})
+			.then(() => setTrouble(null))
+			.catch((error: unknown) => {
+				if (mine === writes.current) {
+					held.current = sending.before;
+					setRead({ id: sending.id, fields: sending.before });
+				}
+				setTrouble(failure(error).message);
+			});
+	}, []);
+
+	// Leaving the folder sends what is waiting rather than dropping it.
+	useEffect(() => send, [root, id, send]);
 
 	const setField = useCallback<SetField>(
 		(key, value) => {
@@ -119,24 +167,31 @@ export function useFolderFields(
 			} else {
 				next.set(key, value);
 			}
+			held.current = next;
 			setRead({ id, fields: next });
 
-			void invoke("set_folder_fields", {
+			writes.current += 1;
+			unsent.current = {
 				root,
 				id,
-				fields: Object.fromEntries(next),
-			})
-				.then(() => setTrouble(null))
-				.catch((error: unknown) => {
-					setRead({ id, fields: was });
-					setTrouble(failure(error).message);
-				});
+				fields: next,
+				before: unsent.current?.before ?? was,
+			};
+			if (timer.current !== null) {
+				window.clearTimeout(timer.current);
+			}
+			timer.current = window.setTimeout(send, 800);
 		},
-		[root, id],
+		[root, id, send],
 	);
 
 	return {
-		handle: id === null ? null : { fields, setField },
+		// Not until the read has landed, or a keystroke would write over the
+		// folder's other fields with a map that has none of them.
+		handle:
+			id === null || read === null || read.id !== id
+				? null
+				: { fields, setField },
 		trouble,
 	};
 }

@@ -177,6 +177,12 @@ function ask(held: Store): void {
 export function filed(root: string, id: string, text: string): void {
 	const held = store;
 
+	// A sweep already under way may have read this document before it was
+	// written, so what it brings back cannot be trusted.
+	if (held !== null && held.root === root && held.sweeping !== null) {
+		held.stale = true;
+	}
+
 	if (held === null || held.root !== root || held.corpus.kind !== "ready") {
 		return;
 	}
@@ -194,6 +200,11 @@ export function filed(root: string, id: string, text: string): void {
 			document.id === id ? { ...document, ...readIn(text) } : document,
 		),
 	});
+}
+
+/** Lets go of what is held, for when the project is closed. */
+export function forget(): void {
+	store = null;
 }
 
 /**

@@ -80,10 +80,40 @@ describe("what counts as the document", () => {
 
 	test("naming a field is not writing a word", () => {
 		expect(words(page)).toBe(14);
-		expect(words(prose(page))).toBe(7);
+		expect(words(prose(page))).toBe(6);
 	});
 
 	test("a document with no front matter is all of it", () => {
 		expect(prose("Elena andava a scuola")).toBe("Elena andava a scuola");
+	});
+});
+
+// The same table is in `document.rs`. Both sides count markdown the same way
+// or the status line and the section cards disagree.
+describe("markdown markers are not words", () => {
+	const table: [string, number][] = [
+		["# Title", 1],
+		["###### Deep heading", 2],
+		["####### seven hashes", 3],
+		["# Title\n\n* * *\n\nHello world", 3],
+		["---", 0],
+		["***", 0],
+		["_ _ _", 0],
+		["> quoted line", 2],
+		["> > nested quote", 2],
+		["- one\n- two", 2],
+		["* one\n+ two", 2],
+		["1. one\n2. two", 2],
+		["**bold** and _italic_", 3],
+		["~~gone~~ now", 2],
+		["`code` here", 2],
+		["a \\*b c", 3],
+		["Elena\\.", 1],
+		["2024. A year", 2],
+		["2024.5 is a number", 4],
+	];
+
+	test.each(table)("%j counts %i", (markdown, count) => {
+		expect(words(prose(markdown))).toBe(count);
 	});
 });

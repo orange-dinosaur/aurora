@@ -50,10 +50,12 @@ type Props = {
 
 const EMPTY: Fields = new Map();
 
+// Each read is for one subject, so turning the page to another cannot show the
+// last one's fields for a frame.
 type Held =
 	| { kind: "reading" }
-	| { kind: "ready"; text: string }
-	| { kind: "failed"; message: string };
+	| { kind: "ready"; id: string; text: string }
+	| { kind: "failed"; id: string; message: string };
 
 export default function SubjectView({
 	root,
@@ -65,7 +67,11 @@ export default function SubjectView({
 	onSubject,
 	onRemarks,
 }: Props) {
-	const [held, setHeld] = useState<Held>({ kind: "reading" });
+	const [read, setHeld] = useState<Held>({ kind: "reading" });
+	const held: Held =
+		read.kind !== "reading" && read.id !== subject.id
+			? { kind: "reading" }
+			: read;
 
 	// What the tab holds beats what is on disk, the same way the corpus takes
 	// an open document from its tab: a name typed into Info a second ago is
@@ -74,7 +80,7 @@ export default function SubjectView({
 
 	useEffect(() => {
 		if (open !== undefined) {
-			setHeld({ kind: "ready", text: open });
+			setHeld({ kind: "ready", id: subject.id, text: open });
 			return;
 		}
 
@@ -82,13 +88,14 @@ export default function SubjectView({
 		void invoke<string>("read_document", { root, id: subject.id })
 			.then((found) => {
 				if (!gone) {
-					setHeld({ kind: "ready", text: found });
+					setHeld({ kind: "ready", id: subject.id, text: found });
 				}
 			})
 			.catch((error: unknown) => {
 				if (!gone) {
 					setHeld({
 						kind: "failed",
+						id: subject.id,
 						message: failure(error).message,
 					});
 				}
@@ -185,7 +192,8 @@ export default function SubjectView({
 	// so a change made anywhere else shows up here. Only on a match: a read
 	// that lands while the writer is still typing is older than the box.
 	useEffect(() => {
-		if (draft !== null && draft === remarks) {
+		// Trimmed on both sides, since the file keeps the remarks trimmed.
+		if (draft !== null && draft.trim() === remarks.trim()) {
 			setDraft(null);
 		}
 	}, [draft, remarks]);
@@ -203,7 +211,11 @@ export default function SubjectView({
 	// This page's copy of the file with the remarks replaced. `serialize` keeps
 	// every other field spelled the way the file spells it.
 	function rewritten(value: string): string {
-		const { block, body } = split(held.kind === "ready" ? held.text : "");
+		// The open tab's text when there is one, which is newer than what was
+		// last read.
+		const { block, body } = split(
+			open ?? (held.kind === "ready" ? held.text : ""),
+		);
 		const next = new Map(fields);
 
 		if (value === "") {
@@ -261,6 +273,7 @@ export default function SubjectView({
 					setTrouble("");
 					onRemarks(rewritten(value), setTrouble);
 				}}
+				onBlur={() => setDraft(null)}
 			/>
 			<p className="subject__trouble">{trouble}</p>
 

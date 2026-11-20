@@ -151,7 +151,8 @@ type Props = {
 	target: number | null;
 	/** A hit clicked in search, which opens Find on that word. */
 	seed: Seed | null;
-	takes: TakeView[];
+	/** Null when the list could not be read. */
+	takes: TakeView[] | null;
 	merging: boolean;
 	preferences: Preferences;
 	onChooseTake: (take: string) => Promise<void>;
@@ -257,22 +258,30 @@ export default function Editor({
 	const latest = useRef(text);
 	const [marks, setMarks] = useState<Marking | null>(null);
 	const marking = marks !== null && !preferences.focus;
+	// Counts the asks, so a comparison that is still reading when the writer
+	// closes the page or asks for another does not open over them.
+	const asks = useRef(0);
+	const unmark = () => {
+		asks.current += 1;
+		setMarks(null);
+	};
 	const compareWith = (take: string | null) =>
 		attempt(async () => {
+			asks.current += 1;
+			const mine = asks.current;
 			const live = latest.current;
-			setMarks({
-				take,
-				live,
-				prose:
-					take === null ? split(live).body : await onTakeText(take),
-			});
+			const against =
+				take === null ? split(live).body : await onTakeText(take);
+			if (mine === asks.current) {
+				setMarks({ take, live, prose: against });
+			}
 		});
 	// Handed up for the Synopsis panel. Only what it draws is watched, because
 	// `Project` remakes the callbacks behind this on every render, and setting
 	// the handle renders it again.
 	const compared = marks?.take ?? null;
 	useEffect(() => {
-		if (!active || takes.length === 0) {
+		if (!active || takes === null || takes.length === 0) {
 			return;
 		}
 
@@ -280,8 +289,7 @@ export default function Editor({
 			takes,
 			marking,
 			compared,
-			onMarks: () =>
-				marking ? setMarks(null) : compareWith(baseline(takes)),
+			onMarks: () => (marking ? unmark() : compareWith(baseline(takes))),
 			onCompare: compareWith,
 		});
 		return () => onMarks(null);
@@ -300,6 +308,14 @@ export default function Editor({
 	// already open takes the caret back to the field instead of doing nothing.
 	const [asked, setAsked] = useState(0);
 	const [replacing, setReplacing] = useState(false);
+	// Leaving the tab closes the panel, so it is not waiting when the writer
+	// comes back.
+	useEffect(() => {
+		if (!active) {
+			setFinding(false);
+			setReplacing(false);
+		}
+	}, [active]);
 	const find = useCallback(() => {
 		setFinding(true);
 		setAsked((times) => times + 1);
@@ -322,10 +338,22 @@ export default function Editor({
 		setAsked((times) => times + 1);
 	}, [seed]);
 
+	// The editor rewrites the file's markdown as it loads it, so its words are
+	// counted from that. Counted from the file, the first keystroke would move
+	// the total by whatever the rewriting changed.
+	useEffect(() => {
+		if (settled.current !== null) {
+			const next = counted(settled.current);
+			setTally(next);
+			was.current = next.words;
+		}
+	}, []);
+
 	const edited = useCallback(
 		(state: EditorState) => {
 			const markdown = state.read(() => $toMarkdown());
 			latest.current = markdown;
+			setRefused(null);
 			const next = counted(markdown);
 			setTally(next);
 			// Moving the caret is a change like any other here, and it has
@@ -349,11 +377,15 @@ export default function Editor({
 	// The editor owns its text from here on, so the document seeds it once and
 	// is never pushed in again — doing that on every render would drag the
 	// caret out from under whoever is typing.
+	const settled = useRef<string | null>(null);
 	const [config] = useState(() => ({
 		namespace: "aurora",
 		nodes: EDITOR_NODES,
 		theme: THEME,
-		editorState: () => $fromMarkdown(text),
+		editorState: () => {
+			$fromMarkdown(text);
+			settled.current = $toMarkdown();
+		},
 		onError: (failed: Error) => {
 			throw failed;
 		},
@@ -441,31 +473,38 @@ export default function Editor({
 									<h2 className="editor__title">{title}</h2>
 								</div>
 							</div>
-							{takes.length > 0 && !preferences.focus && (
-								<TakeStrip
-									takes={takes}
-									words={tally.words}
-									merging={merging}
-									onChoose={(take) => {
-										setMarks(null);
-										attempt(() => onChooseTake(take));
-									}}
-									onTry={() => {
-										setMarks(null);
-										attempt(onTry);
-									}}
-									onRename={onRenameTake}
-									onDelete={(take) => {
-										setMarks(null);
-										attempt(() => onDeleteTake(take));
-									}}
-								/>
+							{takes === null && !preferences.focus && (
+								<p className="takes" role="status">
+									Takes could not be read
+								</p>
 							)}
+							{takes !== null &&
+								takes.length > 0 &&
+								!preferences.focus && (
+									<TakeStrip
+										takes={takes}
+										words={tally.words}
+										merging={merging}
+										onChoose={(take) => {
+											unmark();
+											attempt(() => onChooseTake(take));
+										}}
+										onTry={() => {
+											unmark();
+											attempt(onTry);
+										}}
+										onRename={onRenameTake}
+										onDelete={(take) => {
+											unmark();
+											attempt(() => onDeleteTake(take));
+										}}
+									/>
+								)}
 							{marking && (
 								<Marks
 									live={marks.live}
 									prose={marks.prose}
-									onClose={() => setMarks(null)}
+									onClose={unmark}
 								/>
 							)}
 							{/* Hidden rather than unmounted, so the caret and
@@ -498,7 +537,7 @@ export default function Editor({
 								{/* Keeps link nodes tidy as they are edited, as
 								    well as answering for the toggle command. */}
 								<LinkPlugin />
-								<Links />
+								<Links onFailed={setRefused} />
 								{/* Moving the caret is not an edit, or every
 								    click would mark the document unsaved. */}
 								<OnChangePlugin
@@ -555,6 +594,7 @@ export default function Editor({
 					{finding && (
 						<Find
 							asked={asked}
+							active={active}
 							seed={seed}
 							replacing={replacing}
 							onReplacing={setReplacing}

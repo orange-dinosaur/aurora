@@ -121,12 +121,9 @@ describe("mentions come back in reading order, whoever they belong to", () => {
 		expect(found(both, "Rose stood there.")).toHaveLength(2);
 	});
 
-	test("the longer of two overlapping names is reported first", () => {
+	test("the longer of two overlapping names is the one reported", () => {
 		const rose = subject("Rose", "Rose Quartz");
-		expect(found([rose], "Rose Quartz turned.")).toEqual([
-			"Rose Quartz",
-			"Rose",
-		]);
+		expect(found([rose], "Rose Quartz turned.")).toEqual(["Rose Quartz"]);
 	});
 });
 
@@ -159,6 +156,23 @@ function page(title: string, names: string[] = []): Mentionable {
 }
 
 const elena = subject("Elena", "the Captain");
+
+describe("a short name inside a longer one is the same mention", () => {
+	test("Elena Marsh with the name Elena is one mention", () => {
+		const marsh = subject("Elena Marsh", "Elena");
+
+		expect(found([marsh], "Elena Marsh walked.")).toEqual(["Elena Marsh"]);
+	});
+
+	test("the short name still counts where it stands alone", () => {
+		const marsh = subject("Elena Marsh", "Elena");
+
+		expect(found([marsh], "Elena Marsh walked. Elena sat.")).toEqual([
+			"Elena Marsh",
+			"Elena",
+		]);
+	});
+});
 
 describe("a subject's page collects where it is spoken of", () => {
 	test("a document that names it and one that tags it both appear", () => {

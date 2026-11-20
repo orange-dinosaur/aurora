@@ -353,6 +353,21 @@ describe("the project's day, across the three numbers", () => {
 		});
 	});
 
+	test("a session running from yesterday adds nothing to today", () => {
+		const yesterday = NOON - 24 * 60 * 60 * 1000;
+		const open = start(IDLE, yesterday, 1000);
+		const typed = wrote(
+			open.sessions,
+			changed("scene", yesterday, 50),
+			1000,
+		);
+
+		expect(dayTally([], typed.sessions, 1050, NOON)).toEqual({
+			automatic: { written: 0, removed: 0, net: 0 },
+			deliberate: { written: 0, removed: 0, net: 0 },
+		});
+	});
+
 	test("nothing today is three noughts", () => {
 		expect(dayTally([], IDLE, 4000, NOON)).toEqual({
 			automatic: { written: 0, removed: 0, net: 0 },

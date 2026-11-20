@@ -162,8 +162,11 @@ function added(one: Tally, other: Tally): Tally {
  * here rather than held: it is the count now less the count the session opened
  * on, and it only settles when the session closes.
  */
-function sofar(session: Running | null, words: number): Tally {
-	return session === null
+function sofar(session: Running | null, words: number, at: number): Tally {
+	// A session that began on an earlier day belongs to that day, whatever it
+	// is still doing now.
+	return session === null ||
+		new Date(session.start).toDateString() !== new Date(at).toDateString()
 		? NOTHING
 		: {
 				written: session.written,
@@ -196,8 +199,8 @@ export function dayTally(
 				: { ...all, deliberate: added(all.deliberate, tally) };
 		},
 		{
-			automatic: sofar(sessions.automatic, words),
-			deliberate: sofar(sessions.deliberate, words),
+			automatic: sofar(sessions.automatic, words, at),
+			deliberate: sofar(sessions.deliberate, words, at),
 		},
 	);
 }

@@ -53,7 +53,9 @@ export default function NameField({
 					event.currentTarget.contains(moved);
 				// Not while a name is with Rust: closing now would only reopen
 				// the field if that name comes back refused.
-				if (!busy && !inside) {
+				// Nor when the whole window lost focus: switching away is not
+				// abandoning the name.
+				if (!busy && !inside && document.hasFocus()) {
 					onCancel();
 				}
 			}}
@@ -71,7 +73,9 @@ export default function NameField({
 				onKeyDown={(event) => {
 					if (event.key === "Escape") {
 						event.preventDefault();
-						onCancel();
+						if (!busy) {
+							onCancel();
+						}
 					}
 				}}
 			/>

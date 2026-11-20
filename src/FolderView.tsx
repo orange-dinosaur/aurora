@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DocumentMenu from "./DocumentMenu";
@@ -91,8 +91,7 @@ function NamingCard({
 	);
 }
 
-type Status =
-	{ kind: "busy" } | { kind: "idle" } | { kind: "error"; message: string };
+type Status = { kind: "idle" } | { kind: "error"; message: string };
 
 // The `+ New` card: a menu until the writer chooses from it, then the field
 // asking what to call what they chose, and whatever Rust made of the last name
@@ -165,7 +164,7 @@ export default function FolderView({
 	const [target, setTarget] = useState<number | null>(null);
 	// The card whose target is being typed, if one is.
 	const [aiming, setAiming] = useState<string | null>(null);
-	const [status, setStatus] = useState<Status>({ kind: "busy" });
+	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	// A target refused is said in the alert line, and the field stays open.
 	function aimed(done: Promise<void>) {
 		return done.catch((error: unknown) => {
@@ -198,8 +197,13 @@ export default function FolderView({
 		};
 	}
 
+	// Counts the reads, so only the newest is drawn. A reload says nothing
+	// while it reads, so it cannot wipe a message or the field being typed in.
+	const reads = useRef(0);
+	const [loaded, setLoaded] = useState(false);
 	const load = useCallback(async () => {
-		setStatus({ kind: "busy" });
+		reads.current += 1;
+		const mine = reads.current;
 		try {
 			// The cards already add up to the folder's words; only its
 			// target lives elsewhere.
@@ -213,11 +217,18 @@ export default function FolderView({
 					id: folder.id,
 				}),
 			]);
+			if (mine !== reads.current) {
+				return;
+			}
 			setCards(read);
 			setTarget(progress.target);
-			setStatus({ kind: "idle" });
 		} catch (error) {
-			setStatus({ kind: "error", message: failure(error).message });
+			if (mine === reads.current) {
+				setStatus({ kind: "error", message: failure(error).message });
+			}
+		}
+		if (mine === reads.current) {
+			setLoaded(true);
 		}
 	}, [root, folder.id]);
 
@@ -296,7 +307,7 @@ export default function FolderView({
 		}
 	}
 
-	if (status.kind === "busy" && cards.length === 0) {
+	if (!loaded) {
 		return (
 			<div className="overview overview--folder">
 				<header className="overview__header">
@@ -386,7 +397,7 @@ export default function FolderView({
 								key={card.id}
 								className="cards__item"
 								{...reorder.item(spot(card, at))}
-								draggable={!merging}
+								draggable={!merging && aiming !== card.id}
 							>
 								<Card
 									className="card card--folder"
@@ -508,7 +519,7 @@ export default function FolderView({
 							key={document.id}
 							className="cards__item"
 							{...reorder.item(spot(document, at))}
-							draggable={!merging}
+							draggable={!merging && aiming !== document.id}
 						>
 							<Card
 								className="card"

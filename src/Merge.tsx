@@ -573,7 +573,17 @@ export default function Merge({
 
 // Asks first, as it loses every choice made here. The note takes the keyboard
 // rather than a button, so Enter aborts nothing.
-function Abort({ into, onAbort }: { into: string; onAbort: () => void }) {
+export function Abort({
+	into,
+	className = "quiet merge__abort",
+	disabled = false,
+	onAbort,
+}: {
+	into: string;
+	className?: string;
+	disabled?: boolean;
+	onAbort: () => void;
+}) {
 	const [asking, setAsking] = useState(false);
 	const wrapper = useRef<HTMLDivElement>(null);
 	const note = useRef<HTMLParagraphElement>(null);
@@ -589,7 +599,8 @@ function Abort({ into, onAbort }: { into: string; onAbort: () => void }) {
 		<div ref={wrapper} className="putback">
 			<button
 				type="button"
-				className="quiet merge__abort"
+				className={className}
+				disabled={disabled}
 				aria-expanded={asking}
 				onClick={() => setAsking((was) => !was)}
 			>

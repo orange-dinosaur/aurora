@@ -7,6 +7,7 @@ import Account from "./Account";
 import Icon from "./Icon";
 import { UNITS } from "./Session";
 import { bounded } from "./lib/settings";
+import { trapTab } from "./lib/trap";
 import { KEYBOARD, written } from "./formatting";
 import { face, FACES, nudged, SETTINGS, type Setting } from "./lib/typography";
 import type { Preferences, Theme } from "./types";
@@ -120,6 +121,9 @@ export default function Settings({
 				aria-label="Settings"
 				ref={dialog}
 				tabIndex={-1}
+				onKeyDown={(event) =>
+					trapTab(event.nativeEvent, dialog.current)
+				}
 			>
 				<nav className="settings__rail">
 					<p className="settings__eyebrow">Settings</p>
@@ -492,6 +496,7 @@ function Sessions({
 						value={preferences.idleMinutes}
 						label="Count a session closed after, in minutes"
 						bounds={IDLE}
+						fallback
 						onValue={(minutes) =>
 							onPreferences({
 								...preferences,
@@ -544,22 +549,46 @@ function Amount({
 	value,
 	label,
 	bounds,
+	fallback = false,
 	onValue,
 }: {
 	value: number | null;
 	label: string;
 	bounds: { min: number; max: number };
+	/** Empty stands for a usual amount, so it cannot be stored while typing. */
+	fallback?: boolean;
 	onValue: (value: number | null) => void;
 }) {
+	// Only a field with a fallback keeps a draft: emptying it is the first step
+	// of typing a new number, and storing the fallback at once would put it
+	// back under the writer's hands.
+	const [draft, setDraft] = useState<string | null>(null);
+
 	return (
 		<input
 			className="settings__field"
-			value={value === null ? "" : String(value)}
+			value={draft ?? (value === null ? "" : String(value))}
 			inputMode="numeric"
 			aria-label={label}
-			onChange={(event) =>
-				onValue(bounded(event.target.value, bounds.min, bounds.max))
-			}
+			onChange={(event) => {
+				const next = bounded(
+					event.target.value,
+					bounds.min,
+					bounds.max,
+				);
+				if (fallback && next === null) {
+					setDraft("");
+					return;
+				}
+				setDraft(null);
+				onValue(next);
+			}}
+			onBlur={() => {
+				if (draft !== null) {
+					setDraft(null);
+					onValue(null);
+				}
+			}}
 		/>
 	);
 }

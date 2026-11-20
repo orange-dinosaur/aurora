@@ -8,6 +8,7 @@ import Profile from "./Profile";
 import UpdateNotice from "./UpdateNotice";
 import type { LastProject, OpenProject, Preferences } from "./types";
 import "./App.css";
+import { forget } from "./corpus";
 import { failure } from "./errors";
 import { flushBeforeQuitting } from "./quitting";
 import { inAField, pressed, SETTINGS } from "./formatting";
@@ -141,57 +142,62 @@ function App() {
 
 	return (
 		<main className="app">
-			{boot.kind === "project" ? (
-				<Project
-					name={boot.project.name}
-					root={boot.project.root}
-					enclosingRepository={boot.project.enclosingRepository}
-					justCreated={boot.created ?? false}
-					preferences={preferences}
-					onPreferences={save}
-					onSettings={openSettings}
-					onLogin={() => setLogin(true)}
-					onProfile={() => setProfile(true)}
-					onClose={() => {
-						// Stops the project reopening on launch; it stays in
-						// the recent list.
-						void invoke("close_project");
-						setBoot({ kind: "welcome", notice: null });
-					}}
-				/>
-			) : (
-				boot.kind === "welcome" && (
-					<Welcome
-						notice={boot.notice}
-						onOpened={(project, created) =>
-							setBoot({ kind: "project", project, created })
-						}
+			{/* Takes no box of its own. Inert while sign-in or the profile is
+			    up, so neither Tab nor a click reaches what they cover. */}
+			<div style={{ display: "contents" }} inert={login || profile}>
+				{boot.kind === "project" ? (
+					<Project
+						name={boot.project.name}
+						root={boot.project.root}
+						enclosingRepository={boot.project.enclosingRepository}
+						justCreated={boot.created ?? false}
+						preferences={preferences}
+						onPreferences={save}
+						onSettings={openSettings}
 						onLogin={() => setLogin(true)}
 						onProfile={() => setProfile(true)}
-						onSettings={openSettings}
-						theme={preferences.theme}
-						onTheme={(theme) => save({ ...preferences, theme })}
-						projectsFolder={preferences.projectsFolder}
-						onProjectsFolder={(projectsFolder) =>
-							save({ ...preferences, projectsFolder })
-						}
+						onClose={() => {
+							// Stops the project reopening on launch; it stays in
+							// the recent list.
+							void invoke("close_project");
+							forget();
+							setBoot({ kind: "welcome", notice: null });
+						}}
 					/>
-				)
-			)}
+				) : (
+					boot.kind === "welcome" && (
+						<Welcome
+							notice={boot.notice}
+							onOpened={(project, created) =>
+								setBoot({ kind: "project", project, created })
+							}
+							onLogin={() => setLogin(true)}
+							onProfile={() => setProfile(true)}
+							onSettings={openSettings}
+							theme={preferences.theme}
+							onTheme={(theme) => save({ ...preferences, theme })}
+							projectsFolder={preferences.projectsFolder}
+							onProjectsFolder={(projectsFolder) =>
+								save({ ...preferences, projectsFolder })
+							}
+						/>
+					)
+				)}
 
-			{settingsDrawn && (
-				<Settings
-					closing={!settings}
-					instant={settingsInstant}
-					preferences={preferences}
-					onPreferences={save}
-					onClose={() => setSettings(false)}
-					onLogin={() => {
-						setSettings(false);
-						setLogin(true);
-					}}
-				/>
-			)}
+				{settingsDrawn && (
+					<Settings
+						closing={!settings}
+						instant={settingsInstant}
+						preferences={preferences}
+						onPreferences={save}
+						onClose={() => setSettings(false)}
+						onLogin={() => {
+							setSettings(false);
+							setLogin(true);
+						}}
+					/>
+				)}
+			</div>
 
 			{login && (
 				<Login
