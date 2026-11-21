@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { trashed } from "./trash";
+import { trashed } from "./trashing";
 
 describe("what a folder in the trash took with it", () => {
 	test("an empty folder still says it is one", () => {

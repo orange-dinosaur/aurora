@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { repointed, strip, without, type Tab } from "./tabs";
+import { repointed, strip, without, type Tab } from "./tabbing";
 import type { ProjectDocument, TreeNode } from "./types";
 
 function folder(id: string, name: string, children: TreeNode[]): TreeNode {

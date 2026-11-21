@@ -8,7 +8,7 @@ import { readDocument, writeDocument } from "./documents";
 import { failure } from "./errors";
 import { rekey, type Sides } from "./split";
 import { retag, tagged } from "./tags";
-import type { DocumentTab } from "./tabs";
+import type { DocumentTab } from "./tabbing";
 import { timed } from "./timing";
 import type { DocumentText } from "./types";
 

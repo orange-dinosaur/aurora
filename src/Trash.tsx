@@ -3,7 +3,7 @@ import type { TrashEntry } from "./types";
 import { MERGE_HOLDS } from "./branches";
 import { listTrash, purgeTrashEntry, restoreFromTrash } from "./documents";
 import { deliberate } from "./rows";
-import { trashed } from "./trash";
+import { trashed } from "./trashing";
 import { when } from "./dates";
 import { failure } from "./errors";
 

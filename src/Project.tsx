@@ -99,7 +99,7 @@ import {
 	type DocumentTab,
 	type Save,
 	type Tab,
-} from "./tabs";
+} from "./tabbing";
 import { pressed, SEARCH, SESSION } from "./formatting";
 
 type Props = {
