@@ -445,6 +445,17 @@ export function split(text: string): { block: string; body: string } {
 }
 
 /**
+ * The same document with these fields in its block, spelled the way `serialize`
+ * keeps them, and the body as it was.
+ */
+export function withFields(text: string, fields: Fields): string {
+	const { block, body } = split(text);
+
+	// `split` ate the newline under the block, so it goes back on.
+	return `${serialize(fields, block)}\n${body}`;
+}
+
+/**
  * Whether a fenced stretch is front matter rather than prose between two scene
  * breaks: it opens on a line with something in it, and every line is blank, a
  * comment, indented, a list item or a `key:` line. Rust asks the same of the

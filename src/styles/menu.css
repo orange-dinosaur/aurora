@@ -1,0 +1,296 @@
+.quiet.trashed__danger:not(:disabled) {
+	color: var(--danger);
+}
+
+/* Every surface that floats over the page is the same box, wherever it is
+   raised from. Sizes are in rem rather than em: these open inside the editor,
+   which carries the writer's own font size, and a popover should not grow with
+   the manuscript. */
+.menu__items,
+.toolbar,
+.slash,
+.controls__list,
+.controls__address,
+.typography__panel,
+.editor__find {
+	padding: 0.5rem;
+	font-size: 0.75rem;
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
+}
+
+.menu {
+	position: absolute;
+}
+
+.cards__item .menu {
+	top: var(--space-xs);
+	right: var(--space-xs);
+}
+
+.cards__item .menu__trigger {
+	opacity: 0;
+}
+
+.cards__item:hover .menu__trigger,
+.cards__item:focus-within .menu__trigger,
+.cards__item .menu__trigger[aria-expanded="true"] {
+	opacity: 1;
+}
+
+/* Spanning the row and centring with flex rather than translating: a transform
+   would make this a stacking context, trapping the dropdown's z-index inside it
+   so every row after this one painted over the open menu. */
+.documents__item .menu {
+	top: 0;
+	bottom: 0;
+	right: 0;
+	display: flex;
+	align-items: center;
+	/* Faded rather than removed, so a row of documents is quiet to read but
+	   never changes width. */
+	opacity: 0;
+}
+
+.documents__item:hover .menu,
+.documents__item:focus-within .menu {
+	opacity: 1;
+}
+
+/* A folder carries two of them. They share one slot at the end of the row, and
+   the ⋮ takes the outer place so it lines up with the ⋮ on every document
+   below it. Inside the slot each menu is only the anchor its dropdown hangs
+   from, so it is placed by the flow rather than by the row. */
+.documents__actions {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	display: flex;
+	align-items: center;
+	opacity: 0;
+}
+
+.documents__item:hover .documents__actions,
+.documents__item:focus-within .documents__actions {
+	opacity: 1;
+}
+
+.documents__actions .menu {
+	position: relative;
+	inset: auto;
+	display: block;
+	opacity: 1;
+}
+
+.menu__trigger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.menu__trigger:hover,
+.menu__trigger[aria-expanded="true"] {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.menu__trigger:disabled {
+	color: var(--text-faint);
+	background: none;
+	cursor: default;
+}
+
+/* Opened at the pointer: placed against the window rather than a trigger,
+   over everything but a dialog. */
+.menu__items.menu__items--pointer {
+	position: fixed;
+	top: 0;
+	right: auto;
+	left: 0;
+	z-index: 30;
+	transform-origin: top left;
+}
+
+/* Hangs under its trigger. A menu listing folders can run past the window, so
+   it scrolls rather than growing off the bottom of a deep project. */
+.menu__items {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	min-width: 8rem;
+	max-height: 60vh;
+	padding: var(--space-xxs);
+	font: var(--text-ui);
+	overflow-y: auto;
+	scrollbar-width: none;
+}
+
+/* Transitions rather than keyframes, so a menu closed mid-opening goes back
+   from where it is. A webview without @starting-style simply opens at once. */
+.menu__items,
+.typography__panel {
+	transform-origin: top right;
+	transition:
+		opacity 150ms var(--ease-open),
+		transform 150ms var(--ease-open);
+}
+
+@starting-style {
+	.menu__items,
+	.typography__panel {
+		opacity: 0;
+		transform: var(--open-from);
+	}
+}
+
+/* 100ms is MENU_FADE. Fade only: the writer has already moved on. */
+.menu__items[data-closing],
+.typography__panel[data-closing] {
+	opacity: 0;
+	transition: opacity 100ms var(--ease-open);
+}
+
+.menu__items[data-instant],
+.typography__panel[data-instant] {
+	transition: none;
+}
+
+.shelf__book .menu__items,
+.binder__menu .menu__items,
+.versions__actions .menu__items,
+.takes__menu .menu__items,
+.book__picker .menu__items {
+	transform-origin: top left;
+}
+
+.sidelist__foot .menu__items,
+.takes__compare .menu__items {
+	transform-origin: bottom left;
+}
+
+/* The foot sits on the window's edge, so the question opens upward. */
+.compare__acts .menu__items {
+	top: auto;
+	bottom: calc(100% + var(--space-xxs));
+	transform-origin: bottom right;
+}
+
+.menu__item {
+	padding: 0.3rem 0.5rem;
+	/* Set in only where a menu draws a tree; the custom property is nought
+	   everywhere else. */
+	padding-left: calc(0.5rem + var(--depth, 0) * 0.7rem);
+	font: inherit;
+	text-align: left;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Between what a menu does inside the project and what leaves it. */
+.menu__rule {
+	height: 1px;
+	margin: var(--space-xxs);
+	background: var(--border);
+}
+
+/* The way back to the actions, above the folders it opened over. */
+.menu__back {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	margin-bottom: 0.25rem;
+	padding-bottom: 0.4rem;
+	color: var(--text-dim);
+	border-bottom: 1px solid var(--border);
+	border-radius: 0;
+}
+
+.menu__back:hover {
+	color: var(--text);
+}
+
+.menu__back svg {
+	width: 13px;
+	height: 13px;
+}
+
+/* What the menu says or asks, rather than what it offers. */
+.menu__note {
+	margin: 0;
+	padding: 0.3rem 0.5rem;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+/* The row a question ends on. */
+.menu__go {
+	font-weight: 600;
+}
+
+.menu__item:hover:not(:disabled) {
+	background: var(--accent-wash);
+}
+
+.menu__item:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.menu__item--danger {
+	color: var(--danger);
+}
+
+.menu__item--danger:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+/* The shortcut for an item that has one, at the far end of the row. The menu is
+   where a shortcut is learned, so it is written out rather than left to a
+   tooltip nobody hovers for. */
+.menu__item:has(.menu__chord) {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.5rem;
+}
+
+.menu__chord {
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+/* A second line under an item, for an action whose name does not say what it
+   leaves behind. It inherits the danger colour where it sits in one, so the
+   pair reads as one item rather than two. */
+.menu__hint {
+	display: block;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.menu__item--danger .menu__hint {
+	color: inherit;
+	opacity: 0.75;
+}

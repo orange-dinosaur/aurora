@@ -1,0 +1,244 @@
+.stats__words {
+	margin: 0 0 1rem;
+	font-size: 0.9375rem;
+	color: var(--text);
+}
+
+.stats__line {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin: 0 0 0.25rem;
+	font-size: 0.8125rem;
+}
+
+.stats__layer {
+	color: var(--text-dim);
+}
+
+/* Which layer the three numbers under it came from. Lighter than a heading: it
+   divides a group rather than opening one. */
+.stats__layers {
+	margin: 0.75rem 0 0.25rem;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--text);
+}
+
+.stats__heading + .stats__layers {
+	margin-top: 0;
+}
+
+/* An explanation, not a warning, so it reads in the same grey as the labels
+   rather than in the danger colour. */
+.stats__note {
+	margin: 0.25rem 0 0;
+	font-size: 0.75rem;
+	line-height: 1.4;
+	color: var(--text-dim);
+}
+
+.stats__number {
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
+}
+
+.sprint {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	margin: 0;
+	padding: var(--space-xxs) var(--space-xs);
+}
+
+/* A line to write on, like a new version's name. It takes the row's spare
+   width, so the gaps between the three stay equal. */
+.sprint__amount {
+	flex: 1;
+	min-width: 0;
+	height: 23px;
+	padding: 0;
+	font: inherit;
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--graphic-faint);
+	border-radius: 0;
+}
+
+/* One shape made of two buttons. A native select is drawn by WebKitGTK in the
+   desktop theme's colours whatever the page asks for, which came out white on
+   white; nothing else in Aurora is a native widget either. */
+.sprint__units {
+	display: inline-flex;
+	flex: none;
+	gap: 2px;
+	padding: 2px;
+	background: var(--bg-hover);
+	border-radius: var(--radius-pill);
+}
+
+.sprint__unit {
+	padding: 1px 6px;
+	font: var(--text-ui);
+	font-size: 0.75rem;
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.sprint__unit:hover {
+	color: var(--text);
+}
+
+.sprint__unit[aria-pressed="true"] {
+	color: var(--text);
+	background: var(--bg-card);
+}
+
+/* Drawn inside its own edge: the group clips what overflows it, so a ring set
+   outside the button would be cut off. */
+.sprint__unit:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -2px;
+}
+
+/* The same height as the field and the units beside it. */
+.sprint__go {
+	flex: none;
+	padding: 3px var(--space-xs);
+	font: var(--text-ui-strong);
+	font-size: 0.75rem;
+	letter-spacing: normal;
+	text-transform: none;
+}
+
+/* Clear of the fill, or the ring lands on its own colour. */
+.sprint__go:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.sprint__amount:focus {
+	outline: none;
+	border-bottom-color: var(--accent-text);
+	box-shadow: 0 1px 0 var(--accent-text);
+}
+
+.history {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* The hairline falls between days, not between sessions: the day is the
+   division the writer reads by, and a rule under every entry in a 240px column
+   turns the list into a grid. */
+.history__day + .history__day {
+	margin-top: 0.6rem;
+	padding-top: 0.6rem;
+	border-top: 1px solid var(--border);
+}
+
+.history__date {
+	margin: 0;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--text);
+}
+
+/* What the whole day came to, which is not always what is listed under it: the
+   cap can cut a day short and the total still speaks for all of it. */
+.history__total {
+	margin-top: 0.05rem;
+	color: var(--text);
+}
+
+.history__sessions {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.history__session {
+	padding: 0.35rem 0 0;
+}
+
+.history__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--text);
+}
+
+.history__lasted {
+	flex: none;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.history__kind {
+	margin: 0.1rem 0 0;
+	font-size: 0.75rem;
+	color: var(--text);
+}
+
+.history__numbers {
+	margin: 0.1rem 0 0;
+	font-size: 0.6875rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.history__none {
+	margin: 0;
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+}
+
+.history__more {
+	margin-top: 0.4rem;
+	padding: 0.1rem 0.3rem;
+	font: inherit;
+	font-size: 0.75rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.history__more:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.history__more:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+.stats__trouble {
+	margin: 0 0 0.75rem;
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+}
+
+.right-sidebar__empty {
+	margin: 0;
+	font-size: 0.8125rem;
+	color: var(--text-dim);
+}

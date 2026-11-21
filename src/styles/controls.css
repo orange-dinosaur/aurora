@@ -1,0 +1,569 @@
+/* The same row of buttons in both bars, so the two can never look like they do
+   different things. */
+.controls {
+	display: flex;
+	gap: 2px;
+	align-items: center;
+	white-space: nowrap;
+}
+
+/* Floats at the foot of the page, over the writing but outside its scroll. */
+.toolbar {
+	position: absolute;
+	bottom: var(--space-md);
+	left: 50%;
+	z-index: 4;
+	display: flex;
+	align-items: center;
+	padding: var(--space-xxs) var(--space-xs);
+	font-family: var(--font-ui);
+	white-space: nowrap;
+	border-radius: var(--radius-pill);
+	transform: translateX(-50%);
+}
+
+.toolbar__marks[inert] {
+	opacity: 0.55;
+}
+
+.toolbar__modes {
+	display: flex;
+	gap: 2px;
+	align-items: center;
+}
+
+.toolbar__mode {
+	display: inline-flex;
+	gap: var(--space-xxs);
+	align-items: center;
+	height: 28px;
+	padding: 0 var(--space-xs);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.toolbar__mode:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.toolbar__mode[aria-pressed="true"] {
+	color: var(--accent-text);
+	background: var(--accent-wash);
+}
+
+.toolbar__mode svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* The dock stands at the foot, so what it opens goes up. */
+.toolbar .controls__list,
+.toolbar .controls__address {
+	top: auto;
+	bottom: 100%;
+	margin: 0 0 var(--space-xs);
+}
+
+.controls__block {
+	position: relative;
+}
+
+.controls__turn {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	height: 28px;
+	padding: 0 var(--space-xs);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.controls__turn:hover,
+.controls__turn[aria-expanded="true"] {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.controls__caret {
+	display: flex;
+}
+
+.controls__caret svg {
+	width: 14px;
+	height: 14px;
+}
+
+.controls__list {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	min-width: 9rem;
+	margin-top: 0.25rem;
+}
+
+/* Solid, because they sit inside a bar that already blurs, where a second blur
+   has nothing behind it to read. */
+.controls__list,
+.controls__address {
+	background: var(--bg-card);
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+}
+
+.controls__option,
+.slash__option {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1.5rem;
+	padding: 0.3rem 0.5rem;
+	font: inherit;
+	text-align: left;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.controls__option:hover,
+.slash__option[aria-selected="true"] {
+	background: var(--accent-wash);
+}
+
+.controls__option[aria-checked="true"] {
+	color: var(--accent-text);
+}
+
+/* Quiet enough to ignore while reading the names, there to be noticed once. */
+.controls__keys {
+	font-size: 0.9em;
+	color: var(--text-dim);
+}
+
+.controls__divider {
+	flex: none;
+	width: 1px;
+	height: 16px;
+	margin: 0 var(--space-xxs);
+	background: var(--border-strong);
+}
+
+/* Each button is drawn in the style it applies, so it needs no label. */
+.controls__mark {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	font: 400 15px/1 var(--font-page);
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.controls__mark:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.controls__mark[aria-pressed="true"] {
+	color: var(--accent-text);
+	background: var(--accent-wash);
+}
+
+.controls__mark--bold {
+	font-weight: 700;
+}
+
+.controls__mark--italic {
+	font-style: italic;
+}
+
+.controls__mark--strikethrough {
+	text-decoration: line-through;
+}
+
+.controls__mark--highlight {
+	background: var(--accent-wash);
+}
+
+/* Solid when on, because it wears the wash when off. */
+.controls__mark--highlight[aria-pressed="true"] {
+	color: var(--on-accent);
+	background: var(--accent);
+}
+
+/* Holds the address field under the button that opens it. */
+.controls__link {
+	position: relative;
+}
+
+.controls__address {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 6;
+	margin-top: 0.25rem;
+}
+
+.controls__url {
+	width: 16rem;
+	padding: 0.25rem 0;
+	font: inherit;
+	color: var(--text);
+}
+
+.controls__mark--code {
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+
+/* The menu a slash raises. The plugin hangs an anchor off the caret and gives
+   it the caret's own size, so the menu itself is taken out of that box and
+   only has to lay itself out. */
+/* Over the text rather than above it: the page keeps its place while a search
+   is going on, and the panel gives it back when it closes. */
+.editor__find {
+	position: absolute;
+	top: calc(var(--space-xs) * 2 + var(--tools-height));
+	right: var(--gutter);
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+}
+
+/* The replace row lines up under the find row, so the two fields share an
+   edge and the buttons sit where the arrows are. */
+.editor__find-row {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+}
+
+.editor__find-input {
+	width: 12rem;
+	padding: 0.2rem 0;
+	font: inherit;
+	color: var(--text);
+}
+
+/* Wide enough for "12 of 34" so the buttons hold still as the count changes. */
+.editor__find-count {
+	min-width: 5rem;
+	color: var(--text-dim);
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.editor__find-step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border-radius: var(--radius-xs);
+	font: inherit;
+	color: var(--text);
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.editor__find-step:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.editor__find-step:disabled {
+	color: var(--text-dim);
+	cursor: default;
+}
+
+/* Worded rather than drawn: replacing is not something to press by accident. */
+.editor__find-do {
+	flex: 1;
+	padding: 0.2rem 0.5rem;
+	font: inherit;
+	color: var(--text);
+}
+
+/* Nothing in the panel had a ring of its own, so every control in it took the
+   webview's blue. The panel's own padding leaves room for this. */
+.editor__find-step:focus-visible,
+.editor__find-do:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* The two paint layers. Only a handful of properties are allowed here, which
+   is why the current match is told apart by colour alone. */
+::highlight(aurora-find) {
+	background-color: var(--find);
+}
+
+/* The paper is what reads against the accent in both schemes: dark on a light
+   accent, light on a dark one. A fixed white was legible in one of the two. */
+::highlight(aurora-find-current) {
+	background-color: var(--accent);
+	color: var(--on-accent);
+}
+
+.slash {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	min-width: 11rem;
+}
+
+.typography {
+	position: relative;
+}
+
+.typography__toggle {
+	width: auto;
+	padding-inline: var(--space-xs);
+	font: var(--text-ui-strong);
+}
+
+.typography__panel {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 6;
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: var(--space-xxs) var(--space-md);
+	margin-top: var(--space-xxs);
+	font: var(--text-ui);
+	white-space: nowrap;
+}
+
+.typography__stepper {
+	display: inline-flex;
+	align-items: center;
+}
+
+.typography__value {
+	min-width: 44px;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.typography__step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	font: inherit;
+	line-height: 1;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.typography__step:hover:not(:disabled) {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.typography__step:disabled {
+	color: var(--border-strong);
+	cursor: default;
+}
+
+/* Focus mode. Nothing inside a block has to escape it, so the stacking context
+   an opacity below 1 creates costs nothing here. */
+.editor--focus .editor__text > * {
+	opacity: 0.3;
+	transition: opacity 120ms var(--ease-open);
+}
+
+.editor--focus .editor__text > .editor__focused {
+	opacity: 1;
+}
+
+/* Room below the last line, or the caret could not be held part-way down the
+   page once the writer reached the end of the document. There is deliberately
+   no matching room above: the opening lines should sit where they are rather
+   than start half-way down. */
+.editor--typewriter .editor__text {
+	padding-bottom: 60vh;
+}
+
+.editor__under {
+	padding-block: var(--space-xs) var(--space-sm);
+}
+
+/* The count and the save state share one row, so the row keeps its height
+   whatever either of them says. */
+.editor__foot {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.editor__count {
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+/* The count is the control, so it carries no box of its own: only the cursor
+   and the underline on hover say it can be pressed. */
+.editor__target {
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.editor__target:hover:not(:disabled),
+.editor__target:focus-visible {
+	color: var(--text);
+	text-decoration: underline;
+}
+
+.editor__target:disabled {
+	cursor: default;
+}
+
+/* A fieldset only for its disabled state: no box of its own. */
+.still {
+	display: contents;
+}
+
+.still:disabled :is(input, textarea, button) {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.editor__aim {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35rem;
+}
+
+.editor__aim-input {
+	width: 6ch;
+	padding: 0 0.15rem;
+	font: inherit;
+	color: var(--text);
+	text-align: right;
+}
+
+.editor__aim-note {
+	color: var(--text-dim);
+}
+
+/* In a header the field reads as the number it replaced, so it starts where
+   the number started. */
+.aim--sentence .editor__aim-input {
+	padding: 0;
+	text-align: left;
+}
+
+.aim--sentence .editor__aim-input::selection {
+	background: var(--accent-wash);
+}
+
+/* A hairline under the foot rather than a widget: the number says how far
+   along the writer is, and this only gives it a shape. */
+.editor__progress {
+	height: 2px;
+	margin-top: 0.4rem;
+	background: var(--border);
+	border-radius: 1px;
+	overflow: hidden;
+}
+
+.editor__progress::after {
+	content: "";
+	display: block;
+	width: var(--progress);
+	height: 100%;
+	background: var(--band, var(--accent));
+}
+
+/* Always in the DOM, so the wording can change without moving the text above
+   it. */
+.editor__status {
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--text-dim);
+	text-align: right;
+}
+
+/* A link rather than a button: it sits inside a sentence, and a box here would
+   pull the eye away from the writing. */
+.editor__restore {
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: 0;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.editor__status--error {
+	color: var(--danger);
+}
+
+.reader__title {
+	margin: 0 0 1rem;
+	font-size: 1.25rem;
+	font-weight: 600;
+}
+
+.reader__note {
+	margin: 0;
+	color: var(--text-dim);
+}
+
+.reader__note--error {
+	color: var(--danger);
+}
+
+/* Always in the DOM and out of flow, so an error appears without moving the
+   list underneath it. */
+.sidebar__message {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	margin: 0;
+	padding: 0 var(--space-sm);
+	font-size: 0.8rem;
+	color: var(--danger);
+	background: var(--bg);
+	overflow-wrap: anywhere;
+}

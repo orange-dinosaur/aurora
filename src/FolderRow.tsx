@@ -5,7 +5,6 @@
 
 import { useState } from "react";
 import { useRightClick } from "./Menu";
-import { abbreviated } from "./cards";
 import Icon from "./Icon";
 import NewMenu from "./NewMenu";
 import type { Making } from "./kinds";
@@ -14,7 +13,7 @@ import RowMenu, { RowShell } from "./RowMenu";
 import type { Draggable } from "./reorder";
 import type { Row } from "./tree";
 import { inManuscript } from "./tree";
-import type { Retitling } from "./rows";
+import { abbreviated, type Retitling } from "./rows";
 import { progress } from "./RowProgress";
 import { TargetField, type Aim } from "./Target";
 

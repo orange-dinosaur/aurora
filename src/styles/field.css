@@ -1,0 +1,319 @@
+/* One field of the panel: its name, then whatever holds its value. Stacked
+   rather than set beside a label, since the panel is too narrow for two
+   columns and a synopsis wants the whole width. */
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.field + .field {
+	margin-top: 1rem;
+}
+
+.field__label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--text-dim);
+}
+
+/* The label, and the x on a field the writer added. */
+.field__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	min-height: 18px;
+}
+
+.field__remove {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.field__remove:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.field__remove:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -1px;
+}
+
+.field__remove svg {
+	width: 13px;
+	height: 13px;
+}
+
+/* Under the label, for a rule the writer would otherwise have to guess. */
+.field__hint {
+	margin-top: -0.125rem;
+	font-size: 0.6875rem;
+	line-height: 1.4;
+	color: var(--text-dim);
+}
+
+/* A line that is kept whether or not it has something to say. */
+.field__hint--held {
+	min-height: 1.4em;
+}
+
+.field__box,
+.field__line {
+	width: 100%;
+	padding: 0.375rem 0.5rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	line-height: 1.5;
+	color: var(--text);
+}
+
+.field__box {
+	resize: vertical;
+}
+
+.field__line {
+	padding: 4px 0;
+	font: var(--text-ui);
+}
+
+.field__box:focus-visible {
+	outline: 2px solid var(--accent-text);
+	/* Inside the box rather than around it: the panel's own padding is only
+	   0.75rem and a ring outside would be clipped by the scroll container. */
+	outline-offset: -1px;
+}
+
+/* The way out of the panel and into the page about this document. Outlined and
+   full width, so it reads as a door rather than as one more field. */
+.info__page {
+	width: 100%;
+	height: 30px;
+	margin-bottom: 0.35rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+}
+
+.info__page:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/* What is in the book, above the fields: it decides whether any of them reach
+   an export. Ruled off underneath so it reads as a switch about the whole
+   document rather than the first field of the list. */
+.info__switch {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	padding-bottom: 0.7rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.info__about {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	min-width: 0;
+}
+
+.info__label {
+	margin: 0;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--text-dim);
+}
+
+.info__hint {
+	margin: 0;
+	font-size: 0.6875rem;
+	line-height: 1.4;
+	color: var(--text-dim);
+}
+
+/* The subjects this page is tied to. Each one is stacked rather than set in a
+   row of columns: the panel is 300px, and a name and a sentence about it do not
+   both fit across that. */
+.ties {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	margin: 0 0 0.15rem;
+	padding: 0;
+	list-style: none;
+}
+
+.tie {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+}
+
+/* The name and the way to drop it, on one line above the note. */
+.tie__who {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+/* Reads as the note's label, because that is what it is. */
+.tie__name {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+/* The tags on a document. A chip is a value, not a control: the x removes it
+   and the chip itself does nothing until a tag has a view of its own. */
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25rem;
+	margin: 0;
+	padding: 4px 0;
+	font: var(--text-ui);
+	list-style: none;
+}
+
+/* Follows the last chip and only wraps once the line has no room left for it. */
+.chips__entry {
+	flex: 1 1 7rem;
+	min-width: 7rem;
+}
+
+.chips__input {
+	width: 100%;
+	padding: 0;
+	font: inherit;
+	color: var(--text);
+	background: none;
+	border: 0;
+	outline: none;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.125rem;
+	padding: 0.0625rem 0.125rem 0.0625rem 0.4375rem;
+	font-size: 0.75rem;
+	color: var(--text);
+	background: var(--accent-wash);
+	border-radius: var(--radius-pill);
+}
+
+/* A tag that goes somewhere. It stays a chip and does not underline until it is
+   pointed at: a column of tags each wearing a link reads as a row of controls
+   rather than as what the document is filed under. WebKitGTK resets three
+   properties on a button that `font` does not carry, so they are named. */
+.chip__open {
+	margin: 0;
+	padding: 0;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	line-height: inherit;
+	text-transform: inherit;
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.chip__open:hover {
+	text-decoration: underline;
+}
+
+.chip__open:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -1px;
+}
+
+.chip__remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.chip__remove:hover {
+	color: var(--text);
+}
+
+.chip__remove:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -1px;
+}
+
+/* The icon inside a chip is smaller than the 16px the set is drawn at. */
+.chip__remove svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* The names already used elsewhere in the project, under the Add field box. In
+   the layout rather than floating over it: it is the last thing in the panel,
+   so there is nothing below for it to cover. */
+.suggestions {
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0.125rem;
+	list-style: none;
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xs);
+}
+
+.suggestion {
+	display: block;
+	width: 100%;
+	padding: 0.1875rem 0.375rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	text-transform: none;
+	text-align: left;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.suggestion:hover,
+.suggestion[aria-selected="true"] {
+	background: var(--bg-hover);
+}
+
+.suggestion:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -2px;
+}

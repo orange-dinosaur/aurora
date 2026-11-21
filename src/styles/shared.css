@@ -1,0 +1,158 @@
+/* The main thing to do here, and the only pill. */
+.welcome__create,
+.account__in,
+.login__go,
+.versions__keep,
+.compare__put-back,
+.merge__done,
+.export__run,
+.sprint__go,
+.overwrite__go,
+.overview__new,
+.update__action {
+	font-weight: 600;
+	color: var(--on-accent);
+	background: var(--accent);
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+	transition: transform 120ms var(--ease-open);
+}
+
+.welcome__create:disabled,
+.account__in:disabled,
+.login__go:disabled,
+.versions__keep:disabled,
+.compare__put-back:disabled,
+.merge__done:disabled,
+.export__run:disabled,
+.sprint__go:disabled,
+.overwrite__go:disabled,
+.overview__new:disabled,
+.update__action:disabled {
+	color: var(--text-faint);
+	background: var(--bg-hover);
+	cursor: default;
+}
+
+.profile__quiet,
+.retag__do,
+.merge-banner__abort,
+.merge-spot__choice,
+.compare__take,
+.overwrite__cancel,
+.info__page,
+.subject__draft,
+.editor__find-do,
+.cover__button,
+.export__button {
+	background: var(--bg-card);
+	border: var(--hairline);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	transition: transform 120ms var(--ease-open);
+}
+
+.profile__quiet:hover:not(:disabled),
+.retag__do:hover:not(:disabled),
+.merge-banner__abort:hover:not(:disabled),
+.merge-spot__choice:hover:not(:disabled),
+.compare__take:hover:not(:disabled),
+.overwrite__cancel:hover:not(:disabled),
+.info__page:hover:not(:disabled),
+.subject__draft:hover:not(:disabled),
+.editor__find-do:hover:not(:disabled),
+.cover__button:hover:not(:disabled),
+.export__button:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.profile__quiet:disabled,
+.retag__do:disabled,
+.merge-banner__abort:disabled,
+.merge-spot__choice:disabled,
+.compare__take:disabled,
+.overwrite__cancel:disabled,
+.info__page:disabled,
+.subject__draft:disabled,
+.editor__find-do:disabled,
+.cover__button:disabled,
+.export__button:disabled {
+	color: var(--text-faint);
+	background: none;
+	cursor: default;
+}
+
+.welcome__create:active:not(:disabled),
+.account__in:active:not(:disabled),
+.login__go:active:not(:disabled),
+.versions__keep:active:not(:disabled),
+.compare__put-back:active:not(:disabled),
+.merge__done:active:not(:disabled),
+.export__run:active:not(:disabled),
+.sprint__go:active:not(:disabled),
+.overwrite__go:active:not(:disabled),
+.overview__new:active:not(:disabled),
+.update__action:active:not(:disabled),
+.profile__quiet:active:not(:disabled),
+.retag__do:active:not(:disabled),
+.merge-banner__abort:active:not(:disabled),
+.merge-spot__choice:active:not(:disabled),
+.compare__take:active:not(:disabled),
+.overwrite__cancel:active:not(:disabled),
+.info__page:active:not(:disabled),
+.subject__draft:active:not(:disabled),
+.editor__find-do:active:not(:disabled),
+.cover__button:active:not(:disabled),
+.export__button:active:not(:disabled) {
+	transform: var(--press);
+}
+
+.changes__message,
+.field__box,
+.subject__remarks {
+	background: var(--bg);
+	border: 1px solid var(--graphic-faint);
+	border-radius: var(--radius-sm);
+}
+
+/* A line of its own is underlined. A box that lights up on all four sides reads
+   as another button; the writer only needs to see which line the caret is on. */
+.namefield__input,
+.controls__url,
+.editor__find-input,
+.editor__aim-input,
+.settings__field,
+.login__input,
+.profile__input,
+.field__line,
+.chips {
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--graphic-faint);
+	border-radius: 0;
+}
+
+.namefield__input:focus,
+.controls__url:focus,
+.editor__find-input:focus,
+.editor__aim-input:focus,
+.settings__field:focus,
+.login__input:focus,
+.field__line:focus,
+.chips:has(.chips__input:focus) {
+	outline: none;
+	border-bottom-color: var(--accent-text);
+	box-shadow: 0 1px 0 var(--accent-text);
+}
+
+input::placeholder,
+textarea::placeholder {
+	color: var(--text-faint);
+}
+
+input:disabled,
+textarea:disabled {
+	background: var(--bg-chrome);
+	border-color: var(--border);
+}

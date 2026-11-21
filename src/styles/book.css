@@ -1,0 +1,330 @@
+/* The page about the book the project adds up to: a 660px column, held in by
+   padding so the scrollbar stays at the window's edge. */
+.book {
+	--gutter: var(--space-lg);
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+	padding: var(--space-xl)
+		max(var(--gutter), calc((100% - 660px) / 2 + var(--gutter))) 120px;
+	overflow-y: auto;
+}
+
+/* The Shelf's book, large, beside its name. */
+.face {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--space-lg);
+	margin-bottom: var(--space-lg);
+}
+
+.face__jacket {
+	position: relative;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	width: 132px;
+	aspect-ratio: 2 / 3;
+	padding: var(--space-sm);
+	overflow: hidden;
+	color: #2b1b16;
+	border-radius: 3px 6px 6px 3px;
+	box-shadow: var(--shadow-cover);
+}
+
+/* Six lines is as many as the cover holds above its author. */
+.face__jacket-title {
+	position: relative;
+	display: -webkit-box;
+	font: 400 21px/1.1 var(--font-title);
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 6;
+}
+
+.face__jacket-by {
+	position: relative;
+	font: var(--text-caption);
+	overflow-wrap: anywhere;
+}
+
+.face__text {
+	flex: 1;
+	min-width: 0;
+}
+
+.face__where {
+	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.face__title {
+	margin: var(--space-xxs) 0 0;
+	font: var(--text-display);
+	letter-spacing: var(--tracking-display);
+	overflow-wrap: anywhere;
+}
+
+.face__by {
+	margin: 2px 0 var(--space-sm);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}
+
+.face__buttons {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+.face__state {
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.face__note {
+	margin: var(--space-xs) 0 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.book__trouble {
+	min-height: 15px;
+	margin: 0 0 var(--space-sm);
+	font: var(--text-caption);
+	color: var(--danger);
+}
+
+@media (max-width: 820px) {
+	.book {
+		--gutter: var(--space-md);
+		padding-top: var(--space-md);
+	}
+}
+
+@media (max-width: 620px) {
+	.face {
+		align-items: flex-start;
+		gap: var(--space-md);
+	}
+
+	.face__jacket {
+		width: 96px;
+		padding: var(--space-xs);
+	}
+
+	.face__jacket-title {
+		font-size: 16px;
+	}
+
+	.face__title {
+		font: var(--text-heading);
+	}
+}
+
+/* One heading's worth of the Book page, folding on its own chevron. */
+.group + .group {
+	margin-top: var(--space-lg);
+}
+
+.group__head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	width: 100%;
+	margin-left: calc(var(--space-xxs) * -1);
+	padding: var(--space-xxs);
+	font: var(--text-title);
+	letter-spacing: normal;
+	text-align: left;
+	text-transform: none;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.group__head:hover {
+	background: var(--bg-hover);
+}
+
+.group__head:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.group__chevron {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	color: var(--text-faint);
+	transition: transform 120ms var(--ease-open);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.group__chevron {
+		transition: none;
+	}
+}
+
+/* Down into the group when it is open, at the heading when it is shut. */
+.group__head[aria-expanded="false"] .group__chevron {
+	transform: rotate(-90deg);
+}
+
+/* What a folded group is holding, so that a filled-in field does not vanish
+   without a trace when it is shut. */
+.group__count {
+	margin-left: var(--space-xxs);
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.group__body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-sm);
+	margin-top: var(--space-xs);
+}
+
+/* The group's gap spaces these. */
+.book .field + .field {
+	margin-top: 0;
+}
+
+.book .field__label {
+	font: var(--text-caption);
+	letter-spacing: normal;
+}
+
+.book__pick:focus-visible {
+	outline: none;
+	border-bottom-color: var(--accent-text);
+	box-shadow: 0 1px 0 var(--accent-text);
+}
+
+.book .field__box {
+	padding: 6px var(--space-sm);
+	font: var(--text-ui);
+}
+
+.book .field__box--page {
+	font: 400 16px/1.5 var(--font-page);
+}
+
+.book .field__box:focus-visible {
+	outline-offset: 1px;
+}
+
+.book .field > .quiet {
+	align-self: flex-start;
+}
+
+/* The writer's own labels, so they take a pastel rather than the accent. */
+.book .chip {
+	background: var(--accent-2-wash);
+}
+
+/* Two fields on one line, for a pair that is really one answer: which series,
+   and where in it. */
+.book__pair {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: var(--space-sm);
+}
+
+/* For a second field that is a number rather than a name: a series number gets
+   a field the size of the answer, not half the line. */
+.book__pair--tight {
+	grid-template-columns: minmax(0, 1fr) 88px;
+}
+
+/* `.menu` is absolute by default, because everywhere else it hangs off a row or
+   a card that is already positioned. Here it is a field in the flow, so it has
+   to place itself and be what its own dropdown is measured from. */
+.book__picker {
+	position: relative;
+	display: block;
+}
+
+/* Lined up under the box it drops from, rather than hung off its right edge. */
+.book__picker .menu__items {
+	left: 0;
+	right: auto;
+	min-width: 100%;
+}
+
+/* Everyone on the book besides the author, a row each. */
+.people {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xs);
+	margin: 0 0 var(--space-xs);
+	padding: 0;
+	list-style: none;
+}
+
+.person {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 150px 28px;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+.person .field__remove {
+	width: 28px;
+	height: 28px;
+	color: var(--text-faint);
+}
+
+@media (max-width: 620px) {
+	.person {
+		grid-template-columns: minmax(0, 1fr) 120px 28px;
+	}
+}
+
+/* Shaped like the lines above it rather than like a menu trigger: it is one
+   more field, and only answers from a list because a language tag is not
+   something to be typed by hand. A line of its own is underlined. */
+.book__pick {
+	padding: 4px 0;
+	font: var(--text-ui);
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--graphic-faint);
+	border-radius: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-xs);
+	width: 100%;
+	color: var(--text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.book__pick--empty {
+	color: var(--text-faint);
+}
+
+.book__pick:hover {
+	border-bottom-color: var(--text-dim);
+}
+
+.cover__button,
+.export__button {
+	padding: 5px var(--space-sm);
+	font: var(--text-ui);
+	color: var(--text);
+	white-space: nowrap;
+}
+
+.export__button {
+	align-self: flex-start;
+}

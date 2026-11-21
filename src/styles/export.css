@@ -1,0 +1,191 @@
+.cover__button:focus-visible,
+.export__button:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.export__dialog {
+	--dialog-pad: var(--space-md);
+	max-width: 380px;
+}
+
+.export__dialog .dialog__lead {
+	margin-bottom: var(--space-xs);
+}
+
+.export__dialog .dialog__foot {
+	margin-top: var(--space-xs);
+}
+
+.export__format {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+	width: 100%;
+	padding: 3px var(--space-xs);
+	font: var(--text-ui);
+	color: var(--text);
+	text-align: left;
+	background: none;
+	border: 0;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.export__format:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.export__format:disabled {
+	cursor: default;
+}
+
+.export__format:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -2px;
+}
+
+.export__label {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--space-xs);
+	min-width: 0;
+}
+
+.export__what {
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.export__tick {
+	position: relative;
+	flex: none;
+	width: 16px;
+	height: 16px;
+	border: 1px solid var(--graphic-faint);
+	border-radius: var(--radius-pill);
+}
+
+.export__format:hover .export__tick {
+	border-color: var(--text-dim);
+}
+
+.export__format[aria-checked="true"] .export__tick {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+/* The tick itself: two sides of a narrow box, turned. */
+.export__format[aria-checked="true"] .export__tick::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	left: 5px;
+	width: 4px;
+	height: 8px;
+	border: solid var(--on-accent);
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+}
+
+.export__run {
+	padding: 6px var(--space-md);
+	font: inherit;
+	white-space: nowrap;
+}
+
+.export__run:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/* Always drawn and only hidden, so the bar coming and going moves nothing. */
+.export__track {
+	height: 4px;
+	margin: var(--space-xs) 0 var(--space-xxs);
+	overflow: hidden;
+	background: var(--bg-hover);
+	border-radius: var(--radius-pill);
+}
+
+.export__track[data-shown="false"] {
+	visibility: hidden;
+}
+
+.export__fill {
+	height: 100%;
+	background: var(--accent);
+}
+
+/* Always drawn and two lines tall, so what an export says moves nothing. */
+.export__said {
+	min-height: 30px;
+	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-dim);
+	overflow-wrap: anywhere;
+}
+
+/* An update is the only thing Aurora interrupts the writer with, so it floats
+   in the corner rather than taking a place in the layout: nothing that was
+   already on screen moves when it appears. It sits below the overlays at 50,
+   so opening Settings covers it. */
+.update {
+	position: fixed;
+	right: 1rem;
+	bottom: 1rem;
+	z-index: 40;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	max-width: calc(100vw - 2rem);
+	padding: 0.4rem 0.4rem 0.4rem 0.75rem;
+	font-size: 0.8125rem;
+	color: var(--text);
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
+}
+
+.update__message {
+	overflow-wrap: anywhere;
+}
+
+.update__action {
+	flex: none;
+	height: 26px;
+	padding: 0 0.6rem;
+	font: inherit;
+	font-size: 0.75rem;
+}
+
+.update__dismiss {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.update__dismiss:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.update__action:focus-visible,
+.update__dismiss:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/* The shared controls. The rules above give each one its size and place, and
+   these give it its look, which is why they come last. */

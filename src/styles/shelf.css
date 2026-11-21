@@ -1,0 +1,455 @@
+/* The shell runs edge to edge, so the welcome fills it and does its own
+   centring inside. The bar has to sit at the top of the window rather than at
+   the top of the centred box, which is why the two are separate. */
+.welcome {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-self: stretch;
+	width: 100%;
+	min-height: 100%;
+	text-align: left;
+}
+
+/* The same 44px row the project wears, holding the two controls that mean
+   anything with no project open. It stays while the Shelf scrolls under it. */
+.welcome__bar {
+	position: sticky;
+	top: 0;
+	z-index: 6;
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+	height: 44px;
+	padding: 0 var(--space-sm) 0 var(--space-md);
+}
+
+/* A layer of its own: a blur on the bar itself would stop the account menu's
+   blur from reaching the books behind it. */
+.welcome__bar::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+}
+
+.welcome__name {
+	flex: 1;
+	font: 400 21px/1 var(--font-title);
+	letter-spacing: var(--tracking-heading);
+}
+
+/* The square button the three headerless screens use. The project header has
+   its own, which is the same shape under a name that belongs to that row. */
+.welcome__button,
+.login__button,
+.profile__button {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.welcome__button:hover,
+.login__button:hover,
+.profile__button:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.welcome__button:focus-visible,
+.login__button:focus-visible,
+.profile__button:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+.shelf {
+	width: 100%;
+	max-width: 1680px;
+	margin: 0 auto;
+	padding: var(--space-xl) var(--space-lg) var(--space-section);
+}
+
+.shelf__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: var(--space-sm);
+	margin-bottom: var(--space-xl);
+}
+
+.shelf__heading {
+	margin: 0;
+	font: var(--text-display);
+	letter-spacing: var(--tracking-display);
+}
+
+.shelf__count {
+	margin: 2px 0 0;
+	color: var(--text-dim);
+}
+
+.shelf__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+.welcome__create {
+	padding: 6px var(--space-md);
+	font: var(--text-ui-strong);
+}
+
+.shelf__folder,
+.shelf__cancel,
+.welcome__back {
+	padding: 5px var(--space-xs);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.shelf__folder:hover:not(:disabled),
+.shelf__cancel:hover:not(:disabled),
+.welcome__back:hover:not(:disabled) {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.shelf__folder:focus-visible,
+.shelf__cancel:focus-visible,
+.shelf__sure:focus-visible,
+.welcome__back:focus-visible,
+.welcome__create:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/* Books grow with the window: 148px wide at the default 1000px window, 200px
+   at a full HD one. */
+.shelf__books {
+	display: grid;
+	grid-template-columns: repeat(
+		auto-fill,
+		minmax(clamp(148px, 91.5px + 5.65vw, 200px), 1fr)
+	);
+	gap: var(--space-xl) var(--space-lg);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* What the menu's list and the question hang from. Both are wider than a narrow
+   book and centred on it, which keeps them inside the window in every column. */
+.shelf__book {
+	position: relative;
+	min-width: 0;
+}
+
+.shelf__book .menu {
+	position: static;
+}
+
+.shelf__book .menu__trigger {
+	position: absolute;
+	top: var(--space-xs);
+	right: var(--space-xs);
+	z-index: 1;
+	width: 26px;
+	height: 26px;
+	color: #2b1b16;
+	background: rgb(255 255 255 / 0.72);
+	border-radius: var(--radius-pill);
+	opacity: 0;
+	transition: transform 160ms var(--ease-open);
+}
+
+.shelf__book:hover .menu__trigger,
+.shelf__book:focus-within .menu__trigger,
+.shelf__book .menu__trigger[aria-expanded="true"] {
+	opacity: 1;
+}
+
+.shelf__book .menu__trigger:hover,
+.shelf__book .menu__trigger[aria-expanded="true"] {
+	color: #2b1b16;
+	background: rgb(255 255 255 / 0.9);
+}
+
+.shelf__book .menu__trigger:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* The … lifts with the cover, or moving onto it would drop the book. */
+.shelf__book:hover .shelf__cover,
+.shelf__book:hover .menu__trigger {
+	transform: var(--lift);
+}
+
+.shelf__book .menu__items,
+.shelf__ask {
+	top: 38px;
+	left: 50%;
+	width: 190px;
+	transform: translateX(-50%);
+}
+
+.shelf__book .menu__items {
+	right: auto;
+}
+
+.shelf__ask {
+	position: absolute;
+	z-index: 5;
+	padding: var(--space-sm);
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
+}
+
+.shelf__question {
+	margin: 0 0 var(--space-xxs);
+	font: var(--text-ui-strong);
+	overflow-wrap: anywhere;
+}
+
+.shelf__going {
+	margin: 0 0 var(--space-sm);
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.shelf__answers {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--space-xxs);
+}
+
+.shelf__cancel,
+.shelf__sure {
+	padding: 3px var(--space-xs);
+	font: var(--text-ui);
+	font-size: 0.75rem;
+}
+
+.shelf__sure {
+	font-weight: 600;
+	color: var(--bg);
+	background: var(--danger);
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.shelf__sure:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.shelf__book .menu__item {
+	white-space: normal;
+}
+
+/* The path is the one long thing in the menu, and it has no spaces to break on. */
+.shelf__path {
+	font-family: var(--font-mono);
+	overflow-wrap: anywhere;
+}
+
+.shelf__open {
+	display: block;
+	width: 100%;
+	padding: 0;
+	font: var(--text-ui);
+	text-align: left;
+	color: inherit;
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.shelf__open:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 4px;
+	border-radius: var(--radius-xs);
+}
+
+.shelf__cover {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	aspect-ratio: 2 / 3;
+	padding: var(--space-md) var(--space-sm) var(--space-sm) var(--space-md);
+	overflow: hidden;
+	color: #2b1b16;
+	border-radius: 3px 6px 6px 3px;
+	box-shadow:
+		var(--shadow-cover),
+		inset 5px 0 0 rgb(0 0 0 / 0.05);
+	transition: transform 160ms var(--ease-open);
+}
+
+/* A project that cannot be read has no book to show, only its folder. */
+.shelf__cover--unread {
+	justify-content: center;
+	color: var(--text-dim);
+	border: 1px dashed var(--border-strong);
+	box-shadow: none;
+}
+
+.shelf__cover--unread strong {
+	font: 400 12px/1.4 var(--font-mono);
+	overflow-wrap: anywhere;
+}
+
+.shelf__cover--unread span {
+	margin-top: var(--space-xxs);
+	font: var(--text-caption);
+}
+
+.shelf__cover img,
+.face__jacket img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* Cream with a soft shadow, so the words read on any picture. */
+.shelf__cover--image,
+.face__jacket--image {
+	color: #f4efe6;
+	text-shadow: 0 1px 6px rgb(0 0 0 / 0.55);
+}
+
+/* Five lines is as many as a narrow book holds above its author. */
+.shelf__title {
+	position: relative;
+	display: -webkit-box;
+	font: 400 26px/1.05 var(--font-title);
+	letter-spacing: var(--tracking-heading);
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 5;
+}
+
+.shelf__author {
+	position: relative;
+	font: var(--text-caption);
+	overflow-wrap: anywhere;
+}
+
+.shelf__format {
+	display: block;
+	margin-top: var(--space-sm);
+	font: 600 11px/1.35 var(--font-ui);
+}
+
+.shelf__meta {
+	display: block;
+	margin-top: 2px;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.shelf__cover + .shelf__meta {
+	margin-top: var(--space-sm);
+}
+
+/* A long path is cut short rather than wrapping under a narrow book. */
+.shelf__place {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.shelf__place svg {
+	flex: none;
+	width: 12px;
+	height: 12px;
+	color: var(--accent-text);
+}
+
+.shelf__place span,
+.shelf__left {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.shelf__ghost {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-sm);
+	width: 100%;
+	aspect-ratio: 2 / 3;
+	color: var(--accent-text);
+	background: none;
+	border: 1px dashed var(--border-strong);
+	border-radius: 3px 6px 6px 3px;
+	cursor: pointer;
+	transition: transform 160ms var(--ease-open);
+}
+
+.shelf__ghost:hover:not(:disabled) {
+	background: var(--bg-hover);
+	transform: var(--lift);
+}
+
+.shelf__ghost:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.shelf__ghost svg {
+	width: 22px;
+	height: 22px;
+}
+
+.shelf__ghost-label {
+	font: 400 20px/1.1 var(--font-title);
+	letter-spacing: var(--tracking-heading);
+}
+
+@media (max-width: 620px) {
+	.shelf {
+		padding: var(--space-md) var(--space-md) var(--space-xxl);
+	}
+
+	.shelf__books {
+		gap: var(--space-lg) var(--space-md);
+	}
+
+	.shelf__title {
+		font-size: 22px;
+	}
+}

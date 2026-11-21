@@ -1,0 +1,199 @@
+.tabs-wrap {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+}
+
+.tabs {
+	--fade-left: 0px;
+	--fade-right: 0px;
+	flex: 1;
+	display: flex;
+	gap: var(--space-xxs);
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	overflow-x: auto;
+	/* One tab tall, so a scrollbar would sit over the tabs it scrolls. The
+	   wheel and the arrows reach everything without it. */
+	scrollbar-width: none;
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent,
+		#000 var(--fade-left),
+		#000 calc(100% - var(--fade-right)),
+		transparent
+	);
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		#000 var(--fade-left),
+		#000 calc(100% - var(--fade-right)),
+		transparent
+	);
+}
+
+.tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.tabs[data-before] {
+	--fade-left: 20px;
+}
+
+.tabs[data-after] {
+	--fade-right: 20px;
+}
+
+.nudge {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.nudge:hover:not(:disabled) {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.nudge:disabled {
+	color: var(--border-strong);
+	cursor: default;
+}
+
+.nudge svg {
+	width: 14px;
+	height: 14px;
+}
+
+.tab {
+	position: relative;
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	max-width: 160px;
+	padding-right: var(--space-xxs);
+	border-radius: var(--radius-pill);
+}
+
+.tab:hover,
+.tab[data-active] {
+	background: var(--bg-hover);
+}
+
+.tab__title {
+	min-width: 0;
+	padding: 4px 0 4px var(--space-sm);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tab[data-active] .tab__title {
+	color: var(--text);
+}
+
+/* The other side of a split: lit, but less than the side being written in. */
+.tab[data-beside] {
+	box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.tab[data-beside=""] .tab__title {
+	color: var(--text);
+}
+
+/* Folded away for want of room: still part of the split, but only just. */
+.tab[data-beside="folded"] {
+	box-shadow: none;
+	outline: 1px dashed var(--border);
+	outline-offset: -1px;
+}
+
+/* What the tab holds. Smaller than the 16px the rest of the interface uses,
+   because a full-sized glyph beside the title reads as a button. */
+.tab__mark {
+	display: inline-block;
+	width: 13px;
+	height: 13px;
+	margin-right: 0.3rem;
+	vertical-align: -2px;
+	opacity: 0.7;
+}
+
+.tab__dirty {
+	position: absolute;
+	top: calc(50% - 2.5px);
+	left: 4px;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--accent);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.tab__dirty[data-dirty] {
+	opacity: 1;
+}
+
+.tab__close {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	color: var(--text-faint);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.tab__close:hover {
+	color: var(--text);
+}
+
+.tab__close svg {
+	width: 13px;
+	height: 13px;
+}
+
+/* Inset, because the row clips anything drawn outside a tab. */
+.tab__title:focus-visible,
+.tab__close:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -2px;
+}
+
+.nudge:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* Stands in for the editor while a document opens, so it sits where the editor
+   will. */
+.reader {
+	width: 100%;
+	max-width: 40rem;
+	margin-inline: auto;
+}

@@ -1,0 +1,178 @@
+/* Out of flow wherever it appears; each surface says where. */
+.subject__lead {
+	margin: var(--space-xxs) 0 0;
+	font: var(--text-title);
+	font-weight: 400;
+	color: var(--text-dim);
+}
+
+.subject__draft {
+	flex: none;
+	height: 30px;
+	padding: 0 0.75rem;
+	font: inherit;
+	font-size: 0.8125rem;
+	letter-spacing: normal;
+	line-height: normal;
+	text-transform: none;
+	color: var(--text);
+}
+
+.subject__draft:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/* However many fields the writer gave the page, wrapping rather than
+   squeezing: the mock draws three and a document may carry one or six. */
+.subject__boxes {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+	gap: var(--space-xs);
+}
+
+.subject__box {
+	padding: var(--space-xs) var(--space-sm);
+	background: var(--bg-card);
+	border: var(--hairline);
+	border-radius: var(--radius-sm);
+}
+
+/* The writer's own spelling of the field name, the way Info shows it. */
+.subject__label {
+	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.subject__value {
+	margin: 0;
+	font: var(--text-ui-strong);
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.subject__heading {
+	margin: var(--space-lg) 0 var(--space-xs);
+	font: var(--text-title);
+}
+
+/* The one thing on this page that writes. Set in the manuscript face, because
+   what goes in it is the writer's words rather than Aurora's. */
+.subject__remarks {
+	display: block;
+	width: 100%;
+	padding: 6px var(--space-sm);
+	font: 400 16px/1.5 var(--font-page);
+	color: var(--text);
+	resize: vertical;
+}
+
+.subject__remarks:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* Kept even while it says nothing, so a failed write cannot shove the list of
+   appearances down the page. */
+.subject__trouble {
+	min-height: 15px;
+	margin: var(--space-xxs) 0 0;
+	font: var(--text-caption);
+	color: var(--danger);
+}
+
+.subject__note {
+	margin: 0;
+	font: var(--text-ui);
+	color: var(--text-faint);
+}
+
+.subject__note--error {
+	color: var(--danger);
+}
+
+/* The relationships, at the foot of the page. They wrap across rather than
+   running down: each is a name and a few words, and a column of them would
+   leave the page mostly empty. */
+.subject__links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-xs);
+}
+
+.subject__link {
+	display: flex;
+	flex-direction: column;
+	max-width: 100%;
+	padding: var(--space-xs) var(--space-sm);
+	font: var(--text-ui);
+	letter-spacing: normal;
+	text-transform: none;
+	text-align: left;
+	color: var(--text);
+	background: var(--bg-card);
+	border: var(--hairline);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	overflow-wrap: anywhere;
+}
+
+.subject__link:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.subject__link:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/* A tie whose name has no page behind it. It still says what the writer wrote:
+   the name may be someone they have not made a page for yet. */
+.subject__link:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.subject__tie {
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.trashed {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-xxs) var(--space-md);
+	padding: var(--space-xs) var(--space-sm);
+	border-radius: var(--radius-sm);
+}
+
+.trashed:hover {
+	background: var(--bg-hover);
+}
+
+.trashed__what {
+	display: flex;
+	flex: 1 1 220px;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.trashed__title {
+	font: var(--text-ui);
+	overflow-wrap: anywhere;
+}
+
+.trashed__meta {
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+/* Held to the right edge, so asking swaps the words and not the sides. */
+.trashed__actions {
+	display: flex;
+	flex: none;
+	gap: 2px;
+	margin-left: auto;
+}

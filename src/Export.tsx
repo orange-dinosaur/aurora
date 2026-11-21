@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { failure } from "./errors";
-import { trapTab } from "./lib/trap";
+import Dialog from "./Dialog";
 import { DIALOG_FADE, useLingering } from "./Menu";
 import {
 	FORMATS,
@@ -58,7 +58,6 @@ export default function Export({
 	const [instant, setInstant] = useState(false);
 	const drawn = useLingering(asking, DIALOG_FADE);
 	const opener = useRef<HTMLButtonElement>(null);
-	const dialog = useRef<HTMLDivElement>(null);
 
 	// Counting reads every scene, so it waits until the dialog is open.
 	useEffect(() => {
@@ -81,27 +80,6 @@ export default function Export({
 			gone = true;
 		};
 	}, [root, changed, asking]);
-
-	// So a key has somewhere to land: what had focus is behind the dialog now.
-	useEffect(() => {
-		if (asking) {
-			dialog.current?.focus();
-		}
-	}, [asking]);
-
-	useEffect(() => {
-		if (!asking) {
-			return;
-		}
-		function escape(event: KeyboardEvent) {
-			if (event.key === "Escape") {
-				leave();
-			}
-		}
-
-		document.addEventListener("keydown", escape);
-		return () => document.removeEventListener("keydown", escape);
-	});
 
 	// Leaving while an export runs would hide how it ended.
 	function leave() {
@@ -180,104 +158,86 @@ export default function Export({
 
 			{drawn &&
 				createPortal(
-					<div
-						className="scrim"
-						data-closing={asking ? undefined : ""}
-						data-instant={instant ? "" : undefined}
-						inert={!asking}
-						// On the press, as in Settings, so a selection dragged
-						// out of the dialog and released here does not shut it.
-						onMouseDown={(event) => {
-							if (event.target === event.currentTarget) {
-								leave();
-							}
-						}}
+					<Dialog
+						label="Export"
+						className="dialog export__dialog"
+						closing={!asking}
+						instant={instant}
+						onLeave={leave}
 					>
-						<div
-							ref={dialog}
-							className="dialog export__dialog"
-							role="dialog"
-							aria-modal="true"
-							aria-label="Export"
-							tabIndex={-1}
-							onKeyDown={(event) =>
-								trapTab(event.nativeEvent, dialog.current)
-							}
-						>
-							<h2 className="dialog__title">Export</h2>
-							<p className="dialog__lead">
-								{extent === null ? "" : sized(extent)}
-							</p>
+						<h2 className="dialog__title">Export</h2>
+						<p className="dialog__lead">
+							{extent === null ? "" : sized(extent)}
+						</p>
 
-							<div role="group" aria-label="Formats">
-								{FORMATS.map(({ key, name, what }) => (
-									<button
-										key={key}
-										type="button"
-										className="export__format"
-										role="checkbox"
-										aria-checked={formats.includes(key)}
-										disabled={busy}
-										onClick={() => {
-											// What the last export said was
-											// about the last choice.
-											setSaid("");
-											onFormats(flipped(formats, key));
-										}}
-									>
-										<span className="export__tick" />
-										<span className="export__label">
-											<span>{name}</span>
-											<span className="export__what">
-												{what}
-											</span>
-										</span>
-									</button>
-								))}
-							</div>
-
-							{/* The bar and the line under it are always drawn, so
-							    neither an export starting nor what it says at
-							    the end moves anything. */}
-							<div
-								className="export__track"
-								role="progressbar"
-								aria-label="Export progress"
-								aria-valuemin={0}
-								aria-valuemax={100}
-								aria-valuenow={percent}
-								data-shown={current !== null}
-							>
-								<div
-									className="export__fill"
-									style={{ width: `${percent}%` }}
-								/>
-							</div>
-
-							<p className="export__said" role="status">
-								{line}
-							</p>
-
-							<div className="dialog__foot">
+						<div role="group" aria-label="Formats">
+							{FORMATS.map(({ key, name, what }) => (
 								<button
+									key={key}
 									type="button"
-									className="quiet"
+									className="export__format"
+									role="checkbox"
+									aria-checked={formats.includes(key)}
 									disabled={busy}
-									onClick={leave}
+									onClick={() => {
+										// What the last export said was
+										// about the last choice.
+										setSaid("");
+										onFormats(flipped(formats, key));
+									}}
 								>
-									Close
+									<span className="export__tick" />
+									<span className="export__label">
+										<span>{name}</span>
+										<span className="export__what">
+											{what}
+										</span>
+									</span>
 								</button>
-								<button
-									type="button"
-									className="export__run"
-									disabled={busy || formats.length === 0}
-									onClick={() => void run()}
-								>
-									{busy ? "Exporting…" : "Export…"}
-								</button>
-							</div>
+							))}
 						</div>
-					</div>,
+
+						{/* The bar and the line under it are always drawn, so
+						    neither an export starting nor what it says at
+						    the end moves anything. */}
+						<div
+							className="export__track"
+							role="progressbar"
+							aria-label="Export progress"
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-valuenow={percent}
+							data-shown={current !== null}
+						>
+							<div
+								className="export__fill"
+								style={{ width: `${percent}%` }}
+							/>
+						</div>
+
+						<p className="export__said" role="status">
+							{line}
+						</p>
+
+						<div className="dialog__foot">
+							<button
+								type="button"
+								className="quiet"
+								disabled={busy}
+								onClick={leave}
+							>
+								Close
+							</button>
+							<button
+								type="button"
+								className="export__run"
+								disabled={busy || formats.length === 0}
+								onClick={() => void run()}
+							>
+								{busy ? "Exporting…" : "Export…"}
+							</button>
+						</div>
+					</Dialog>,
 					document.body,
 				)}
 		</>

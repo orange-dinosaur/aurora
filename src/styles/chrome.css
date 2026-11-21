@@ -1,0 +1,354 @@
+/* Aurora's own row, directly beneath the window frame the desktop draws. */
+.titlebar {
+	grid-area: 1 / 2 / 2 / 5;
+	position: relative;
+	/* Raised over the body so the writing below does not paint on its menus. */
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+	min-width: 0;
+	padding: 0 var(--space-sm);
+}
+
+/* Both header menus sit in the flow of the row. Every other menu in the app is
+   raised from the end of a row and hangs over it, which is what `.menu` sets;
+   that rule is further down the file, so this one has to carry both classes to
+   outrank it. */
+.menu.titlebar__menu {
+	position: relative;
+	flex: none;
+}
+
+.titlebar__menu .menu__items {
+	top: calc(100% + 4px);
+}
+
+.titlebar__menu--account .menu__items {
+	min-width: 15.5rem;
+}
+
+.titlebar__state {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 14rem;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--accent-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* A fixed slot, so the names line up whichever one is ticked. */
+.menu__tick {
+	display: inline-flex;
+	width: 1rem;
+	margin-right: 0.4rem;
+	vertical-align: -3px;
+}
+
+.version__ask {
+	display: flex;
+	flex-direction: column;
+}
+
+.version__ask .namefield__input {
+	margin-block: var(--space-xxs);
+}
+
+/* The rename and delete buttons sit over the end of a version's row and show
+   on hover, the way a document row's actions do. */
+.version__row {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Room for all three buttons, so a long name stops short of them. */
+.version__row .menu__item {
+	padding-right: 64px;
+}
+
+.version__row-actions {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0.2rem;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	opacity: 0;
+}
+
+.version__row:hover .version__row-actions,
+.version__row:focus-within .version__row-actions {
+	opacity: 1;
+}
+
+.version__row-actions .menu__trigger {
+	width: 18px;
+	height: 18px;
+}
+
+/* No larger than the words beside them, so the names carry the row. */
+.version__row-actions svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* Weight rather than a tick, so every row in the menu starts at one edge. */
+.version__row .menu__item[aria-checked="true"] {
+	font-weight: 600;
+}
+
+/* A menu row's size rather than the sidebar's, with room kept beneath for
+   what Rust says about the name, so a refusal does not cover the next row. */
+.version__field {
+	position: relative;
+	padding-bottom: 1.1rem;
+}
+
+.version__field .namefield__message {
+	left: 0.5rem;
+	right: 0.5rem;
+	bottom: 0.1rem;
+}
+
+/* A line to write on rather than a box, level with the words in the rows. */
+.binder__menu--version .namefield__input {
+	width: calc(100% - 2 * var(--space-xs));
+	height: 24px;
+	margin-inline: var(--space-xs);
+	padding: 0;
+	font: inherit;
+}
+
+.binder__menu--version .menu__note {
+	white-space: normal;
+}
+
+/* Takes what the row has left, tabs or none, so the buttons after it stay put. */
+.titlebar__tabs {
+	flex: 1;
+	display: flex;
+	gap: var(--space-xs);
+	min-width: 0;
+}
+
+/* The way back cannot scroll as tabs do, so a merge's name gives way. */
+.titlebar__tabs:has(> .quiet) {
+	flex: none;
+	margin-right: auto;
+}
+
+/* WebKitGTK resets the two properties after `font` on a button, and a font
+   shorthand restores neither of them. */
+.quiet {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	font: var(--text-ui);
+	letter-spacing: normal;
+	text-transform: none;
+	padding: 4px var(--space-xs);
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.quiet:hover:not(:disabled),
+.quiet[aria-expanded="true"] {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.quiet:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.quiet:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.quiet svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* An open session is worth more than the dim grey around it: seeing that it is
+   running is the whole reason it is drawn up here. Fixed-width digits and a
+   floor on the width, so a running clock cannot jog the row. */
+.titlebar__clock {
+	min-width: 62px;
+	color: var(--accent-text);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.titlebar__menu--session .menu__items {
+	width: 240px;
+}
+
+.titlebar__menu--session > .quiet {
+	font-size: 12px;
+}
+
+.titlebar__menu--session > .quiet svg {
+	width: 12px;
+	height: 12px;
+}
+
+.titlebar__right {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+/* Fixed-width digits, so typing does not jog the row. */
+.titlebar__today {
+	color: var(--text-dim);
+	font: var(--text-caption);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.titlebar__button {
+	flex: none;
+	align-self: center;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	color: var(--text-dim);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+	transition:
+		color 120ms var(--ease-open),
+		background-color 120ms var(--ease-open);
+}
+
+.titlebar__button .icon {
+	width: 14px;
+	height: 14px;
+}
+
+.titlebar__button:hover:not(:disabled) {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.titlebar__button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* A person in a coral circle, signed in or not. The menu says the rest. */
+.account__chip {
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	margin-left: var(--space-xxs);
+	padding: 0;
+	color: var(--accent-text);
+	background: var(--accent-wash);
+	border: 0;
+	border-radius: 50%;
+	cursor: pointer;
+}
+
+.account__chip:hover,
+.account__chip[aria-expanded="true"] {
+	color: var(--on-accent);
+	background: var(--accent);
+}
+
+.account__chip:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.account__chip svg {
+	width: 13px;
+	height: 13px;
+}
+
+/* A person in a coral circle, signed in or not. */
+.account__avatar {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	color: var(--accent-text);
+	background: var(--accent-wash);
+	border-radius: 50%;
+}
+
+.account__avatar svg {
+	width: 15px;
+	height: 15px;
+}
+
+/* Under this width the header cannot hold its words as well as its controls,
+   so the two controls that have an icon drop their words and today's count
+   goes. A running session keeps its readout: seeing it is the reason it is up
+   there. */
+@media (max-width: 620px) {
+	.titlebar__label,
+	.titlebar__today {
+		display: none;
+	}
+}
+
+/* Who is signed in, at the top of the menu the chip opens. */
+.account__who {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+	padding: var(--space-xs);
+}
+
+.account__names {
+	min-width: 0;
+}
+
+.account__name {
+	display: block;
+	font: var(--text-ui-strong);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.account__where {
+	display: block;
+	font: var(--text-caption);
+	color: var(--text-dim);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.account__in {
+	flex: none;
+	margin-left: auto;
+	height: 30px;
+	padding: 0 var(--space-sm);
+	font: var(--text-ui);
+	letter-spacing: normal;
+	text-transform: none;
+}

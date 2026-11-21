@@ -10,6 +10,7 @@ import {
 	split,
 	text,
 	ties,
+	withFields,
 	type Fields,
 } from "./frontmatter";
 
@@ -471,6 +472,14 @@ describe("relationships", () => {
 
 		expect(list(found, "relationships")).toEqual(["Ana: her sister"]);
 		expect(text(found, "relationships")).toBe("Ana: her sister");
+	});
+});
+
+describe("withFields", () => {
+	test("its own parsed fields give the text back unchanged", () => {
+		const text = "---\ntags: [a, b]\nnote: hi # kept\n---\nShe ran.\n";
+
+		expect(withFields(text, parse(split(text).block))).toBe(text);
 	});
 });
 

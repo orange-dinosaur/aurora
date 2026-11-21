@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { indent, retitling } from "./rows";
+import { abbreviated, deliberate, indent, retitling } from "./rows";
 
 describe("which row is being retitled", () => {
 	test("no row is, while the field is closed", () => {
@@ -40,5 +40,33 @@ describe("which row is being retitled", () => {
 describe("how far in a row sits", () => {
 	test("the depth reaches the stylesheet as a custom property", () => {
 		expect(indent(3)).toEqual({ "--depth": 3 });
+	});
+});
+
+describe("a folder row's count", () => {
+	test("a short folder says exactly what it holds", () => {
+		expect(abbreviated(0)).toBe("0");
+		expect(abbreviated(999)).toBe("999");
+	});
+
+	test("a longer one is cut down to thousands", () => {
+		expect(abbreviated(1200)).toBe("1.2k");
+		expect(abbreviated(48_300)).toBe("48k");
+	});
+
+	test("what is cut is never rounded up", () => {
+		expect(abbreviated(1999)).toBe("1.9k");
+		expect(abbreviated(9999)).toBe("9.9k");
+	});
+});
+
+describe("deliberate", () => {
+	test("a single click and the keyboard count", () => {
+		expect(deliberate(1)).toBe(true);
+		expect(deliberate(0)).toBe(true);
+	});
+
+	test("the second click of a double click does not", () => {
+		expect(deliberate(2)).toBe(false);
 	});
 });

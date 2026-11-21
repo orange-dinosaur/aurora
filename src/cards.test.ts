@@ -1,14 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
-	abbreviated,
 	band,
 	counted,
-	deliberate,
 	described,
 	previewed,
 	reached,
 	summarised,
-	trashed,
 } from "./cards";
 import type { FolderKind, OverviewCard } from "./types";
 
@@ -135,23 +132,6 @@ describe("a folder card's line", () => {
 	});
 });
 
-describe("a folder row's count", () => {
-	test("a short folder says exactly what it holds", () => {
-		expect(abbreviated(0)).toBe("0");
-		expect(abbreviated(999)).toBe("999");
-	});
-
-	test("a longer one is cut down to thousands", () => {
-		expect(abbreviated(1200)).toBe("1.2k");
-		expect(abbreviated(48_300)).toBe("48k");
-	});
-
-	test("what is cut is never rounded up", () => {
-		expect(abbreviated(1999)).toBe("1.9k");
-		expect(abbreviated(9999)).toBe("9.9k");
-	});
-});
-
 describe("the line under a folder's name", () => {
 	test("an empty folder still says so", () => {
 		expect(summarised([])).toEqual({ documents: "0 documents", words: 0 });
@@ -183,30 +163,5 @@ describe("the line under a folder's name", () => {
 				folder("Back Matter", "back-matter", 1, 150),
 			]),
 		).toEqual({ documents: "0 documents", words: 8_000 });
-	});
-});
-
-describe("what a folder in the trash took with it", () => {
-	test("an empty folder still says it is one", () => {
-		expect(trashed(0)).toBe("an empty folder");
-	});
-
-	test("one document is not one documents", () => {
-		expect(trashed(1)).toBe("a folder of 1 document");
-	});
-
-	test("a chapter of fourteen scenes counts every one of them", () => {
-		expect(trashed(14)).toBe("a folder of 14 documents");
-	});
-});
-
-describe("deliberate", () => {
-	test("a single click and the keyboard count", () => {
-		expect(deliberate(1)).toBe(true);
-		expect(deliberate(0)).toBe(true);
-	});
-
-	test("the second click of a double click does not", () => {
-		expect(deliberate(2)).toBe(false);
 	});
 });

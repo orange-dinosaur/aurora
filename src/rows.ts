@@ -64,3 +64,27 @@ export function spot(
 		within: held.has(id),
 	};
 }
+
+/**
+ * A word count for a sidebar row, where there is room for a number and not for
+ * the word after it. Always short of the true figure rather than over it: a
+ * writer reads their own count as a claim, and a rounded-up one is a lie.
+ */
+export function abbreviated(words: number) {
+	if (words < 1000) {
+		return String(words);
+	}
+	const thousands = words / 1000;
+	return thousands < 10
+		? `${(Math.floor(thousands * 10) / 10).toFixed(1)}k`
+		: `${Math.floor(thousands)}k`;
+}
+
+/**
+ * Whether a click is not the second of a double click, which is what lets a
+ * button appear under the pointer without being pressed by it. The keyboard
+ * reports 0.
+ */
+export function deliberate(detail: number) {
+	return detail < 2;
+}

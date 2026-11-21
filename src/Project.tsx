@@ -9,8 +9,10 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { NARROW } from "./breakpoints";
 import { filed, refile } from "./corpus";
 import Editor from "./Editor";
+import { useMedia } from "./useMedia";
 import { useFolderFields, type FieldsHandle } from "./fields";
 import { flushAll, flushOthers, holdUnsaved } from "./flushing";
 import { list } from "./frontmatter";
@@ -129,9 +131,6 @@ const AUTOSAVE_MS = 800;
 
 // How long the Control+W chord waits for its second key.
 const CHORD_PAUSE_MS = 1500;
-
-// Where the sidebar floats, which the stylesheet's own query has to match.
-const NARROW = "(max-width: 820px)";
 
 async function read(
 	root: string,
@@ -481,9 +480,7 @@ export default function Project({
 	// click, so it has its own open and the writer's lasting choice is left for
 	// the wider window. Watched rather than read once, so resizing across the
 	// line swaps one for the other.
-	const [narrow, setNarrow] = useState(
-		() => window.matchMedia(NARROW).matches,
-	);
+	const narrow = useMedia(NARROW);
 	const [floating, setFloating] = useState(false);
 	const sidebarButton = useRef<HTMLButtonElement>(null);
 	const sidebar = narrow ? floating : preferences.sidebar;
@@ -492,16 +489,9 @@ export default function Project({
 	const listButton = useRef<HTMLButtonElement>(null);
 
 	useEffect(() => {
-		const query = window.matchMedia(NARROW);
-		function changed(event: MediaQueryListEvent) {
-			setNarrow(event.matches);
-			setFloating(false);
-			setListOpen(false);
-		}
-
-		query.addEventListener("change", changed);
-		return () => query.removeEventListener("change", changed);
-	}, []);
+		setFloating(false);
+		setListOpen(false);
+	}, [narrow]);
 
 	const {
 		pieces,

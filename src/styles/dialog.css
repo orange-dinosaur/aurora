@@ -1,0 +1,287 @@
+/* The surface a dialog over the Shelf stands on. A short window scrolls it
+   rather than pushing its buttons off the foot. */
+.dialog {
+	--dialog-pad: var(--space-lg);
+	width: 100%;
+	max-width: 440px;
+	max-height: 100%;
+	padding: var(--dialog-pad);
+	overflow-y: auto;
+	text-align: left;
+	color: var(--text);
+	background: var(--bg-card);
+	border: var(--hairline);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-float);
+}
+
+/* Focused when it opens so a key has somewhere to land, with nothing drawn. */
+.dialog:focus {
+	outline: none;
+}
+
+.dialog__title {
+	margin: 0 0 var(--space-xxs);
+	font: var(--text-heading);
+	letter-spacing: var(--tracking-heading);
+}
+
+.dialog__lead {
+	margin: 0 0 var(--space-md);
+	color: var(--text-dim);
+}
+
+.dialog__label {
+	display: block;
+	margin-bottom: var(--space-sm);
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+/* Lines to write on, like the sprint field and a new version's name. */
+.dialog__input {
+	display: block;
+	width: 100%;
+	margin-top: var(--space-xxs);
+	padding: 4px 0;
+	font: var(--text-ui);
+	color: var(--text);
+	text-align: left;
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--graphic-faint);
+	border-radius: 0;
+}
+
+.dialog__input:focus {
+	outline: none;
+	border-bottom-color: var(--accent-text);
+	box-shadow: 0 1px 0 var(--accent-text);
+}
+
+/* A folder and the Change… beside it, in the labels' type. A long path wraps
+   rather than hiding its end. */
+.dialog__saved {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-xs);
+	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.dialog__saved span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* A fixed two lines, so a refusal appearing does not push the buttons. */
+.dialog__problem {
+	height: 2lh;
+	margin: var(--space-xs) 0 0;
+	overflow: hidden;
+	font: var(--text-caption);
+	color: var(--danger);
+}
+
+.dialog__saved .welcome__back {
+	flex: none;
+	font: inherit;
+}
+
+/* Pinned to the bottom of a dialog that has to scroll, so its buttons never
+   scroll away. It takes over the dialog's bottom padding to sit flush. */
+.dialog__foot {
+	position: sticky;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-xs);
+	margin: var(--space-md) 0 calc(-1 * var(--dialog-pad));
+	padding: var(--space-xs) 0 var(--dialog-pad);
+	background: var(--bg-card);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.dialog {
+		scroll-behavior: smooth;
+	}
+}
+
+/* Kept out of sight but still focusable, so the card shows the focus ring. */
+/* The second because the panel's title already says Synopsis. */
+.visually-hidden,
+.synopsis .field__label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+.formats {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	/* A fieldset defaults to min-content, which would stop it shrinking. */
+	min-inline-size: 0;
+}
+
+.format {
+	position: relative;
+	display: block;
+	margin-bottom: var(--space-xs);
+	padding: var(--space-sm);
+	color: var(--text);
+	border: var(--hairline);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.format:last-child {
+	margin-bottom: 0;
+}
+
+.format:hover:not(:has(:disabled)) {
+	background: var(--bg-hover);
+}
+
+.format:has(:checked) {
+	border-color: var(--accent);
+	background: var(--accent-wash);
+}
+
+.format:has(:focus-visible) {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.format:has(:disabled) {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.format__name {
+	display: flex;
+	justify-content: space-between;
+	font: var(--text-ui-strong);
+}
+
+.format__soon {
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.format__description {
+	display: block;
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+/* The folders a format makes, named in mono: this is a list of names on disk,
+   not a sentence about the format. */
+.format__files {
+	display: block;
+	margin-top: var(--space-xxs);
+	font: 400 11px/1.4 var(--font-mono);
+	color: var(--text-dim);
+}
+
+/* The numbers and ticks for the structure picked above them, indented to the
+   card's text. */
+/* Scrolled into view clear of the pinned foot. */
+.start {
+	margin-bottom: var(--space-xs);
+	padding: 0 var(--space-sm);
+	scroll-margin-bottom: 4.5rem;
+}
+
+.start__counts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+	gap: var(--space-md);
+}
+
+.start__matter {
+	display: flex;
+	gap: var(--space-md);
+}
+
+.start__matter .export__format {
+	width: auto;
+	padding-left: 0;
+}
+
+/* A 1px dark red line alone reads as black, so the label and the number turn
+   too. */
+.dialog__label:has(> .dialog__input[aria-invalid="true"]) {
+	color: var(--danger);
+}
+
+.dialog__input[aria-invalid="true"] {
+	color: var(--danger);
+	border-bottom-color: var(--danger);
+}
+
+.dialog__input[aria-invalid="true"]:focus {
+	border-bottom-color: var(--danger);
+	box-shadow: 0 1px 0 var(--danger);
+}
+
+/* Floats at the foot of the window, so a message appearing cannot move the
+   books, and a long Shelf cannot leave it out of sight below the last one.
+   Over the scrim as well, or a failed New project would say so unread. */
+.welcome__message {
+	position: fixed;
+	bottom: var(--space-sm);
+	left: var(--space-md);
+	z-index: 61;
+	max-width: calc(100% - 2 * var(--space-md));
+	margin: 0;
+	padding: var(--space-xs) var(--space-sm);
+	font: var(--text-ui);
+	color: var(--text-dim);
+	background: var(--surface-float);
+	-webkit-backdrop-filter: var(--material);
+	backdrop-filter: var(--material);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
+	overflow-wrap: anywhere;
+}
+
+.welcome__message:empty {
+	display: none;
+}
+
+.welcome__message--error {
+	color: var(--danger);
+}
+
+/* The sidebar runs the full height on the left, and the bar runs across
+   everything right of it. Position is what a floating sidebar hangs from. */
+.project {
+	position: relative;
+	display: grid;
+	grid-template: 44px minmax(0, 1fr) / auto minmax(0, 1fr) auto auto;
+	align-self: stretch;
+	width: 100%;
+	min-height: 0;
+}
+
+/* Focus leaves only the page and its dock. */
+.project--focus {
+	grid-template-rows: 0 minmax(0, 1fr);
+}
+
+.project--focus .titlebar,
+.project--focus .sidebar,
+.project--focus .right-sidebar,
+.project--focus .rail {
+	display: none;
+}

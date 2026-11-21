@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { TrashEntry } from "./types";
 import { MERGE_HOLDS } from "./branches";
 import { listTrash, purgeTrashEntry, restoreFromTrash } from "./documents";
-import { deliberate, trashed } from "./cards";
+import { deliberate } from "./rows";
+import { trashed } from "./trash";
 import { when } from "./dates";
 import { failure } from "./errors";
 

@@ -2,7 +2,7 @@
 // document. `frontmatter.ts` knows what a tag is; this knows what happens to one
 // when the page it points at is renamed.
 
-import { list, parse, serialize, split } from "./frontmatter";
+import { list, parse, split, withFields } from "./frontmatter";
 
 /**
  * Whether a document carries this tag. Case-sensitive, like recognition in
@@ -19,8 +19,7 @@ export function tagged(text: string, tag: string): boolean {
  * character, so nothing is written for the sake of it.
  */
 export function retag(text: string, from: string, to: string): string {
-	const { block, body } = split(text);
-	const fields = parse(block);
+	const fields = parse(split(text).block);
 	const tags = list(fields, "tags");
 
 	if (!tags.includes(from)) {
@@ -40,6 +39,5 @@ export function retag(text: string, from: string, to: string): string {
 	const rewritten = new Map(fields);
 	rewritten.set("tags", next);
 
-	// `split` ate the newline under the block, so it goes back on.
-	return `${serialize(rewritten, block)}\n${body}`;
+	return withFields(text, rewritten);
 }

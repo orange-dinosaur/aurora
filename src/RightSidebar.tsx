@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { OVERLAY } from "./breakpoints";
 import { Still } from "./Field";
 import Grip from "./Grip";
 import Icon, { type IconName } from "./Icon";
@@ -19,6 +20,7 @@ import type { OutlineHandle } from "./lib/outline";
 import type { MergeUnderway, Overwrites } from "./lib/versions";
 import { MANUSCRIPT } from "./kinds";
 import { isSubject } from "./subjects";
+import { useMedia } from "./useMedia";
 import type { Aim } from "./Target";
 import type {
 	ProjectDocument,
@@ -42,10 +44,6 @@ const TABS: { name: RightSidebarTab; label: string; icon: IconName }[] = [
 	{ name: "stats", label: "Stats", icon: "bars" },
 	{ name: "versions", label: "Versions", icon: "layers" },
 ];
-
-// Where the panel leaves the page's width alone and floats over it, which the
-// stylesheet's own query has to match.
-const OVERLAY = "(max-width: 1080px)";
 
 type Props = {
 	/** Whether the panel is showing. The rail always is. */
@@ -173,17 +171,7 @@ export default function RightSidebar({
 	const rail = useRef<HTMLDivElement>(null);
 
 	// Floating over the page, it goes the way the floating binder does.
-	const [overlay, setOverlay] = useState(
-		() => window.matchMedia(OVERLAY).matches,
-	);
-	useEffect(() => {
-		const query = window.matchMedia(OVERLAY);
-		function changed(event: MediaQueryListEvent) {
-			setOverlay(event.matches);
-		}
-		query.addEventListener("change", changed);
-		return () => query.removeEventListener("change", changed);
-	}, []);
+	const overlay = useMedia(OVERLAY);
 	useDismissal(showing && overlay, panel, onClose, rail);
 
 	// Only a tile clicked with the mouse fades the panel in. It also mounts on

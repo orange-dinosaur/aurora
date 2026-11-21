@@ -1,0 +1,210 @@
+/* The edge between a panel and the writing, widened into something a pointer
+   can find. It lies over the border rather than beside it, so nothing moves
+   when nothing is being dragged, and neither panel clips it. */
+.grip {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 9px;
+	cursor: col-resize;
+}
+
+.grip--left {
+	right: -4px;
+}
+
+.grip--right {
+	left: -4px;
+}
+
+/* The border under it, in the accent colour, so the edge answers the pointer
+   before it is pressed. */
+.grip:hover::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 4px;
+	width: 1px;
+	background: var(--accent);
+}
+
+.grip:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -2px;
+}
+
+/* While an edge is being dragged. Over everything, since the pointer spends
+   the drag outside the handle it grabbed: without this it would flicker back
+   to a caret over the writing and select the text it crossed. */
+body.dragging,
+body.dragging * {
+	cursor: col-resize;
+	user-select: none;
+}
+
+/* The panel about whatever is open, a card on the far side of the writing.
+   Narrower than the sidebar, which has to hold a whole project's names; this
+   holds one thing's own. It is unmounted when closed rather than hidden, since
+   it keeps nothing a writer would miss. */
+.right-sidebar {
+	grid-area: 2 / 3;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	margin: var(--space-md) 0 var(--space-sm);
+	background: var(--bg);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	/* What the trouble line is placed against. */
+	position: relative;
+}
+
+/* Fades in and is simply gone on closing. Reduced motion keeps the fade, and the
+   page takes its new width at once either way. */
+.right-sidebar[data-fading] {
+	transition: opacity 120ms var(--ease-open);
+}
+
+@starting-style {
+	.right-sidebar[data-fading] {
+		opacity: 0;
+	}
+}
+
+/* Clear of the card's corners, so its line does not cut across them. */
+.right-sidebar > .grip {
+	top: var(--radius-md);
+	bottom: var(--radius-md);
+}
+
+/* The window cannot spare the width here, so the panel floats over the page,
+   below the bar, and leaves the rail and a strip of the page showing. */
+@media (max-width: 1080px) {
+	.right-sidebar {
+		grid-area: auto;
+		position: absolute;
+		top: calc(44px + var(--space-md));
+		right: var(--space-xxl);
+		bottom: var(--space-xs);
+		z-index: 1;
+		max-width: calc(100% - var(--space-xxl) - var(--space-md));
+		margin: 0;
+		box-shadow: var(--shadow-float);
+	}
+}
+
+.right-sidebar__title {
+	flex: none;
+	margin: 0;
+	padding: var(--space-md) var(--space-md) var(--space-sm);
+	font: var(--text-heading);
+	letter-spacing: var(--tracking-heading);
+}
+
+/* Why a change was refused. Always in the tree and empty until there is
+   something to say, and laid over the foot of the panel rather than in it, so
+   the field the writer is looking at does not move. */
+.right-sidebar__trouble {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	margin: 0;
+	padding: 0 var(--space-md);
+	font-size: 0.8rem;
+	color: var(--danger);
+	background: var(--bg);
+	border-radius: 0 0 var(--radius-md) var(--radius-md);
+	overflow-wrap: anywhere;
+}
+
+.right-sidebar__body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 0 var(--space-md) var(--space-md);
+}
+
+/* A heading inside a panel: the label over a group, not a title. */
+.panel__heading,
+.stats__heading,
+.versions__date {
+	margin: var(--space-md) 0 var(--space-xxs);
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+/* The writer's own words, so in the page's type. */
+.synopsis .field__box {
+	font: 400 15px/1.5 var(--font-page);
+}
+
+/* The icons that open the panels, straight on the page with no line beside
+   them. It starts level with the panel. */
+.rail {
+	grid-area: 2 / 4;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-xs);
+	width: var(--space-xxl);
+	padding-top: var(--space-md);
+}
+
+.rail__tile {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	color: var(--graphic-faint);
+	border: 0;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.rail__tile:nth-child(1) {
+	background: var(--tile-1);
+}
+
+.rail__tile:nth-child(2) {
+	background: var(--tile-2);
+}
+
+.rail__tile:nth-child(3) {
+	background: var(--tile-3);
+}
+
+.rail__tile:nth-child(4) {
+	background: var(--tile-4);
+}
+
+.rail__tile:nth-child(5) {
+	background: var(--tile-5);
+}
+
+.rail__tile .icon {
+	width: 15px;
+	height: 15px;
+	stroke-width: 1.35;
+}
+
+.rail__tile:hover {
+	color: var(--text);
+}
+
+.rail__tile[aria-pressed="true"] {
+	color: var(--text);
+	box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.rail__tile:active {
+	transform: var(--press);
+}
+
+.rail__tile:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { homeDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -7,7 +7,7 @@ import Account from "./Account";
 import Icon from "./Icon";
 import { UNITS } from "./Session";
 import { bounded } from "./lib/settings";
-import { trapTab } from "./lib/trap";
+import Dialog from "./Dialog";
 import { KEYBOARD, written } from "./formatting";
 import { face, FACES, nudged, SETTINGS, type Setting } from "./lib/typography";
 import type { Preferences, Theme } from "./types";
@@ -76,123 +76,84 @@ export default function Settings({
 	onLogin,
 }: Props) {
 	const [section, setSection] = useState<Section>("appearance");
-	const dialog = useRef<HTMLDivElement>(null);
-
-	// So Escape has somewhere to land: what had focus is behind the dialog
-	// now, and a key pressed there would reach the app.
-	useEffect(() => {
-		if (!closing) {
-			dialog.current?.focus();
-		}
-	}, [closing]);
-
-	useEffect(() => {
-		function escape(event: KeyboardEvent) {
-			if (event.key === "Escape") {
-				onClose();
-			}
-		}
-
-		document.addEventListener("keydown", escape);
-		return () => document.removeEventListener("keydown", escape);
-	}, [onClose]);
 
 	const heading = SECTIONS.find((each) => each.id === section)?.label;
 
 	return (
-		<div
-			className="scrim"
-			data-closing={closing ? "" : undefined}
-			data-instant={instant ? "" : undefined}
-			inert={closing}
-			// Clicking away closes it, as Escape does. On the press rather
-			// than the click, so a selection dragged out of the dialog and
-			// released on the scrim does not shut it.
-			onMouseDown={(event) => {
-				if (event.target === event.currentTarget) {
-					onClose();
-				}
-			}}
+		<Dialog
+			label="Settings"
+			className="settings"
+			closing={closing}
+			instant={instant}
+			onLeave={onClose}
 		>
-			<div
-				className="settings"
-				role="dialog"
-				aria-modal="true"
-				aria-label="Settings"
-				ref={dialog}
-				tabIndex={-1}
-				onKeyDown={(event) =>
-					trapTab(event.nativeEvent, dialog.current)
-				}
-			>
-				<nav className="settings__rail">
-					<p className="settings__eyebrow">Settings</p>
-					<ul className="settings__list">
-						{SECTIONS.map((each) => (
-							<li key={each.id}>
-								<button
-									type="button"
-									className="settings__section"
-									aria-current={
-										each.id === section ? "page" : undefined
-									}
-									onClick={() => setSection(each.id)}
-								>
-									{each.label}
-								</button>
-							</li>
-						))}
-					</ul>
-					<p className="settings__note">
-						Preferences follow you into every project.
-					</p>
-				</nav>
+			<nav className="settings__rail">
+				<p className="settings__eyebrow">Settings</p>
+				<ul className="settings__list">
+					{SECTIONS.map((each) => (
+						<li key={each.id}>
+							<button
+								type="button"
+								className="settings__section"
+								aria-current={
+									each.id === section ? "page" : undefined
+								}
+								onClick={() => setSection(each.id)}
+							>
+								{each.label}
+							</button>
+						</li>
+					))}
+				</ul>
+				<p className="settings__note">
+					Preferences follow you into every project.
+				</p>
+			</nav>
 
-				<div className="settings__pane">
-					<div className="settings__head">
-						<h2 className="settings__heading">{heading}</h2>
-						<button
-							type="button"
-							className="settings__close"
-							onClick={onClose}
-							aria-label="Close settings"
-							title="Close settings (Escape)"
-						>
-							<Icon name="x" />
-						</button>
-					</div>
+			<div className="settings__pane">
+				<div className="settings__head">
+					<h2 className="settings__heading">{heading}</h2>
+					<button
+						type="button"
+						className="settings__close"
+						onClick={onClose}
+						aria-label="Close settings"
+						title="Close settings (Escape)"
+					>
+						<Icon name="x" />
+					</button>
+				</div>
 
-					<div className="settings__body">
-						{section === "account" && <Account onLogin={onLogin} />}
-						{section === "general" && (
-							<General
-								preferences={preferences}
-								onPreferences={onPreferences}
-							/>
-						)}
-						{section === "appearance" && (
-							<Appearance
-								preferences={preferences}
-								onPreferences={onPreferences}
-							/>
-						)}
-						{section === "typography" && (
-							<Typography
-								preferences={preferences}
-								onPreferences={onPreferences}
-							/>
-						)}
-						{section === "sessions" && (
-							<Sessions
-								preferences={preferences}
-								onPreferences={onPreferences}
-							/>
-						)}
-						{section === "shortcuts" && <Shortcuts />}
-					</div>
+				<div className="settings__body">
+					{section === "account" && <Account onLogin={onLogin} />}
+					{section === "general" && (
+						<General
+							preferences={preferences}
+							onPreferences={onPreferences}
+						/>
+					)}
+					{section === "appearance" && (
+						<Appearance
+							preferences={preferences}
+							onPreferences={onPreferences}
+						/>
+					)}
+					{section === "typography" && (
+						<Typography
+							preferences={preferences}
+							onPreferences={onPreferences}
+						/>
+					)}
+					{section === "sessions" && (
+						<Sessions
+							preferences={preferences}
+							onPreferences={onPreferences}
+						/>
+					)}
+					{section === "shortcuts" && <Shortcuts />}
 				</div>
 			</div>
-		</div>
+		</Dialog>
 	);
 }
 

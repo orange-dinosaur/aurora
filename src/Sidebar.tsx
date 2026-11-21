@@ -14,7 +14,6 @@ import {
 	useRightClick,
 	type Point,
 } from "./Menu";
-import { abbreviated } from "./cards";
 import { SIDEBAR } from "./panels";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
@@ -32,7 +31,7 @@ import { failure } from "./errors";
 import { FOLD, pressed } from "./formatting";
 import { useReorder, type Draggable } from "./reorder";
 import type { Renaming } from "./rows";
-import { indent, retitling, spot } from "./rows";
+import { abbreviated, indent, retitling, spot } from "./rows";
 import { timed } from "./timing";
 import {
 	firstScene,

@@ -1,0 +1,371 @@
+/* The top of the page, underlined like the app's other single-line fields and
+   slightly larger: this is where a whole line of dialogue gets pasted. */
+.search__box {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+	margin-bottom: var(--space-md);
+	padding: 4px 0;
+	border-bottom: 1px solid var(--graphic-faint);
+}
+
+.search__box:focus-within {
+	border-bottom-color: var(--accent-text);
+	box-shadow: 0 1px 0 var(--accent-text);
+}
+
+.search__box .icon {
+	color: var(--text-faint);
+}
+
+.search__field {
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	font: 400 15px/1.3 var(--font-ui);
+	color: var(--text);
+	background: none;
+	border: 0;
+	outline: 0;
+	appearance: none;
+}
+
+.search__field::-webkit-search-cancel-button {
+	display: none;
+}
+
+.search__note {
+	margin: 0;
+	color: var(--text-dim);
+}
+
+.search__note--error {
+	color: var(--danger);
+}
+
+.search__groups {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* A row that opens and closes the hits under it. It has to be a button to be
+   reachable by keyboard, and has to look like a line of a list rather than a
+   control. */
+.search__document {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	width: 100%;
+	margin: 0;
+	padding: 0.15rem 0.25rem;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	background: none;
+	border: none;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.search__document:hover {
+	background: var(--bg-hover);
+}
+
+.search__document:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* Sitting with the line rather than on its baseline. */
+.search__document .icon {
+	flex: none;
+	align-self: center;
+	color: var(--text-dim);
+}
+
+/* Serif, because it names a piece of writing. The folder beside it does not. */
+.search__title {
+	font-family: var(--font-page);
+	font-size: 1.0625rem;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
+}
+
+.search__folder {
+	color: var(--text-dim);
+	font-size: 0.85rem;
+}
+
+/* Pushed to the far edge and lined up, so a column of counts can be read down
+   rather than hunted for after each title. */
+.search__count {
+	margin-left: auto;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Indented to under the document's name, past its chevron, so the eye can run
+   down the column of names without the lines under them getting in the way. */
+.search__hits {
+	display: flex;
+	flex-direction: column;
+	margin: 0.2rem 0 0;
+	padding: 0 0 0 1.6rem;
+	list-style: none;
+}
+
+/* A button, because clicking it opens the document on this hit, and it lines
+   up under the document's name as though it were still just a line. */
+.search__hit {
+	display: flex;
+	align-items: baseline;
+	gap: 0.45rem;
+	width: 100%;
+	min-width: 0;
+	padding: 0.1rem 0.25rem;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	background: none;
+	border: none;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.search__hit:hover {
+	background: var(--bg-hover);
+}
+
+.search__hit:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* One line each, whatever the paragraph behind it is doing. The text has
+   already been cut to a window around the match; the clipping here is only for
+   a window too narrow to hold even that. */
+.search__line {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-dim);
+	font-family: var(--font-page);
+	font-size: 0.9375rem;
+	line-height: 1.4;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+/* A name reads as itself rather than as an excerpt of something longer. */
+.search__hit--title .search__line {
+	color: var(--text);
+}
+
+/* The same wash Find paints on the page, so a hit looks like the thing it will
+   become once it is clicked through. */
+.search__match {
+	color: var(--text);
+	background: var(--find);
+	border-radius: 2px;
+}
+
+/* A name is not a position in any text, so its row says so rather than
+   pretending to be a line of the writing. */
+.search__kind {
+	flex: none;
+	color: var(--text-dim);
+	font-size: 0.7rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+/* Reads as one more row of the list rather than as a call to action. */
+.search__more {
+	padding: 0.1rem 0.3rem;
+	color: var(--text-dim);
+	font: inherit;
+	font-size: 0.85rem;
+	background: none;
+	border: none;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+.search__more:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.search__more:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+/* Below the results and after a gap of its own, so a document turning out to
+   be unreadable moves nothing above it. */
+.search__unreadable {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xxs);
+	margin-top: var(--space-lg);
+}
+
+.search__unread {
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* The tab: a column in the chrome's type, with the writer's own text in the page
+   font. */
+.search--page .search__note {
+	font: var(--text-ui);
+}
+
+.search--page > .search__note:not(.search__note--error) {
+	color: var(--text-faint);
+}
+
+/* Out by a row's own padding, so a chevron stands on the field's left edge and
+   the hover wash still has its margin. */
+.search--page .search__groups,
+.search--page .search__unread {
+	margin-inline: calc(var(--space-xs) * -1);
+}
+
+.search--page .search__groups {
+	gap: var(--space-sm);
+}
+
+.search--page .search__document {
+	gap: var(--space-xs);
+	padding: var(--space-xxs) var(--space-xs);
+	border-radius: var(--radius-sm);
+}
+
+.search--page .search__document .icon {
+	width: 13px;
+	height: 13px;
+	color: var(--text-faint);
+	transition: transform 120ms var(--ease-open);
+}
+
+.search--page .search__document[aria-expanded="false"] .icon {
+	transform: rotate(-90deg);
+}
+
+.search--page .search__title {
+	font: var(--text-ui-strong);
+}
+
+.search--page .search__folder {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font: var(--text-caption);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.search--page .search__count {
+	flex: none;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.search--page .search__hits {
+	margin: 0;
+	padding: 0;
+}
+
+.search--page .search__hit {
+	gap: var(--space-xs);
+	padding: 3px var(--space-xs) 3px 29px;
+}
+
+.search--page .search__hit:hover .search__line {
+	color: var(--text);
+}
+
+.search--page .search__line {
+	font: 400 15px/1.45 var(--font-page);
+}
+
+.search--page .search__match {
+	padding: 0 1px;
+}
+
+.search--page .search__kind {
+	font: var(--text-caption);
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--text-faint);
+}
+
+.search--page .search__more {
+	margin: 2px 0 0 21px;
+	padding: var(--space-xxs) var(--space-xs);
+	font: var(--text-ui);
+	color: var(--accent-text);
+}
+
+.search--page .search__more:hover {
+	color: var(--accent-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.search--page .search__document .icon {
+		transition: none;
+	}
+}
+
+@media (max-width: 620px) {
+	.search--page .search__hit {
+		padding-left: 21px;
+	}
+}
+
+/* The same list of hits, read in the right sidebar rather than in a tab of its
+   own. The panel is a fifth of the width, so a line wraps instead of running
+   off the end with an ellipsis, and the sidebar's own body does the scrolling
+   rather than nesting a second scroller inside it. */
+.search--panel {
+	display: flex;
+	flex-direction: column;
+	flex: none;
+	min-height: 0;
+}
+
+.search--panel .search__hits {
+	padding-left: 1rem;
+}
+
+.search--panel .search__title {
+	font-size: 0.9375rem;
+}
+
+.search--panel .search__line {
+	overflow: visible;
+	font-size: 0.875rem;
+	white-space: normal;
+	text-overflow: clip;
+}
+
+/* The right-hand end of a cast row: whether the document tags this subject,
+   and how many times it names it. Either can be missing, so they travel
+   together rather than each finding its own way to the edge. */
+.search__aside {
+	display: flex;
+	align-items: baseline;
+	gap: 0.4rem;
+	margin-left: auto;
+}
+
+.search__aside .search__count {
+	margin-left: 0;
+}

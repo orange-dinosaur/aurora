@@ -83,44 +83,6 @@ export function previewed(front: string, excerpt: string): string {
 }
 
 /**
- * A word count for a sidebar row, where there is room for a number and not for
- * the word after it. Always short of the true figure rather than over it: a
- * writer reads their own count as a claim, and a rounded-up one is a lie.
- */
-export function abbreviated(words: number) {
-	if (words < 1000) {
-		return String(words);
-	}
-	const thousands = words / 1000;
-	return thousands < 10
-		? `${(Math.floor(thousands * 10) / 10).toFixed(1)}k`
-		: `${Math.floor(thousands)}k`;
-}
-
-/**
- * What a folder in the trash took in with it, for the line beside its name. A
- * folder that held nothing still went in as a folder and says so, or its row
- * would read as a document.
- */
-export function trashed(inside: number) {
-	if (inside === 0) {
-		return "an empty folder";
-	}
-	return inside === 1
-		? "a folder of 1 document"
-		: `a folder of ${inside} documents`;
-}
-
-/**
- * Whether a click is not the second of a double click, which is what lets a
- * button appear under the pointer without being pressed by it. The keyboard
- * reports 0.
- */
-export function deliberate(detail: number) {
-	return detail < 2;
-}
-
-/**
  * What the folder amounts to, for the line under its name. The documents are
  * the ones sitting in it, since a folder below it is not one; the words are
  * the whole of what is written under it, which every card now carries. Front

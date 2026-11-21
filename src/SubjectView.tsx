@@ -7,10 +7,10 @@ import type { Seed } from "./lib/find";
 import {
 	list,
 	parse,
-	serialize,
 	split,
 	text,
 	ties,
+	withFields,
 	type Fields,
 } from "./frontmatter";
 import { mentionsIn, subjectsIn } from "./lib/mentions";
@@ -211,9 +211,6 @@ export default function SubjectView({
 	function rewritten(value: string): string {
 		// The open tab's text when there is one, which is newer than what was
 		// last read.
-		const { block, body } = split(
-			open ?? (held.kind === "ready" ? held.text : ""),
-		);
 		const next = new Map(fields);
 
 		if (value === "") {
@@ -222,7 +219,10 @@ export default function SubjectView({
 			next.set("remarks", value);
 		}
 
-		return `${serialize(next, block)}\n${body}`;
+		return withFields(
+			open ?? (held.kind === "ready" ? held.text : ""),
+			next,
+		);
 	}
 	const place = subject.trail[0] === "Locations";
 	const scenes = place ? "Scenes set here" : "Appears in";

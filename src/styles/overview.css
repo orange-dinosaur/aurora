@@ -1,0 +1,474 @@
+/* The grid scrolls itself, the way the editor scrolls its own text. */
+.overview {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	padding-bottom: 1.5rem;
+}
+
+/* The heading scrolls with what is under it: a column held in by padding so the
+   scrollbar stays at the window's edge. */
+.overview--folder,
+.overview--sheet {
+	--gutter: var(--space-lg);
+	--column: 980px;
+	display: block;
+	padding: var(--space-xl)
+		max(var(--gutter), calc((100% - var(--column)) / 2 + var(--gutter)))
+		var(--space-xxl);
+	overflow-y: auto;
+}
+
+.overview--sheet {
+	--column: 720px;
+}
+
+.overview__header {
+	flex: none;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: var(--space-sm);
+	margin-bottom: var(--space-lg);
+}
+
+/* Takes the slack, so the name and its count sit together at the left and the
+   button stays at the far edge however long the folder is called. */
+.overview__heading {
+	min-width: 0;
+	margin-right: auto;
+}
+
+.overview__title {
+	margin: var(--space-xxs) 0 0;
+	font: var(--text-display);
+	letter-spacing: var(--tracking-display);
+	overflow-wrap: anywhere;
+}
+
+.overview__count {
+	margin: var(--space-xxs) 0 0;
+	font: var(--text-ui);
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+}
+
+.overview__count--chip {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+/* The writer's own label, so it takes a pastel rather than the accent. */
+.overview__tag {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	padding: 2px var(--space-xs);
+	font: var(--text-caption);
+	color: var(--text);
+	background: var(--accent-2-wash);
+	border-radius: var(--radius-pill);
+	overflow-wrap: anywhere;
+}
+
+.overview__tag::before {
+	content: "";
+	flex: none;
+	width: 8px;
+	height: 8px;
+	background: var(--accent-2);
+	border-radius: var(--radius-pill);
+}
+
+/* The folders above this one, said before its name. */
+.overview__where {
+	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+/* Out by a row's own padding, so its words stand on the heading's left edge. */
+.overview__rows {
+	margin: 0 calc(var(--space-sm) * -1);
+	padding: 0;
+	list-style: none;
+}
+
+.overview__row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	width: 100%;
+	margin: 0;
+	padding: var(--space-xs) var(--space-sm);
+	color: var(--text);
+	font: var(--text-ui);
+	text-align: left;
+	background: none;
+	border: none;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.overview__row:hover {
+	background: var(--bg-hover);
+}
+
+.overview__row:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 1px;
+}
+
+.overview__row-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.overview__row-title,
+.overview__row-where {
+	display: block;
+	overflow-wrap: anywhere;
+}
+
+.overview__row-where {
+	font: var(--text-caption);
+	color: var(--text-dim);
+}
+
+.overview__row-count {
+	flex: none;
+	font: var(--text-caption);
+	font-variant-numeric: tabular-nums;
+	color: var(--text-faint);
+}
+
+/* The + is a menu trigger wearing this shape instead of the plain one. Its
+   menu opens below it rather than over the cards. */
+.overview__header .menu {
+	position: relative;
+	flex: none;
+}
+
+.overview__new {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	padding: 6px var(--space-md);
+	font: var(--text-ui);
+}
+
+/* Centring the two boxes is not the same as aligning what is in them: this
+   font's letters sit high in their line, so a + centred by the box lands three
+   pixels below the word beside it. Measured against "New", not guessed. */
+.overview__new .icon {
+	margin-top: -3px;
+}
+
+.overview__note {
+	margin: 0;
+	font: var(--text-ui);
+	color: var(--text-dim);
+}
+
+.overview--sheet .overview__note {
+	color: var(--text-faint);
+}
+
+/* Always in the DOM and out of flow, so an error appears without moving the
+   cards above it. */
+.overview__message {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--danger);
+	background: var(--bg);
+	overflow-wrap: anywhere;
+}
+
+/* Under the cards here, which scroll with the page, and with its line kept. */
+.overview--folder .overview__message,
+.overview--sheet .overview__message {
+	position: static;
+	min-height: 15px;
+	margin-top: var(--space-sm);
+	font: var(--text-caption);
+	background: none;
+}
+
+.cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: var(--space-sm);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.card {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xxs);
+	min-width: 0;
+	min-height: 168px;
+	padding: var(--space-sm) var(--space-md);
+	font: var(--text-ui);
+	text-align: left;
+	color: var(--text);
+	background: var(--bg-card);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	cursor: grab;
+}
+
+.card:hover {
+	border-color: var(--border-strong);
+}
+
+.card:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/* The menu sits over the card's corner rather than inside it: the card is a
+   button, and a button cannot hold another one. */
+.cards__item {
+	position: relative;
+	display: flex;
+	min-width: 0;
+}
+
+/* The card being dragged stays where it is and fades, so the grid does not
+   reflow under the cursor while it is being aimed. */
+.cards__item[data-dragging] {
+	opacity: 0.4;
+}
+
+.cards__item[data-over="into"] .card {
+	border-color: var(--accent);
+	box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* The cards flow across, so a landing beside one is a line down its near edge,
+   drawn in the middle of the gap between them. */
+.cards__item[data-over="before"]::before,
+.cards__item[data-over="after"]::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	background: var(--accent);
+	border-radius: 1px;
+}
+
+.cards__item[data-over="before"]::before {
+	left: calc(var(--space-xxs) * -1.5);
+}
+
+.cards__item[data-over="after"]::after {
+	right: calc(var(--space-xxs) * -1.5);
+}
+
+/* Where a document sits in the folder, said once here so the title never has
+   to carry a number of its own. */
+.card__ordinal {
+	font: var(--text-caption);
+	font-variant-numeric: tabular-nums;
+	color: var(--text-faint);
+}
+
+.card__title {
+	font: var(--text-title);
+	overflow-wrap: anywhere;
+}
+
+/* Four lines of the opening, however long the excerpt Rust sent is. */
+.card__excerpt {
+	flex: 1;
+	font: 400 14px/1.45 var(--font-page);
+	color: var(--text-dim);
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
+}
+
+.card__meta {
+	margin-top: auto;
+	font: var(--text-caption);
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+}
+
+/* A folder with a target gives its count a second line, which stays under the
+   first rather than sharing the card's spare room with it. */
+.card__meta + .card__meta {
+	margin-top: 0;
+}
+
+/* The card lays its children out with a gap already, so the bar drops the
+   margin it carries in the editor's foot. */
+.card__progress {
+	flex: none;
+	height: 3px;
+	margin-top: 0;
+	background: var(--bg-hover);
+	border-radius: var(--radius-pill);
+}
+
+/* A folder holds no opening to show, so it sits on the chrome surface and says
+   what it holds instead. */
+.card--folder {
+	background: var(--bg-chrome);
+}
+
+.card--folder .card__title {
+	flex: 1;
+}
+
+/* The card is the menu's trigger, so the menu itself generates no box. Its
+   list hangs from the card's near corner rather than the far one, which is
+   nowhere near where the card was clicked. */
+.cards__item--new .menu {
+	display: contents;
+}
+
+/* Under the + itself, over the lower half of the card, rather than below the
+   card and outside it. Measured from the middle because the card stretches to
+   whatever height the row of documents beside it takes. */
+.cards__item--new .menu__items {
+	top: calc(50% + 1.1rem);
+	right: auto;
+	left: 50%;
+	transform: translateX(-50%);
+}
+
+/* Outlined rather than filled, so the row of real documents reads first. */
+.card--new {
+	align-items: center;
+	justify-content: center;
+	color: var(--text-dim);
+	background: none;
+	border: 1px dashed var(--border-strong);
+	cursor: pointer;
+}
+
+.card--new:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.card--new:disabled {
+	color: var(--text-faint);
+	background: none;
+	cursor: default;
+}
+
+/* A card that cannot be dragged, while a merge waits, does not offer to be. */
+[draggable="false"] > .card {
+	cursor: pointer;
+}
+
+/* Naming writes straight onto the card, in the title's own place and type. */
+.card--naming,
+.card--naming:hover {
+	position: relative;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 1px var(--accent);
+	cursor: default;
+}
+
+.card--naming .namefield__input,
+.card--naming .namefield__input:focus {
+	padding: 0;
+	font: var(--text-title);
+	background: none;
+	border: 0;
+	outline: none;
+	box-shadow: none;
+}
+
+.card__hint {
+	margin: auto 0 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.namefield {
+	display: contents;
+}
+
+.namefield__input {
+	width: 100%;
+	padding: 0.3rem 0;
+	font: inherit;
+	font-size: 0.9rem;
+	color: var(--text);
+}
+
+/* The field stands among rows of documents, so it is their size and their
+   height rather than the interface's. */
+.sidebar__field .namefield__input {
+	height: 28px;
+	padding: 0;
+	font-size: 0.8125rem;
+}
+
+/* Out of flow wherever it appears, so a refused name reports without moving
+   anything around it. Each surface says where. */
+.namefield__message {
+	position: absolute;
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--danger);
+	overflow-wrap: anywhere;
+}
+
+/* In the hint's place, and over it. */
+.card--naming .namefield__message {
+	right: var(--space-md);
+	bottom: var(--space-sm);
+	left: var(--space-md);
+	font: var(--text-caption);
+	background: var(--bg-card);
+}
+
+@media (max-width: 820px) {
+	.overview--folder,
+	.overview--sheet {
+		--gutter: var(--space-md);
+		padding-top: var(--space-md);
+		padding-bottom: var(--space-xl);
+	}
+}
+
+@media (max-width: 620px) {
+	.overview__title {
+		font: var(--text-heading);
+	}
+
+	.cards {
+		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	}
+
+	.card {
+		min-height: 148px;
+	}
+}
+
+.sidebar__field .namefield__message {
+	top: 100%;
+	left: 0;
+	right: 0;
+	padding-bottom: 0.25rem;
+	background: var(--bg);
+}

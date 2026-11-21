@@ -3,7 +3,6 @@
 // being retitled, and is not draggable while it does.
 
 import { useState } from "react";
-import { abbreviated } from "./cards";
 import { documentPlaceholder } from "./kinds";
 import { useRightClick } from "./Menu";
 import RowMenu, { RowShell } from "./RowMenu";
@@ -12,7 +11,7 @@ import { canTry } from "./takes";
 import type { Row } from "./tree";
 import { inManuscript } from "./tree";
 import type { Draggable } from "./reorder";
-import type { Retitling } from "./rows";
+import { abbreviated, type Retitling } from "./rows";
 import { progress } from "./RowProgress";
 import { TargetField, type Aim } from "./Target";
 

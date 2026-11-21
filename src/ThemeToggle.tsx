@@ -2,10 +2,10 @@
 // The project header carries it beside the other toggles; the screens with no
 // header carry it in the bar across their top, which is the only one they have.
 
-import { useEffect, useState } from "react";
 import Icon from "./Icon";
 import { flipped } from "./theme";
 import type { Theme } from "./types";
+import { useMedia } from "./useMedia";
 
 export default function ThemeToggle({
 	theme,
@@ -21,19 +21,7 @@ export default function ThemeToggle({
 	// know what the desktop is set to as well as what the writer asked for.
 	// Watched rather than read once: a desktop that changes at dusk would
 	// otherwise leave the button offering the theme already on screen.
-	const [systemIsDark, setSystemIsDark] = useState(
-		() => window.matchMedia("(prefers-color-scheme: dark)").matches,
-	);
-
-	useEffect(() => {
-		const query = window.matchMedia("(prefers-color-scheme: dark)");
-		function changed(event: MediaQueryListEvent) {
-			setSystemIsDark(event.matches);
-		}
-
-		query.addEventListener("change", changed);
-		return () => query.removeEventListener("change", changed);
-	}, []);
+	const systemIsDark = useMedia("(prefers-color-scheme: dark)");
 
 	const next = flipped(theme, systemIsDark);
 
