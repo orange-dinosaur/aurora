@@ -4602,7 +4602,8 @@ button.compare__pick:focus-visible {
 	cursor: pointer;
 }
 
-.suggestion:hover {
+.suggestion:hover,
+.suggestion[aria-selected="true"] {
 	background: var(--bg-hover);
 }
 
@@ -6317,7 +6318,6 @@ button.compare__pick:focus-visible {
    which carries the writer's own font size, and a popover should not grow with
    the manuscript. */
 .menu__items,
-.bubble,
 .toolbar,
 .slash,
 .controls__list,
@@ -7274,24 +7274,6 @@ button.compare__pick:focus-visible {
 	top: auto;
 	bottom: 100%;
 	margin: 0 0 var(--space-xs);
-}
-
-/* Follows the words rather than the layout, so it is placed from JavaScript, and
-   out of flow so it can never move the writing it sits on. */
-.bubble {
-	position: absolute;
-	top: 0;
-	left: 0;
-	z-index: 5;
-	padding: 2px var(--space-xxs);
-	border-radius: var(--radius-pill);
-}
-
-/* Hidden rather than removed: the bar has to be measured to be centred, and
-   visibility also takes it out of the tab order. */
-.bubble--hidden {
-	visibility: hidden;
-	pointer-events: none;
 }
 
 .controls__block {

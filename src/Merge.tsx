@@ -16,6 +16,7 @@ import { failure } from "./errors";
 import { blocks } from "./lib/compare";
 import { draw, type Look } from "./Blocks";
 import { MenuItem, useDismissal } from "./Menu";
+import SideList from "./SideList";
 import {
 	BINDER,
 	cardKey,
@@ -98,8 +99,6 @@ export default function Merge({
 	pieces,
 	piecesFailed,
 }: Props) {
-	const list = useRef<HTMLElement>(null);
-	useDismissal(floating, list, onDismiss, opener);
 	const { merging, into } = merge;
 	const theirs = merging.name ?? "the other version";
 	const [current, setCurrent] = useState(0);
@@ -251,23 +250,27 @@ export default function Merge({
 
 	return (
 		<>
-			<nav
-				ref={list}
-				className={floating ? "sidelist sidelist--open" : "sidelist"}
-				aria-label="To settle"
+			<SideList
+				label="To settle"
+				book={book}
+				floating={floating}
+				onDismiss={onDismiss}
+				opener={opener}
+				head={
+					<>
+						<p className="sidelist__of">Merging</p>
+						<h2 className="sidelist__title">
+							{merging.name ?? "another version"}
+						</h2>
+						<p className="sidelist__trail">
+							into {into} · {lines.length.toLocaleString()} to
+							settle
+						</p>
+					</>
+				}
+				foot={<Abort into={into} onAbort={() => void abort()} />}
 			>
-				<div className="binder__head">{book}</div>
-				<div className="sidelist__head">
-					<p className="sidelist__of">Merging</p>
-					<h2 className="sidelist__title">
-						{merging.name ?? "another version"}
-					</h2>
-					<p className="sidelist__trail">
-						into {into} · {lines.length.toLocaleString()} to settle
-					</p>
-				</div>
-
-				<div className="sidelist__list">
+				<>
 					{documents.map((document) => {
 						const found =
 							document.id === null
@@ -365,12 +368,8 @@ export default function Merge({
 							</span>
 						</button>
 					)}
-				</div>
-
-				<div className="sidelist__foot">
-					<Abort into={into} onAbort={() => void abort()} />
-				</div>
-			</nav>
+				</>
+			</SideList>
 
 			<div className="merge__work">
 				{open === BINDER && (

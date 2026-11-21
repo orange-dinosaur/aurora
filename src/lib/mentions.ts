@@ -7,7 +7,7 @@
 // hands over, the same copy Find and project-wide search work on, so it can
 // never dirty a document.
 
-import { type Match, type Run, matches } from "./find";
+import { type Match, type Run, find, prepare } from "./find";
 import { lineOf, locate, type Searchable, type Unreadable } from "./search";
 import { isSubject } from "../subjects";
 
@@ -54,6 +54,7 @@ function namesOf(subject: Subject): string[] {
  */
 export function mentions(subjects: Subject[], runs: Run[]): Mention[] {
 	const found: Mention[] = [];
+	const prepared = prepare(runs);
 	const order = new Map(runs.map((run, index) => [run.key, index]));
 	// A place in the text as one number, so two places compare with `<`.
 	const place = (key: string, offset: number) =>
@@ -64,7 +65,7 @@ export function mentions(subjects: Subject[], runs: Run[]): Mention[] {
 		// already taken is the same mention and is not counted again.
 		const taken: Mention[] = [];
 		for (const name of namesOf(subject)) {
-			for (const at of matches(runs, name, RECOGNITION)) {
+			for (const at of find(prepared, name, RECOGNITION)) {
 				const from = place(at.fromKey, at.fromOffset);
 				const to = place(at.toKey, at.toOffset);
 				const inside = taken.some(

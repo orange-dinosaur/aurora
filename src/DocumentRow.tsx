@@ -4,17 +4,15 @@
 
 import { useState } from "react";
 import { abbreviated } from "./cards";
-import DocumentMenu from "./DocumentMenu";
 import { documentPlaceholder } from "./kinds";
 import { useRightClick } from "./Menu";
-import NameField from "./NameField";
+import RowMenu, { RowShell } from "./RowMenu";
 import { isSubject } from "./subjects";
 import { canTry } from "./takes";
 import type { Row } from "./tree";
 import { inManuscript } from "./tree";
 import type { Draggable } from "./reorder";
 import type { Retitling } from "./rows";
-import { indent } from "./rows";
 import { progress } from "./RowProgress";
 import { TargetField, type Aim } from "./Target";
 
@@ -78,37 +76,18 @@ export default function DocumentRow({
 		</>
 	);
 
-	if (renaming !== null) {
-		return (
-			<li className="documents__item" style={indent(row.depth)}>
-				<div className="sidebar__field">
-					<NameField
-						label={`New name for ${document.title}`}
-						placeholder={documentPlaceholder(document.trail[0])}
-						initial={document.title}
-						busy={renaming.busy}
-						working="Renaming…"
-						error={renaming.error}
-						onSubmit={onRetitle}
-						onCancel={onCancelRetitle}
-					/>
-				</div>
-			</li>
-		);
-	}
-
 	return (
-		<li
-			className={[
-				"documents__item",
-				row.dim && "documents__item--out",
-				inManuscript(row) && "documents__item--counted",
-			]
-				.filter(Boolean)
-				.join(" ")}
-			style={indent(row.depth)}
-			{...(aiming ? {} : drag)}
+		<RowShell
+			depth={row.depth}
+			dim={row.dim}
+			counted={inManuscript(row)}
+			renaming={renaming}
+			name={document.title}
+			placeholder={documentPlaceholder(document.trail[0])}
+			drag={aiming ? null : drag}
 			onContextMenu={pointer.open}
+			onRetitle={onRetitle}
+			onCancelRetitle={onCancelRetitle}
 		>
 			{aiming ? (
 				// A form cannot sit inside a button, so the row is drawn
@@ -139,12 +118,11 @@ export default function DocumentRow({
 				</button>
 			)}
 			{progress(row.words, document.target)}
-			<DocumentMenu
+			<RowMenu
 				label={`Actions for ${document.title}`}
 				pointer={pointer}
 				root={root}
-				index={row.index}
-				count={row.siblings}
+				ordering={{ index: row.index, count: row.siblings }}
 				moving={{
 					id: document.id,
 					kind: null,
@@ -160,6 +138,6 @@ export default function DocumentRow({
 				onTarget={() => setAiming(true)}
 				onDelete={onDelete}
 			/>
-		</li>
+		</RowShell>
 	);
 }

@@ -80,20 +80,16 @@ function within(spans: Span[], index: number, end: boolean): Span | null {
 	);
 }
 
-/**
- * Every place `query` appears, in the order a writer would step through them.
- * Matching never crosses from one block into the next; whether it ignores case
- * and whether it stops at word edges are up to `reading`.
- */
-export function matches(
-	runs: Run[],
-	query: string,
-	reading: Reading = {},
-): Match[] {
-	if (query === "") {
-		return [];
-	}
+/** A document's runs joined once, so many queries can search the same text. */
+export type Prepared = {
+	text: string;
+	/** The text lowercased, or null when lowercasing moved the offsets. */
+	folded: string | null;
+	spans: Span[];
+};
 
+/** Joins the runs into the text every search reads. */
+export function prepare(runs: Run[]): Prepared {
 	let text = "";
 	const spans: Span[] = [];
 	let block: string | null = null;
@@ -118,8 +114,29 @@ export function matches(
 	// Turkish İ becomes two — which would put every offset after it out by
 	// one. When that happens the search is exact instead of being wrong.
 	const folded = text.toLowerCase();
-	const exact =
-		reading.caseSensitive === true || folded.length !== text.length;
+	return {
+		text,
+		folded: folded.length === text.length ? folded : null,
+		spans,
+	};
+}
+
+/**
+ * Every place `query` appears, in the order a writer would step through them.
+ * Matching never crosses from one block into the next; whether it ignores case
+ * and whether it stops at word edges are up to `reading`.
+ */
+export function find(
+	prepared: Prepared,
+	query: string,
+	reading: Reading = {},
+): Match[] {
+	if (query === "") {
+		return [];
+	}
+
+	const { text, folded, spans } = prepared;
+	const exact = reading.caseSensitive === true || folded === null;
 	const haystack = exact ? text : folded;
 	const needle = exact ? query : query.toLowerCase();
 
@@ -150,4 +167,13 @@ export function matches(
 	}
 
 	return found;
+}
+
+/** `prepare` and `find` together, for one query against one document. */
+export function matches(
+	runs: Run[],
+	query: string,
+	reading: Reading = {},
+): Match[] {
+	return find(prepare(runs), query, reading);
 }

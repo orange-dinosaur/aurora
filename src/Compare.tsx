@@ -18,7 +18,8 @@ import {
 import { differences, putBack } from "./differences";
 import { failure } from "./errors";
 import Icon from "./Icon";
-import Menu, { MenuItem, useDismissal } from "./Menu";
+import Menu, { MenuItem } from "./Menu";
+import SideList from "./SideList";
 import PutBack from "./PutBack";
 import { canTry, openAsTake } from "./takes";
 import { draw, Wash } from "./Blocks";
@@ -102,8 +103,6 @@ export default function Compare({
 	onPutBack,
 }: Props) {
 	const open = scope === "document" ? document : null;
-	const list = useRef<HTMLElement>(null);
-	useDismissal(floating, list, onDismiss, opener);
 	const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
 	const [versions, setVersions] = useState<Branch[]>([]);
 	const [listing, setListing] = useState(slug);
@@ -474,88 +473,90 @@ export default function Compare({
 
 	return (
 		<>
-			<nav
-				ref={list}
-				className={floating ? "sidelist sidelist--open" : "sidelist"}
-				aria-label="Checkpoints"
-			>
-				<div className="binder__head">{book}</div>
-				<div className="sidelist__head">
-					<p className="sidelist__of">Checkpoints of</p>
-					<h1 className="sidelist__title">
-						{open === null ? "The whole project" : open.title}
-					</h1>
-					{open !== null && (
-						<p className="sidelist__trail">
-							{open.trail.join(" · ")}
-						</p>
-					)}
-					<div
-						className="versions__scope compare__scope"
-						role="group"
-						aria-label="Versions of"
-					>
-						<button
-							type="button"
-							className="versions__scope-button"
-							aria-pressed={open !== null}
-							disabled={document === null}
-							onClick={() => onScope("document")}
+			<SideList
+				label="Checkpoints"
+				book={book}
+				floating={floating}
+				onDismiss={onDismiss}
+				opener={opener}
+				head={
+					<>
+						<p className="sidelist__of">Checkpoints of</p>
+						<h1 className="sidelist__title">
+							{open === null ? "The whole project" : open.title}
+						</h1>
+						{open !== null && (
+							<p className="sidelist__trail">
+								{open.trail.join(" · ")}
+							</p>
+						)}
+						<div
+							className="versions__scope compare__scope"
+							role="group"
+							aria-label="Versions of"
 						>
-							This document
-						</button>
-						<button
-							type="button"
-							className="versions__scope-button"
-							aria-pressed={open === null}
-							onClick={() => onScope("project")}
-						>
-							Whole project
-						</button>
-					</div>
+							<button
+								type="button"
+								className="versions__scope-button"
+								aria-pressed={open !== null}
+								disabled={document === null}
+								onClick={() => onScope("document")}
+							>
+								This document
+							</button>
+							<button
+								type="button"
+								className="versions__scope-button"
+								aria-pressed={open === null}
+								onClick={() => onScope("project")}
+							>
+								Whole project
+							</button>
+						</div>
 
-					{shownVersion !== undefined && (
-						<Menu
-							label="Checkpoints in"
-							trigger={
-								<>
-									<span className="binder__version-name">
-										Checkpoints in: {shownVersion.name}
-									</span>
-									<Icon name="chevron-down" />
-								</>
-							}
-							wrapper="binder__menu binder__menu--version"
-							className="binder__version"
-						>
-							{(close) =>
-								versions.map((listed) => (
-									<MenuItem
-										key={listed.slug}
-										checked={listed === shownVersion}
-										onSelect={() => {
-											close();
-											setListing(
-												listed.current
-													? null
-													: listed.slug,
-											);
-										}}
-									>
-										<span className="menu__tick">
-											{listed === shownVersion && (
-												<Icon name="check" />
-											)}
+						{shownVersion !== undefined && (
+							<Menu
+								label="Checkpoints in"
+								trigger={
+									<>
+										<span className="binder__version-name">
+											Checkpoints in: {shownVersion.name}
 										</span>
-										{listed.name}
-									</MenuItem>
-								))
-							}
-						</Menu>
-					)}
-				</div>
-
-				<div className="sidelist__list">
+										<Icon name="chevron-down" />
+									</>
+								}
+								wrapper="binder__menu binder__menu--version"
+								className="binder__version"
+							>
+								{(close) =>
+									versions.map((listed) => (
+										<MenuItem
+											key={listed.slug}
+											checked={listed === shownVersion}
+											onSelect={() => {
+												close();
+												setListing(
+													listed.current
+														? null
+														: listed.slug,
+												);
+											}}
+										>
+											<span className="menu__tick">
+												{listed === shownVersion && (
+													<Icon name="check" />
+												)}
+											</span>
+											{listed.name}
+										</MenuItem>
+									))
+								}
+							</Menu>
+						)}
+					</>
+				}
+			>
+				<>
 					{days.map((day, index) => (
 						<section key={day.heading} className="versions__day">
 							<h2 className="versions__date">{day.heading}</h2>
@@ -589,8 +590,8 @@ export default function Compare({
 							</ul>
 						</section>
 					))}
-				</div>
-			</nav>
+				</>
+			</SideList>
 
 			<div className="compare__work">
 				{whole && changes !== null && (

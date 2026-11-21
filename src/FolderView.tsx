@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import DocumentMenu from "./DocumentMenu";
-import FolderMenu from "./FolderMenu";
 import NameField from "./NameField";
 import NewMenu from "./NewMenu";
+import RowMenu from "./RowMenu";
 import type { FolderNode, OverviewCard, ProjectDocument } from "./types";
 import type { Making } from "./kinds";
 import { documentPlaceholder, folderKinds, folderPlaceholder } from "./kinds";
@@ -92,6 +91,41 @@ function NamingCard({
 			{children}
 			<p className="card__hint">{hint}</p>
 		</div>
+	);
+}
+
+/** A card being retitled, on the item the card it replaces was in. */
+function RenamingCard({
+	at,
+	name,
+	placeholder,
+	renaming,
+	onSubmit,
+	onCancel,
+}: {
+	at: number;
+	name: string;
+	placeholder: string;
+	renaming: Renaming;
+	onSubmit: (name: string) => void;
+	onCancel: () => void;
+}) {
+	return (
+		<li className="cards__item">
+			<NamingCard at={at} hint="Enter to rename, Esc to cancel">
+				<NameField
+					label={`New name for ${name}`}
+					placeholder={placeholder}
+					initial={name}
+					busy={renaming.kind === "saving"}
+					error={
+						renaming.kind === "refused" ? renaming.message : null
+					}
+					onSubmit={onSubmit}
+					onCancel={onCancel}
+				/>
+			</NamingCard>
+		</li>
 	);
 }
 
@@ -257,6 +291,15 @@ export default function FolderView({
 		void load();
 	}, [load, reload]);
 
+	// A choice that already carries a name is made at once; the rest ask for one.
+	function chosen(making: Making) {
+		if (making.name) {
+			void create(making, making.name);
+		} else {
+			setNaming({ kind: "open", making });
+		}
+	}
+
 	async function create(making: Making, name: string) {
 		setNaming({ kind: "creating", making });
 		try {
@@ -377,11 +420,7 @@ export default function FolderView({
 					text="New"
 					className="overview__new"
 					merging={merging}
-					onChoose={(making) =>
-						making.name
-							? void create(making, making.name)
-							: setNaming({ kind: "open", making })
-					}
+					onChoose={chosen}
 				/>
 			</header>
 
@@ -390,32 +429,17 @@ export default function FolderView({
 					if (card.node === "folder") {
 						return renaming.kind !== "closed" &&
 							renaming.id === card.id ? (
-							<li key={card.id} className="cards__item">
-								<NamingCard
-									at={at}
-									hint="Enter to rename, Esc to cancel"
-								>
-									<NameField
-										label={`New name for ${card.name}`}
-										placeholder={folderPlaceholder(
-											card.kind,
-										)}
-										initial={card.name}
-										busy={renaming.kind === "saving"}
-										error={
-											renaming.kind === "refused"
-												? renaming.message
-												: null
-										}
-										onSubmit={(name) =>
-											void rename(card.id, name, "folder")
-										}
-										onCancel={() =>
-											setRenaming({ kind: "closed" })
-										}
-									/>
-								</NamingCard>
-							</li>
+							<RenamingCard
+								key={card.id}
+								at={at}
+								name={card.name}
+								placeholder={folderPlaceholder(card.kind)}
+								renaming={renaming}
+								onSubmit={(name) =>
+									void rename(card.id, name, "folder")
+								}
+								onCancel={() => setRenaming({ kind: "closed" })}
+							/>
 						) : (
 							<li
 								key={card.id}
@@ -478,7 +502,7 @@ export default function FolderView({
 									)}
 									{bar(card.words, card.target)}
 								</Card>
-								<FolderMenu
+								<RowMenu
 									label={`Actions for ${card.name}`}
 									root={root}
 									moving={{
@@ -509,37 +533,22 @@ export default function FolderView({
 					const document = card;
 					return renaming.kind !== "closed" &&
 						renaming.id === document.id ? (
-						<li key={document.id} className="cards__item">
-							<NamingCard
-								at={at}
-								hint="Enter to rename, Esc to cancel"
-							>
-								<NameField
-									label={`New name for ${document.title}`}
-									placeholder={documentPlaceholder(
-										folder.section,
-									)}
-									initial={document.title}
-									busy={renaming.kind === "saving"}
-									error={
-										renaming.kind === "refused"
-											? renaming.message
-											: null
-									}
-									onSubmit={(name) =>
-										void rename(
-											document.id,
-											name,
-											"document",
-											document.title,
-										)
-									}
-									onCancel={() =>
-										setRenaming({ kind: "closed" })
-									}
-								/>
-							</NamingCard>
-						</li>
+						<RenamingCard
+							key={document.id}
+							at={at}
+							name={document.title}
+							placeholder={documentPlaceholder(folder.section)}
+							renaming={renaming}
+							onSubmit={(name) =>
+								void rename(
+									document.id,
+									name,
+									"document",
+									document.title,
+								)
+							}
+							onCancel={() => setRenaming({ kind: "closed" })}
+						/>
 					) : (
 						<li
 							key={document.id}
@@ -584,11 +593,10 @@ export default function FolderView({
 								</span>
 								{bar(document.words, document.target)}
 							</Card>
-							<DocumentMenu
+							<RowMenu
 								label={`Actions for ${document.title}`}
 								root={root}
-								index={at}
-								count={cards.length}
+								ordering={{ index: at, count: cards.length }}
 								moving={{
 									id: document.id,
 									kind: null,
@@ -629,11 +637,7 @@ export default function FolderView({
 							text="New"
 							className="card card--new"
 							merging={merging}
-							onChoose={(making) =>
-								making.name
-									? void create(making, making.name)
-									: setNaming({ kind: "open", making })
-							}
+							onChoose={chosen}
 						/>
 					) : (
 						<NamingCard

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useCorpus } from "./corpus";
+import { OverviewRow, useKnown } from "./OverviewRows";
 import type { ProjectDocument } from "./types";
 
 // Everything wearing one tag. This is where a chip lands when it names no
@@ -32,12 +33,12 @@ export default function TagView({ root, tag, changed, live, onOpen }: Props) {
 		[documents, tag],
 	);
 
-	// A row on screen came out of the corpus, so its document is in hand.
+	const known = useKnown(corpus);
+
 	function open(id: string) {
-		const known =
-			corpus.kind === "ready" ? corpus.known.get(id) : undefined;
-		if (known !== undefined) {
-			onOpen(known);
+		const found = known(id);
+		if (found !== undefined) {
+			onOpen(found);
 		}
 	}
 
@@ -68,22 +69,12 @@ export default function TagView({ root, tag, changed, live, onOpen }: Props) {
 			{corpus.kind === "ready" && wearing.length > 0 && (
 				<ul className="overview__rows">
 					{wearing.map((document) => (
-						<li key={document.id}>
-							<button
-								type="button"
-								className="overview__row"
-								onClick={() => open(document.id)}
-							>
-								<span className="overview__row-text">
-									<span className="overview__row-title">
-										{document.title}
-									</span>
-									<span className="overview__row-where">
-										{document.trail.join(" / ")}
-									</span>
-								</span>
-							</button>
-						</li>
+						<OverviewRow
+							key={document.id}
+							title={document.title}
+							where={document.trail.join(" / ")}
+							onOpen={() => open(document.id)}
+						/>
 					))}
 				</ul>
 			)}

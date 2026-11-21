@@ -1,17 +1,23 @@
-import { useState } from "react";
+// What a row in the binder or a card in a folder offers: the ⋮ on it and, where
+// it answers one, the same items at a right-click. Also the shell a binder row
+// draws around itself, which both kinds of row share.
+
+import { useState, type ReactNode } from "react";
 import { MERGE_HOLDS } from "./branches";
 import Menu, { MenuItem, PointerMenu, type RightClick } from "./Menu";
 import MoveTo from "./MoveTo";
+import NameField from "./NameField";
+import type { Draggable } from "./reorder";
+import type { Retitling } from "./rows";
+import { indent } from "./rows";
 import type { Moving } from "./tree";
 
 type Props = {
 	label: string;
 	root: string;
-	// Where this document sits among the others beside it, which is what says
-	// whether there is anywhere left to move it.
-	index: number;
-	count: number;
 	moving: Moving;
+	/** Given only for a row that can step up and down among its siblings. */
+	ordering?: { index: number; count: number };
 	onMove: (parentId: string, index: number) => void;
 	/** Given only in the binder, where the row also answers a right-click. */
 	onBeside?: () => void;
@@ -27,7 +33,7 @@ type Props = {
 };
 
 /** The ⋮ on the row, and the same items where the row was right-clicked. */
-export default function DocumentMenu({
+export default function RowMenu({
 	label,
 	pointer,
 	...rest
@@ -56,9 +62,8 @@ export default function DocumentMenu({
 function Actions({
 	close,
 	root,
-	index,
-	count,
 	moving,
+	ordering,
 	onMove,
 	onBeside,
 	onRename,
@@ -100,26 +105,32 @@ function Actions({
 					<span className="menu__rule" />
 				</>
 			)}
-			<MenuItem
-				disabled={merging || index === 0}
-				title={why}
-				onSelect={() => {
-					close();
-					onMove(moving.from, index - 1);
-				}}
-			>
-				Move up
-			</MenuItem>
-			<MenuItem
-				disabled={merging || index >= count - 1}
-				title={why}
-				onSelect={() => {
-					close();
-					onMove(moving.from, index + 1);
-				}}
-			>
-				Move down
-			</MenuItem>
+			{ordering !== undefined && (
+				<>
+					<MenuItem
+						disabled={merging || ordering.index === 0}
+						title={why}
+						onSelect={() => {
+							close();
+							onMove(moving.from, ordering.index - 1);
+						}}
+					>
+						Move up
+					</MenuItem>
+					<MenuItem
+						disabled={
+							merging || ordering.index >= ordering.count - 1
+						}
+						title={why}
+						onSelect={() => {
+							close();
+							onMove(moving.from, ordering.index + 1);
+						}}
+					>
+						Move down
+					</MenuItem>
+				</>
+			)}
 			<MenuItem
 				disabled={merging}
 				title={why}
@@ -183,5 +194,77 @@ function Actions({
 				Delete
 			</MenuItem>
 		</>
+	);
+}
+
+type Shell = {
+	depth: number;
+	/** Whether it sits outside what the book counts. */
+	dim: boolean;
+	/** Whether it sits inside the Manuscript. */
+	counted: boolean;
+	/** Set only on the row being retitled. */
+	renaming: Retitling | null;
+	name: string;
+	placeholder: string;
+	/** Not given while the row's count is a field, so the field can be typed in. */
+	drag: Draggable | null;
+	onContextMenu: RightClick["open"];
+	onRetitle: (name: string) => void;
+	onCancelRetitle: () => void;
+	children: ReactNode;
+};
+
+/**
+ * The item every binder row sits in, or the field in its place when it is the
+ * row being retitled: a rename happens where the name already is.
+ */
+export function RowShell({
+	depth,
+	dim,
+	counted,
+	renaming,
+	name,
+	placeholder,
+	drag,
+	onContextMenu,
+	onRetitle,
+	onCancelRetitle,
+	children,
+}: Shell) {
+	if (renaming !== null) {
+		return (
+			<li className="documents__item" style={indent(depth)}>
+				<div className="sidebar__field">
+					<NameField
+						label={`New name for ${name}`}
+						placeholder={placeholder}
+						initial={name}
+						busy={renaming.busy}
+						working="Renaming…"
+						error={renaming.error}
+						onSubmit={onRetitle}
+						onCancel={onCancelRetitle}
+					/>
+				</div>
+			</li>
+		);
+	}
+
+	return (
+		<li
+			className={[
+				"documents__item",
+				dim && "documents__item--out",
+				counted && "documents__item--counted",
+			]
+				.filter(Boolean)
+				.join(" ")}
+			style={indent(depth)}
+			{...drag}
+			onContextMenu={onContextMenu}
+		>
+			{children}
+		</li>
 	);
 }

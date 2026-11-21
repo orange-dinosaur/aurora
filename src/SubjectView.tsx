@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useCorpus } from "./corpus";
 import { failure } from "./errors";
+import { OverviewRow, useKnown } from "./OverviewRows";
 import type { Seed } from "./lib/find";
 import {
 	list,
@@ -157,10 +158,7 @@ export default function SubjectView({
 		[corpus.kind, documents, fields],
 	);
 
-	// A row on screen came out of the corpus, so its document is in hand.
-	function known(id: string): ProjectDocument | undefined {
-		return corpus.kind === "ready" ? corpus.known.get(id) : undefined;
-	}
+	const known = useKnown(corpus);
 
 	function show(id: string) {
 		const found = known(id);
@@ -291,25 +289,13 @@ export default function SubjectView({
 			) : (
 				<ul className="overview__rows">
 					{appearances.map((group) => (
-						<li key={group.id}>
-							<button
-								type="button"
-								className="overview__row"
-								onClick={() => show(group.id)}
-							>
-								<span className="overview__row-text">
-									<span className="overview__row-title">
-										{group.title}
-									</span>
-									<span className="overview__row-where">
-										{group.trail.join(" / ")}
-									</span>
-								</span>
-								<span className="overview__row-count">
-									{group.count}
-								</span>
-							</button>
-						</li>
+						<OverviewRow
+							key={group.id}
+							title={group.title}
+							where={group.trail.join(" / ")}
+							count={group.count}
+							onOpen={() => show(group.id)}
+						/>
 					))}
 				</ul>
 			)}

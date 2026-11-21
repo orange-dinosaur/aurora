@@ -4,19 +4,17 @@
 // draggable while it does.
 
 import { useState } from "react";
-import FolderMenu from "./FolderMenu";
 import { useRightClick } from "./Menu";
 import { abbreviated } from "./cards";
 import Icon from "./Icon";
-import NameField from "./NameField";
 import NewMenu from "./NewMenu";
 import type { Making } from "./kinds";
 import { folderPlaceholder } from "./kinds";
+import RowMenu, { RowShell } from "./RowMenu";
 import type { Draggable } from "./reorder";
 import type { Row } from "./tree";
 import { inManuscript } from "./tree";
 import type { Retitling } from "./rows";
-import { indent } from "./rows";
 import { progress } from "./RowProgress";
 import { TargetField, type Aim } from "./Target";
 
@@ -64,37 +62,18 @@ export default function FolderRow({
 	const pointer = useRightClick();
 	const [aiming, setAiming] = useState(false);
 
-	if (renaming !== null) {
-		return (
-			<li className="documents__item" style={indent(row.depth)}>
-				<div className="sidebar__field">
-					<NameField
-						label={`New name for ${row.name}`}
-						placeholder={folderPlaceholder(row.folderKind)}
-						initial={row.name}
-						busy={renaming.busy}
-						working="Renaming…"
-						error={renaming.error}
-						onSubmit={onRetitle}
-						onCancel={onCancelRetitle}
-					/>
-				</div>
-			</li>
-		);
-	}
-
 	return (
-		<li
-			className={[
-				"documents__item",
-				row.dim && "documents__item--out",
-				inManuscript(row) && "documents__item--counted",
-			]
-				.filter(Boolean)
-				.join(" ")}
-			style={indent(row.depth)}
-			{...(aiming ? {} : drag)}
+		<RowShell
+			depth={row.depth}
+			dim={row.dim}
+			counted={inManuscript(row)}
+			renaming={renaming}
+			name={row.name}
+			placeholder={folderPlaceholder(row.folderKind)}
+			drag={aiming ? null : drag}
 			onContextMenu={pointer.open}
+			onRetitle={onRetitle}
+			onCancelRetitle={onCancelRetitle}
 		>
 			{/* Over the row rather than inside it, for the reason the menus at
 			    the other end are: the row is itself a button. A folder holding
@@ -156,7 +135,7 @@ export default function FolderRow({
 					merging={merging}
 					onChoose={onNew}
 				/>
-				<FolderMenu
+				<RowMenu
 					label={`Actions for ${row.name}`}
 					pointer={pointer}
 					root={root}
@@ -174,6 +153,6 @@ export default function FolderRow({
 					merging={merging}
 				/>
 			</div>
-		</li>
+		</RowShell>
 	);
 }

@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import Icon from "./Icon";
 import { MERGE_HOLDS } from "./branches";
 import type { Ties } from "./frontmatter";
@@ -213,6 +213,118 @@ export function Chips({
 	);
 }
 
+type Suggesting = ReturnType<typeof useSuggestions>;
+
+/**
+ * The names a box under a field offers while it is focused, and which of them
+ * the arrow keys have marked. The box keeps its own text and says what to do
+ * with a name that is picked.
+ */
+function useSuggestions(
+	names: string[],
+	draft: string,
+	onAsk: () => void,
+	pick: (name: string) => void,
+) {
+	const id = useId();
+	const [open, setOpen] = useState(false);
+	const [marked, setMarked] = useState(-1);
+
+	const wanted = draft.trim().toLowerCase();
+	const offered = names
+		.filter((name) => name.toLowerCase().includes(wanted))
+		.slice(0, 6);
+	const showing = open && offered.length > 0;
+	const at = showing && marked < offered.length ? marked : -1;
+
+	function choose(name: string) {
+		setMarked(-1);
+		pick(name);
+	}
+
+	return {
+		id,
+		offered,
+		showing,
+		at,
+		choose,
+		/** The attributes that tie the box to its list. */
+		aria: {
+			role: "combobox",
+			"aria-expanded": showing,
+			"aria-controls": showing ? id : undefined,
+			"aria-autocomplete": "list",
+			"aria-activedescendant": at < 0 ? undefined : `${id}-${at}`,
+		} as const,
+		focus() {
+			setOpen(true);
+			onAsk();
+		},
+		blur() {
+			setOpen(false);
+			setMarked(-1);
+		},
+		typed() {
+			setMarked(-1);
+		},
+		/** Answers the arrows and Enter on a marked name; true when it did. */
+		key(event: KeyboardEvent<HTMLInputElement>): boolean {
+			if (!showing) {
+				return false;
+			}
+			if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+				event.preventDefault();
+				// One stop past each end is no name marked, so the writer can
+				// get back to the text they typed.
+				const stops = offered.length + 1;
+				const step = event.key === "ArrowDown" ? 1 : -1;
+				setMarked(((at + 1 + step + stops) % stops) - 1);
+				return true;
+			}
+			if (event.key === "Enter" && at >= 0) {
+				event.preventDefault();
+				choose(offered[at]);
+				return true;
+			}
+			return false;
+		},
+	};
+}
+
+function Suggestions({ of }: { of: Suggesting }) {
+	if (!of.showing) {
+		return null;
+	}
+
+	return (
+		<ul className="suggestions" id={of.id} role="listbox">
+			{of.offered.map((name, index) => (
+				<li key={name} role="presentation">
+					<button
+						type="button"
+						role="option"
+						id={`${of.id}-${index}`}
+						aria-selected={index === of.at}
+						className="suggestion"
+						// Taken out of the tab order: the arrows move through
+						// the list while focus stays in the box.
+						tabIndex={-1}
+						// Mouse down rather than click: the blur that closes the
+						// list would otherwise happen first and take the button
+						// with it.
+						onMouseDown={(event) => {
+							event.preventDefault();
+							of.choose(name);
+						}}
+					>
+						{name}
+					</button>
+				</li>
+			))}
+		</ul>
+	);
+}
+
 type TieProps = {
 	label: string;
 	hint?: string;
@@ -241,14 +353,6 @@ export function TieList({
 	onChange,
 }: TieProps) {
 	const [draft, setDraft] = useState("");
-	const [open, setOpen] = useState(false);
-
-	const wanted = draft.trim().toLowerCase();
-	const offered = names
-		.filter(
-			(name) => !values.has(name) && name.toLowerCase().includes(wanted),
-		)
-		.slice(0, 6);
 
 	function add(name: string) {
 		const subject = name.trim();
@@ -259,6 +363,13 @@ export function TieList({
 		}
 		setDraft("");
 	}
+
+	const suggesting = useSuggestions(
+		names.filter((name) => !values.has(name)),
+		draft,
+		onAsk,
+		add,
+	);
 
 	function word(subject: string, said: string) {
 		onChange(
@@ -316,12 +427,16 @@ export function TieList({
 				value={draft}
 				placeholder={placeholder}
 				aria-label={placeholder}
-				onFocus={() => {
-					setOpen(true);
-					onAsk();
+				{...suggesting.aria}
+				onFocus={suggesting.focus}
+				onChange={(event) => {
+					setDraft(event.target.value);
+					suggesting.typed();
 				}}
-				onChange={(event) => setDraft(event.target.value)}
 				onKeyDown={(event) => {
+					if (suggesting.key(event)) {
+						return;
+					}
 					if (event.key === "Enter") {
 						event.preventDefault();
 						add(draft);
@@ -333,32 +448,12 @@ export function TieList({
 				// Clicking away abandons what was half typed, the way every
 				// other field that appears in place behaves.
 				onBlur={() => {
-					setOpen(false);
+					suggesting.blur();
 					setDraft("");
 				}}
 			/>
 
-			{open && offered.length > 0 && (
-				<ul className="suggestions">
-					{offered.map((name) => (
-						<li key={name}>
-							<button
-								type="button"
-								className="suggestion"
-								// Mouse down rather than click: the blur that
-								// closes the list would otherwise happen first
-								// and take the button with it.
-								onMouseDown={(event) => {
-									event.preventDefault();
-									add(name);
-								}}
-							>
-								{name}
-							</button>
-						</li>
-					))}
-				</ul>
-			)}
+			<Suggestions of={suggesting} />
 		</div>
 	);
 }
@@ -375,15 +470,9 @@ type AddProps = {
 /** The box that gives a document a field of the writer's own. */
 export function AddField({ names, onAsk, onAdd }: AddProps) {
 	const [draft, setDraft] = useState("");
-	const [open, setOpen] = useState(false);
 	// Why the last name was refused. The line is always there, so saying it
 	// moves nothing.
 	const [refused, setRefused] = useState<string | null>(null);
-
-	const wanted = draft.trim().toLowerCase();
-	const offered = names
-		.filter((name) => name.toLowerCase().includes(wanted))
-		.slice(0, 6);
 
 	function add(name: string) {
 		if (name.trim() !== "") {
@@ -397,6 +486,8 @@ export function AddField({ names, onAsk, onAdd }: AddProps) {
 		setDraft("");
 	}
 
+	const suggesting = useSuggestions(names, draft, onAsk, add);
+
 	return (
 		<div className="field">
 			<span className="field__label">Add field</span>
@@ -406,15 +497,17 @@ export function AddField({ names, onAsk, onAdd }: AddProps) {
 				value={draft}
 				placeholder="Field name"
 				aria-label="Add a field"
-				onFocus={() => {
-					setOpen(true);
-					onAsk();
-				}}
+				{...suggesting.aria}
+				onFocus={suggesting.focus}
 				onChange={(event) => {
 					setDraft(event.target.value);
 					setRefused(null);
+					suggesting.typed();
 				}}
 				onKeyDown={(event) => {
+					if (suggesting.key(event)) {
+						return;
+					}
 					if (event.key === "Enter") {
 						event.preventDefault();
 						add(draft);
@@ -425,7 +518,7 @@ export function AddField({ names, onAsk, onAdd }: AddProps) {
 					}
 				}}
 				onBlur={() => {
-					setOpen(false);
+					suggesting.blur();
 					setDraft("");
 					setRefused(null);
 				}}
@@ -433,27 +526,7 @@ export function AddField({ names, onAsk, onAdd }: AddProps) {
 			<span className="field__hint field__hint--held" role="status">
 				{refused}
 			</span>
-			{open && offered.length > 0 && (
-				<ul className="suggestions">
-					{offered.map((name) => (
-						<li key={name}>
-							<button
-								type="button"
-								className="suggestion"
-								// Mouse down rather than click: the blur that
-								// closes the list would otherwise happen first
-								// and take the button with it.
-								onMouseDown={(event) => {
-									event.preventDefault();
-									add(name);
-								}}
-							>
-								{name}
-							</button>
-						</li>
-					))}
-				</ul>
-			)}
+			<Suggestions of={suggesting} />
 		</div>
 	);
 }
