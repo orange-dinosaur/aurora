@@ -28,7 +28,12 @@ export type SetField = (key: string, value: Value | null) => void;
  * What the panel beside the writing needs from the editor: the open document's
  * fields, and a way to change one.
  */
-export type FieldsHandle = { fields: Fields; setField: SetField };
+export type FieldsHandle = {
+	fields: Fields;
+	setField: SetField;
+	/** Writes what is waiting now, for fields that do not ride on an autosave. */
+	flush?: () => void;
+};
 
 /** The fields the document carries. Call inside a read of an editor state. */
 export function $fields(): Fields {
@@ -192,7 +197,7 @@ export function useFolderFields(
 		handle:
 			id === null || read === null || read.id !== id
 				? null
-				: { fields, setField },
+				: { fields, setField, flush: send },
 		trouble,
 	};
 }

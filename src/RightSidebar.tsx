@@ -267,6 +267,7 @@ export default function RightSidebar({
 							// merge leaves alone; a folder's are in the binder.
 							<Still
 								merging={merging && about?.kind !== "document"}
+								onBlur={fields.flush}
 							>
 								{tab === "synopsis" ? (
 									<Synopsis

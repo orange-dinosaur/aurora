@@ -15,9 +15,12 @@ import type { Ties } from "./frontmatter";
  */
 export function Still({
 	merging,
+	onBlur,
 	children,
 }: {
 	merging: boolean;
+	/** When focus leaves any control inside, which bubbles up to here. */
+	onBlur?: () => void;
 	children: ReactNode;
 }) {
 	return (
@@ -25,6 +28,7 @@ export function Still({
 			className="still"
 			disabled={merging}
 			title={merging ? MERGE_HOLDS : undefined}
+			onBlur={onBlur}
 		>
 			{children}
 		</fieldset>
