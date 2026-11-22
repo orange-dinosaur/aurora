@@ -352,9 +352,10 @@ export function PointerMenu({
 
 	useDismissal(open, items, onClose);
 
-	// Measured before it is painted, so it never shows past the edge first.
-	// Closing leaves it where it was while it fades. Focus goes back to
-	// whatever had it when the menu opened.
+	// Measured before it is painted, so it never shows past the edge first,
+	// and again whenever it changes size, as Move to does once its folders
+	// arrive. Closing leaves it where it was while it fades. Focus goes back
+	// to whatever had it when the menu opened.
 	useLayoutEffect(() => {
 		const box = items.current;
 		if (at === null || box === null) {
@@ -362,15 +363,22 @@ export function PointerMenu({
 		}
 		const before = document.activeElement;
 
-		const spot = inward(
-			at,
-			{ width: box.offsetWidth, height: box.offsetHeight },
-			{ width: window.innerWidth, height: window.innerHeight },
-		);
-		box.style.left = `${spot.x}px`;
-		box.style.top = `${spot.y}px`;
+		function place(box: HTMLDivElement, at: Point) {
+			const spot = inward(
+				at,
+				{ width: box.offsetWidth, height: box.offsetHeight },
+				{ width: window.innerWidth, height: window.innerHeight },
+			);
+			box.style.left = `${spot.x}px`;
+			box.style.top = `${spot.y}px`;
+		}
+
+		place(box, at);
+		const resized = new ResizeObserver(() => place(box, at));
+		resized.observe(box);
 		box.querySelector<HTMLButtonElement>("button:enabled")?.focus();
 		return () => {
+			resized.disconnect();
 			if (before instanceof HTMLElement && focusWasLeft(box)) {
 				before.focus();
 			}
