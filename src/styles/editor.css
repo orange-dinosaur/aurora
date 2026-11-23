@@ -447,6 +447,55 @@
 	color: var(--text-dim);
 }
 
+/* A screenplay scene, in Courier at the script indents measured in characters
+   from a 60-character action line, with a blank line between elements and none
+   inside a speech. */
+
+.editor--script .editor__text {
+	font-family: "Courier Prime", "Courier New", Courier, monospace;
+	font-variation-settings: normal;
+	max-width: 60ch;
+}
+
+.editor--script .editor__paragraph {
+	margin: 1lh 0 0;
+}
+
+.editor--script .editor__paragraph:first-child {
+	margin-top: 0;
+}
+
+.editor--script [data-kind="heading"] {
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.editor--script [data-kind="character"] {
+	margin-left: 22ch;
+}
+
+.editor--script [data-kind="dialogue"] {
+	margin: 0 0 0 10ch;
+	max-width: 35ch;
+}
+
+.editor--script [data-kind="parenthetical"] {
+	margin: 0 0 0 16ch;
+	max-width: 25ch;
+}
+
+.editor--script [data-kind="transition"] {
+	text-align: right;
+}
+
+.editor--script [data-kind="centered"] {
+	text-align: center;
+}
+
+.editor--script [data-kind="page-break"] {
+	border-top: 1px dashed color-mix(in srgb, var(--text) 25%, transparent);
+}
+
 .editor__quote {
 	margin: 0 0 1rem;
 	padding-left: 1rem;

@@ -97,6 +97,44 @@ export function parse(body: string): Block[] {
 	return blocks;
 }
 
+/**
+ * The kinds a run of editor blocks should have now their text has changed. The
+ * editor has no blank lines, so the kind a block already has stands in for
+ * one: the line under a cue or a parenthetical is speech, the line under
+ * dialogue is speech only if it already was, and a
+ * cue stays a cue whatever follows it. A capitalised line becomes a cue only
+ * at the end, above an empty block or above speech. A block forced by a mark
+ * or by the writer, and the kinds only a mark makes, keep their kind.
+ */
+export function classify(blocks: Block[]): BlockKind[] {
+	const kinds: BlockKind[] = [];
+	blocks.forEach((block, i) => {
+		const before = i > 0 ? kinds[i - 1] : null;
+		const next = blocks[i + 1];
+		if (
+			block.forced ||
+			block.kind === "centered" ||
+			block.kind === "page-break" ||
+			block.text.trim() === ""
+		) {
+			kinds.push(block.kind);
+			return;
+		}
+		const speaking =
+			before === "character" ||
+			before === "parenthetical" ||
+			(before === "dialogue" && SPOKEN.has(block.kind));
+		const heard =
+			block.kind === "character" ||
+			next === undefined ||
+			next.text.trim() === "" ||
+			SPOKEN.has(next.kind);
+		const text = [speaking ? "@A" : "", block.text, heard ? "A" : ""];
+		kinds.push(parse(text.join("\n"))[speaking ? 1 : 0].kind);
+	});
+	return kinds;
+}
+
 // The kinds a mark can force, and the mark that does it.
 const MARKS: Partial<Record<BlockKind, string>> = {
 	heading: ".",

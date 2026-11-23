@@ -7,7 +7,16 @@ import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import type { EditorState, EditorThemeClasses } from "lexical";
+import { MANUSCRIPT } from "./kinds";
+import { useFormat } from "./projectFormat";
+import {
+	$fromFountain,
+	$toFountain,
+	registerScript,
+	SCRIPT_NODES,
+} from "./screenplay";
 import type { TakeView } from "./bindings/TakeView";
 import { band } from "./cards";
 import { failure } from "./errors";
@@ -111,6 +120,13 @@ function OutlineReporter({
 	useEffect(() => onOutline(outline), [outline, onOutline]);
 	useEffect(() => () => onOutline(null), [onOutline]);
 
+	return null;
+}
+
+/** Keeps each line of a script at the block its text makes it. */
+function Script() {
+	const [editor] = useLexicalComposerContext();
+	useEffect(() => registerScript(editor), [editor]);
 	return null;
 }
 
@@ -349,9 +365,14 @@ export default function Editor({
 		}
 	}, []);
 
+	// A screenplay's scenes are Fountain, and nothing else in it is.
+	const script = useFormat() === "screenplay" && trail[0] === MANUSCRIPT;
+	const [$read, $write] = script
+		? [$fromFountain, $toFountain]
+		: [$fromMarkdown, $toMarkdown];
 	const edited = useCallback(
 		(state: EditorState) => {
-			const markdown = state.read(() => $toMarkdown());
+			const markdown = state.read($write);
 			latest.current = markdown;
 			setRefused(null);
 			const next = counted(markdown);
@@ -364,9 +385,12 @@ export default function Editor({
 			}
 			onChange(markdown);
 		},
-		[onChange, onWrote],
+		[onChange, onWrote, $write],
 	);
 	const look = ["editor"];
+	if (script) {
+		look.push("editor--script");
+	}
 	if (preferences.focus) {
 		look.push("editor--focus");
 	}
@@ -380,11 +404,11 @@ export default function Editor({
 	const settled = useRef<string | null>(null);
 	const [config] = useState(() => ({
 		namespace: "aurora",
-		nodes: EDITOR_NODES,
+		nodes: script ? [...EDITOR_NODES, ...SCRIPT_NODES] : EDITOR_NODES,
 		theme: THEME,
 		editorState: () => {
-			$fromMarkdown(text);
-			settled.current = $toMarkdown();
+			$read(text);
+			settled.current = $write();
 		},
 		onError: (failed: Error) => {
 			throw failed;
@@ -530,9 +554,13 @@ export default function Editor({
 								{/* The same transformer list the file is read
 								    and written with, so what converts as you
 								    type is exactly what survives a save. */}
-								<MarkdownShortcutPlugin
-									transformers={MARKDOWN_TRANSFORMERS}
-								/>
+								{script ? (
+									<Script />
+								) : (
+									<MarkdownShortcutPlugin
+										transformers={MARKDOWN_TRANSFORMERS}
+									/>
+								)}
 								<ListPlugin />
 								{/* Keeps link nodes tidy as they are edited, as
 								    well as answering for the toggle command. */}
@@ -560,7 +588,7 @@ export default function Editor({
 									onLeave={leaveFocus}
 								/>
 								<Typewriter on={preferences.typewriter} />
-								<SlashMenu />
+								{!script && <SlashMenu />}
 								<Whereabouts
 									place={place}
 									active={active}
