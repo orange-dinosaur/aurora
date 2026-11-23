@@ -68,9 +68,13 @@ export function spot(
 /**
  * A word count for a sidebar row, where there is room for a number and not for
  * the word after it. Always short of the true figure rather than over it: a
- * writer reads their own count as a claim, and a rounded-up one is a lie.
+ * writer reads their own count as a claim, and a rounded-up one is a lie. An
+ * empty row shows nothing, so a new project's binder is not a column of zeros.
  */
 export function abbreviated(words: number) {
+	if (words === 0) {
+		return "";
+	}
 	if (words < 1000) {
 		return String(words);
 	}

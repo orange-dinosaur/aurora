@@ -45,8 +45,12 @@ describe("how far in a row sits", () => {
 
 describe("a folder row's count", () => {
 	test("a short folder says exactly what it holds", () => {
-		expect(abbreviated(0)).toBe("0");
+		expect(abbreviated(1)).toBe("1");
 		expect(abbreviated(999)).toBe("999");
+	});
+
+	test("an empty one shows nothing", () => {
+		expect(abbreviated(0)).toBe("");
 	});
 
 	test("a longer one is cut down to thousands", () => {
