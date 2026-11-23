@@ -6,6 +6,7 @@ pub mod epub;
 pub mod history;
 pub mod merge;
 pub mod project;
+pub mod script;
 pub mod store;
 pub mod structure;
 pub mod takes;
