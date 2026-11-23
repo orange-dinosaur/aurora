@@ -577,6 +577,7 @@ export default function Editor({
 									<OutlineReporter onOutline={onOutline} />
 								)}
 								<Shortcuts
+									script={script}
 									onToolbar={toggle}
 									onOutline={outline}
 									onFind={find}
@@ -603,6 +604,7 @@ export default function Editor({
 					{preferences.toolbar && (
 						<Toolbar
 							marking={marking}
+							script={script}
 							focus={preferences.focus}
 							typewriter={preferences.typewriter}
 							onFocus={() =>

@@ -2,7 +2,10 @@ import { describe, expect, test } from "vitest";
 import {
 	classify,
 	cycled,
+	emphasised,
 	follows,
+	spans,
+	type Span,
 	overrules,
 	parse,
 	serialise,
@@ -142,5 +145,65 @@ describe("Enter and Tab", () => {
 			{ kind: "action", text: "Hi.", forced: false },
 		];
 		expect(overrules(blocks, 1, "dialogue")).toBe(false);
+	});
+});
+
+describe("emphasis", () => {
+	const plain = { bold: false, italic: false, underline: false };
+	const span = (text: string, styles: Partial<Span> = {}): Span => ({
+		...plain,
+		text,
+		...styles,
+	});
+
+	test.each<[string, Span[]]>([
+		["plain words", [span("plain words")]],
+		[
+			"a **bold** word",
+			[span("a "), span("bold", { bold: true }), span(" word")],
+		],
+		[
+			"*italic* and _under_",
+			[
+				span("italic", { italic: true }),
+				span(" and "),
+				span("under", { underline: true }),
+			],
+		],
+		["***both***", [span("both", { bold: true, italic: true })]],
+		[
+			"**a*b***",
+			[
+				span("a", { bold: true }),
+				span("b", { bold: true, italic: true }),
+			],
+		],
+		[
+			"_**all *three***_",
+			[
+				span("all ", { underline: true, bold: true }),
+				span("three", { underline: true, bold: true, italic: true }),
+			],
+		],
+		["5 \\* 3 and snake\\_case", [span("5 * 3 and snake_case")]],
+		["C:\\\\\\*", [span("C:\\*")]],
+	])("%s round-trips", (text, line) => {
+		expect(spans(text)).toEqual(line);
+		expect(emphasised(line)).toBe(text);
+	});
+
+	test("a marker with no partner is a character", () => {
+		expect(spans("5 * 3")).toEqual([span("5 * 3")]);
+		expect(emphasised(spans("5 * 3"))).toBe("5 \\* 3");
+	});
+
+	test("a backslash that escapes nothing stays", () => {
+		expect(spans("C:\\path")).toEqual([span("C:\\path")]);
+		expect(emphasised([span("C:\\path")])).toBe("C:\\path");
+	});
+
+	test("a backslash before emphasis is not read as an escape", () => {
+		const line = [span("a\\"), span("b", { bold: true })];
+		expect(spans(emphasised(line))).toEqual(line);
 	});
 });

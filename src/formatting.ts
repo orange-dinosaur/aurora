@@ -96,6 +96,15 @@ export const MARKS: Mark[] = [
 	mark("code", "Code", "<>", "code", { key: "e", shift: false }),
 ];
 
+// Markdown has nowhere to keep an underline, so only a screenplay offers one.
+const UNDERLINE = mark("underline", "Underline", "U", "underline", {
+	key: "u",
+	shift: false,
+});
+
+/** What a screenplay can keep: Fountain has bold, italic and underline only. */
+export const SCRIPT_MARKS: Mark[] = [MARKS[0], MARKS[1], UNDERLINE];
+
 // The blocks a selection reaches into, named as a writer would name them: a
 // list item's block is the list it belongs to, not the item.
 function $blocksOf(selection: RangeSelection): LexicalNode[] {
@@ -461,9 +470,9 @@ export function sameFormatting(
 export function $formattingOf(selection: RangeSelection): Formatting {
 	return {
 		marks: new Set(
-			MARKS.filter((action) => action.isActive(selection)).map(
-				(action) => action.id,
-			),
+			[...MARKS, UNDERLINE]
+				.filter((action) => action.isActive(selection))
+				.map((action) => action.id),
 		),
 		block: $blockOf(selection),
 		link: $linkAt(selection),

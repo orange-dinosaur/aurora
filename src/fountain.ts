@@ -178,6 +178,106 @@ export function overrules(
 	return classify(chosen)[at] !== kind;
 }
 
+export type Style = "bold" | "italic" | "underline";
+
+/** A stretch of a line in one emphasis. */
+export type Span = { text: string } & Record<Style, boolean>;
+
+// Checked in this order, so `**` is read as bold before `*` can be italic.
+const EMPHASIS: [string, Style][] = [
+	["**", "bold"],
+	["*", "italic"],
+	["_", "underline"],
+];
+const MARKER: Record<Style, string> = {
+	bold: "**",
+	italic: "*",
+	underline: "_",
+};
+const OPENING: Style[] = ["underline", "bold", "italic"];
+
+/** Whether an unescaped `marker` comes at or after `from`. */
+function closes(text: string, from: number, marker: string): boolean {
+	for (let i = from; i < text.length; i++) {
+		if (text[i] === "\\") {
+			i++;
+		} else if (text.startsWith(marker, i)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Reads a line's emphasis: `**bold**`, `*italic*` and `_underline_`, nested
+ * as `***both***`, with `\*`, `\_` and `\\` for the characters themselves. A
+ * marker with nothing to close it is only a character.
+ */
+export function spans(text: string): Span[] {
+	const found: Span[] = [];
+	const on: Record<Style, boolean> = {
+		bold: false,
+		italic: false,
+		underline: false,
+	};
+	let run = "";
+	const flush = () => {
+		if (run !== "") {
+			found.push({ text: run, ...on });
+			run = "";
+		}
+	};
+	for (let i = 0; i < text.length;) {
+		if (text[i] === "\\" && "*_\\".includes(text[i + 1] ?? "")) {
+			run += text[i + 1];
+			i += 2;
+			continue;
+		}
+		const hit = EMPHASIS.find(
+			([marker, style]) =>
+				text.startsWith(marker, i) &&
+				(on[style] || closes(text, i + marker.length, marker)),
+		);
+		if (hit === undefined) {
+			run += text[i];
+			i++;
+			continue;
+		}
+		flush();
+		on[hit[1]] = !on[hit[1]];
+		i += hit[0].length;
+	}
+	flush();
+	return found;
+}
+
+/** Writes spans back as one line, opening and closing only where emphasis changes. */
+export function emphasised(line: Span[]): string {
+	const open: Style[] = [];
+	let text = "";
+	for (const span of line) {
+		if (span.text === "") {
+			continue;
+		}
+		while (open.some((style) => !span[style])) {
+			text += MARKER[open.pop() as Style];
+		}
+		for (const style of OPENING) {
+			if (span[style] && !open.includes(style)) {
+				text += MARKER[style];
+				open.push(style);
+			}
+		}
+		text += span.text
+			.replace(/\\(?=[*_\\]|$)/g, "\\\\")
+			.replace(/[*_]/g, "\\$&");
+	}
+	while (open.length > 0) {
+		text += MARKER[open.pop() as Style];
+	}
+	return text;
+}
+
 // The kinds a mark can force, and the mark that does it.
 const MARKS: Partial<Record<BlockKind, string>> = {
 	heading: ".",

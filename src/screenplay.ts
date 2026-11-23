@@ -6,7 +6,9 @@ import {
 	$getRoot,
 	$getSelection,
 	$getState,
+	$isElementNode,
 	$isRangeSelection,
+	$isTextNode,
 	$setState,
 	COMMAND_PRIORITY_LOW,
 	createState,
@@ -23,13 +25,19 @@ import { split } from "./frontmatter";
 import {
 	classify,
 	cycled,
+	emphasised,
 	follows,
 	overrules,
 	parse,
 	serialise,
+	spans,
 	type Block,
 	type BlockKind,
+	type Span,
+	type Style,
 } from "./fountain";
+
+const STYLES: Style[] = ["bold", "italic", "underline"];
 import { $frontMatter, $setFrontMatter } from "./markdown";
 
 const KINDS: ReadonlySet<string> = new Set<BlockKind>([
@@ -108,7 +116,13 @@ function $line(block: Block): ScriptNode {
 	const node = new ScriptNode();
 	$setState(node, kind, block.kind);
 	$setState(node, forced, block.forced);
-	return block.text === "" ? node : node.append($createTextNode(block.text));
+	return node.append(
+		...spans(block.text).map((span) => {
+			const words = $createTextNode(span.text);
+			STYLES.forEach((style) => span[style] && words.toggleFormat(style));
+			return words;
+		}),
+	);
 }
 
 /** Replaces the document with the blocks a Fountain file holds. */
@@ -126,12 +140,24 @@ export function $fromFountain(text: string): void {
 	$setFrontMatter(block);
 }
 
-// Anything else at the top, such as a heading the toolbar made, is kept as
-// action so its words are not lost on save.
+// The line's words with their emphasis. A link or a line break keeps only its
+// text, which is all Fountain has room for.
+function $spans(node: LexicalNode): Span[] {
+	const pieces = $isElementNode(node) ? node.getChildren() : [node];
+	return pieces.map((piece) => ({
+		text: piece.getTextContent(),
+		bold: $isTextNode(piece) && piece.hasFormat("bold"),
+		italic: $isTextNode(piece) && piece.hasFormat("italic"),
+		underline: $isTextNode(piece) && piece.hasFormat("underline"),
+	}));
+}
+
+// Anything else at the top, such as a pasted list, is kept as action so its
+// words are not lost on save.
 function $block(node: LexicalNode): Block {
 	return {
 		kind: $isScriptNode(node) ? $getState(node, kind) : "action",
-		text: node.getTextContent(),
+		text: emphasised($spans(node)),
 		forced: $isScriptNode(node) && $getState(node, forced),
 	};
 }

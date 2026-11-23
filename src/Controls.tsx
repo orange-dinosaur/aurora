@@ -6,6 +6,7 @@ import {
 	BLOCKS,
 	INSERTS,
 	MARKS,
+	SCRIPT_MARKS,
 	linkTarget,
 	sameFormatting,
 	setLink,
@@ -48,11 +49,17 @@ type Props = {
 	// address means focus leaves the text, which would otherwise move the bar
 	// out from under the field being typed in.
 	onHold?: (held: boolean) => void;
+	// A screenplay scene, which has its three marks and nothing else.
+	script?: boolean;
 };
 
 // The row of buttons itself, shared by the dock and the bar that floats over a
 // selection, so the two can never offer different things.
-export default function Controls({ hidden = false, onHold }: Props) {
+export default function Controls({
+	hidden = false,
+	onHold,
+	script = false,
+}: Props) {
 	const [editor] = useLexicalComposerContext();
 	const formatting = useFormatting(editor);
 	const [open, setOpen] = useState(false);
@@ -163,6 +170,35 @@ export default function Controls({ hidden = false, onHold }: Props) {
 		);
 	}
 
+	const marks = (script ? SCRIPT_MARKS : MARKS).map((action) => (
+		<button
+			key={action.id}
+			type="button"
+			className={`controls__mark controls__mark--${action.id}`}
+			aria-label={action.label}
+			title={`${action.label} (${shortcutLabel(action.keys)})`}
+			aria-keyshortcuts={shortcutLabel(action.keys)}
+			aria-pressed={formatting?.marks.has(action.id) ?? false}
+			onClick={() => act(action)}
+		>
+			{action.glyph}
+		</button>
+	));
+
+	if (script) {
+		return (
+			<div
+				className="controls"
+				role="toolbar"
+				aria-label="Formatting"
+				// Keeps the selection on the words being formatted.
+				onMouseDown={(event) => event.preventDefault()}
+			>
+				{marks}
+			</div>
+		);
+	}
+
 	return (
 		<div
 			className="controls"
@@ -214,20 +250,7 @@ export default function Controls({ hidden = false, onHold }: Props) {
 
 			<span className="controls__divider" aria-hidden="true" />
 
-			{MARKS.map((action) => (
-				<button
-					key={action.id}
-					type="button"
-					className={`controls__mark controls__mark--${action.id}`}
-					aria-label={action.label}
-					title={`${action.label} (${shortcutLabel(action.keys)})`}
-					aria-keyshortcuts={shortcutLabel(action.keys)}
-					aria-pressed={formatting?.marks.has(action.id) ?? false}
-					onClick={() => act(action)}
-				>
-					{action.glyph}
-				</button>
-			))}
+			{marks}
 
 			<div className="controls__link">
 				<button

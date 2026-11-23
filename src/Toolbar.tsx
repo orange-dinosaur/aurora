@@ -4,6 +4,8 @@ import Icon from "./Icon";
 type Props = {
 	/** Set while the page shows marks, when there is no text to format. */
 	marking: boolean;
+	/** A screenplay scene, whose bar holds only its three marks. */
+	script: boolean;
 	focus: boolean;
 	typewriter: boolean;
 	onFocus: () => void;
@@ -16,6 +18,7 @@ type Props = {
 // words.
 export default function Toolbar({
 	marking,
+	script,
 	focus,
 	typewriter,
 	onFocus,
@@ -24,7 +27,7 @@ export default function Toolbar({
 	return (
 		<div className="toolbar">
 			<div className="toolbar__marks" inert={marking}>
-				<Controls />
+				<Controls script={script} />
 			</div>
 			<span className="controls__divider" aria-hidden="true" />
 			{/* Pressing one must not take the caret out of the text. */}

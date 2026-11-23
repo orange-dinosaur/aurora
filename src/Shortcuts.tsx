@@ -7,10 +7,13 @@ import {
 	OUTLINE,
 	pressed,
 	REPLACE,
+	SCRIPT_MARKS,
 	TOOLBAR,
 } from "./formatting";
 
 type Props = {
+	/** A screenplay scene, which answers only to its three marks. */
+	script: boolean;
 	onToolbar: () => void;
 	onOutline: () => void;
 	onFind: () => void;
@@ -27,6 +30,7 @@ const UNDERLINE = { key: "u", shift: false };
 // come to mean something the buttons do not do. Registered on the editor rather
 // than on a bar, so hiding the toolbar does not take the keys with it.
 export default function Shortcuts({
+	script,
 	onToolbar,
 	onOutline,
 	onFind,
@@ -45,7 +49,7 @@ export default function Shortcuts({
 			editor.registerCommand(
 				KEY_DOWN_COMMAND,
 				(event) => {
-					if (pressed(event, UNDERLINE)) {
+					if (!script && pressed(event, UNDERLINE)) {
 						event.preventDefault();
 						return true;
 					}
@@ -74,8 +78,8 @@ export default function Shortcuts({
 						return true;
 					}
 
-					const action = ACTIONS.find((each) =>
-						pressed(event, each.keys),
+					const action = (script ? SCRIPT_MARKS : ACTIONS).find(
+						(each) => pressed(event, each.keys),
 					);
 					if (action === undefined) {
 						return false;
@@ -90,7 +94,7 @@ export default function Shortcuts({
 				// bold, italic and underline live.
 				COMMAND_PRIORITY_NORMAL,
 			),
-		[editor],
+		[editor, script],
 	);
 
 	return null;
