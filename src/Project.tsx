@@ -929,8 +929,11 @@ export default function Project({
 	// is applied here rather than by whichever surface made the document, so
 	// the sidebar and a section's overview cannot disagree about it, and after
 	// the document is open, because `retarget` reports a refusal in the panel.
-	async function created(document: ProjectDocument) {
-		await openDocument(document);
+	async function created(
+		document: ProjectDocument,
+		landing: Landing = "here",
+	) {
+		await openDocument(document, null, landing);
 		if (preferences.defaultTarget !== null) {
 			await retarget(document.id, preferences.defaultTarget).catch(
 				() => undefined,
@@ -1638,7 +1641,10 @@ export default function Project({
 						}
 						onTry={(document) => startTake(document, "across")}
 						onOpenFolder={(folder) => openFolder(folder, "across")}
-						onCreated={(document) => void created(document)}
+						// Across, so the overview it was made from stays put.
+						onCreated={(document) =>
+							void created(document, "across")
+						}
 						onRenamed={renamed}
 						onFolderRenamed={renamedFolder}
 						onChanged={changed}
