@@ -166,13 +166,22 @@ export function Chips({
 						{onOpen === undefined ? (
 							value
 						) : (
-							<button
-								type="button"
+							// Not a button, so a merge's disabled fieldset leaves it
+							// working: going to a tag changes nothing.
+							<span
+								role="link"
+								tabIndex={0}
 								className="chip__open"
 								onClick={() => onOpen(value)}
+								onKeyDown={(event) => {
+									if (event.key === "Enter") {
+										event.preventDefault();
+										onOpen(value);
+									}
+								}}
 							>
 								{value}
-							</button>
+							</span>
 						)}
 						<button
 							type="button"
