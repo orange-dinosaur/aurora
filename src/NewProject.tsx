@@ -37,12 +37,12 @@ export const COPY: Record<
 	screenplay: {
 		name: "Screenplay",
 		kind: "A screenplay",
-		description: "Film or television, in standard screenplay form.",
+		description: "Film or television, organised into acts and scenes.",
 	},
 	"short-stories": {
 		name: "Short Stories",
 		kind: "A collection of short stories",
-		description: "A collection of shorter pieces.",
+		description: "Separate stories in one book, each with its own scenes.",
 	},
 	"stage-play": {
 		name: "Stage Play",
@@ -113,9 +113,11 @@ function CountField({
 	);
 }
 
-/** The numbers and ticks under the structure the writer picked. */
+/** The numbers and ticks under the structure the writer picked. A screenplay
+ * has no chapters and no matter, so it asks only for scenes. */
 function StartFields({
 	layout,
+	screenplay,
 	draft,
 	onDraft,
 	frontMatter,
@@ -124,6 +126,7 @@ function StartFields({
 	onBackMatter,
 }: {
 	layout: StructureLayout;
+	screenplay: boolean;
 	draft: Draft;
 	onDraft: (draft: Draft) => void;
 	frontMatter: boolean;
@@ -131,7 +134,7 @@ function StartFields({
 	onFrontMatter: (on: boolean) => void;
 	onBackMatter: (on: boolean) => void;
 }) {
-	const fields = read(draft, layout);
+	const fields = read(draft, layout, screenplay);
 	const start = useRef<HTMLDivElement>(null);
 
 	// Opening a structure low in the list would leave its fields under the
@@ -155,31 +158,35 @@ function StartFields({
 						onChange={(parts) => onDraft({ ...draft, parts })}
 					/>
 				)}
+				{!screenplay && (
+					<CountField
+						label="Chapters"
+						value={draft.chapters}
+						invalid={fields.chapters === null}
+						onChange={(chapters) => onDraft({ ...draft, chapters })}
+					/>
+				)}
 				<CountField
-					label="Chapters"
-					value={draft.chapters}
-					invalid={fields.chapters === null}
-					onChange={(chapters) => onDraft({ ...draft, chapters })}
-				/>
-				<CountField
-					label="Scenes per chapter"
+					label={screenplay ? "Scenes per act" : "Scenes per chapter"}
 					value={draft.scenes}
 					invalid={fields.scenes === null}
 					onChange={(scenes) => onDraft({ ...draft, scenes })}
 				/>
 			</div>
-			<div className="start__matter">
-				<Tick
-					label="Front matter"
-					on={frontMatter}
-					onFlip={() => onFrontMatter(!frontMatter)}
-				/>
-				<Tick
-					label="Back matter"
-					on={backMatter}
-					onFlip={() => onBackMatter(!backMatter)}
-				/>
-			</div>
+			{!screenplay && (
+				<div className="start__matter">
+					<Tick
+						label="Front matter"
+						on={frontMatter}
+						onFlip={() => onFrontMatter(!frontMatter)}
+					/>
+					<Tick
+						label="Back matter"
+						on={backMatter}
+						onFlip={() => onBackMatter(!backMatter)}
+					/>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -210,8 +217,8 @@ function Tick({
 }
 
 /**
- * The stages of starting a project: format, then for a novel the shape it
- * starts from, then its name. Built when it opens, so a cancelled attempt
+ * The stages of starting a project: format, then for a novel or a screenplay
+ * the shape it starts from, then its name. Built when it opens, so a cancelled attempt
  * leaves nothing behind for the next one.
  */
 export default function NewProject({
@@ -277,12 +284,14 @@ export default function NewProject({
 	const [parent, setParent] = useState<string | null>(projectsFolder);
 
 	const chosen = formats.find((format) => format.id === selectedId) ?? null;
-	// Only a novel has parts and chapters to lay out.
-	const shaped = chosen?.id === "novel" && structures.length > 0;
+	// A collection starts as one story and has no shape to choose.
+	const screenplay = chosen?.id === "screenplay";
+	const shaped =
+		(chosen?.id === "novel" || screenplay) && structures.length > 0;
 	const layout =
 		structures.find((structure) => structure.structure === structureId) ??
 		null;
-	const numbers = layout === null ? null : counts(draft, layout);
+	const numbers = layout === null ? null : counts(draft, layout, screenplay);
 	// A structure whose fields are out of range has nothing to send yet.
 	const start: Start | null =
 		layout === null || numbers === null
@@ -290,8 +299,8 @@ export default function NewProject({
 			: {
 					structure: layout.structure,
 					...numbers,
-					frontMatter,
-					backMatter,
+					frontMatter: frontMatter && !screenplay,
+					backMatter: backMatter && !screenplay,
 				};
 	const startReady = layout === null || start !== null;
 	const ready = parent !== null && name.trim() !== "" && !busy;
@@ -480,7 +489,9 @@ export default function NewProject({
 							/>
 							<span className="format__name">A single scene</span>
 							<span className="format__description">
-								One empty scene, as today.
+								{screenplay
+									? "One act holding one scene."
+									: "One empty scene, as today."}
 							</span>
 						</label>
 						{structures.map((option) => (
@@ -507,13 +518,16 @@ export default function NewProject({
 									</span>
 									{option.partNames.length > 0 && (
 										<span className="format__files">
-											{option.partNames.join(" · ")}
+											{screenplay
+												? `${option.partNames.length} acts`
+												: option.partNames.join(" · ")}
 										</span>
 									)}
 								</label>
 								{option === layout && (
 									<StartFields
 										layout={option}
+										screenplay={screenplay}
 										draft={draft}
 										onDraft={setDraft}
 										frontMatter={frontMatter}

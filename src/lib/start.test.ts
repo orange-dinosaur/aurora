@@ -62,6 +62,36 @@ describe("counts", () => {
 	});
 });
 
+describe("a screenplay's start", () => {
+	it("ignores chapters, whatever was typed", () => {
+		expect(
+			counts({ parts: "", chapters: "", scenes: "8" }, threeActs, true),
+		).toEqual({ parts: 3, chapters: 0, scenes: 8 });
+	});
+
+	it("needs a scene in every act", () => {
+		expect(
+			counts({ parts: "", chapters: "24", scenes: "0" }, threeActs, true),
+		).toBeNull();
+		expect(
+			counts(
+				{ parts: "", chapters: "24", scenes: "21" },
+				threeActs,
+				true,
+			),
+		).toBeNull();
+	});
+
+	it("still reads parts for Your own", () => {
+		expect(
+			counts({ parts: "2", chapters: "", scenes: "3" }, yourOwn, true),
+		).toEqual({ parts: 2, chapters: 0, scenes: 3 });
+		expect(
+			counts({ parts: "11", chapters: "", scenes: "3" }, yourOwn, true),
+		).toBeNull();
+	});
+});
+
 describe("read", () => {
 	it("marks chapters out when there are fewer than parts", () => {
 		const fields = read(
