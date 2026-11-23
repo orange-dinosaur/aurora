@@ -32,6 +32,9 @@ import { FOLD, pressed } from "./formatting";
 import { useReorder, type Draggable } from "./reorder";
 import type { Renaming } from "./rows";
 import { abbreviated, indent, retitling, spot } from "./rows";
+import { progress } from "./RowProgress";
+import { TargetField } from "./Target";
+import { MERGE_HOLDS } from "./branches";
 import { timed } from "./timing";
 import {
 	firstScene,
@@ -185,6 +188,8 @@ export default function Sidebar({
 		at: Point;
 		open: boolean;
 	} | null>(null);
+	// Whether the Manuscript heading's count is a target field.
+	const [aimingBook, setAimingBook] = useState(false);
 	// Held here rather than passed in, so the element the grip moves is the
 	// one this component drew.
 	const panel = useRef<HTMLElement>(null);
@@ -567,11 +572,30 @@ export default function Sidebar({
 											{section.name}
 										</button>
 									</h3>
-									{section.name === MANUSCRIPT && (
-										<span className="section__words">
-											{abbreviated(section.words)}
-										</span>
-									)}
+									{section.name === MANUSCRIPT &&
+										(aimingBook ? (
+											<TargetField
+												compact
+												target={section.target}
+												onTarget={(target) =>
+													aimed(
+														onRetargetFolder(
+															section.id,
+															target,
+														),
+													)
+												}
+												onDone={() =>
+													setAimingBook(false)
+												}
+											/>
+										) : (
+											<span className="section__words">
+												{abbreviated(section.words)}
+											</span>
+										))}
+									{section.name === MANUSCRIPT &&
+										progress(section.words, section.target)}
 									<NewMenu
 										label={`New in ${section.name}`}
 										kind={section.kind}
@@ -831,6 +855,23 @@ export default function Sidebar({
 								>
 									Open beside
 								</MenuItem>
+								{/* A target on the Manuscript is the book's.
+								    Research and the rest measure nothing the
+								    writer is aiming at. */}
+								{sectionAsked.folder.name === MANUSCRIPT && (
+									<MenuItem
+										disabled={merging}
+										title={
+											merging ? MERGE_HOLDS : undefined
+										}
+										onSelect={() => {
+											close();
+											setAimingBook(true);
+										}}
+									>
+										Set target…
+									</MenuItem>
+								)}
 							</>
 						)
 					}
