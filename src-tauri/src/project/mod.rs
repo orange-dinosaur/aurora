@@ -54,7 +54,7 @@ pub fn create_from(
 	if sections.is_empty() {
 		return Err(Error::UnsupportedFormat(format));
 	}
-	if start.is_some_and(|start| !start.in_range()) {
+	if start.is_some_and(|start| !start.in_range(format)) {
 		return Err(Error::StartOutOfRange);
 	}
 
@@ -88,20 +88,19 @@ fn fill(
 	let mut nodes = Vec::new();
 	for section in sections {
 		let children = match start {
-			Some(start) if section.folder == MANUSCRIPT => structure::manuscript(start),
+			Some(start) if section.folder == MANUSCRIPT => structure::manuscript(format, start),
 			_ => section.seed.map(seed_node).into_iter().collect(),
+		};
+		// A screenplay's scenes open on a scene heading, ready for the place.
+		let body = match (format, section.folder) {
+			(Format::Screenplay, MANUSCRIPT) => "INT. ",
+			_ => "",
 		};
 		let folder = root.join(section.folder);
 		fs::create_dir(&folder)?;
-		lay_down(&folder, &children)?;
+		lay_down(&folder, &children, body)?;
 		if let (Some(start), Some(seed @ "Outline.md")) = (start, section.seed) {
 			fs::write(folder.join(seed), structure::outline(start))?;
-		}
-		// A screenplay's first scene opens on a scene heading, ready for the place.
-		if let (None, Format::Screenplay, MANUSCRIPT, Some(seed)) =
-			(start, format, section.folder, section.seed)
-		{
-			fs::write(folder.join(seed), "INT. ")?;
 		}
 		nodes.push(Node::folder(section.folder, children));
 	}
@@ -123,16 +122,16 @@ fn seed_node(seed: &str) -> Node {
 }
 
 /// Makes on disk what the nodes describe: a folder for each folder and an
-/// empty file for each document.
-fn lay_down(dir: &Path, nodes: &[Node]) -> Result<()> {
+/// file holding `body` for each document.
+fn lay_down(dir: &Path, nodes: &[Node], body: &str) -> Result<()> {
 	for node in nodes {
 		let path = dir.join(node.name());
 		match node {
 			Node::Folder { children, .. } => {
 				fs::create_dir(&path)?;
-				lay_down(&path, children)?;
+				lay_down(&path, children, body)?;
 			}
-			Node::Document { .. } => fs::write(&path, "")?,
+			Node::Document { .. } => fs::write(&path, body)?,
 		}
 	}
 	Ok(())
@@ -567,6 +566,56 @@ mod tests {
 		assert_eq!(paths.len(), 24);
 		assert_eq!(paths[0], "Manuscript/Act One/Chapter 1.md");
 		assert!(root.join("Manuscript/Act One/Chapter 1.md").is_file());
+	}
+
+	#[test]
+	fn a_screenplay_start_lays_out_acts_of_scene_headings() {
+		let parent = tempfile::tempdir().unwrap();
+		let mut three_acts = start(Structure::ThreeActs, 24, 2);
+		three_acts.front_matter = true;
+		three_acts.back_matter = true;
+		let root = create_from(
+			parent.path(),
+			"Ithaca",
+			Format::Screenplay,
+			Some(&three_acts),
+			fixed_time(),
+		)
+		.unwrap();
+
+		let paths = manuscript_paths(&root);
+		assert_eq!(
+			paths,
+			[
+				"Manuscript/Act One/Scene 1.md",
+				"Manuscript/Act One/Scene 2.md",
+				"Manuscript/Act Two/Scene 1.md",
+				"Manuscript/Act Two/Scene 2.md",
+				"Manuscript/Act Three/Scene 1.md",
+				"Manuscript/Act Three/Scene 2.md",
+			]
+		);
+		for path in &paths {
+			assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "INT. ");
+		}
+		let outline = fs::read_to_string(root.join("Outline/Outline.md")).unwrap();
+		assert!(outline.starts_with("## Act One\n"));
+	}
+
+	#[test]
+	fn a_screenplay_start_without_scenes_is_refused() {
+		let parent = tempfile::tempdir().unwrap();
+		let err = create_from(
+			parent.path(),
+			"Ithaca",
+			Format::Screenplay,
+			Some(&start(Structure::ThreeActs, 24, 0)),
+			fixed_time(),
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, Error::StartOutOfRange));
+		assert!(!parent.path().join("Ithaca").exists());
 	}
 
 	/// The Manuscript's direct children as the manifest records them: each

@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::project::{BACK_MATTER, FRONT_MATTER};
+use crate::project::{BACK_MATTER, FRONT_MATTER, Format};
 use crate::tree::{FolderKind, Node};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
@@ -286,12 +286,16 @@ impl Start {
 
 	/// Whether every number is one the Start from screen could have offered.
 	/// The dialog keeps to the same ranges, but a command argument is not
-	/// trusted to.
-	pub fn in_range(&self) -> bool {
+	/// trusted to. A screenplay has no chapters, and every act starts with at
+	/// least one scene.
+	pub fn in_range(&self, format: Format) -> bool {
 		let parts = match self.structure {
 			Structure::YourOwn => self.parts,
 			fixed => fixed.parts().len() as u32,
 		};
+		if format == Format::Screenplay {
+			return (1..=MAX_PARTS).contains(&parts) && (1..=MAX_SCENES).contains(&self.scenes);
+		}
 		(1..=MAX_PARTS).contains(&parts)
 			&& (parts..=MAX_CHAPTERS).contains(&self.chapters)
 			&& self.scenes <= MAX_SCENES
@@ -361,8 +365,12 @@ pub fn split(chapters: u32, weights: &[u32]) -> Vec<u32> {
 
 /// The Manuscript's children for this start: front matter if asked, the parts,
 /// then back matter if asked. Chapters number straight through the book and
-/// scenes restart in each chapter. Assumes `in_range`.
-pub fn manuscript(start: &Start) -> Vec<Node> {
+/// scenes restart in each chapter. A screenplay gets its acts and nothing
+/// else. Assumes `in_range`.
+pub fn manuscript(format: Format, start: &Start) -> Vec<Node> {
+	if format == Format::Screenplay {
+		return acts(start);
+	}
 	let mut nodes = Vec::new();
 	if start.front_matter {
 		nodes.push(matter(
@@ -404,6 +412,21 @@ pub fn outline(start: &Start) -> String {
 fn matter(kind: FolderKind, name: &str, documents: &[&str]) -> Node {
 	let documents = documents.iter().map(|name| Node::document(name)).collect();
 	Node::folder_of(Some(kind), name, documents)
+}
+
+/// One act to each of the structure's parts, numbered rather than named, each
+/// holding its scenes directly.
+fn acts(start: &Start) -> Vec<Node> {
+	ORDINALS
+		.iter()
+		.take(start.parts().len())
+		.map(|n| {
+			let scenes = (1..=start.scenes)
+				.map(|s| Node::document(&format!("Scene {s}.md")))
+				.collect();
+			Node::folder_of(Some(FolderKind::Part), &format!("Act {n}"), scenes)
+		})
+		.collect()
 }
 
 fn parts(start: &Start) -> Vec<Node> {
@@ -500,7 +523,7 @@ mod tests {
 				front_matter: false,
 				back_matter: false,
 			};
-			assert!(start.in_range(), "{:?}", layout.structure);
+			assert!(start.in_range(Format::Novel), "{:?}", layout.structure);
 		}
 	}
 
@@ -523,9 +546,77 @@ mod tests {
 		assert_eq!(split(10, &[1; 10]), [1; 10]);
 	}
 
+	/// Each act's name and how many scenes it holds, with nothing deeper.
+	fn screenplay(structure: Structure, parts: u32, scenes: u32) -> Vec<(String, usize)> {
+		let mut asked = start(structure, parts, 24, scenes);
+		asked.front_matter = true;
+		asked.back_matter = true;
+		manuscript(Format::Screenplay, &asked)
+			.into_iter()
+			.map(|node| match node {
+				Node::Folder {
+					name,
+					kind: Some(FolderKind::Part),
+					children,
+					..
+				} => {
+					assert!(
+						children
+							.iter()
+							.all(|child| matches!(child, Node::Document { .. }))
+					);
+					(name, children.len())
+				}
+				other => panic!("{} is not an act", other.name()),
+			})
+			.collect()
+	}
+
+	fn acts(names: &[&str], scenes: usize) -> Vec<(String, usize)> {
+		names
+			.iter()
+			.map(|&name| (name.to_owned(), scenes))
+			.collect()
+	}
+
+	#[test]
+	fn a_screenplay_numbers_one_act_to_each_part() {
+		assert_eq!(
+			screenplay(Structure::ThreeActs, 0, 5),
+			acts(&["Act One", "Act Two", "Act Three"], 5)
+		);
+		assert_eq!(
+			screenplay(Structure::FourParts, 0, 2),
+			acts(&["Act One", "Act Two", "Act Three", "Act Four"], 2)
+		);
+		assert_eq!(
+			screenplay(Structure::SaveTheCat, 0, 1),
+			acts(&["Act One", "Act Two", "Act Three"], 1)
+		);
+		assert_eq!(
+			screenplay(Structure::HerosJourney, 0, 3),
+			acts(&["Act One", "Act Two", "Act Three"], 3)
+		);
+		assert_eq!(
+			screenplay(Structure::YourOwn, 2, 4),
+			acts(&["Act One", "Act Two"], 4)
+		);
+	}
+
+	#[test]
+	fn a_screenplay_ignores_chapters_but_needs_a_scene() {
+		let screenplay = Format::Screenplay;
+		assert!(start(Structure::ThreeActs, 0, 0, 1).in_range(screenplay));
+		assert!(start(Structure::ThreeActs, 0, 500, 20).in_range(screenplay));
+		assert!(!start(Structure::ThreeActs, 0, 24, 0).in_range(screenplay));
+		assert!(!start(Structure::ThreeActs, 0, 24, 21).in_range(screenplay));
+		assert!(!start(Structure::YourOwn, 0, 24, 2).in_range(screenplay));
+		assert!(!start(Structure::YourOwn, 11, 24, 2).in_range(screenplay));
+	}
+
 	#[test]
 	fn your_own_names_as_many_parts_as_asked() {
-		let names: Vec<String> = manuscript(&start(Structure::YourOwn, 3, 3, 0))
+		let names: Vec<String> = manuscript(Format::Novel, &start(Structure::YourOwn, 3, 3, 0))
 			.iter()
 			.map(|n| n.name().to_owned())
 			.collect();
@@ -534,13 +625,13 @@ mod tests {
 
 	#[test]
 	fn ranges_are_checked() {
-		assert!(start(Structure::ThreeActs, 0, 3, 0).in_range());
-		assert!(start(Structure::ThreeActs, 0, 99, 20).in_range());
-		assert!(!start(Structure::ThreeActs, 0, 2, 2).in_range());
-		assert!(!start(Structure::ThreeActs, 0, 100, 2).in_range());
-		assert!(!start(Structure::ThreeActs, 0, 24, 21).in_range());
-		assert!(!start(Structure::YourOwn, 0, 18, 2).in_range());
-		assert!(!start(Structure::YourOwn, 11, 18, 2).in_range());
-		assert!(!start(Structure::YourOwn, 4, 3, 2).in_range());
+		assert!(start(Structure::ThreeActs, 0, 3, 0).in_range(Format::Novel));
+		assert!(start(Structure::ThreeActs, 0, 99, 20).in_range(Format::Novel));
+		assert!(!start(Structure::ThreeActs, 0, 2, 2).in_range(Format::Novel));
+		assert!(!start(Structure::ThreeActs, 0, 100, 2).in_range(Format::Novel));
+		assert!(!start(Structure::ThreeActs, 0, 24, 21).in_range(Format::Novel));
+		assert!(!start(Structure::YourOwn, 0, 18, 2).in_range(Format::Novel));
+		assert!(!start(Structure::YourOwn, 11, 18, 2).in_range(Format::Novel));
+		assert!(!start(Structure::YourOwn, 4, 3, 2).in_range(Format::Novel));
 	}
 }
