@@ -135,6 +135,49 @@ export function classify(blocks: Block[]): BlockKind[] {
 	return kinds;
 }
 
+/** The block Enter starts after a block of this kind. */
+export function follows(kind: BlockKind): BlockKind {
+	return kind === "character" || kind === "parenthetical"
+		? "dialogue"
+		: kind === "transition"
+			? "heading"
+			: "action";
+}
+
+const CYCLE: BlockKind[] = [
+	"heading",
+	"action",
+	"character",
+	"dialogue",
+	"parenthetical",
+	"transition",
+];
+
+/**
+ * The kind Tab gives a block, or Shift+Tab when `step` is -1, so Shift+Tab
+ * always undoes Tab. Centered text and a page break sit outside the cycle and
+ * enter it at action.
+ */
+export function cycled(kind: BlockKind, step: 1 | -1): BlockKind {
+	const at = CYCLE.indexOf(kind);
+	if (at === -1) {
+		return "action";
+	}
+	return CYCLE[(at + step + CYCLE.length) % CYCLE.length];
+}
+
+/** Whether giving block `at` this kind overrules what its text would make it. */
+export function overrules(
+	blocks: Block[],
+	at: number,
+	kind: BlockKind,
+): boolean {
+	const chosen = blocks.map((block, i) =>
+		i === at ? { ...block, kind, forced: false } : block,
+	);
+	return classify(chosen)[at] !== kind;
+}
+
 // The kinds a mark can force, and the mark that does it.
 const MARKS: Partial<Record<BlockKind, string>> = {
 	heading: ".",

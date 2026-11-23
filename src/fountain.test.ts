@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { classify, parse, serialise } from "./fountain";
+import {
+	classify,
+	cycled,
+	follows,
+	overrules,
+	parse,
+	serialise,
+} from "./fountain";
 import type { Block, BlockKind } from "./fountain";
 import cases from "./fountain.fixture.json";
 
@@ -88,5 +95,52 @@ describe("blocks follow their text as the writer types", () => {
 			{ kind: "centered", text: "THE END", forced: false },
 		];
 		expect(classify(blocks)).toEqual(["action", "centered"]);
+	});
+});
+
+describe("Enter and Tab", () => {
+	test("Enter goes from a cue to dialogue and from dialogue to action", () => {
+		expect(follows("character")).toBe("dialogue");
+		expect(follows("parenthetical")).toBe("dialogue");
+		expect(follows("dialogue")).toBe("action");
+		expect(follows("heading")).toBe("action");
+		expect(follows("transition")).toBe("heading");
+	});
+
+	test("Tab cycles both ways and wraps", () => {
+		expect(cycled("heading", 1)).toBe("action");
+		expect(cycled("action", 1)).toBe("character");
+		expect(cycled("transition", 1)).toBe("heading");
+		expect(cycled("heading", -1)).toBe("transition");
+		expect(cycled("centered", 1)).toBe("action");
+	});
+
+	test("Shift+Tab undoes Tab", () => {
+		const kinds: BlockKind[] = [
+			"heading",
+			"action",
+			"character",
+			"dialogue",
+			"parenthetical",
+			"transition",
+		];
+		for (const kind of kinds) {
+			expect(cycled(cycled(kind, 1), -1)).toBe(kind);
+		}
+	});
+
+	test("a lowercase name made a cue is forced", () => {
+		const blocks: Block[] = [
+			{ kind: "action", text: "marcus", forced: false },
+		];
+		expect(overrules(blocks, 0, "character")).toBe(true);
+	});
+
+	test("a choice the text already makes is not forced", () => {
+		const blocks: Block[] = [
+			{ kind: "character", text: "ROSE", forced: false },
+			{ kind: "action", text: "Hi.", forced: false },
+		];
+		expect(overrules(blocks, 1, "dialogue")).toBe(false);
 	});
 });

@@ -4,18 +4,27 @@
 import {
 	$createTextNode,
 	$getRoot,
+	$getSelection,
 	$getState,
+	$isRangeSelection,
 	$setState,
+	COMMAND_PRIORITY_LOW,
 	createState,
+	KEY_DOWN_COMMAND,
 	ParagraphNode,
 	RootNode,
 	type EditorConfig,
 	type LexicalEditor,
 	type LexicalNode,
+	type RangeSelection,
 } from "lexical";
+import { mergeRegister } from "@lexical/utils";
 import { split } from "./frontmatter";
 import {
 	classify,
+	cycled,
+	follows,
+	overrules,
 	parse,
 	serialise,
 	type Block,
@@ -67,10 +76,22 @@ export class ScriptNode extends ParagraphNode {
 		dom.dataset.kind = $getState(this, kind);
 		return super.updateDOM(prevNode, dom, config);
 	}
+
+	// Enter starts the block that usually comes next.
+	insertNewAfter(
+		selection: RangeSelection,
+		restoreSelection: boolean,
+	): ParagraphNode {
+		const next = super.insertNewAfter(selection, restoreSelection);
+		$setState(next, kind, follows($getState(this, kind)));
+		return next;
+	}
 }
 
+// By type rather than class, so a hot reload that swaps the class does not
+// leave the open scene's lines unrecognised.
 function $isScriptNode(node: LexicalNode): node is ScriptNode {
-	return node instanceof ScriptNode;
+	return node.getType() === "script";
 }
 
 // Every paragraph the editor makes, from Enter to a paste, is a script line.
@@ -143,13 +164,56 @@ export function $toFountain(): string {
  * settled inside the same update and undo takes them back with the text.
  */
 export function registerScript(editor: LexicalEditor): () => void {
-	return editor.registerNodeTransform(RootNode, () => {
-		const nodes = $getRoot().getChildren().filter($isScriptNode);
-		const kinds = classify(nodes.map($block));
-		nodes.forEach((node, i) => {
-			if ($getState(node, kind) !== kinds[i]) {
-				$setState(node, kind, kinds[i]);
-			}
-		});
-	});
+	return mergeRegister(
+		editor.registerNodeTransform(RootNode, () => {
+			const nodes = $getRoot().getChildren().filter($isScriptNode);
+			const kinds = classify(nodes.map($block));
+			nodes.forEach((node, i) => {
+				if ($getState(node, kind) !== kinds[i]) {
+					$setState(node, kind, kinds[i]);
+				}
+			});
+		}),
+		// Tab changes the block the caret is in when the guess was wrong. Matched
+		// by the physical key, because Linux names Shift+Tab "ISO_Left_Tab" and
+		// Lexical's own Tab command only answers to "Tab".
+		editor.registerCommand(
+			KEY_DOWN_COMMAND,
+			(event) => {
+				if (
+					(event.code !== "Tab" && event.key !== "Tab") ||
+					event.ctrlKey ||
+					event.altKey ||
+					event.metaKey
+				) {
+					return false;
+				}
+				const selection = $getSelection();
+				if (!$isRangeSelection(selection)) {
+					return false;
+				}
+				const node = selection.anchor.getNode().getTopLevelElement();
+				if (node === null || !$isScriptNode(node)) {
+					return false;
+				}
+				event.preventDefault();
+				const nodes = $getRoot().getChildren().filter($isScriptNode);
+				const at = nodes.findIndex((each) => each.is(node));
+				const chosen = cycled(
+					$getState(node, kind),
+					event.shiftKey ? -1 : 1,
+				);
+				$setState(
+					node,
+					forced,
+					overrules(nodes.map($block), at, chosen),
+				);
+				$setState(node, kind, chosen);
+				return true;
+			},
+			// Above Lexical's own keydown handler, which runs at the editor's
+			// priority and takes every key it recognises.
+			COMMAND_PRIORITY_LOW,
+		),
+	);
 }
