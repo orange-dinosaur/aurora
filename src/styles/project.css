@@ -15,6 +15,9 @@
 	min-height: 0;
 	/* The inset that used to come from .app's padding. */
 	padding: 1.5rem;
+	/* What the page inside measures its narrow rules against: the room this
+	   side has, after the binder, the rail and any split have taken theirs. */
+	container-type: inline-size;
 }
 
 /* The page scrolls from edge to edge and keeps its own gutters. */

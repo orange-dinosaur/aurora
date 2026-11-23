@@ -442,7 +442,7 @@
 	background: var(--bg-card);
 }
 
-@media (max-width: 820px) {
+@container (max-width: 820px) {
 	.overview--folder,
 	.overview--sheet {
 		--gutter: var(--space-md);
@@ -451,7 +451,7 @@
 	}
 }
 
-@media (max-width: 620px) {
+@container (max-width: 620px) {
 	.overview__title {
 		font: var(--text-heading);
 	}

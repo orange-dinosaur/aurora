@@ -100,14 +100,14 @@
 	color: var(--danger);
 }
 
-@media (max-width: 820px) {
+@container (max-width: 820px) {
 	.book {
 		--gutter: var(--space-md);
 		padding-top: var(--space-md);
 	}
 }
 
-@media (max-width: 620px) {
+@container (max-width: 620px) {
 	.face {
 		align-items: flex-start;
 		gap: var(--space-md);
@@ -283,7 +283,7 @@
 	color: var(--text-faint);
 }
 
-@media (max-width: 620px) {
+@container (max-width: 620px) {
 	.person {
 		grid-template-columns: minmax(0, 1fr) 120px 28px;
 	}
