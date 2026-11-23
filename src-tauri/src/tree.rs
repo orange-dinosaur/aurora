@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::document::Document;
+use crate::project::Format;
 
 /// What one of a folder's fields holds: a line of text, or a list of them.
 ///
@@ -130,13 +131,24 @@ pub enum Node {
 /// too, and hold documents the way a chapter does. Everywhere else a folder is
 /// just a folder, at any depth.
 ///
+/// A screenplay is narrower: its Manuscript holds acts, which are parts, and an
+/// act holds scenes and no folder at all. A collection follows the novel.
+///
 /// This says nothing about how many: that the Manuscript holds one front matter
 /// and one back matter is [`crate::document::create_folder`]'s to enforce, since
 /// it is the only caller that can see what is already there.
-pub fn may_hold(in_manuscript: bool, parent: Option<FolderKind>, kind: Option<FolderKind>) -> bool {
+pub fn may_hold(
+	format: Format,
+	in_manuscript: bool,
+	parent: Option<FolderKind>,
+	kind: Option<FolderKind>,
+) -> bool {
+	let screenplay = format == Format::Screenplay;
 	match (in_manuscript, parent) {
 		(false, _) => kind.is_none(),
+		(true, None) if screenplay => kind == Some(FolderKind::Part),
 		(true, None) => kind.is_some(),
+		(true, Some(FolderKind::Part)) if screenplay => false,
 		(true, Some(FolderKind::Part)) => kind == Some(FolderKind::Chapter),
 		(true, Some(FolderKind::Chapter)) => false,
 		(true, Some(FolderKind::FrontMatter | FolderKind::BackMatter)) => false,
@@ -770,60 +782,112 @@ mod tests {
 	const PLAIN: Option<FolderKind> = None;
 	const FRONT: Option<FolderKind> = Some(FolderKind::FrontMatter);
 	const BACK: Option<FolderKind> = Some(FolderKind::BackMatter);
+	const NOVEL: Format = Format::Novel;
 
 	#[test]
 	fn the_manuscript_takes_a_part_or_a_chapter() {
-		assert!(may_hold(true, PLAIN, PART));
-		assert!(may_hold(true, PLAIN, CHAPTER));
+		assert!(may_hold(NOVEL, true, PLAIN, PART));
+		assert!(may_hold(NOVEL, true, PLAIN, CHAPTER));
 	}
 
 	#[test]
 	fn the_manuscript_takes_the_matter_that_surrounds_the_story() {
-		assert!(may_hold(true, PLAIN, FRONT));
-		assert!(may_hold(true, PLAIN, BACK));
+		assert!(may_hold(NOVEL, true, PLAIN, FRONT));
+		assert!(may_hold(NOVEL, true, PLAIN, BACK));
 	}
 
 	#[test]
 	fn matter_holds_documents_and_no_folder_at_all() {
 		for parent in [FRONT, BACK] {
-			assert!(!may_hold(true, parent, PART));
-			assert!(!may_hold(true, parent, CHAPTER));
-			assert!(!may_hold(true, parent, PLAIN));
-			assert!(!may_hold(true, parent, FRONT));
+			assert!(!may_hold(NOVEL, true, parent, PART));
+			assert!(!may_hold(NOVEL, true, parent, CHAPTER));
+			assert!(!may_hold(NOVEL, true, parent, PLAIN));
+			assert!(!may_hold(NOVEL, true, parent, FRONT));
 		}
 	}
 
 	#[test]
 	fn a_part_takes_a_chapter_and_nothing_else() {
-		assert!(may_hold(true, PART, CHAPTER));
-		assert!(!may_hold(true, PART, PART), "a part inside a part");
-		assert!(!may_hold(true, PART, PLAIN), "a plain folder inside a part");
-		assert!(!may_hold(true, PART, FRONT), "front matter inside a part");
-		assert!(!may_hold(true, PART, BACK), "back matter inside a part");
+		assert!(may_hold(NOVEL, true, PART, CHAPTER));
+		assert!(!may_hold(NOVEL, true, PART, PART), "a part inside a part");
+		assert!(
+			!may_hold(NOVEL, true, PART, PLAIN),
+			"a plain folder inside a part"
+		);
+		assert!(
+			!may_hold(NOVEL, true, PART, FRONT),
+			"front matter inside a part"
+		);
+		assert!(
+			!may_hold(NOVEL, true, PART, BACK),
+			"back matter inside a part"
+		);
 	}
 
 	#[test]
 	fn a_chapter_holds_no_folder_at_all() {
-		assert!(!may_hold(true, CHAPTER, PART));
-		assert!(!may_hold(true, CHAPTER, CHAPTER));
-		assert!(!may_hold(true, CHAPTER, PLAIN));
+		assert!(!may_hold(NOVEL, true, CHAPTER, PART));
+		assert!(!may_hold(NOVEL, true, CHAPTER, CHAPTER));
+		assert!(!may_hold(NOVEL, true, CHAPTER, PLAIN));
 	}
 
 	#[test]
 	fn the_manuscript_takes_no_folder_without_a_kind() {
-		assert!(!may_hold(true, PLAIN, PLAIN));
+		assert!(!may_hold(NOVEL, true, PLAIN, PLAIN));
 	}
 
 	#[test]
 	fn a_kind_means_nothing_outside_the_manuscript() {
-		assert!(may_hold(false, PLAIN, PLAIN), "a folder in Notes");
+		assert!(may_hold(NOVEL, false, PLAIN, PLAIN), "a folder in Notes");
 		assert!(
-			may_hold(false, PLAIN, PLAIN),
+			may_hold(NOVEL, false, PLAIN, PLAIN),
 			"and a folder inside that one, however deep"
 		);
-		assert!(!may_hold(false, PLAIN, PART));
-		assert!(!may_hold(false, PLAIN, CHAPTER));
-		assert!(!may_hold(false, PLAIN, FRONT), "front matter in Notes");
+		assert!(!may_hold(NOVEL, false, PLAIN, PART));
+		assert!(!may_hold(NOVEL, false, PLAIN, CHAPTER));
+		assert!(
+			!may_hold(NOVEL, false, PLAIN, FRONT),
+			"front matter in Notes"
+		);
+	}
+
+	const SCREENPLAY: Format = Format::Screenplay;
+
+	#[test]
+	fn a_screenplay_manuscript_takes_only_acts() {
+		assert!(may_hold(SCREENPLAY, true, PLAIN, PART));
+		for kind in [CHAPTER, FRONT, BACK, PLAIN] {
+			assert!(!may_hold(SCREENPLAY, true, PLAIN, kind), "{kind:?}");
+		}
+	}
+
+	#[test]
+	fn a_screenplay_act_holds_no_folder_at_all() {
+		for kind in [PART, CHAPTER, FRONT, BACK, PLAIN] {
+			assert!(!may_hold(SCREENPLAY, true, PART, kind), "{kind:?}");
+		}
+	}
+
+	#[test]
+	fn a_screenplay_folder_outside_the_manuscript_is_any_folder() {
+		assert!(may_hold(SCREENPLAY, false, PLAIN, PLAIN));
+		assert!(!may_hold(SCREENPLAY, false, PLAIN, PART));
+	}
+
+	#[test]
+	fn a_collection_follows_the_novel() {
+		let parents = [PLAIN, PART, CHAPTER, FRONT, BACK];
+		for in_manuscript in [true, false] {
+			for parent in parents {
+				for kind in parents {
+					assert_eq!(
+						may_hold(Format::ShortStories, in_manuscript, parent, kind),
+						may_hold(NOVEL, in_manuscript, parent, kind),
+						"{in_manuscript} {parent:?} {kind:?}"
+					);
+				}
+			}
+		}
 	}
 
 	#[test]

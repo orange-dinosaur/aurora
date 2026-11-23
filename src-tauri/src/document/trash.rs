@@ -162,7 +162,7 @@ pub fn move_node(root: PathBuf, id: Uuid, parent_id: Uuid, index: usize) -> Resu
 	// anything where this is going.
 	let in_manuscript = chain[0].name() == MANUSCRIPT;
 	let (into, parent) = folder_at(&manifest, parent_id)?;
-	if folder && !tree::may_hold(in_manuscript, parent, kind) {
+	if folder && !tree::may_hold(manifest.format, in_manuscript, parent, kind) {
 		return Err(Error::FolderNotAllowed);
 	}
 
@@ -500,7 +500,7 @@ pub(super) fn put_node_back(root: &Path, landed: &str, mut node: Node, name: &st
 		Node::Folder {
 			kind, name: held, ..
 		} => {
-			if !tree::may_hold(in_manuscript, parent_kind, *kind) {
+			if !tree::may_hold(manifest.format, in_manuscript, parent_kind, *kind) {
 				*kind = None;
 			}
 			name.clone_into(held);

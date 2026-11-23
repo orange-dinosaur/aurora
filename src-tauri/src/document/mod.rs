@@ -423,7 +423,7 @@ pub fn create_folder(
 
 	// The section at the head of the chain is what decides whether kinds mean
 	// anything here at all.
-	if !tree::may_hold(chain[0].name() == MANUSCRIPT, parent, kind) {
+	if !tree::may_hold(manifest.format, chain[0].name() == MANUSCRIPT, parent, kind) {
 		return Err(Error::FolderNotAllowed);
 	}
 	let siblings = tree::children(&manifest.nodes, parent_id).unwrap_or_default();
@@ -2594,6 +2594,32 @@ mod tests {
 
 		assert!(matches!(err, Error::FolderNotAllowed));
 		assert!(!root.join("Notes/Part One").exists());
+	}
+
+	#[test]
+	fn a_screenplay_manuscript_takes_an_act_but_no_chapter() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Screenplay, fixed_time()).unwrap();
+		let manuscript = section_id(&root, MANUSCRIPT);
+
+		let err = create_folder(
+			root.clone(),
+			manuscript,
+			"Chapter 1".to_owned(),
+			Some(FolderKind::Chapter),
+		)
+		.unwrap_err();
+		assert!(matches!(err, Error::FolderNotAllowed));
+		assert!(!root.join("Manuscript/Chapter 1").exists());
+
+		create_folder(
+			root.clone(),
+			manuscript,
+			"Act Two".to_owned(),
+			Some(FolderKind::Part),
+		)
+		.unwrap();
+		assert!(root.join("Manuscript/Act Two").is_dir());
 	}
 
 	#[test]
