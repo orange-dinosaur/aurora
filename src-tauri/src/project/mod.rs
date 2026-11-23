@@ -89,13 +89,19 @@ fn fill(
 	for section in sections {
 		let children = match start {
 			Some(start) if section.folder == MANUSCRIPT => structure::manuscript(start),
-			_ => section.seed.map(Node::document).into_iter().collect(),
+			_ => section.seed.map(seed_node).into_iter().collect(),
 		};
 		let folder = root.join(section.folder);
 		fs::create_dir(&folder)?;
 		lay_down(&folder, &children)?;
 		if let (Some(start), Some(seed @ "Outline.md")) = (start, section.seed) {
 			fs::write(folder.join(seed), structure::outline(start))?;
+		}
+		// A screenplay's first scene opens on a scene heading, ready for the place.
+		if let (None, Format::Screenplay, MANUSCRIPT, Some(seed)) =
+			(start, format, section.folder, section.seed)
+		{
+			fs::write(folder.join(seed), "INT. ")?;
 		}
 		nodes.push(Node::folder(section.folder, children));
 	}
@@ -104,6 +110,16 @@ fn fill(
 	manifest.nodes = nodes;
 	fs::write(root.join(MANIFEST_FILE), to_json(&manifest)?)?;
 	Ok(())
+}
+
+/// A seed of the form `Part/Doc.md` is a document inside a part.
+fn seed_node(seed: &str) -> Node {
+	match seed.split_once('/') {
+		Some((part, document)) => {
+			Node::folder_of(Some(FolderKind::Part), part, vec![Node::document(document)])
+		}
+		None => Node::document(seed),
+	}
 }
 
 /// Makes on disk what the nodes describe: a folder for each folder and an
@@ -231,6 +247,7 @@ pub struct OpenedProject {
 	/// The folder of a git repository the project sits inside, until the
 	/// writer has been told once that the project keeps its own versions.
 	pub enclosing_repository: Option<PathBuf>,
+	pub format: Format,
 }
 
 fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Result<OpenedProject> {
@@ -251,6 +268,7 @@ fn open_and_remember(store_path: &Path, root: &Path, at: OffsetDateTime) -> Resu
 		name: manifest.name,
 		root: root.to_path_buf(),
 		enclosing_repository,
+		format: manifest.format,
 	})
 }
 
@@ -760,49 +778,112 @@ mod tests {
 	}
 
 	#[test]
-	fn the_other_formats_have_no_layout_yet() {
-		for format in [Format::Screenplay, Format::ShortStories, Format::StagePlay] {
-			assert!(
-				format.layout().is_empty(),
-				"{format:?} should not be creatable"
-			);
-		}
+	fn stage_play_has_no_layout() {
+		assert!(Format::StagePlay.layout().is_empty());
 	}
 
 	#[test]
 	fn every_format_is_offered_in_order() {
 		let formats: Vec<_> = format_layouts().into_iter().map(|f| f.format).collect();
-		assert_eq!(formats, Format::ALL);
+		assert_eq!(
+			formats,
+			[Format::Novel, Format::Screenplay, Format::ShortStories]
+		);
 	}
 
 	#[test]
 	fn the_layouts_match_the_formats() {
-		let layouts = format_layouts();
-		let novel = layouts.iter().find(|f| f.format == Format::Novel).unwrap();
-		assert!(novel.available);
-		assert_eq!(
-			novel.folders,
-			["Manuscript", "Outline", "Characters", "Locations", "Notes"]
-		);
-
-		for layout in layouts.iter().filter(|f| f.format != Format::Novel) {
-			assert!(layout.folders.is_empty());
-			assert!(!layout.available);
+		for layout in format_layouts() {
+			assert!(layout.available, "{:?}", layout.format);
+			assert_eq!(
+				layout.folders,
+				["Manuscript", "Outline", "Characters", "Locations", "Notes"]
+			);
 		}
 	}
 
 	#[test]
 	fn a_layout_crosses_with_the_format_name_the_frontend_uses() {
 		let layouts = format_layouts();
-		let stage_play = layouts.last().unwrap();
+		let stories = layouts.last().unwrap();
 		assert_eq!(
-			serde_json::to_value(stage_play).unwrap(),
+			serde_json::to_value(stories).unwrap(),
 			serde_json::json!({
-				"format": "stage-play",
-				"folders": [],
-				"available": false,
+				"format": "short-stories",
+				"folders": ["Manuscript", "Outline", "Characters", "Locations", "Notes"],
+				"available": true,
 			})
 		);
+	}
+
+	/// Every document of a new project as the manifest records it, and the
+	/// Manuscript's top-level kinds.
+	fn created_tree(
+		parent: &Path,
+		format: Format,
+	) -> (PathBuf, Vec<String>, Vec<Option<FolderKind>>) {
+		let root = create(parent, "Ithaca", format, fixed_time()).unwrap();
+		let json = fs::read_to_string(root.join(MANIFEST_FILE)).unwrap();
+		let manifest: Manifest = serde_json::from_str(&json).unwrap();
+		let Some(Node::Folder { children, .. }) =
+			manifest.nodes.iter().find(|node| node.name() == MANUSCRIPT)
+		else {
+			panic!("no Manuscript");
+		};
+		let kinds = children
+			.iter()
+			.map(|node| match node {
+				Node::Folder { kind, .. } => *kind,
+				Node::Document { .. } => None,
+			})
+			.collect();
+		(root, paths_of(&manifest), kinds)
+	}
+
+	#[test]
+	fn a_screenplay_starts_with_one_act_and_a_scene_heading() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, paths, kinds) = created_tree(parent.path(), Format::Screenplay);
+		assert_eq!(
+			paths,
+			[
+				"Manuscript/Act One/Scene 1.md",
+				"Outline/Outline.md",
+				"Notes/Notes.md"
+			]
+		);
+		assert_eq!(kinds, [Some(FolderKind::Part)]);
+		assert_eq!(
+			fs::read_to_string(root.join("Manuscript/Act One/Scene 1.md")).unwrap(),
+			"INT. "
+		);
+	}
+
+	#[test]
+	fn a_collection_starts_with_one_story() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, paths, kinds) = created_tree(parent.path(), Format::ShortStories);
+		assert_eq!(
+			paths,
+			[
+				"Manuscript/Story 1/Scene 1.md",
+				"Outline/Outline.md",
+				"Notes/Notes.md"
+			]
+		);
+		assert_eq!(kinds, [Some(FolderKind::Part)]);
+		assert_eq!(
+			fs::read_to_string(root.join("Manuscript/Story 1/Scene 1.md")).unwrap(),
+			""
+		);
+	}
+
+	#[test]
+	fn a_novel_starts_with_a_loose_scene() {
+		let parent = tempfile::tempdir().unwrap();
+		let (_, paths, kinds) = created_tree(parent.path(), Format::Novel);
+		assert_eq!(paths[0], "Manuscript/Scene 1.md");
+		assert_eq!(kinds, [None]);
 	}
 
 	fn fixed_time() -> OffsetDateTime {
@@ -1534,8 +1615,8 @@ mod tests {
 	#[test]
 	fn create_refuses_a_format_without_a_layout() {
 		let parent = tempfile::tempdir().unwrap();
-		let err = create(parent.path(), "Ithaca", Format::Screenplay, fixed_time()).unwrap_err();
-		assert!(matches!(err, Error::UnsupportedFormat(Format::Screenplay)));
+		let err = create(parent.path(), "Ithaca", Format::StagePlay, fixed_time()).unwrap_err();
+		assert!(matches!(err, Error::UnsupportedFormat(Format::StagePlay)));
 		assert_eq!(fs::read_dir(parent.path()).unwrap().count(), 0);
 	}
 
@@ -1822,6 +1903,7 @@ mod tests {
 				name: "Ithaca".to_owned(),
 				root: root.clone(),
 				enclosing_repository: None,
+				format: Format::Novel,
 			}
 		);
 	}

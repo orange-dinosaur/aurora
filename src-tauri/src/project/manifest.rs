@@ -98,22 +98,67 @@ pub(super) const NOVEL: &[Section] = &[
 	},
 ];
 
+/// A screenplay's Manuscript holds acts, and an act holds scenes.
+pub(super) const SCREENPLAY: &[Section] = &[
+	Section {
+		folder: "Manuscript",
+		seed: Some("Act One/Scene 1.md"),
+	},
+	Section {
+		folder: "Outline",
+		seed: Some("Outline.md"),
+	},
+	Section {
+		folder: "Characters",
+		seed: None,
+	},
+	Section {
+		folder: "Locations",
+		seed: None,
+	},
+	Section {
+		folder: "Notes",
+		seed: Some("Notes.md"),
+	},
+];
+
+/// A collection's Manuscript holds stories, each laid out as a novel's part.
+pub(super) const SHORT_STORIES: &[Section] = &[
+	Section {
+		folder: "Manuscript",
+		seed: Some("Story 1/Scene 1.md"),
+	},
+	Section {
+		folder: "Outline",
+		seed: Some("Outline.md"),
+	},
+	Section {
+		folder: "Characters",
+		seed: None,
+	},
+	Section {
+		folder: "Locations",
+		seed: None,
+	},
+	Section {
+		folder: "Notes",
+		seed: Some("Notes.md"),
+	},
+];
+
 impl Format {
-	/// Every format, in the order the Welcome screen offers them. Keep in step
-	/// with the enum.
-	pub const ALL: &'static [Format] = &[
-		Format::Novel,
-		Format::Screenplay,
-		Format::ShortStories,
-		Format::StagePlay,
-	];
+	/// The formats the Welcome screen offers, in order. Stage Play stays in the
+	/// enum so older manifests still parse, but is no longer offered.
+	pub const ALL: &'static [Format] = &[Format::Novel, Format::Screenplay, Format::ShortStories];
 
 	/// The sections a new project of this format is created with. An empty
-	/// layout means the format cannot be created yet.
+	/// layout means the format cannot be created.
 	pub fn layout(self) -> &'static [Section] {
 		match self {
 			Format::Novel => NOVEL,
-			Format::Screenplay | Format::ShortStories | Format::StagePlay => &[],
+			Format::Screenplay => SCREENPLAY,
+			Format::ShortStories => SHORT_STORIES,
+			Format::StagePlay => &[],
 		}
 	}
 }
