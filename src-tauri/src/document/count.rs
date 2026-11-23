@@ -128,6 +128,23 @@ pub(super) fn words_under(root: &Path, nodes: &[Node], prefix: &str) -> usize {
 		.sum()
 }
 
+/// The book's words: the Manuscript's, less its front and back matter, the same
+/// total its heading in the binder shows.
+pub(crate) fn manuscript_words(root: &Path, nodes: &[Node]) -> usize {
+	let Ok(root) = root.canonicalize() else {
+		return 0;
+	};
+	nodes
+		.iter()
+		.find_map(|node| match node {
+			Node::Folder { name, children, .. } if name == MANUSCRIPT => {
+				Some(words_under(&root, children, &format!("{MANUSCRIPT}/")))
+			}
+			_ => None,
+		})
+		.unwrap_or(0)
+}
+
 /// The tree under `prefix`, ready to send, and the words in the whole of it.
 /// The prefix is how far down the walk has come, which is what turns a node's
 /// name into its path. The total comes back alongside the views because a

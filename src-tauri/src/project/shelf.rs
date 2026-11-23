@@ -124,7 +124,11 @@ pub(super) fn left_off(workspace: &store::Workspace, nodes: &[Node]) -> Option<S
 
 pub(super) fn measure(root: &Path, workspace: Option<&store::Workspace>) -> Option<Measure> {
 	let manifest = read_manifest(root).ok()?;
-	let documents = manifest.documents();
+	// Counted the way the Manuscript heading counts, which also passes over a
+	// path in the manifest that climbs out of the project. The documents stay
+	// every one there is: the shelf says how many a delete will take.
+	let words = crate::document::manuscript_words(root, &manifest.nodes);
+	let documents = manifest.documents().len();
 	Some(Measure {
 		left_off: workspace.and_then(|workspace| left_off(workspace, &manifest.nodes)),
 		name: manifest.name,
@@ -132,26 +136,8 @@ pub(super) fn measure(root: &Path, workspace: Option<&store::Workspace>) -> Opti
 		author: manifest.book.author,
 		cover: Some(manifest.book.cover).filter(|name| cover_stays_inside(name)),
 		format: manifest.format,
-		words: documents
-			.iter()
-			.map(|document| {
-				// The manifest is a file in the writer's project and could
-				// have been edited by hand, so a path that climbs out of the
-				// project is passed over rather than read.
-				let relative = Path::new(&document.path);
-				if !relative
-					.components()
-					.all(|part| matches!(part, Component::Normal(_)))
-				{
-					return 0;
-				}
-
-				fs::read_to_string(root.join(relative))
-					.map(|text| crate::document::words_of(crate::document::body(&text)))
-					.unwrap_or(0)
-			})
-			.sum(),
-		documents: documents.len(),
+		words,
+		documents,
 	})
 }
 

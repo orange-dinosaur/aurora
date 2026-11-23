@@ -24,6 +24,7 @@ mod paths;
 mod scan;
 mod trash;
 
+pub(crate) use count::manuscript_words;
 use count::*;
 pub use front::*;
 pub(crate) use paths::*;

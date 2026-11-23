@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -2041,7 +2041,7 @@ mod tests {
 	}
 
 	#[test]
-	fn the_recent_list_counts_every_document_in_a_project() {
+	fn the_recent_list_counts_the_manuscript() {
 		let parent = tempfile::tempdir().unwrap();
 		let store = parent.path().join("store.json");
 		let root =
@@ -2067,13 +2067,43 @@ mod tests {
 				.unwrap();
 
 		fs::write(parent.path().join("elsewhere.md"), "one two three").unwrap();
-		// A path that climbs out of the project can only be written by hand,
-		// and only at the top of the tree: a name under a folder is one part.
+		// A path that climbs out of the project can only be written by hand.
+		// Inside the Manuscript, so it is counted unless the guard stops it.
 		let mut manifest = read_manifest(&root).unwrap();
-		manifest.nodes.insert(0, Node::document("../elsewhere.md"));
+		let Some(Node::Folder { children, .. }) = manifest
+			.nodes
+			.iter_mut()
+			.find(|node| node.name() == MANUSCRIPT)
+		else {
+			panic!("no Manuscript");
+		};
+		children.insert(0, Node::document("../../elsewhere.md"));
 		write_manifest(&root, &mut manifest).unwrap();
 
 		assert_eq!(summarise_recents(&store).unwrap()[0].words, Some(0));
+	}
+
+	#[test]
+	fn the_recent_list_leaves_out_notes_and_matter() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root =
+			create_and_remember(&store, parent.path(), "Ithaca", Format::Novel, fixed_time())
+				.unwrap();
+
+		let scaffold = read_manifest(&root).unwrap().documents().len();
+		fs::write(root.join("Manuscript").join("Landfall.md"), "one two three").unwrap();
+		let front = root.join("Manuscript").join(FRONT_MATTER);
+		fs::create_dir_all(&front).unwrap();
+		fs::write(front.join("For Telemachus.md"), "for my son").unwrap();
+		fs::create_dir_all(root.join("Notes")).unwrap();
+		fs::write(root.join("Notes").join("The raft.md"), "a ship, a storm").unwrap();
+		refresh(&root).unwrap();
+
+		let recents = summarise_recents(&store).unwrap();
+		assert_eq!(recents[0].words, Some(3));
+		// Every document still counts toward what a delete would take.
+		assert_eq!(recents[0].documents, Some(scaffold + 3));
 	}
 
 	/// Where the shelf says a book was left, with `front` the only tab open.
