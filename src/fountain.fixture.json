@@ -1,0 +1,166 @@
+[
+	{
+		"name": "a new scene",
+		"text": "INT. ",
+		"blocks": [{ "kind": "heading", "text": "INT. ", "forced": false }]
+	},
+	{
+		"name": "a heading and action",
+		"text": "INT. KITCHEN - NIGHT\n\nRose fills the kettle.",
+		"blocks": [
+			{
+				"kind": "heading",
+				"text": "INT. KITCHEN - NIGHT",
+				"forced": false
+			},
+			{
+				"kind": "action",
+				"text": "Rose fills the kettle.",
+				"forced": false
+			}
+		]
+	},
+	{
+		"name": "every way a heading starts",
+		"text": "EXT. GARDEN - DAY\n\nEST. THE CITY\n\nINT./EXT. CAR - MOVING\n\nI/E. PORCH - DUSK\n\nint. hall - night",
+		"blocks": [
+			{ "kind": "heading", "text": "EXT. GARDEN - DAY", "forced": false },
+			{ "kind": "heading", "text": "EST. THE CITY", "forced": false },
+			{
+				"kind": "heading",
+				"text": "INT./EXT. CAR - MOVING",
+				"forced": false
+			},
+			{ "kind": "heading", "text": "I/E. PORCH - DUSK", "forced": false },
+			{ "kind": "heading", "text": "int. hall - night", "forced": false }
+		]
+	},
+	{
+		"name": "a cue, a parenthetical and dialogue, then action",
+		"text": "ROSE\n(quietly)\nIt's late.\nGo home.\n\nShe turns away.",
+		"blocks": [
+			{ "kind": "character", "text": "ROSE", "forced": false },
+			{ "kind": "parenthetical", "text": "(quietly)", "forced": false },
+			{ "kind": "dialogue", "text": "It's late.", "forced": false },
+			{ "kind": "dialogue", "text": "Go home.", "forced": false },
+			{ "kind": "action", "text": "She turns away.", "forced": false }
+		]
+	},
+	{
+		"name": "a cue with an extension in any case",
+		"text": "MARCUS (V.O.)\nWhere are you?\n\nMARCUS (cont'd)\nAnswer me.",
+		"blocks": [
+			{ "kind": "character", "text": "MARCUS (V.O.)", "forced": false },
+			{ "kind": "dialogue", "text": "Where are you?", "forced": false },
+			{ "kind": "character", "text": "MARCUS (cont'd)", "forced": false },
+			{ "kind": "dialogue", "text": "Answer me.", "forced": false }
+		]
+	},
+	{
+		"name": "a transition between scenes",
+		"text": "Rose leaves.\n\nCUT TO:\n\nEXT. GARDEN - DAY",
+		"blocks": [
+			{ "kind": "action", "text": "Rose leaves.", "forced": false },
+			{ "kind": "transition", "text": "CUT TO:", "forced": false },
+			{ "kind": "heading", "text": "EXT. GARDEN - DAY", "forced": false }
+		]
+	},
+	{
+		"name": "a capitalised line on its own is action",
+		"text": "THE HOUSE IS QUIET.",
+		"blocks": [
+			{ "kind": "action", "text": "THE HOUSE IS QUIET.", "forced": false }
+		]
+	},
+	{
+		"name": "an ellipsis is not a forced heading",
+		"text": "...and then silence.",
+		"blocks": [
+			{
+				"kind": "action",
+				"text": "...and then silence.",
+				"forced": false
+			}
+		]
+	},
+	{
+		"name": "a forced heading",
+		"text": ".FLASHBACK\n\nThe garden, years ago.",
+		"blocks": [
+			{ "kind": "heading", "text": "FLASHBACK", "forced": true },
+			{
+				"kind": "action",
+				"text": "The garden, years ago.",
+				"forced": false
+			}
+		]
+	},
+	{
+		"name": "a forced cue for a name in mixed case",
+		"text": "@McCLANE\nYippee.",
+		"blocks": [
+			{ "kind": "character", "text": "McCLANE", "forced": true },
+			{ "kind": "dialogue", "text": "Yippee.", "forced": false }
+		]
+	},
+	{
+		"name": "a cue with no dialogue yet is forced",
+		"text": "@ROSE",
+		"blocks": [{ "kind": "character", "text": "ROSE", "forced": true }]
+	},
+	{
+		"name": "forced action that would read as a heading",
+		"text": "!INT. stands for interior.",
+		"blocks": [
+			{
+				"kind": "action",
+				"text": "INT. stands for interior.",
+				"forced": true
+			}
+		]
+	},
+	{
+		"name": "a mark Fountain does not need is dropped",
+		"text": "!BANG\nThe door flies open.",
+		"canonical": "BANG\n\nThe door flies open.",
+		"blocks": [
+			{ "kind": "action", "text": "BANG", "forced": true },
+			{
+				"kind": "action",
+				"text": "The door flies open.",
+				"forced": false
+			}
+		]
+	},
+	{
+		"name": "a forced transition",
+		"text": "She sleeps.\n\n>FADE TO BLACK.",
+		"blocks": [
+			{ "kind": "action", "text": "She sleeps.", "forced": false },
+			{ "kind": "transition", "text": "FADE TO BLACK.", "forced": true }
+		]
+	},
+	{
+		"name": "centered text",
+		"text": "> THE END <",
+		"blocks": [{ "kind": "centered", "text": "THE END", "forced": false }]
+	},
+	{
+		"name": "a page break",
+		"text": "Rose sleeps.\n\n===\n\nINT. KITCHEN - DAY",
+		"blocks": [
+			{ "kind": "action", "text": "Rose sleeps.", "forced": false },
+			{ "kind": "page-break", "text": "", "forced": false },
+			{ "kind": "heading", "text": "INT. KITCHEN - DAY", "forced": false }
+		]
+	},
+	{
+		"name": "extra blank lines and Windows line ends",
+		"text": "INT. HALL - NIGHT\r\n\r\n\r\nRose waits.\r\n",
+		"canonical": "INT. HALL - NIGHT\n\nRose waits.",
+		"blocks": [
+			{ "kind": "heading", "text": "INT. HALL - NIGHT", "forced": false },
+			{ "kind": "action", "text": "Rose waits.", "forced": false }
+		]
+	}
+]
