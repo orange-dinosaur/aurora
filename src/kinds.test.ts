@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { creatable, documentPlaceholder, folderKinds, mayHold } from "./kinds";
-import type { FolderKind } from "./types";
+import {
+	creatable,
+	documentPlaceholder,
+	folderKinds,
+	folderPlaceholder,
+	mayHold,
+} from "./kinds";
+import type { FolderKind, Format } from "./types";
 
 /** What the + would offer, written the way the menu reads. */
 function offered(
@@ -149,7 +155,92 @@ describe("what a folder may hold", () => {
 		["nowhere else takes a chapter", false, null, "chapter", false],
 		["nowhere else takes matter", false, null, "front-matter", false],
 	] as const)("%s", (_what, inManuscript, parent, kind, allowed) => {
-		expect(mayHold(inManuscript, parent, kind)).toBe(allowed);
+		expect(mayHold("novel", inManuscript, parent, kind)).toBe(allowed);
+	});
+
+	const KINDS = [
+		null,
+		"part",
+		"chapter",
+		"front-matter",
+		"back-matter",
+	] as const;
+
+	test("a screenplay's Manuscript takes only an act", () => {
+		for (const kind of KINDS) {
+			expect(mayHold("screenplay", true, null, kind)).toBe(
+				kind === "part",
+			);
+		}
+	});
+
+	test("a screenplay's act takes no folder at all", () => {
+		for (const kind of KINDS) {
+			expect(mayHold("screenplay", true, "part", kind)).toBe(false);
+		}
+	});
+
+	test("a collection answers as a novel does", () => {
+		for (const inManuscript of [true, false]) {
+			for (const parent of KINDS) {
+				for (const kind of KINDS) {
+					expect(
+						mayHold("short-stories", inManuscript, parent, kind),
+					).toBe(mayHold("novel", inManuscript, parent, kind));
+				}
+			}
+		}
+	});
+});
+
+describe("what a + offers in each format", () => {
+	function labels(
+		format: Format,
+		kind: FolderKind | null,
+		section = "Manuscript",
+	) {
+		return creatable(kind, section, [], format).map(
+			(making) => making.label,
+		);
+	}
+
+	test("a screenplay's Manuscript offers a scene or an act", () => {
+		expect(labels("screenplay", null)).toEqual(["New scene", "New act"]);
+	});
+
+	test("inside an act a screenplay offers only a scene", () => {
+		expect(labels("screenplay", "part")).toEqual(["New scene"]);
+	});
+
+	test("a collection calls a part a story", () => {
+		expect(labels("short-stories", null)).toEqual([
+			"New scene",
+			"New story",
+			"New chapter",
+			"New front matter",
+			"New back matter",
+		]);
+		expect(labels("short-stories", "part")).toEqual([
+			"New scene",
+			"New chapter",
+		]);
+	});
+
+	test("a screenplay's Notes still takes a folder", () => {
+		expect(labels("screenplay", null, "Notes")).toEqual([
+			"New document",
+			"New folder",
+		]);
+	});
+
+	test("the name field suggests the next act or story", () => {
+		const act = creatable(null, "Manuscript", [], "screenplay")[1];
+		expect([act.noun, act.placeholder]).toEqual(["act", "Act Two"]);
+		const story = creatable(null, "Manuscript", [], "short-stories")[1];
+		expect([story.noun, story.placeholder]).toEqual(["story", "Story 2"]);
+		expect(folderPlaceholder("part", "screenplay")).toBe("Act Two");
+		expect(folderPlaceholder("part", "short-stories")).toBe("Story 2");
+		expect(folderPlaceholder("part")).toBe("Part One");
 	});
 });
 

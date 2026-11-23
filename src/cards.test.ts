@@ -114,6 +114,18 @@ describe("a folder card's line", () => {
 		expect(described("chapter", 0, 0)).toBe("Chapter · 0 items · 0 words");
 	});
 
+	test("a part is an act in a screenplay and a story in a collection", () => {
+		expect(described("part", 2, 40, null, "screenplay")).toBe(
+			"Act · 2 items · 40 words",
+		);
+		expect(described("part", 2, 40, null, "short-stories")).toBe(
+			"Story · 2 items · 40 words",
+		);
+		expect(described("chapter", 2, 40, null, "short-stories")).toBe(
+			"Chapter · 2 items · 40 words",
+		);
+	});
+
 	test("one item is not one items", () => {
 		expect(described("part", 1, 1)).toBe("Part · 1 item · 1 word");
 	});

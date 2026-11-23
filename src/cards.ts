@@ -4,7 +4,7 @@
 
 import { parse, text } from "./frontmatter";
 import { isMatter } from "./kinds";
-import type { FolderKind, OverviewCard } from "./types";
+import type { FolderKind, Format, OverviewCard } from "./types";
 
 /** A document card's count, which says what it is aiming at if it is. */
 export function counted(words: number, target: number | null) {
@@ -46,6 +46,12 @@ const KIND_NAMES: Record<FolderKind, string> = {
 	"back-matter": "Back matter",
 };
 
+// What a part is called in the formats that call it something else.
+const PART_NAMES: Partial<Record<Format, string>> = {
+	screenplay: "Act",
+	"short-stories": "Story",
+};
+
 /**
  * What a folder card says it is. A folder outside the Manuscript is only ever
  * a folder, so it says so rather than naming a kind it does not have. The
@@ -57,8 +63,13 @@ export function described(
 	children: number,
 	words: number,
 	target: number | null = null,
+	format: Format = "novel",
 ) {
-	const what = kind === null ? "Folder" : KIND_NAMES[kind];
+	const what =
+		kind === null
+			? "Folder"
+			: ((kind === "part" ? PART_NAMES[format] : undefined) ??
+				KIND_NAMES[kind]);
 	const held = children === 1 ? "1 item" : `${children} items`;
 	// With a target the words get a line of their own, the one a document
 	// card gives them, so they are not said twice.

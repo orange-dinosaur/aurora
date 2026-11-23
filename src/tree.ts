@@ -6,6 +6,7 @@
 import type {
 	FolderKind,
 	FolderNode,
+	Format,
 	ProjectDocument,
 	TreeNode,
 } from "./types";
@@ -356,7 +357,11 @@ export type Destination = {
  * listed, so the writer can see the shape of the project while choosing, and
  * `mayHold` says which of them will take this node.
  */
-export function destinations(nodes: TreeNode[], moving: Moving): Destination[] {
+export function destinations(
+	nodes: TreeNode[],
+	moving: Moving,
+	format: Format = "novel",
+): Destination[] {
 	function walk(
 		level: TreeNode[],
 		depth: number,
@@ -378,7 +383,12 @@ export function destinations(nodes: TreeNode[], moving: Moving): Destination[] {
 				allowed:
 					node.id !== moving.from &&
 					(!moving.folder ||
-						mayHold(under === MANUSCRIPT, node.kind, moving.kind)),
+						mayHold(
+							format,
+							under === MANUSCRIPT,
+							node.kind,
+							moving.kind,
+						)),
 			};
 
 			return [destination, ...walk(node.children, depth + 1, under)];

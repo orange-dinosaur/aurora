@@ -9,6 +9,7 @@ import Icon from "./Icon";
 import NewMenu from "./NewMenu";
 import type { Making } from "./kinds";
 import { folderPlaceholder } from "./kinds";
+import { useFormat } from "./projectFormat";
 import RowMenu, { RowShell } from "./RowMenu";
 import type { Draggable } from "./reorder";
 import type { Row } from "./tree";
@@ -59,6 +60,7 @@ export default function FolderRow({
 	onCancelRetitle,
 }: Props) {
 	const pointer = useRightClick();
+	const format = useFormat();
 	const [aiming, setAiming] = useState(false);
 
 	return (
@@ -68,7 +70,7 @@ export default function FolderRow({
 			counted={inManuscript(row)}
 			renaming={renaming}
 			name={row.name}
-			placeholder={folderPlaceholder(row.folderKind)}
+			placeholder={folderPlaceholder(row.folderKind, format)}
 			drag={aiming ? null : drag}
 			onContextMenu={pointer.open}
 			onRetitle={onRetitle}

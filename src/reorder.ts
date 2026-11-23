@@ -10,8 +10,9 @@
 
 import { useState } from "react";
 import type { DragEvent } from "react";
-import type { FolderKind } from "./types";
+import type { FolderKind, Format } from "./types";
 import { MANUSCRIPT, mayHold } from "./kinds";
+import { useFormat } from "./projectFormat";
 
 /** Where a drop would put the node, said against the row under the cursor. */
 export type Landing = "before" | "into" | "after";
@@ -76,7 +77,12 @@ export function index(moving: Spot, target: Spot, landing: Landing): number {
  * hold it turns on that parent's kind, which a row does not carry: to send a
  * folder elsewhere, aim at the folder itself.
  */
-export function accepts(moving: Spot, target: Spot, landing: Landing): boolean {
+export function accepts(
+	moving: Spot,
+	target: Spot,
+	landing: Landing,
+	format: Format = "novel",
+): boolean {
 	if (moving.id === target.id || target.within) {
 		return false;
 	}
@@ -87,6 +93,7 @@ export function accepts(moving: Spot, target: Spot, landing: Landing): boolean {
 			moving.group !== target.id &&
 			(!moving.folder ||
 				mayHold(
+					format,
 					target.section === MANUSCRIPT,
 					target.kind,
 					moving.kind,
@@ -118,6 +125,7 @@ function landing(
 	moving: Spot,
 	target: Spot,
 	along: Axis,
+	format: Format,
 ): Landing | null {
 	const fraction = aim(event, along);
 	const edge = target.folder ? 0.25 : 0.5;
@@ -130,13 +138,14 @@ function landing(
 					? "into"
 					: "after";
 
-	return accepts(moving, target, asked) ? asked : null;
+	return accepts(moving, target, asked, format) ? asked : null;
 }
 
 export function useReorder(
 	move: (id: string, parentId: string, index: number) => void,
 	along: Axis = "y",
 ) {
+	const format = useFormat();
 	const [dragging, setDragging] = useState<Spot | null>(null);
 	const [over, setOver] = useState<{ id: string; landing: Landing } | null>(
 		null,
@@ -168,7 +177,7 @@ export function useReorder(
 				const asked =
 					dragging === null
 						? null
-						: landing(event, dragging, spot, along);
+						: landing(event, dragging, spot, along, format);
 				if (asked === null) {
 					clear(spot.id);
 					return;
@@ -197,7 +206,7 @@ export function useReorder(
 					return;
 				}
 
-				const asked = landing(event, moving, spot, along);
+				const asked = landing(event, moving, spot, along, format);
 				if (asked !== null) {
 					move(
 						moving.id,

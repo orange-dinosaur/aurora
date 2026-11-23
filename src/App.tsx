@@ -14,6 +14,7 @@ import { flushBeforeQuitting } from "./quitting";
 import { inAField, pressed, SETTINGS } from "./formatting";
 import { face } from "./lib/typography";
 import { DIALOG_FADE, useLingering } from "./Menu";
+import { FormatContext } from "./projectFormat";
 
 // What Aurora looks like before the store has answered, and what it falls back
 // to if the store cannot be read at all.
@@ -151,24 +152,28 @@ function App() {
 			    up, so neither Tab nor a click reaches what they cover. */}
 			<div style={{ display: "contents" }} inert={login || profile}>
 				{boot.kind === "project" ? (
-					<Project
-						name={boot.project.name}
-						root={boot.project.root}
-						enclosingRepository={boot.project.enclosingRepository}
-						justCreated={boot.created ?? false}
-						preferences={preferences}
-						onPreferences={save}
-						onSettings={openSettings}
-						onLogin={() => setLogin(true)}
-						onProfile={() => setProfile(true)}
-						onClose={() => {
-							// Stops the project reopening on launch; it stays in
-							// the recent list.
-							void invoke("close_project");
-							forget();
-							setBoot({ kind: "welcome", notice: null });
-						}}
-					/>
+					<FormatContext.Provider value={boot.project.format}>
+						<Project
+							name={boot.project.name}
+							root={boot.project.root}
+							enclosingRepository={
+								boot.project.enclosingRepository
+							}
+							justCreated={boot.created ?? false}
+							preferences={preferences}
+							onPreferences={save}
+							onSettings={openSettings}
+							onLogin={() => setLogin(true)}
+							onProfile={() => setProfile(true)}
+							onClose={() => {
+								// Stops the project reopening on launch; it stays
+								// in the recent list.
+								void invoke("close_project");
+								forget();
+								setBoot({ kind: "welcome", notice: null });
+							}}
+						/>
+					</FormatContext.Provider>
 				) : (
 					boot.kind === "welcome" && (
 						<Welcome

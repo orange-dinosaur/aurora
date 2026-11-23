@@ -2,7 +2,7 @@
 // `tree::may_hold` and refuses anything else; this is only so the writer is
 // never offered something that would be turned down.
 
-import type { FolderKind } from "./types";
+import type { FolderKind, Format } from "./types";
 
 /**
  * The name of the one section with a hierarchy of its own. Rust holds the same
@@ -66,6 +66,32 @@ const PART: Making = {
 	placeholder: "Part One",
 };
 
+// A part is what a screenplay calls an act and a collection calls a story.
+const ACT: Making = {
+	...PART,
+	label: "New act",
+	noun: "act",
+	placeholder: "Act Two",
+};
+
+const STORY: Making = {
+	...PART,
+	label: "New story",
+	noun: "story",
+	placeholder: "Story 2",
+};
+
+function partOf(format: Format): Making {
+	switch (format) {
+		case "screenplay":
+			return ACT;
+		case "short-stories":
+			return STORY;
+		default:
+			return PART;
+	}
+}
+
 const CHAPTER: Making = {
 	what: "folder",
 	kind: "chapter",
@@ -126,10 +152,13 @@ export function folderKinds(
  * What an empty field suggests for a folder of this kind. The + knows what it
  * is about to make; a rename has only the folder in front of it to go on.
  */
-export function folderPlaceholder(kind: FolderKind | null): string {
+export function folderPlaceholder(
+	kind: FolderKind | null,
+	format: Format = "novel",
+): string {
 	switch (kind) {
 		case "part":
-			return PART.placeholder;
+			return partOf(format).placeholder;
 		case "chapter":
 			return CHAPTER.placeholder;
 		case "front-matter":
@@ -160,8 +189,12 @@ export function documentPlaceholder(section: string | undefined): string {
  * documents rather than folders. The front and back matter go directly in it
  * too and hold documents the way a chapter does. Everywhere else a folder is
  * just a folder, at any depth.
+ *
+ * A screenplay is narrower: its Manuscript holds acts, which are parts, and an
+ * act holds scenes and no folder at all. A collection follows the novel.
  */
 export function mayHold(
+	format: Format,
 	inManuscript: boolean,
 	parent: FolderKind | null,
 	kind: FolderKind | null,
@@ -170,11 +203,12 @@ export function mayHold(
 		return kind === null;
 	}
 
+	const screenplay = format === "screenplay";
 	switch (parent) {
 		case null:
-			return kind !== null;
+			return screenplay ? kind === "part" : kind !== null;
 		case "part":
-			return kind === "chapter";
+			return !screenplay && kind === "chapter";
 		case "chapter":
 		case "front-matter":
 		case "back-matter":
@@ -198,14 +232,15 @@ export function creatable(
 	kind: FolderKind | null,
 	section: string,
 	held: readonly (FolderKind | null)[] = [],
+	format: Format = "novel",
 ): Making[] {
 	const inManuscript = section === MANUSCRIPT;
 
 	return [
 		inManuscript ? SCENE : DOCUMENT,
-		...[PART, CHAPTER, FRONT, BACK, FOLDER].filter(
+		...[partOf(format), CHAPTER, FRONT, BACK, FOLDER].filter(
 			(making) =>
-				mayHold(inManuscript, kind, making.kind) &&
+				mayHold(format, inManuscript, kind, making.kind) &&
 				!(isMatter(making.kind) && held.includes(making.kind)),
 		),
 	];

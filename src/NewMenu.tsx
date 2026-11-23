@@ -6,6 +6,7 @@ import Icon from "./Icon";
 import { creatable } from "./kinds";
 import type { Making } from "./kinds";
 import type { FolderKind } from "./types";
+import { useFormat } from "./projectFormat";
 
 type Props = {
 	label: string;
@@ -33,7 +34,7 @@ export default function NewMenu({
 	merging,
 	onChoose,
 }: Props) {
-	const offered = creatable(kind, section, held);
+	const offered = creatable(kind, section, held, useFormat());
 	const why = merging ? MERGE_HOLDS : undefined;
 
 	// A chapter holds scenes and nothing else, so there is nothing to choose

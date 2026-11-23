@@ -10,6 +10,7 @@ import { MenuItem } from "./Menu";
 import type { TreeNode } from "./types";
 import type { Moving } from "./tree";
 import { destinations } from "./tree";
+import { useFormat } from "./projectFormat";
 import { failure } from "./errors";
 
 type Props = {
@@ -26,6 +27,7 @@ type Tree =
 	| { kind: "error"; message: string };
 
 export default function MoveTo({ root, moving, onBack, onChoose }: Props) {
+	const format = useFormat();
 	const [tree, setTree] = useState<Tree>({ kind: "reading" });
 	const back = useRef<HTMLButtonElement>(null);
 
@@ -74,7 +76,7 @@ export default function MoveTo({ root, moving, onBack, onChoose }: Props) {
 				</p>
 			)}
 			{tree.kind === "read" &&
-				destinations(tree.nodes, moving).map((where) => (
+				destinations(tree.nodes, moving, format).map((where) => (
 					<MenuItem
 						key={where.id}
 						depth={where.depth}

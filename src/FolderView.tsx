@@ -26,6 +26,7 @@ import {
 import { when } from "./dates";
 import type { Spot } from "./reorder";
 import { useReorder } from "./reorder";
+import { useFormat } from "./projectFormat";
 import { failure } from "./errors";
 import { canTry } from "./takes";
 import Target, { TargetField } from "./Target";
@@ -227,6 +228,7 @@ export default function FolderView({
 			throw error;
 		});
 	}
+	const format = useFormat();
 	const [naming, setNaming] = useState<Naming>({ kind: "closed" });
 	const [renaming, setRenaming] = useState<Renaming>({ kind: "closed" });
 	// The cards flow across the overview rather than down it, so a landing
@@ -433,7 +435,10 @@ export default function FolderView({
 								key={card.id}
 								at={at}
 								name={card.name}
-								placeholder={folderPlaceholder(card.kind)}
+								placeholder={folderPlaceholder(
+									card.kind,
+									format,
+								)}
 								renaming={renaming}
 								onSubmit={(name) =>
 									void rename(card.id, name, "folder")
@@ -472,6 +477,7 @@ export default function FolderView({
 											card.children,
 											card.words,
 											card.target,
+											format,
 										)}
 									</span>
 									{aiming === card.id ? (
