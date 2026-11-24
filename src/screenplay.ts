@@ -237,6 +237,58 @@ function line(
 	};
 }
 
+function cueEntry({ name, folder }: Filed): Entry {
+	return {
+		...line(
+			`cue:${name}`,
+			name,
+			"character",
+			cueFor(name),
+			folder || "Character",
+		),
+		named: true,
+	};
+}
+
+/** The characters a cue line offers to finish: those whose cue starts with
+ * what is typed. Nothing once the line already spells a whole name. */
+export function cueEntries(typed: string, characters: Filed[]): Entry[] {
+	const wanted = typed.trim().toUpperCase();
+	const cues = characters.map((each) => cueFor(each.name));
+	if (wanted === "" || cues.includes(wanted)) {
+		return [];
+	}
+	return characters
+		.filter((_, at) => cues[at].startsWith(wanted))
+		.map(cueEntry);
+}
+
+/** What has been typed on a cue line, when the caret stands at its end and the
+ * line is plain text. Null anywhere else. */
+export function $cueAt(): string | null {
+	const selection = $getSelection();
+	if (
+		!$isRangeSelection(selection) ||
+		!selection.isCollapsed() ||
+		selection.anchor.type !== "text"
+	) {
+		return null;
+	}
+	const node = selection.anchor.getNode();
+	const owner = node.getTopLevelElement();
+	if (
+		owner === null ||
+		!$isScriptNode(owner) ||
+		$getState(owner, kind) !== "character"
+	) {
+		return null;
+	}
+	const typed = node.getTextContent().slice(0, selection.anchor.offset);
+	return typed === owner.getTextContent() && typed.trim() !== ""
+		? typed
+		: null;
+}
+
 /** What a slash offers in a script: the blocks, then each character as a cue
  * and each location as the start of a scene heading. */
 export function scriptEntries(
@@ -245,16 +297,7 @@ export function scriptEntries(
 ): Entry[] {
 	return [
 		...CYCLE.map((each) => line(each, NAMES[each], each)),
-		...characters.map(({ name, folder }) => ({
-			...line(
-				`cue:${name}`,
-				name,
-				"character",
-				cueFor(name),
-				folder || "Character",
-			),
-			named: true,
-		})),
+		...characters.map(cueEntry),
 		...locations.map(({ name, folder }) => ({
 			...line(
 				`place:${name}`,

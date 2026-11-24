@@ -12,7 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { shortcutLabel } from "./formatting";
-import { scriptEntries } from "./screenplay";
+import { $cueAt, cueEntries, scriptEntries } from "./screenplay";
 import { $slashAt, matching, NOVEL, type Entry } from "./slash";
 import type { ScriptNames } from "./subjects";
 
@@ -27,15 +27,16 @@ class Choice extends MenuOption {
 	}
 }
 
+type Cast = { names: ScriptNames; ask: () => void };
+
 type Props = {
 	/** In a script, the people and places to offer, read once a slash is typed. */
-	cast?: { names: ScriptNames; ask: () => void };
+	cast?: Cast;
 };
 
 // A slash at the start of an empty block offers the same blocks the bar's
 // dropdown does, without the writer having to reach for it.
 export default function SlashMenu({ cast }: Props) {
-	const [editor] = useLexicalComposerContext();
 	const names = cast?.names;
 	const offered = useMemo(
 		() =>
@@ -44,24 +45,73 @@ export default function SlashMenu({ cast }: Props) {
 				: scriptEntries(names.characters, names.locations),
 		[names],
 	);
+	const offer = useCallback(
+		(query: string) => matching(query, offered),
+		[offered],
+	);
+	// A bare slash leaves the names out, so it says they are there to be found.
+	const named =
+		names !== undefined &&
+		names.characters.length + names.locations.length > 0;
+
+	return (
+		<Menu
+			read={$slashAt}
+			prefix="/"
+			offer={offer}
+			hint={
+				named
+					? "Type a name to find characters and locations"
+					: undefined
+			}
+			ask={cast?.ask}
+		/>
+	);
+}
+
+/** On a cue line, the characters whose names start with what is typed there. */
+export function CueMenu({ cast }: { cast: Cast }) {
+	const characters = cast.names.characters;
+	const offer = useCallback(
+		(query: string) => cueEntries(query, characters),
+		[characters],
+	);
+	return <Menu read={$cueAt} prefix="" offer={offer} ask={cast.ask} />;
+}
+
+type MenuProps = {
+	/** What has been typed for the menu where the caret is, or null when the
+	 * caret is not asking for one. */
+	read: () => string | null;
+	/** What stands before the typed text and goes with it when a choice is made. */
+	prefix: string;
+	offer: (query: string) => Entry[];
+	/** A line at the foot when nothing has been typed yet. */
+	hint?: string;
+	/** Called once the menu is first wanted, to fetch what it offers. */
+	ask?: () => void;
+};
+
+function Menu({ read, prefix, offer, hint, ask }: MenuProps) {
+	const [editor] = useLexicalComposerContext();
 
 	// Nothing to match means no menu at all, rather than an empty one: an open
 	// menu takes the arrow keys, and the caret would stop moving.
 	const trigger = useCallback(
 		(_text: string, editor: LexicalEditor): MenuTextMatch | null => {
-			const query = editor.getEditorState().read($slashAt);
-			if (query === null || matching(query, offered).length === 0) {
+			const query = editor.getEditorState().read(read);
+			if (query === null || offer(query).length === 0) {
 				return null;
 			}
 			return {
 				leadOffset: 0,
 				matchingString: query,
-				replaceableString: `/${query}`,
+				replaceableString: `${prefix}${query}`,
 			};
 		},
-		[offered],
+		[read, prefix, offer],
 	);
-	// What has been typed after the slash. Read here as well as by the plugin
+	// What has been typed for the menu. Read here as well as by the plugin
 	// below, because it is also what says when a menu put away by hand may
 	// come back.
 	const [typed, setTyped] = useState<string | null>(null);
@@ -71,10 +121,10 @@ export default function SlashMenu({ cast }: Props) {
 	useEffect(
 		() =>
 			editor.registerUpdateListener(() => {
-				const now = editor.getEditorState().read($slashAt);
+				const now = editor.getEditorState().read(read);
 				setTyped((was) => (was === now ? was : now));
 			}),
-		[editor],
+		[editor, read],
 	);
 
 	useEffect(() => {
@@ -82,7 +132,6 @@ export default function SlashMenu({ cast }: Props) {
 	}, [typed]);
 
 	const asking = typed !== null;
-	const ask = cast?.ask;
 	useEffect(() => {
 		if (asking) {
 			ask?.();
@@ -91,16 +140,14 @@ export default function SlashMenu({ cast }: Props) {
 
 	const options = useMemo(
 		() =>
-			matching(typed ?? "", offered).map((action) => new Choice(action)),
-		[typed, offered],
+			typed === null
+				? []
+				: offer(typed).map((action) => new Choice(action)),
+		[typed, offer],
 	);
 
 	const showing = typed !== null && !dismissed && options.length > 0;
-	// A bare slash leaves the names out, so it says they are there to be found.
-	const hinted =
-		typed === "" &&
-		names !== undefined &&
-		names.characters.length + names.locations.length > 0;
+	const hinted = typed === "" && hint !== undefined;
 
 	// Watched on the document rather than through the menu losing focus: this
 	// webview does not focus a button when it is clicked, so a blur handler
@@ -201,10 +248,7 @@ export default function SlashMenu({ cast }: Props) {
 									</button>
 								))}
 								{hinted && (
-									<div className="slash__hint">
-										Type a name to find characters and
-										locations
-									</div>
+									<div className="slash__hint">{hint}</div>
 								)}
 							</div>,
 							anchor.current,

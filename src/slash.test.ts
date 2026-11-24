@@ -5,7 +5,7 @@ import { describe, expect, test } from "vitest";
 import { BLOCKS, INSERTS } from "./formatting";
 import { $fromMarkdown, EDITOR_NODES } from "./markdown";
 import { cueFor, headingAt } from "./fountain";
-import { scriptEntries } from "./screenplay";
+import { cueEntries, scriptEntries } from "./screenplay";
 import { $slashAt, matching, NOVEL, slashQuery } from "./slash";
 
 describe("recognising a slash that is asking for the menu", () => {
@@ -186,6 +186,20 @@ describe("what a slash offers in a script", () => {
 
 	test("a block and a name can both answer", () => {
 		expect(ids("pa")).toEqual(["parenthetical", "place:Paris"]);
+	});
+
+	test("a cue line offers the characters whose cue starts with it", () => {
+		const cues = (typed: string) =>
+			cueEntries(typed, [
+				filed("Elena Marsh"),
+				filed("Elias"),
+				filed("Marcus"),
+			]).map((entry) => entry.label);
+		expect(cues("EL")).toEqual(["Elena Marsh", "Elias"]);
+		expect(cues("eli")).toEqual(["Elias"]);
+		expect(cues("MARSH")).toEqual([]);
+		expect(cues("ELIAS")).toEqual([]);
+		expect(cues(" ")).toEqual([]);
 	});
 
 	test("a cue is the name in capitals and a heading starts at the place", () => {

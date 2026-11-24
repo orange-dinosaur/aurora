@@ -44,7 +44,7 @@ import Focus from "./Focus";
 import Links from "./Links";
 import { useOutline, type OutlineHandle } from "./lib/outline";
 import Shortcuts from "./Shortcuts";
-import SlashMenu from "./SlashMenu";
+import SlashMenu, { CueMenu } from "./SlashMenu";
 import { split } from "./frontmatter";
 import { baseline } from "./lib/compare";
 import Marks from "./Marks";
@@ -594,6 +594,7 @@ export default function Editor({
 								/>
 								<Typewriter on={preferences.typewriter} />
 								<SlashMenu cast={script ? cast : undefined} />
+								{script && <CueMenu cast={cast} />}
 								<Whereabouts
 									place={place}
 									active={active}
