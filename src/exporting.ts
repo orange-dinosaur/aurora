@@ -1,8 +1,22 @@
 import { counted } from "./cards";
-import type { ExportFormat, ExportProgress, Extent } from "./types";
+import type { ExportFormat, ExportProgress, Extent, Format } from "./types";
 
-/** Every format the Export dialog offers, in the order it lists them. */
-export const FORMATS: { key: ExportFormat; name: string; what: string }[] = [
+type Offer = { key: ExportFormat; name: string; what: string };
+
+/** A screenplay's formats. Rust refuses these for any other project. */
+const SCRIPT: ExportFormat[] = ["fountain", "pdf", "fdx"];
+
+/**
+ * What the Export dialog offers a project of this format, in the order it
+ * lists them: a screenplay's formats for a screenplay, a book's for the rest.
+ */
+export function offered(format: Format): Offer[] {
+	const script = format === "screenplay";
+	return FORMATS.filter((offer) => SCRIPT.includes(offer.key) === script);
+}
+
+/** Every format there is, in the order the dialog lists them. */
+export const FORMATS: Offer[] = [
 	{
 		key: "markdown",
 		name: "Markdown",
@@ -12,6 +26,17 @@ export const FORMATS: { key: ExportFormat; name: string; what: string }[] = [
 	{ key: "kepub", name: "KEPUB", what: "EPUB made for Kobo readers" },
 	{ key: "docx", name: "DOCX", what: "For Word and for editors" },
 	{ key: "text", name: "Plain text", what: "Just the words" },
+	{
+		key: "fountain",
+		name: "Fountain",
+		what: "Plain text any script app opens",
+	},
+	{ key: "pdf", name: "PDF", what: "Laid out on the page, ready to send" },
+	{
+		key: "fdx",
+		name: "Final Draft",
+		what: "For Final Draft and productions",
+	},
 ];
 
 /**

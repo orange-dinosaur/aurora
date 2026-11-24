@@ -6,14 +6,15 @@ import { failure } from "./errors";
 import Dialog from "./Dialog";
 import { DIALOG_FADE, useLingering } from "./Menu";
 import {
-	FORMATS,
 	doing,
 	flipped,
 	fraction,
+	offered,
 	sized,
 	warned,
 	wrote,
 } from "./exporting";
+import { useFormat } from "./projectFormat";
 import type { ExportFormat, ExportProgress, Extent } from "./types";
 
 /** How long an export runs before its bar is shown, so a quick one does not
@@ -43,11 +44,17 @@ type Props = {
 export default function Export({
 	root,
 	changed,
-	formats,
+	formats: ticks,
 	onFormats,
 	hasCover,
 	onBeforeExport,
 }: Props) {
+	const shown = offered(useFormat());
+	// A tick this project cannot export, from a manifest edited by hand, is
+	// neither drawn nor sent.
+	const formats = ticks.filter((tick) =>
+		shown.some((offer) => offer.key === tick),
+	);
 	const [extent, setExtent] = useState<Extent | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [slow, setSlow] = useState(false);
@@ -171,7 +178,7 @@ export default function Export({
 						</p>
 
 						<div role="group" aria-label="Formats">
-							{FORMATS.map(({ key, name, what }) => (
+							{shown.map(({ key, name, what }) => (
 								<button
 									key={key}
 									type="button"

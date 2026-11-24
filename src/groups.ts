@@ -32,12 +32,16 @@ export function filled(book: Book, key: GroupKey): number {
 			return said([
 				book.title,
 				book.subtitle,
+				book.draft,
 				book.series,
 				book.seriesNumber,
 				book.language,
 			]);
 		case "people":
-			return said([book.author]) + kept(book.contributors).length;
+			return (
+				said([book.author, book.contact]) +
+				kept(book.contributors).length
+			);
 		case "itself":
 			return said([book.blurb]) + book.keywords.length;
 		case "publication":

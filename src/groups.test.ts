@@ -36,6 +36,12 @@ describe("filled", () => {
 		).toBe(2);
 	});
 
+	test("counts a screenplay's draft and contact where they are shown", () => {
+		const script = { ...empty, draft: "Second draft", contact: "agent" };
+		expect(filled(script, "identity")).toBe(1);
+		expect(filled(script, "people")).toBe(1);
+	});
+
 	test("does not count whitespace as an answer", () => {
 		expect(filled({ ...empty, title: "   " }, "identity")).toBe(0);
 	});

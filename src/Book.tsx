@@ -12,6 +12,7 @@ import { holdUnsaved } from "./flushing";
 import { GROUPS, filled, known, toggled } from "./groups";
 import type { GroupKey } from "./groups";
 import { named, offered } from "./languages";
+import { useFormat } from "./projectFormat";
 import type { Book, Contributor } from "./types";
 
 type Props = {
@@ -38,6 +39,8 @@ export default function BookView({
 	merging,
 }: Props) {
 	const [book, setBook] = useState<Book | null>(null);
+	// A script's title page names the draft and how to reach the writer.
+	const screenplay = useFormat() === "screenplay";
 	const [shut, setShut] = useState<GroupKey[]>([]);
 	const [trouble, setTrouble] = useState("");
 	// What is waiting to be written, and the countdown to writing it. Both are
@@ -239,6 +242,17 @@ export default function BookView({
 									edit({ ...book, subtitle })
 								}
 							/>
+							{screenplay && (
+								<TextBox
+									label="Draft"
+									value={book.draft}
+									placeholder="Second draft, Blue revisions"
+									rows={1}
+									onChange={(draft) =>
+										edit({ ...book, draft })
+									}
+								/>
+							)}
 
 							<div className="book__pair book__pair--tight">
 								<TextBox
@@ -310,6 +324,17 @@ export default function BookView({
 								rows={1}
 								onChange={(author) => edit({ ...book, author })}
 							/>
+							{screenplay && (
+								<TextBox
+									label="Contact"
+									value={book.contact}
+									placeholder="How a reader reaches you or your agent"
+									rows={2}
+									onChange={(contact) =>
+										edit({ ...book, contact })
+									}
+								/>
+							)}
 
 							<div className="field">
 								<span className="field__label">

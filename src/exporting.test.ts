@@ -1,5 +1,28 @@
 import { describe, expect, test } from "vitest";
-import { doing, flipped, fraction, sized, warned, wrote } from "./exporting";
+import {
+	doing,
+	flipped,
+	fraction,
+	offered,
+	sized,
+	warned,
+	wrote,
+} from "./exporting";
+
+describe("offered", () => {
+	const keys = (format: Parameters<typeof offered>[0]) =>
+		offered(format).map((offer) => offer.key);
+
+	test("a screenplay gets only the script formats", () => {
+		expect(keys("screenplay")).toEqual(["fountain", "pdf", "fdx"]);
+	});
+
+	test("every other project gets only the book formats", () => {
+		const books = ["markdown", "epub", "kepub", "docx", "text"];
+		expect(keys("novel")).toEqual(books);
+		expect(keys("short-stories")).toEqual(books);
+	});
+});
 
 describe("flipped", () => {
 	test("ticks a format that was not ticked", () => {
