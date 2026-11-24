@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Mentionable } from "./lib/mentions";
 import { runsOf } from "./runs";
-import { rowsOf, type TimelineRow } from "./timeline";
+import { rowsOf, subjectsOf, type TimelineRow } from "./timeline";
 
 function page(section: string, title: string, ...names: string[]): Mentionable {
 	return {
@@ -101,6 +101,29 @@ describe("timeline rows", () => {
 		expect(drawn(rowsOf(["one"], documents, "Characters", true))).toEqual([
 			["Elena", ["one"]],
 		]);
+	});
+
+	test("a hidden subject has no row, and its scenes do not move to the last one", () => {
+		const documents = [
+			...cast,
+			scene("one", "Elena met Rose."),
+			scene("two", "Rose alone."),
+		];
+		const hidden = new Set([cast[1].id]);
+
+		expect(
+			drawn(
+				rowsOf(["one", "two"], documents, "Characters", false, hidden),
+			),
+		).toEqual([["Elena", ["one"]]]);
+	});
+
+	test("the row list offers every page in the section, by title", () => {
+		const documents = [page("Characters", "Zoe"), ...cast];
+
+		expect(
+			subjectsOf(documents, "Characters").map((subject) => subject.title),
+		).toEqual(["Elena", "Rose", "Zoe"]);
 	});
 
 	test("a scene the project has not read yet names no one", () => {

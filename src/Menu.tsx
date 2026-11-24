@@ -418,6 +418,7 @@ export function MenuItem({
 	disabled,
 	autoFocus,
 	checked,
+	ticks,
 	depth,
 	title,
 	onSelect,
@@ -430,6 +431,8 @@ export function MenuItem({
 	autoFocus?: boolean;
 	/** Given only in a menu that picks one of several. */
 	checked?: boolean;
+	/** In a menu that ticks any number of its items rather than one. */
+	ticks?: boolean;
 	/** How far in to set it, for a menu that lists a tree. */
 	depth?: number;
 	onSelect: (event: ReactMouseEvent) => void;
@@ -438,7 +441,13 @@ export function MenuItem({
 	return (
 		<button
 			type="button"
-			role={checked === undefined ? "menuitem" : "menuitemradio"}
+			role={
+				checked === undefined
+					? "menuitem"
+					: ticks === true
+						? "menuitemcheckbox"
+						: "menuitemradio"
+			}
 			aria-checked={checked}
 			className={
 				danger === true ? "menu__item menu__item--danger" : "menu__item"

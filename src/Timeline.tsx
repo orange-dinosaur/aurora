@@ -1,14 +1,17 @@
 // Every scene of the Manuscript, or of one story in a collection, laid out
-// left to right in story order, once in each row whose character it names.
-// It stands over the binder and the tabs, and Escape goes back to them.
+// left to right in story order, once in each row whose character or place it
+// names. It stands over the binder and the tabs, and Escape goes back to them.
 
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Timeline as Laid } from "./bindings/Timeline";
+import type { TimelineView } from "./bindings/TimelineView";
 import { useCorpus } from "./corpus";
 import { failure } from "./errors";
+import Icon from "./Icon";
+import Menu, { MenuItem } from "./Menu";
 import { useFormat } from "./projectFormat";
-import { rowsOf } from "./timeline";
+import { rowsOf, subjectsOf } from "./timeline";
 import type { FolderRef } from "./tree";
 
 type Props = {
@@ -24,6 +27,28 @@ type Read =
 	| { kind: "ready"; laid: Laid }
 	| { kind: "failed"; message: string };
 
+const FRESH: TimelineView = {
+	rows: "characters",
+	hiddenCharacters: [],
+	hiddenLocations: [],
+};
+
+/** What each side of the switch reads from and says. */
+const SIDES = {
+	characters: {
+		section: "Characters",
+		label: "Characters",
+		none: "No one",
+		hidden: "hiddenCharacters",
+	},
+	locations: {
+		section: "Locations",
+		label: "Locations",
+		none: "Nowhere",
+		hidden: "hiddenLocations",
+	},
+} as const;
+
 export default function Timeline({
 	root,
 	folder,
@@ -32,6 +57,7 @@ export default function Timeline({
 	onBack,
 }: Props) {
 	const [read, setRead] = useState<Read>({ kind: "reading" });
+	const [view, setView] = useState<TimelineView>(FRESH);
 	const screenplay = useFormat() === "screenplay";
 
 	useEffect(() => {
@@ -55,15 +81,38 @@ export default function Timeline({
 		};
 	}, [root, folder.id, changed]);
 
+	// A store that cannot be read leaves the timeline as it first opens.
+	useEffect(() => {
+		let gone = false;
+		invoke<TimelineView>("read_timeline_view", { root })
+			.then((stored) => {
+				if (!gone) {
+					setView(stored);
+				}
+			})
+			.catch(() => undefined);
+		return () => {
+			gone = true;
+		};
+	}, [root]);
+
+	function change(next: TimelineView) {
+		setView(next);
+		void invoke("write_timeline_view", { root, view: next }).catch(
+			() => undefined,
+		);
+	}
+
+	// On the window, so a menu open over the timeline, listening on the
+	// document, takes its own Escape first.
 	useEffect(() => {
 		function escape(event: KeyboardEvent) {
-			// A menu open over the timeline takes its own Escape first.
 			if (event.key === "Escape" && !event.defaultPrevented) {
 				onBack();
 			}
 		}
-		document.addEventListener("keydown", escape);
-		return () => document.removeEventListener("keydown", escape);
+		window.addEventListener("keydown", escape);
+		return () => window.removeEventListener("keydown", escape);
 	}, [onBack]);
 
 	const { corpus, documents } = useCorpus({
@@ -73,23 +122,92 @@ export default function Timeline({
 		wanted: true,
 	});
 
+	const side = SIDES[view.rows];
+	const hidden = view[side.hidden];
 	const scenes = read.kind === "ready" ? read.laid.scenes : [];
+	const subjects = useMemo(
+		() => subjectsOf(documents, side.section),
+		[documents, side.section],
+	);
 	const rows = useMemo(
 		() =>
 			rowsOf(
 				scenes.map((scene) => scene.id),
 				documents,
-				"Characters",
+				side.section,
 				screenplay,
+				new Set(hidden),
 			),
-		[scenes, documents, screenplay],
+		[scenes, documents, side.section, screenplay, hidden],
 	);
+
+	function toggle(id: string) {
+		change({
+			...view,
+			[side.hidden]: hidden.includes(id)
+				? hidden.filter((each) => each !== id)
+				: [...hidden, id],
+		});
+	}
 
 	return (
 		<section className="timeline" aria-label={`Timeline of ${folder.name}`}>
 			<header className="timeline__head">
-				<p className="timeline__of">Timeline</p>
-				<h1 className="timeline__title">{folder.name}</h1>
+				<div>
+					<p className="timeline__of">Timeline</p>
+					<h1 className="timeline__title">{folder.name}</h1>
+				</div>
+				<div className="timeline__controls">
+					<div
+						className="versions__scope timeline__switch"
+						role="group"
+						aria-label="Rows"
+					>
+						{(["characters", "locations"] as const).map((rows) => (
+							<button
+								key={rows}
+								type="button"
+								className="versions__scope-button"
+								aria-pressed={view.rows === rows}
+								onClick={() => change({ ...view, rows })}
+							>
+								{SIDES[rows].label}
+							</button>
+						))}
+					</div>
+					<Menu
+						label={`Which ${side.label.toLowerCase()} show`}
+						text="Show"
+						icon="chevron-down"
+						trailing
+						wrapper="timeline__menu"
+						className="timeline__show"
+						disabled={subjects.length === 0}
+						title={
+							subjects.length === 0
+								? `This project has no ${side.label.toLowerCase()} pages`
+								: undefined
+						}
+					>
+						{() =>
+							subjects.map((subject) => (
+								<MenuItem
+									key={subject.id}
+									ticks
+									checked={!hidden.includes(subject.id)}
+									onSelect={() => toggle(subject.id)}
+								>
+									<span className="menu__tick">
+										{!hidden.includes(subject.id) && (
+											<Icon name="check" />
+										)}
+									</span>
+									{subject.title}
+								</MenuItem>
+							))
+						}
+					</Menu>
+				</div>
 			</header>
 			{read.kind === "failed" ? (
 				<p className="timeline__note" role="alert">
@@ -127,7 +245,7 @@ export default function Timeline({
 								className="timeline__row"
 							>
 								<span className="timeline__label">
-									{row.subject?.title ?? "No one"}
+									{row.subject?.title ?? side.none}
 								</span>
 								{scenes.map((scene) =>
 									row.scenes.has(scene.id) ? (

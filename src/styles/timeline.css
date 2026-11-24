@@ -13,7 +13,62 @@
 
 .timeline__head {
 	flex: none;
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: var(--space-md);
 	padding: var(--space-md) var(--space-lg) var(--space-sm);
+}
+
+.timeline__controls {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+/* In the row beside the switch, rather than hung off the corner of a card. */
+.menu.timeline__menu {
+	position: relative;
+	flex: none;
+}
+
+.timeline__menu .menu__items {
+	top: calc(100% + 4px);
+}
+
+/* A word and a chevron, sized to sit beside the switch's pill. */
+.timeline__show {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-xxs);
+	padding: 0.35rem 0.75rem;
+	font: inherit;
+	font-size: 0.75rem;
+	color: var(--text-dim);
+	background: var(--bg-hover);
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.timeline__show:hover,
+.timeline__show[aria-expanded="true"] {
+	color: var(--text);
+}
+
+.timeline__show:disabled {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.timeline__show:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.timeline__switch {
+	width: 200px;
+	margin-top: 0;
 }
 
 .timeline__of {
