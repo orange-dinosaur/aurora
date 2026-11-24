@@ -96,6 +96,11 @@ export default function SlashMenu({ cast }: Props) {
 	);
 
 	const showing = typed !== null && !dismissed && options.length > 0;
+	// A bare slash leaves the names out, so it says they are there to be found.
+	const hinted =
+		typed === "" &&
+		names !== undefined &&
+		names.characters.length + names.locations.length > 0;
 
 	// Watched on the document rather than through the menu losing focus: this
 	// webview does not focus a button when it is clicked, so a blur handler
@@ -195,6 +200,12 @@ export default function SlashMenu({ cast }: Props) {
 										</span>
 									</button>
 								))}
+								{hinted && (
+									<div className="slash__hint">
+										Type a name to find characters and
+										locations
+									</div>
+								)}
 							</div>,
 							anchor.current,
 						)

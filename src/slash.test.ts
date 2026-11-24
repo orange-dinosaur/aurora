@@ -155,7 +155,7 @@ describe("what a slash offers in a script", () => {
 	const ids = (query: string) =>
 		matching(query, offered).map((action) => action.id);
 
-	test("nothing typed lists the blocks, then characters, then locations", () => {
+	test("nothing typed lists only the blocks, however large the cast", () => {
 		expect(ids("")).toEqual([
 			"heading",
 			"action",
@@ -163,11 +163,11 @@ describe("what a slash offers in a script", () => {
 			"dialogue",
 			"parenthetical",
 			"transition",
-			"cue:Elena Marsh",
-			"cue:Marcus",
-			"place:Kitchen",
-			"place:Paris",
 		]);
+	});
+
+	test("a single typed letter brings the names in", () => {
+		expect(ids("m")).toEqual(["cue:Elena Marsh", "cue:Marcus"]);
 	});
 
 	test("a character is found by any word of their name", () => {

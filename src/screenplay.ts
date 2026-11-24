@@ -244,18 +244,26 @@ export function scriptEntries(
 ): Entry[] {
 	return [
 		...CYCLE.map((each) => line(each, NAMES[each], each)),
-		...characters.map((name) =>
-			line(`cue:${name}`, name, "character", cueFor(name), "Character"),
-		),
-		...locations.map((place) =>
-			line(
+		...characters.map((name) => ({
+			...line(
+				`cue:${name}`,
+				name,
+				"character",
+				cueFor(name),
+				"Character",
+			),
+			named: true,
+		})),
+		...locations.map((place) => ({
+			...line(
 				`place:${place}`,
 				place,
 				"heading",
 				headingAt(place),
 				"Location",
 			),
-		),
+			named: true,
+		})),
 	];
 }
 

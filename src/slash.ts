@@ -59,6 +59,9 @@ export function $slashAt(): string | null {
 export type Entry = Pick<Action, "id" | "label" | "run"> & {
 	keys?: Keys;
 	hint?: string;
+	/** Offered only once something is typed, so a long cast never fills a
+	 * bare slash's menu. */
+	named?: boolean;
 };
 
 /** What a paragraph can become, and then what can be dropped in after it. */
@@ -69,7 +72,7 @@ export const NOVEL: Entry[] = [...BLOCKS, ...INSERTS];
 export function matching(query: string, offered: Entry[]): Entry[] {
 	const wanted = query.trim().toLowerCase();
 	if (wanted === "") {
-		return offered;
+		return offered.filter((entry) => !entry.named);
 	}
 	// Any run of the label's words can start with the query, so a two-word
 	// query like "heading 1" finds Heading 1.
