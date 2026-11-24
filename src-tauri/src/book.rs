@@ -23,6 +23,7 @@ use crate::project::{
 	Book, Error, ExportFormat, Format, MANUSCRIPT, RESERVED, Result, cover_bytes, matter,
 	read_manifest,
 };
+use crate::script::fdx::fdx;
 use crate::script::fountain::{Block, parse};
 use crate::script::pdf::pdf;
 use crate::text::text;
@@ -610,9 +611,7 @@ pub fn export(
 				ExportFormat::Text => text(&book, &compiled, &prose).into_bytes(),
 				ExportFormat::Fountain => fountain(&book, &compiled, &prose).into_bytes(),
 				ExportFormat::Pdf => pdf(&book, &script(&compiled, &prose)),
-				ExportFormat::Fdx => {
-					return Err(Error::ExportFormatRefused(format));
-				}
+				ExportFormat::Fdx => fdx(&book, &script(&compiled, &prose)).into_bytes(),
 			};
 			// Whole or not at all: a reader never finds half a file under the
 			// book's name.
