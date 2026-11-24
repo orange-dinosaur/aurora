@@ -148,10 +148,13 @@ describe("choosing what the menu lists", () => {
 });
 
 describe("what a slash offers in a script", () => {
+	const filed = (name: string, folder = "") => ({ name, folder });
 	const offered = scriptEntries(
-		["Elena Marsh", "Marcus"],
-		["Kitchen", "Paris"],
+		[filed("Elena Marsh", "Family"), filed("Marcus")],
+		[filed("Kitchen"), filed("Paris", "Abroad/France")],
 	);
+	const hints = (query: string) =>
+		matching(query, offered).map((entry) => entry.hint);
 	const ids = (query: string) =>
 		matching(query, offered).map((action) => action.id);
 
@@ -164,6 +167,12 @@ describe("what a slash offers in a script", () => {
 			"parenthetical",
 			"transition",
 		]);
+	});
+
+	test("a name shows its folder, or its section's word when it has none", () => {
+		expect(hints("mar")).toEqual(["Family", "Character"]);
+		expect(hints("k")).toEqual(["Location"]);
+		expect(hints("paris")).toEqual(["Abroad/France"]);
 	});
 
 	test("a single typed letter brings the names in", () => {

@@ -26,13 +26,9 @@ export function isSubject(trail: string[]): boolean {
 /**
  * Every subject in the project by title, in the order the tree lists them, so
  * a relationship can be offered the pages it could point at. Two subjects of
- * the same title are one suggestion: the name is all a tie records. `sections`
- * narrows it to some of the subject sections.
+ * the same title are one suggestion: the name is all a tie records.
  */
-export function subjectNames(
-	nodes: TreeNode[],
-	sections: string[] = SUBJECT_SECTIONS,
-): string[] {
+export function subjectNames(nodes: TreeNode[]): string[] {
 	const found: string[] = [];
 
 	function walk(node: TreeNode) {
@@ -40,7 +36,7 @@ export function subjectNames(
 			node.children.forEach(walk);
 			return;
 		}
-		if (sections.includes(node.trail[0]) && !found.includes(node.title)) {
+		if (isSubject(node.trail) && !found.includes(node.title)) {
 			found.push(node.title);
 		}
 	}
@@ -49,15 +45,43 @@ export function subjectNames(
 	return found;
 }
 
+/** A subject by title, with the folders it sits in below its section joined
+ * by `/`, empty when it is filed straight in the section. */
+export type Filed = { name: string; folder: string };
+
+/** The subjects under one section in tree order, the first of a title only. */
+export function filedUnder(nodes: TreeNode[], section: string): Filed[] {
+	const found: Filed[] = [];
+
+	function walk(node: TreeNode) {
+		if (node.node === "folder") {
+			node.children.forEach(walk);
+			return;
+		}
+		if (
+			node.trail[0] === section &&
+			!found.some((each) => each.name === node.title)
+		) {
+			found.push({
+				name: node.title,
+				folder: node.trail.slice(1).join("/"),
+			});
+		}
+	}
+
+	nodes.forEach(walk);
+	return found;
+}
+
 /** The people and places a script's slash menu offers. */
-export type ScriptNames = { characters: string[]; locations: string[] };
+export type ScriptNames = { characters: Filed[]; locations: Filed[] };
 
 export const NO_SCRIPT_NAMES: ScriptNames = { characters: [], locations: [] };
 
 export function scriptNames(nodes: TreeNode[]): ScriptNames {
 	return {
-		characters: subjectNames(nodes, ["Characters"]),
-		locations: subjectNames(nodes, ["Locations"]),
+		characters: filedUnder(nodes, "Characters"),
+		locations: filedUnder(nodes, "Locations"),
 	};
 }
 

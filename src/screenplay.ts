@@ -23,6 +23,7 @@ import {
 import { mergeRegister } from "@lexical/utils";
 import { split } from "./frontmatter";
 import type { Entry } from "./slash";
+import type { Filed } from "./subjects";
 import {
 	classify,
 	cueFor,
@@ -239,28 +240,28 @@ function line(
 /** What a slash offers in a script: the blocks, then each character as a cue
  * and each location as the start of a scene heading. */
 export function scriptEntries(
-	characters: string[],
-	locations: string[],
+	characters: Filed[],
+	locations: Filed[],
 ): Entry[] {
 	return [
 		...CYCLE.map((each) => line(each, NAMES[each], each)),
-		...characters.map((name) => ({
+		...characters.map(({ name, folder }) => ({
 			...line(
 				`cue:${name}`,
 				name,
 				"character",
 				cueFor(name),
-				"Character",
+				folder || "Character",
 			),
 			named: true,
 		})),
-		...locations.map((place) => ({
+		...locations.map(({ name, folder }) => ({
 			...line(
-				`place:${place}`,
-				place,
+				`place:${name}`,
+				name,
 				"heading",
-				headingAt(place),
-				"Location",
+				headingAt(name),
+				folder || "Location",
 			),
 			named: true,
 		})),

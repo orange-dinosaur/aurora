@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Fields } from "./frontmatter";
-import { factsOf, linksOf, subjectNames } from "./subjects";
+import { factsOf, filedUnder, linksOf, subjectNames } from "./subjects";
 import type { TreeNode } from "./types";
 
 function folder(name: string, children: TreeNode[]): TreeNode {
@@ -28,6 +28,40 @@ function document(title: string, trail: string[]): TreeNode {
 		inBook: true,
 	};
 }
+
+describe("filedUnder", () => {
+	test("gives each subject the folders it sits in below its section", () => {
+		const tree = [
+			folder("Characters", [
+				document("Marcus", ["Characters"]),
+				folder("Family", [
+					document("Elena", ["Characters", "Family"]),
+					folder("Cousins", [
+						document("Ana", ["Characters", "Family", "Cousins"]),
+					]),
+				]),
+			]),
+			folder("Locations", [document("Kitchen", ["Locations"])]),
+		];
+		expect(filedUnder(tree, "Characters")).toEqual([
+			{ name: "Marcus", folder: "" },
+			{ name: "Elena", folder: "Family" },
+			{ name: "Ana", folder: "Family/Cousins" },
+		]);
+	});
+
+	test("two of a title are one, filed where the first is", () => {
+		const tree = [
+			folder("Characters", [
+				folder("Family", [document("Elena", ["Characters", "Family"])]),
+				document("Elena", ["Characters"]),
+			]),
+		];
+		expect(filedUnder(tree, "Characters")).toEqual([
+			{ name: "Elena", folder: "Family" },
+		]);
+	});
+});
 
 describe("subjectNames", () => {
 	test("takes the documents under the subject sections and no others", () => {
