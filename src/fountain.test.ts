@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
 	classify,
+	cueNames,
 	cycled,
 	emphasised,
 	follows,
@@ -19,6 +20,20 @@ describe("reading and writing Fountain", () => {
 	test.each(cases as Case[])("$name", ({ text, canonical, blocks }) => {
 		expect(parse(text)).toEqual(blocks);
 		expect(serialise(blocks)).toBe(canonical ?? text);
+	});
+});
+
+describe("the character a cue names", () => {
+	test("is the cue in capitals, extensions and dual caret left out", () => {
+		expect(cueNames("ELENA", "Elena")).toBe(true);
+		expect(cueNames("ELENA MARSH (V.O.)", "Elena Marsh")).toBe(true);
+		expect(cueNames("ELENA (CONT'D) ^", "Elena")).toBe(true);
+	});
+
+	test("is never part of a name or nobody", () => {
+		expect(cueNames("ELENA", "Elena Marsh")).toBe(false);
+		expect(cueNames("MARSH", "Elena Marsh")).toBe(false);
+		expect(cueNames("(V.O.)", "Elena")).toBe(false);
 	});
 });
 

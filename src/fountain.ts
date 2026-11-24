@@ -172,6 +172,17 @@ export function cueFor(name: string): string {
 	return name.toUpperCase();
 }
 
+/** Whether a cue names this character: the cue, without extensions such as
+ * "(V.O.)" and without a dual-dialogue caret, is the name in capitals. */
+export function cueNames(cue: string, name: string): boolean {
+	const bare = cue
+		.replace(/\(.*?\)/g, "")
+		.replace(/\^\s*$/, "")
+		.trim()
+		.toUpperCase();
+	return bare !== "" && bare === cueFor(name.trim());
+}
+
 /** The start of a scene heading set at a place, left for the time of day. */
 export function headingAt(place: string): string {
 	return `INT. ${place.toUpperCase()} - `;

@@ -43,6 +43,7 @@ import type {
 } from "./types";
 import type { FolderRef } from "./tree";
 import { documentsOf, firstScene, folderOf, rows } from "./tree";
+import { cueNames } from "./fountain";
 import type { Opened } from "./bindings/Opened";
 import type { Workspace } from "./bindings/Workspace";
 import {
@@ -866,6 +867,22 @@ export default function Project({
 	}
 
 	/**
+	 * The page of the character a script's cue names, opened across from the
+	 * script. A cue naming no one opens nothing.
+	 */
+	async function openCue(cue: string) {
+		const tree = await documentTree(root).catch(() => []);
+		const found = documentsOf(tree).find(
+			(document) =>
+				document.trail[0] === "Characters" &&
+				cueNames(cue, document.title),
+		);
+		if (found !== undefined) {
+			openSubject(found, "beside");
+		}
+	}
+
+	/**
 	 * Moving from one subject's page to another's, by turning the tab rather
 	 * than opening a second one. Following a relationship is reading, and a
 	 * chain of them would otherwise leave a tab behind at every step. A page
@@ -1603,6 +1620,7 @@ export default function Project({
 					onRestore={() => void restore(tab.document.id)}
 					changed={tab.save.kind === "changed"}
 					cast={cast}
+					onCue={(cue) => void openCue(cue)}
 					onReload={() => void reload(tab.document.id)}
 					onKeepMine={() => void keepMine(tab.document.id)}
 					onPreferences={onPreferences}
