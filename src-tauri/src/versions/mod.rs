@@ -279,15 +279,16 @@ pub fn version_text(root: PathBuf, version: String, id: Uuid) -> Result<Option<S
 mod tests {
 	use super::*;
 	use crate::document::{
-		create_document, create_folder, delete_document, delete_folder, list_trash, move_node,
-		read_document, rename_document, rename_folder, write_document,
+		add_marker, create_document, create_folder, delete_document, delete_folder, delete_marker,
+		list_trash, move_node, place_scene, read_document, rename_document, rename_folder,
+		rename_marker, write_document,
 	};
 	use crate::project::{Format, create, set_cover, write_book, write_manifest};
 	use crate::takes::{
 		TakeView, choose_take, delete_take, list_takes, open_as_take, rename_take, take_text,
 		try_something,
 	};
-	use crate::tree::Node;
+	use crate::tree::{Node, Place};
 	use git2::RepositoryState;
 
 	fn project() -> tempfile::TempDir {
@@ -2553,6 +2554,74 @@ mod tests {
 		assert_eq!(read_document(root.clone(), a).unwrap(), "Hello");
 		assert_eq!(read_document(root.clone(), b).unwrap(), "");
 		assert!(!pending(&root).unwrap());
+	}
+
+	#[test]
+	fn markers_from_both_versions_are_kept() {
+		let (_parent, root, seeded, ..) = novel();
+		let moved = add_marker(root.clone(), "Dawn".to_owned(), seeded).unwrap();
+		let conflicts = diverged(
+			&root,
+			|| {
+				add_marker(root.clone(), "Years later".to_owned(), seeded).unwrap();
+				rename_marker(root.clone(), moved.id, "Daybreak".to_owned()).unwrap();
+			},
+			|| {
+				add_marker(root.clone(), "That night".to_owned(), seeded).unwrap();
+			},
+		);
+
+		assert_eq!(conflicts, []);
+		let mut names: Vec<String> = read_manifest(&root)
+			.unwrap()
+			.markers
+			.into_iter()
+			.map(|marker| marker.name)
+			.collect();
+		names.sort();
+		assert_eq!(names, ["Daybreak", "That night", "Years later"]);
+	}
+
+	#[test]
+	fn a_marker_deleted_on_one_side_and_renamed_on_the_other_is_kept() {
+		let (_parent, root, seeded, ..) = novel();
+		let marker = add_marker(root.clone(), "Dawn".to_owned(), seeded).unwrap();
+		let conflicts = diverged(
+			&root,
+			|| delete_marker(root.clone(), marker.id).unwrap(),
+			|| rename_marker(root.clone(), marker.id, "Daybreak".to_owned()).unwrap(),
+		);
+
+		assert_eq!(conflicts, []);
+		let markers = read_manifest(&root).unwrap().markers;
+		assert_eq!(markers.len(), 1);
+		assert_eq!(markers[0].name, "Daybreak");
+	}
+
+	#[test]
+	fn a_timeline_drag_merges_and_a_clash_keeps_ours() {
+		let (_parent, root, seeded, here, _) = novel();
+		let other = create_document(root.clone(), here, "Other".to_owned())
+			.unwrap()
+			.id;
+		let place = |id: Uuid| match tree::find(&read_manifest(&root).unwrap().nodes, id) {
+			Some(Node::Document { placed, .. }) => *placed,
+			_ => panic!("no document"),
+		};
+		let conflicts = diverged(
+			&root,
+			|| {
+				place_scene(root.clone(), seeded, Some(Place::First)).unwrap();
+				place_scene(root.clone(), other, Some(Place::First)).unwrap();
+			},
+			|| {
+				place_scene(root.clone(), other, Some(Place::After(seeded))).unwrap();
+			},
+		);
+
+		assert_eq!(conflicts, []);
+		assert_eq!(place(seeded), Some(Place::First));
+		assert_eq!(place(other), Some(Place::After(seeded)));
 	}
 
 	#[test]

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
-use crate::project::{Book, Manifest};
+use crate::project::{Book, Manifest, Marker};
 use crate::takes::in_order;
 use crate::tree::{self, Node};
 
@@ -198,7 +198,9 @@ fn details(node: &Node) -> (Map<String, Value>, Map<String, Value>) {
 		Some(Value::Object(fields)) => fields,
 		_ => Map::new(),
 	};
-	for key in ["node", "id", "name", "children", "takes", "chosen"] {
+	for key in [
+		"node", "id", "name", "children", "takes", "chosen", "placed",
+	] {
 		map.remove(key);
 	}
 	(map, fields)
@@ -287,6 +289,29 @@ fn merge_map(
 	merged
 }
 
+/// Markers merge by id, field by field, with ours kept on a clash and no card.
+/// A marker deleted on one side and changed on the other is kept.
+fn merge_markers(base: &[Marker], ours: &[Marker], theirs: &[Marker]) -> Vec<Marker> {
+	let find = |side: &[Marker], id: Uuid| side.iter().find(|marker| marker.id == id).cloned();
+	let mut seen = HashSet::new();
+	ours.iter()
+		.chain(theirs)
+		.map(|marker| marker.id)
+		.filter(|id| seen.insert(*id))
+		.filter_map(|id| {
+			let (b, o, t) = (find(base, id), find(ours, id), find(theirs, id));
+			three_way(&b, &o, &t).unwrap_or_else(|| match (&b, &o, &t) {
+				(Some(b), Some(o), Some(t)) => Some(Marker {
+					id,
+					name: three_way(&b.name, &o.name, &t.name).unwrap_or_else(|| o.name.clone()),
+					before: three_way(&b.before, &o.before, &t.before).unwrap_or(o.before),
+				}),
+				_ => o.or(t),
+			})
+		})
+		.collect()
+}
+
 fn renamed(node: &mut Node, to: String) {
 	match node {
 		Node::Folder { name, .. } | Node::Document { name, .. } => *name = to,
@@ -345,6 +370,17 @@ fn merge_node(
 		serde_json::from_value(Value::Object(map)).unwrap_or_else(|_| ours.clone());
 	renamed(&mut node, name.to_owned());
 	merge_takes(&mut node, base, ours, theirs);
+	if let (
+		Node::Document { placed, .. },
+		Node::Document { placed: b, .. },
+		Node::Document { placed: o, .. },
+		Node::Document { placed: t, .. },
+	) = (&mut node, base, ours, theirs)
+	{
+		// Where a scene was dragged on the timeline raises no card: a clash
+		// keeps ours.
+		*placed = three_way(b, o, t).unwrap_or(*o);
+	}
 	(parent, node)
 }
 
@@ -640,6 +676,11 @@ pub fn manifests(base: &Side, ours: &Side, theirs: &Side, chosen: &[Conflict]) -
 			name,
 			book,
 			nodes,
+			markers: merge_markers(
+				&base.manifest.markers,
+				&ours.manifest.markers,
+				&theirs.manifest.markers,
+			),
 			..ours.manifest.clone()
 		},
 		cover,
