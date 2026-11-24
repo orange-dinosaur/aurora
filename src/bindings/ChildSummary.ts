@@ -17,6 +17,12 @@ children: number,
  */
 words: number, 
 /**
- * The words the writer means it to reach, `null` when unset.
+ * The pages below it in a screenplay's Manuscript, `null` anywhere
+ * else.
+ */
+pages: number | null, 
+/**
+ * The words the writer means it to reach, `null` when unset, or the
+ * pages where `pages` is set.
  */
 target: number | null, } | { "node": "document" } & DocumentSummary;

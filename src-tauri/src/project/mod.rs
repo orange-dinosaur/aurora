@@ -2187,6 +2187,28 @@ mod tests {
 		let recents = summarise_recents(&store).unwrap();
 		assert_eq!(recents.len(), 1);
 		assert_eq!(recents[0].words, Some(5));
+		assert_eq!(recents[0].pages, None);
+	}
+
+	#[test]
+	fn the_shelf_counts_a_screenplay_in_pages() {
+		let parent = tempfile::tempdir().unwrap();
+		let store = parent.path().join("store.json");
+		let root = create_and_remember(
+			&store,
+			parent.path(),
+			"Ithaca",
+			Format::Screenplay,
+			fixed_time(),
+		)
+		.unwrap();
+		// Forty action lines with a blank between each fill 79 lines, which
+		// runs onto a second page.
+		let action = vec!["She waits."; 40].join("\n\n");
+		fs::write(root.join(MANUSCRIPT).join("Long.md"), action).unwrap();
+		refresh(&root).unwrap();
+
+		assert_eq!(summarise_recents(&store).unwrap()[0].pages, Some(2));
 	}
 
 	#[test]

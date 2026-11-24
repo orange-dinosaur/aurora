@@ -22,6 +22,7 @@ function folder(
 		kind,
 		children: held,
 		words,
+		pages: null,
 		target: null,
 	} satisfies OverviewCard;
 }
@@ -35,6 +36,7 @@ function document(title: string, words: number) {
 		title,
 		target: null,
 		words,
+		pages: null,
 		excerpt: "",
 		front: "",
 		modified: null,

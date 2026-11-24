@@ -186,6 +186,7 @@ describe("named", () => {
 				name: "Chapter 1",
 				kind: null,
 				words: 0,
+				pages: null,
 				target: null,
 				inBook: true,
 				children: [
@@ -197,6 +198,7 @@ describe("named", () => {
 						title: "Scene 1",
 						target: null,
 						words: 0,
+						pages: null,
 						inBook: true,
 					},
 				],

@@ -9,4 +9,12 @@ export type FolderProgress = {
  * The words in every document below it, however deep, less anything in the
  * Manuscript's front or back matter.
  */
-words: number, target: number | null, };
+words: number, 
+/**
+ * The pages below it in a screenplay's Manuscript, `null` anywhere else.
+ */
+pages: number | null, 
+/**
+ * In pages where `pages` is set, in words otherwise.
+ */
+target: number | null, };

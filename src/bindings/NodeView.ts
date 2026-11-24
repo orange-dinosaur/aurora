@@ -19,8 +19,14 @@ kind: FolderKind | null, children: Array<NodeView>,
  */
 words: number, 
 /**
+ * The pages below it in a screenplay's Manuscript, `null` anywhere
+ * else. The Manuscript's own is the script's page count.
+ */
+pages: number | null, 
+/**
  * The words the writer means it to reach, `null` when they have not
- * said. Carried here so every row can draw its progress from one read.
+ * said, or the pages where `pages` is set. Carried here so every row
+ * can draw its progress from one read.
  */
 target: number | null, 
 /**
@@ -35,7 +41,12 @@ inBook: boolean, } | { "node": "document",
 /**
  * The words in its body, counted the way a folder's are.
  */
-words: number, inBook: boolean, id: string, path: string, 
+words: number, 
+/**
+ * The pages it fills in a screenplay's Manuscript, `null` anywhere
+ * else.
+ */
+pages: number | null, inBook: boolean, id: string, path: string, 
 /**
  * The folders it sits in, from its section down. A list rather than one
  * joined name, because the search panel draws the whole of it and the tab

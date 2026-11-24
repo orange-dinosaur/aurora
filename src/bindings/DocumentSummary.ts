@@ -4,7 +4,11 @@
  * A document as the section overview shows it: the sidebar's view plus enough
  * of the file to tell one chapter from another without opening it.
  */
-export type DocumentSummary = { words: number, excerpt: string, 
+export type DocumentSummary = { words: number, 
+/**
+ * The pages it fills in a screenplay's Manuscript, `null` anywhere else.
+ */
+pages: number | null, excerpt: string, 
 /**
  * The document's front matter block, fences and all, for the other end to
  * read its fields out of. Empty when the file has none. What a field is

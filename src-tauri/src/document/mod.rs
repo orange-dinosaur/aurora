@@ -20,6 +20,7 @@ use crate::tree::{self, Fields, FolderKind, Node};
 
 mod count;
 mod front;
+mod pages;
 mod paths;
 mod scan;
 mod trash;
@@ -27,6 +28,7 @@ mod trash;
 pub(crate) use count::manuscript_words;
 use count::*;
 pub use front::*;
+pub(crate) use pages::Pages;
 pub(crate) use paths::*;
 pub use scan::*;
 pub use trash::*;
@@ -109,12 +111,14 @@ const EXCERPT_CHARS: usize = 240;
 
 /// A document as the section overview shows it: the sidebar's view plus enough
 /// of the file to tell one chapter from another without opening it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct DocumentSummary {
 	#[serde(flatten)]
 	pub document: DocumentView,
 	pub words: usize,
+	/// The pages it fills in a screenplay's Manuscript, `null` anywhere else.
+	pub pages: Option<f64>,
 	pub excerpt: String,
 	/// The document's front matter block, fences and all, for the other end to
 	/// read its fields out of. Empty when the file has none. What a field is
@@ -132,6 +136,7 @@ impl DocumentSummary {
 		Self {
 			document: document.into(),
 			words: 0,
+			pages: None,
 			excerpt: String::new(),
 			front: String::new(),
 			modified: None,
@@ -142,7 +147,7 @@ impl DocumentSummary {
 /// One of a folder's children, as the overview draws it. A document gets the
 /// card it has always had; a folder says what it is, how much it holds and how
 /// much has been written under it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
 #[serde(tag = "node", rename_all = "camelCase")]
 #[ts(export)]
 pub enum ChildSummary {
@@ -154,7 +159,11 @@ pub enum ChildSummary {
 		children: usize,
 		/// The words in every document below it, however deep.
 		words: usize,
-		/// The words the writer means it to reach, `null` when unset.
+		/// The pages below it in a screenplay's Manuscript, `null` anywhere
+		/// else.
+		pages: Option<f64>,
+		/// The words the writer means it to reach, `null` when unset, or the
+		/// pages where `pages` is set.
 		target: Option<u32>,
 	},
 	Document(DocumentSummary),
@@ -164,7 +173,7 @@ pub enum ChildSummary {
 /// with the things a node's place decides already worked out. A document
 /// carries the same view every other command sends, so nothing outside Rust
 /// ever takes a path apart.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
 #[serde(tag = "node", rename_all = "camelCase")]
 #[ts(export)]
 pub enum NodeView {
@@ -178,8 +187,12 @@ pub enum NodeView {
 		/// The words in every document below it, however deep, less anything in
 		/// the Manuscript's front or back matter.
 		words: usize,
+		/// The pages below it in a screenplay's Manuscript, `null` anywhere
+		/// else. The Manuscript's own is the script's page count.
+		pages: Option<f64>,
 		/// The words the writer means it to reach, `null` when they have not
-		/// said. Carried here so every row can draw its progress from one read.
+		/// said, or the pages where `pages` is set. Carried here so every row
+		/// can draw its progress from one read.
 		target: Option<u32>,
 		/// Whether an export takes it. The sidebar draws what is out of the
 		/// book faint, so this rides along with the tree rather than being
@@ -195,6 +208,9 @@ pub enum NodeView {
 		document: DocumentView,
 		/// The words in its body, counted the way a folder's are.
 		words: usize,
+		/// The pages it fills in a screenplay's Manuscript, `null` anywhere
+		/// else.
+		pages: Option<f64>,
 		#[serde(rename = "inBook")]
 		in_book: bool,
 	},
@@ -255,6 +271,7 @@ fn summarise(document: &Document, path: &Path) -> DocumentSummary {
 	DocumentSummary {
 		document: document.into(),
 		words: words_of(prose),
+		pages: None,
 		excerpt: excerpt(prose),
 		front: front.to_owned(),
 		modified,
@@ -460,6 +477,7 @@ pub fn create_folder(
 		&canonical(&root),
 		std::slice::from_ref(&made),
 		&format!("{inside}/"),
+		Pages::of(&root, &manifest).as_ref(),
 	)
 	.0
 	.pop()
@@ -479,7 +497,9 @@ pub fn create_folder(
 #[tauri::command(async)]
 pub fn document_tree(root: PathBuf) -> Result<Vec<NodeView>> {
 	absolute(&root)?;
-	Ok(views(&canonical(&root), &read_manifest(&root)?.nodes, "").0)
+	let manifest = read_manifest(&root)?;
+	let pages = Pages::of(&root, &manifest);
+	Ok(views(&canonical(&root), &manifest.nodes, "", pages.as_ref()).0)
 }
 
 /// Looks at the project's folders again for anything added, removed or renamed
@@ -620,6 +640,7 @@ pub fn rename_folder(root: PathBuf, id: Uuid, name: String) -> Result<NodeView> 
 			&canonical(&root),
 			std::slice::from_ref(node),
 			&format!("{inside}/"),
+			Pages::of(&root, manifest).as_ref(),
 		)
 		.0
 		.pop()
@@ -697,13 +718,16 @@ pub fn set_folder_target(root: PathBuf, id: Uuid, target: Option<u32>) -> Result
 
 /// How a folder stands against what it is aiming at: everything written under
 /// it, and the target on it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct FolderProgress {
 	/// The words in every document below it, however deep, less anything in the
 	/// Manuscript's front or back matter.
 	pub words: usize,
+	/// The pages below it in a screenplay's Manuscript, `null` anywhere else.
+	pub pages: Option<f64>,
+	/// In pages where `pages` is set, in words otherwise.
 	pub target: Option<u32>,
 }
 
@@ -725,6 +749,7 @@ pub fn folder_progress(root: PathBuf, id: Uuid) -> Result<FolderProgress> {
 	let prefix = tree::path(&manifest.nodes, id).unwrap_or_default();
 	Ok(FolderProgress {
 		words: words_under(&canonical(&root), children, &format!("{prefix}/")),
+		pages: Pages::of(&root, &manifest).and_then(|pages| pages.folder(&prefix)),
 		target: *target,
 	})
 }
@@ -795,6 +820,7 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 	};
 
 	let counting_root = canonical(&root);
+	let pages = Pages::of(&root, &manifest);
 
 	Ok(tree::children(&manifest.nodes, id)
 		.unwrap_or_default()
@@ -816,6 +842,9 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 				kind: *kind,
 				children: children.len(),
 				words: words_under(&counting_root, children, &format!("{prefix}/{name}/")),
+				pages: pages
+					.as_ref()
+					.and_then(|pages| pages.folder(&format!("{prefix}/{name}"))),
 				target: *target,
 			},
 			Node::Document {
@@ -826,12 +855,16 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 					path: format!("{prefix}/{name}"),
 					target: *target,
 				};
-				ChildSummary::Document(match within(&counting_root, &document.path) {
+				let mut summary = match within(&counting_root, &document.path) {
 					Ok(path) => summarise(&document, &path),
 					// A vanished file, or one the manifest points outside the
 					// project.
 					Err(_) => DocumentSummary::blank(&document),
-				})
+				};
+				summary.pages = pages
+					.as_ref()
+					.and_then(|pages| pages.document(&document.path));
+				ChildSummary::Document(summary)
 			}
 		})
 		.collect())
@@ -1378,7 +1411,7 @@ mod tests {
 	#[test]
 	fn the_tree_keeps_its_shape_and_spells_out_every_path() {
 		let manifest = manifest_with(&["Manuscript/Part One/Chapter 1.md", "Notes/Notes.md"]);
-		let tree = views(Path::new("/nowhere"), &manifest.nodes, "").0;
+		let tree = views(Path::new("/nowhere"), &manifest.nodes, "", None).0;
 
 		let NodeView::Folder { name, children, .. } = &tree[0] else {
 			panic!("the top level is the project's sections");
@@ -1418,7 +1451,7 @@ mod tests {
 	#[test]
 	fn a_node_says_which_kind_it_is_on_the_wire() {
 		let manifest = manifest_with(&["Notes/Notes.md"]);
-		let tree = views(Path::new("/nowhere"), &manifest.nodes, "").0;
+		let tree = views(Path::new("/nowhere"), &manifest.nodes, "", None).0;
 		let json = serde_json::to_value(tree).unwrap();
 
 		let notes = &json.as_array().unwrap()[4];
@@ -2191,6 +2224,7 @@ mod tests {
 		let summary = DocumentSummary {
 			document: (&document).into(),
 			words: 3,
+			pages: None,
 			excerpt: "Sing to me".to_owned(),
 			front: String::new(),
 			modified: Some(fixed_time()),
@@ -2218,6 +2252,7 @@ mod tests {
 			kind: Some(FolderKind::Part),
 			children: 2,
 			words: 1200,
+			pages: None,
 			target: None,
 		})
 		.unwrap();
@@ -3382,7 +3417,60 @@ mod tests {
 		let part = folder_id(&root, "Manuscript/Part 1");
 
 		assert_eq!(folder_progress(root.clone(), manuscript).unwrap().words, 5);
-		assert_eq!(folder_progress(root, part).unwrap().words, 3);
+		assert_eq!(folder_progress(root.clone(), part).unwrap().words, 3);
+		assert_eq!(
+			folder_progress(root.clone(), manuscript).unwrap().pages,
+			None
+		);
+		assert!(document_tree(root).unwrap().iter().all(|node| match node {
+			NodeView::Folder { pages, .. } => pages.is_none(),
+			NodeView::Document { pages, .. } => pages.is_none(),
+		}));
+	}
+
+	#[test]
+	fn a_screenplay_counts_in_pages_that_add_up_to_the_script() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Screenplay, fixed_time()).unwrap();
+		let one = root.join("Manuscript").join("Act One");
+		let two = root.join("Manuscript").join("Act Two");
+		fs::create_dir_all(&one).unwrap();
+		fs::create_dir_all(&two).unwrap();
+		// Forty action lines with a blank between each fill 79 lines, which
+		// runs onto a second page.
+		fs::write(one.join("Long.md"), vec!["She waits."; 40].join("\n\n")).unwrap();
+		fs::write(two.join("Short.md"), "He leaves.").unwrap();
+		refresh_documents(root.clone()).unwrap();
+
+		let manuscript = folder_id(&root, "Manuscript");
+		let act_one = folder_id(&root, "Manuscript/Act One");
+		let act_two = folder_id(&root, "Manuscript/Act Two");
+		let pages = |id| folder_progress(root.clone(), id).unwrap().pages.unwrap();
+
+		assert_eq!(pages(manuscript), 2.0);
+		let (one, two) = (pages(act_one), pages(act_two));
+		assert!(one > 1.0 && two > 0.0 && two < 0.1, "{one} {two}");
+		// The seeded opening scene holds the rest.
+		let tree = document_tree(root.clone()).unwrap();
+		let Some(NodeView::Folder {
+			pages: Some(total),
+			children,
+			..
+		}) = tree.iter().find(|node| node.id() == manuscript)
+		else {
+			panic!("no Manuscript in the tree");
+		};
+		let sum: f64 = children
+			.iter()
+			.map(|node| match node {
+				NodeView::Folder { pages, .. } | NodeView::Document { pages, .. } => pages.unwrap(),
+			})
+			.sum();
+		assert!((sum - total).abs() < 1e-9, "{sum} {total}");
+
+		// Notes outside the Manuscript stay in words.
+		let notes = tree.iter().find(|node| node.id() != manuscript).unwrap();
+		assert!(matches!(notes, NodeView::Folder { pages: None, .. }));
 	}
 
 	/// Writes a folder of that name inside `parent` with one document in it,

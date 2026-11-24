@@ -56,6 +56,8 @@ pub struct RecentSummary {
 	/// None when the manifest could not be read, so the screen can leave the
 	/// count off rather than report a project as empty.
 	pub words: Option<usize>,
+	/// The script's page count for a screenplay, None for any other book.
+	pub pages: Option<usize>,
 	/// None for the same reason. The question asked before a project is
 	/// trashed counts what is about to go, so it needs this to be honest.
 	pub documents: Option<usize>,
@@ -77,6 +79,7 @@ pub struct RecentSummary {
 pub(super) struct Measure {
 	name: String,
 	words: usize,
+	pages: Option<usize>,
 	documents: usize,
 	title: String,
 	author: String,
@@ -128,8 +131,10 @@ pub(super) fn measure(root: &Path, workspace: Option<&store::Workspace>) -> Opti
 	// path in the manifest that climbs out of the project. The documents stay
 	// every one there is: the shelf says how many a delete will take.
 	let words = crate::document::manuscript_words(root, &manifest.nodes);
+	let pages = crate::document::Pages::of(root, &manifest).map(|pages| pages.total());
 	let documents = manifest.documents().len();
 	Some(Measure {
+		pages,
 		left_off: workspace.and_then(|workspace| left_off(workspace, &manifest.nodes)),
 		name: manifest.name,
 		title: manifest.book.title,
@@ -163,6 +168,7 @@ pub(super) fn summarise(
 		last_opened,
 		elsewhere,
 		words: measured.as_ref().map(|m| m.words),
+		pages: measured.as_ref().and_then(|m| m.pages),
 		documents: measured.as_ref().map(|m| m.documents),
 		title: measured.as_ref().map(|m| m.title.clone()),
 		author: measured.as_ref().map(|m| m.author.clone()),

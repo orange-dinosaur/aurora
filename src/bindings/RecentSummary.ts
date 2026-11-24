@@ -21,6 +21,10 @@ elsewhere: boolean,
  */
 words: number | null, 
 /**
+ * The script's page count for a screenplay, None for any other book.
+ */
+pages: number | null, 
+/**
  * None for the same reason. The question asked before a project is
  * trashed counts what is about to go, so it needs this to be honest.
  */

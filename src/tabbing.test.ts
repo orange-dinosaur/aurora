@@ -11,6 +11,7 @@ function folder(id: string, name: string, children: TreeNode[]): TreeNode {
 		kind: null,
 		children,
 		words: 0,
+		pages: null,
 		target: null,
 		inBook: true,
 	};
@@ -26,6 +27,7 @@ function document(id: string, path: string): TreeNode & ProjectDocument {
 		title: name.replace(/\.md$/, ""),
 		target: null,
 		words: 0,
+		pages: null,
 		inBook: true,
 	};
 }

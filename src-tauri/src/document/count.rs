@@ -149,8 +149,14 @@ pub(crate) fn manuscript_words(root: &Path, nodes: &[Node]) -> usize {
 /// The prefix is how far down the walk has come, which is what turns a node's
 /// name into its path. The total comes back alongside the views because a
 /// folder's count is its children's added up, and adding them up on the way
-/// out is what keeps each file to a single read.
-pub(super) fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>, usize) {
+/// out is what keeps each file to a single read. A screenplay's pages come in
+/// already worked out, since they take the whole script laid out at once.
+pub(super) fn views(
+	root: &Path,
+	nodes: &[Node],
+	prefix: &str,
+	pages: Option<&Pages>,
+) -> (Vec<NodeView>, usize) {
 	let mut built = Vec::with_capacity(nodes.len());
 	let mut total = 0;
 
@@ -169,7 +175,7 @@ pub(super) fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>
 				target,
 				..
 			} => {
-				let (children, words) = views(root, children, &format!("{prefix}{name}/"));
+				let (children, words) = views(root, children, &format!("{prefix}{name}/"), pages);
 				// The front and back matter keep the count they have earned,
 				// and the Manuscript above them does not take it: the total the
 				// sidebar shows is the story.
@@ -182,6 +188,7 @@ pub(super) fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>
 					kind: *kind,
 					children,
 					words,
+					pages: pages.and_then(|pages| pages.folder(&format!("{prefix}{name}"))),
 					target: *target,
 					in_book: folder_in_book(fields),
 				});
@@ -199,6 +206,7 @@ pub(super) fn views(root: &Path, nodes: &[Node], prefix: &str) -> (Vec<NodeView>
 				built.push(NodeView::Document {
 					document: (&document).into(),
 					words: tally.words,
+					pages: pages.and_then(|pages| pages.document(&document.path)),
 					in_book: tally.in_book,
 				});
 			}

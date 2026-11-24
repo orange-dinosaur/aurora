@@ -11,6 +11,7 @@ function folder(name: string, children: TreeNode[]): TreeNode {
 		kind: null,
 		children,
 		words: 0,
+		pages: null,
 		target: null,
 		inBook: true,
 	};
@@ -25,6 +26,7 @@ function document(title: string, trail: string[]): TreeNode {
 		title,
 		target: null,
 		words: 0,
+		pages: null,
 		inBook: true,
 	};
 }

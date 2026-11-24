@@ -29,6 +29,7 @@ function folder(
 		kind,
 		children,
 		words: 0,
+		pages: null,
 		target: null,
 		inBook,
 	};
@@ -45,6 +46,7 @@ function document(path: string, inBook = true): TreeNode {
 		title: name.replace(/\.md$/, ""),
 		target: null,
 		words: 0,
+		pages: null,
 		inBook,
 	};
 }
@@ -546,6 +548,7 @@ describe("counting a whole project", () => {
 			kind: null,
 			children: [],
 			words,
+			pages: null,
 			target: null,
 			inBook: true,
 		};
