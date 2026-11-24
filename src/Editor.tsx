@@ -8,12 +8,7 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import {
-	CLICK_COMMAND,
-	COMMAND_PRIORITY_LOW,
-	type EditorState,
-	type EditorThemeClasses,
-} from "lexical";
+import type { EditorState, EditorThemeClasses } from "lexical";
 import { MANUSCRIPT } from "./kinds";
 import { useFormat } from "./projectFormat";
 import {
@@ -21,6 +16,7 @@ import {
 	$toFountain,
 	registerScript,
 	SCRIPT_NODES,
+	type Missing,
 } from "./screenplay";
 import type { TakeView } from "./bindings/TakeView";
 import type { ScriptNames } from "./subjects";
@@ -50,6 +46,7 @@ import Links from "./Links";
 import { useOutline, type OutlineHandle } from "./lib/outline";
 import Shortcuts from "./Shortcuts";
 import SlashMenu, { CueMenu } from "./SlashMenu";
+import ScriptSubjects from "./ScriptSubjects";
 import { split } from "./frontmatter";
 import { baseline } from "./lib/compare";
 import Marks from "./Marks";
@@ -130,35 +127,9 @@ function OutlineReporter({
 }
 
 /** Keeps each line of a script at the block its text makes it. */
-function Script({ onCue }: { onCue: (cue: string) => void }) {
+function Script() {
 	const [editor] = useLexicalComposerContext();
 	useEffect(() => registerScript(editor), [editor]);
-	// A plain click puts the caret in the cue; holding the command key follows
-	// it to the character, as it follows a link.
-	useEffect(
-		() =>
-			editor.registerCommand(
-				CLICK_COMMAND,
-				(event) => {
-					if (!event.ctrlKey && !event.metaKey) {
-						return false;
-					}
-					const at = event.target;
-					const cue =
-						at instanceof Element
-							? at.closest('[data-kind="character"]')
-							: null;
-					if (cue === null) {
-						return false;
-					}
-					event.preventDefault();
-					onCue(cue.textContent ?? "");
-					return true;
-				},
-				COMMAND_PRIORITY_LOW,
-			),
-		[editor, onCue],
-	);
 	return null;
 }
 
@@ -229,6 +200,8 @@ type Props = {
 	cast: { names: ScriptNames; ask: () => void };
 	/** A cue Ctrl+clicked in a script, as its text reads. */
 	onCue: (cue: string) => void;
+	/** Makes the page a script's cue or heading names but has none. */
+	onAdd: (missing: Missing) => Promise<void>;
 };
 
 export default function Editor({
@@ -266,6 +239,7 @@ export default function Editor({
 	onPlace,
 	cast,
 	onCue,
+	onAdd,
 }: Props) {
 	// Held here and handed up whole, because the caret and the scroll move
 	// separately. Through a ref so the handlers below need not change with
@@ -593,7 +567,14 @@ export default function Editor({
 								    and written with, so what converts as you
 								    type is exactly what survives a save. */}
 								{script ? (
-									<Script onCue={onCue} />
+									<>
+										<Script />
+										<ScriptSubjects
+											cast={cast}
+											onCue={onCue}
+											onAdd={onAdd}
+										/>
+									</>
 								) : (
 									<MarkdownShortcutPlugin
 										transformers={MARKDOWN_TRANSFORMERS}

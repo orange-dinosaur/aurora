@@ -23,10 +23,13 @@ import {
 import { mergeRegister } from "@lexical/utils";
 import { split } from "./frontmatter";
 import type { Entry } from "./slash";
-import type { Filed } from "./subjects";
+import type { Filed, ScriptNames } from "./subjects";
 import {
 	classify,
 	cueFor,
+	cueNames,
+	cueTitle,
+	headingPlace,
 	CYCLE,
 	cycled,
 	emphasised,
@@ -248,6 +251,32 @@ function cueEntry({ name, folder }: Filed): Entry {
 		),
 		named: true,
 	};
+}
+
+/** A name the script uses that has no page, and the section it would go in. */
+export type Missing = { section: "Characters" | "Locations"; name: string };
+
+/** What a line of this kind names that the project has no page for, or null. */
+export function missingFrom(
+	kind: string | undefined,
+	text: string,
+	names: ScriptNames,
+): Missing | null {
+	if (kind === "character") {
+		const name = cueTitle(text);
+		const known = names.characters.some((each) =>
+			cueNames(text, each.name),
+		);
+		return name === "" || known ? null : { section: "Characters", name };
+	}
+	if (kind === "heading") {
+		const name = headingPlace(text);
+		const known = names.locations.some(
+			(each) => each.name.toUpperCase() === name.toUpperCase(),
+		);
+		return name === "" || known ? null : { section: "Locations", name };
+	}
+	return null;
 }
 
 /** The characters a cue line offers to finish: those whose cue starts with

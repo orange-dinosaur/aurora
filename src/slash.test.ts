@@ -5,7 +5,7 @@ import { describe, expect, test } from "vitest";
 import { BLOCKS, INSERTS } from "./formatting";
 import { $fromMarkdown, EDITOR_NODES } from "./markdown";
 import { cueFor, headingAt } from "./fountain";
-import { cueEntries, scriptEntries } from "./screenplay";
+import { cueEntries, missingFrom, scriptEntries } from "./screenplay";
 import { $slashAt, matching, NOVEL, slashQuery } from "./slash";
 
 describe("recognising a slash that is asking for the menu", () => {
@@ -200,6 +200,27 @@ describe("what a slash offers in a script", () => {
 		expect(cues("MARSH")).toEqual([]);
 		expect(cues("ELIAS")).toEqual([]);
 		expect(cues(" ")).toEqual([]);
+	});
+
+	test("a cue or heading naming no page says what to add, and where", () => {
+		const names = {
+			characters: [filed("Elena Marsh")],
+			locations: [filed("Kitchen")],
+		};
+		expect(
+			missingFrom("character", "ELENA MARSH (V.O.)", names),
+		).toBeNull();
+		expect(missingFrom("character", "MARCUS", names)).toEqual({
+			section: "Characters",
+			name: "Marcus",
+		});
+		expect(missingFrom("heading", "INT. KITCHEN - DAY", names)).toBeNull();
+		expect(missingFrom("heading", "EXT. OLD MILL - DAY", names)).toEqual({
+			section: "Locations",
+			name: "Old Mill",
+		});
+		expect(missingFrom("action", "MARCUS runs.", names)).toBeNull();
+		expect(missingFrom("heading", "INT. ", names)).toBeNull();
 	});
 
 	test("a cue is the name in capitals and a heading starts at the place", () => {

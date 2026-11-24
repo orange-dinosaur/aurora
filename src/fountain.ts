@@ -175,12 +175,43 @@ export function cueFor(name: string): string {
 /** Whether a cue names this character: the cue, without extensions such as
  * "(V.O.)" and without a dual-dialogue caret, is the name in capitals. */
 export function cueNames(cue: string, name: string): boolean {
-	const bare = cue
+	const bare = bareCue(cue).toUpperCase();
+	return bare !== "" && bare === cueFor(name.trim());
+}
+
+function bareCue(cue: string): string {
+	return cue
 		.replace(/\(.*?\)/g, "")
 		.replace(/\^\s*$/, "")
-		.trim()
-		.toUpperCase();
-	return bare !== "" && bare === cueFor(name.trim());
+		.trim();
+}
+
+/** Each word starting with a capital and the rest in lower case. */
+function titled(text: string): string {
+	return text
+		.toLowerCase()
+		.replace(
+			/(^|[\s-])(\p{L})/gu,
+			(_, before, letter) => `${before}${letter.toUpperCase()}`,
+		);
+}
+
+/** The name a cue gives a character who has no page yet: MARCUS is Marcus. */
+export function cueTitle(cue: string): string {
+	return titled(bareCue(cue));
+}
+
+/** The place a scene heading names, as a page title: `INT. KITCHEN - NIGHT`
+ * is Kitchen. The time after the last dash is left out; a heading with no
+ * place gives an empty string. */
+export function headingPlace(heading: string): string {
+	const place = heading
+		.replace(/#[^#]*#\s*$/, "")
+		.replace(HEADING, "")
+		.replace(/^\./, "")
+		.replace(/\s+-\s+[^-]*$/, "")
+		.trim();
+	return titled(place);
 }
 
 /** The start of a scene heading set at a place, left for the time of day. */

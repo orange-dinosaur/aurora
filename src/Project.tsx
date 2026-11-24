@@ -70,12 +70,14 @@ import {
 } from "./split";
 import { remembered, reopen, type Place } from "./workspace";
 import {
+	createDocument,
 	deleteDocument,
 	deleteFolder,
 	documentTree,
 	restoreDocument,
 	writeDocument,
 } from "./documents";
+import type { Missing } from "./screenplay";
 import {
 	chooseTake,
 	deleteTake,
@@ -401,7 +403,8 @@ export default function Project({
 	// Bumped whenever a document reaches disk, which is the other way the
 	// project changes under anything holding a copy of it.
 	const [written, setWritten] = useState(0);
-	const cast = useScriptNames(root, listing + written);
+	// Titles change only with the listing, so a save does not read the tree.
+	const cast = useScriptNames(root, listing);
 
 	// A document created, renamed, moved or deleted. Every other change is a
 	// text the corpus has already been handed, but this one it cannot work out
@@ -880,6 +883,25 @@ export default function Project({
 		if (found !== undefined) {
 			openSubject(found, "beside");
 		}
+	}
+
+	/**
+	 * A page for a person or place the script names but the project has none
+	 * for, made at the end of its section and left closed: the writer is in
+	 * the middle of a scene.
+	 */
+	async function addSubject({ section, name }: Missing) {
+		const tree = await documentTree(root);
+		const folder = tree.find(
+			(node) => node.node === "folder" && node.name === section,
+		);
+		if (folder === undefined) {
+			throw new Error(
+				`There is no ${section} section to add ${name} to.`,
+			);
+		}
+		await createDocument(root, folder.id, name);
+		changed();
 	}
 
 	/**
@@ -1621,6 +1643,7 @@ export default function Project({
 					changed={tab.save.kind === "changed"}
 					cast={cast}
 					onCue={(cue) => void openCue(cue)}
+					onAdd={addSubject}
 					onReload={() => void reload(tab.document.id)}
 					onKeepMine={() => void keepMine(tab.document.id)}
 					onPreferences={onPreferences}

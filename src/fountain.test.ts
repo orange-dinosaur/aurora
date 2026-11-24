@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest";
 import {
 	classify,
 	cueNames,
+	cueTitle,
+	headingPlace,
 	cycled,
 	emphasised,
 	follows,
@@ -34,6 +36,31 @@ describe("the character a cue names", () => {
 		expect(cueNames("ELENA", "Elena Marsh")).toBe(false);
 		expect(cueNames("MARSH", "Elena Marsh")).toBe(false);
 		expect(cueNames("(V.O.)", "Elena")).toBe(false);
+	});
+});
+
+describe("the page a name would get", () => {
+	test("a cue gives the character's name in title case", () => {
+		expect(cueTitle("MARCUS")).toBe("Marcus");
+		expect(cueTitle("ELENA MARSH (V.O.)")).toBe("Elena Marsh");
+		expect(cueTitle("JEAN-LUC ^")).toBe("Jean-Luc");
+		expect(cueTitle("(O.S.)")).toBe("");
+	});
+
+	test("a heading gives the place without the time of day", () => {
+		expect(headingPlace("INT. KITCHEN - NIGHT")).toBe("Kitchen");
+		expect(headingPlace("EXT. OLD MILL")).toBe("Old Mill");
+		expect(headingPlace("INT./EXT. CAR - DAY #12#")).toBe("Car");
+		expect(headingPlace("INT. HOUSE - KITCHEN - DAY")).toBe(
+			"House - Kitchen",
+		);
+		expect(headingPlace("INT. TWENTY-ONE CLUB")).toBe("Twenty-One Club");
+		expect(headingPlace(".BACKSTAGE")).toBe("Backstage");
+	});
+
+	test("a heading still being typed gives what is there so far", () => {
+		expect(headingPlace("INT. KITCHEN - ")).toBe("Kitchen");
+		expect(headingPlace("INT. ")).toBe("");
 	});
 });
 
