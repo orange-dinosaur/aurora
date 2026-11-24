@@ -1,0 +1,49 @@
+[
+	{ "text": "plain words", "spans": [{ "text": "plain words" }] },
+	{
+		"text": "a **bold** word",
+		"spans": [
+			{ "text": "a " },
+			{ "text": "bold", "bold": true },
+			{ "text": " word" }
+		]
+	},
+	{
+		"text": "*italic* and _under_",
+		"spans": [
+			{ "text": "italic", "italic": true },
+			{ "text": " and " },
+			{ "text": "under", "underline": true }
+		]
+	},
+	{
+		"text": "***both***",
+		"spans": [{ "text": "both", "bold": true, "italic": true }]
+	},
+	{
+		"text": "**a*b***",
+		"spans": [
+			{ "text": "a", "bold": true },
+			{ "text": "b", "bold": true, "italic": true }
+		]
+	},
+	{
+		"text": "_**all *three***_",
+		"spans": [
+			{ "text": "all ", "underline": true, "bold": true },
+			{ "text": "three", "underline": true, "bold": true, "italic": true }
+		]
+	},
+	{
+		"text": "5 \\* 3 and snake\\_case",
+		"spans": [{ "text": "5 * 3 and snake_case" }]
+	},
+	{ "text": "C:\\\\\\*", "spans": [{ "text": "C:\\*" }] },
+	{ "text": "5 * 3", "spans": [{ "text": "5 * 3" }] },
+	{ "text": "C:\\path", "spans": [{ "text": "C:\\path" }] },
+	{
+		"text": "a\\\\**b**",
+		"spans": [{ "text": "a\\" }, { "text": "b", "bold": true }]
+	},
+	{ "text": "C:\\", "spans": [{ "text": "C:\\" }] }
+]

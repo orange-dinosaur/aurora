@@ -27,6 +27,96 @@ pub struct Block {
 	pub forced: bool,
 }
 
+/// Which emphasis a stretch of a line is in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Style {
+	pub bold: bool,
+	pub italic: bool,
+	pub underline: bool,
+}
+
+/// A stretch of a line in one emphasis, with its marks taken out.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Span {
+	pub text: String,
+	#[serde(flatten)]
+	pub style: Style,
+}
+
+// Checked in this order, so `**` is read as bold before `*` can be italic.
+const MARKERS: [&str; 3] = ["**", "*", "_"];
+
+fn flag<'a>(style: &'a mut Style, marker: &str) -> &'a mut bool {
+	match marker {
+		"**" => &mut style.bold,
+		"*" => &mut style.italic,
+		_ => &mut style.underline,
+	}
+}
+
+/// Whether an unescaped `marker` comes at or after byte `from`.
+fn closes(text: &str, from: usize, marker: &str) -> bool {
+	let bytes = text.as_bytes();
+	let mut i = from;
+	while i < bytes.len() {
+		if bytes[i] == b'\\' {
+			i += 2;
+		} else if bytes[i..].starts_with(marker.as_bytes()) {
+			return true;
+		} else {
+			i += 1;
+		}
+	}
+	false
+}
+
+/// Reads a line's emphasis as `spans` in `src/fountain.ts` does: `**bold**`,
+/// `*italic*` and `_underline_`, nested as `***both***`, with `\*`, `\_` and
+/// `\\` for the characters themselves. A marker with nothing to close it is
+/// only a character.
+pub fn spans(text: &str) -> Vec<Span> {
+	let mut found = Vec::new();
+	let mut style = Style::default();
+	let mut run = String::new();
+	let mut i = 0;
+	while let Some(c) = text[i..].chars().next() {
+		let rest = &text[i..];
+		let escaped = rest
+			.strip_prefix('\\')
+			.and_then(|after| after.chars().next())
+			.filter(|next| "*_\\".contains(*next));
+		if let Some(escaped) = escaped {
+			run.push(escaped);
+			i += 2;
+			continue;
+		}
+		let hit = MARKERS.into_iter().find(|marker| {
+			let mut now = style;
+			rest.starts_with(marker)
+				&& (*flag(&mut now, marker) || closes(text, i + marker.len(), marker))
+		});
+		let Some(marker) = hit else {
+			run.push(c);
+			i += c.len_utf8();
+			continue;
+		};
+		if !run.is_empty() {
+			found.push(Span {
+				text: std::mem::take(&mut run),
+				style,
+			});
+		}
+		let on = flag(&mut style, marker);
+		*on = !*on;
+		i += marker.len();
+	}
+	if !run.is_empty() {
+		found.push(Span { text: run, style });
+	}
+	found
+}
+
 /// The ways a scene heading starts, in lower case. Each must be followed by a
 /// full stop or a space.
 const HEADINGS: [&str; 6] = ["int./ext", "int/ext", "int", "ext", "est", "i/e"];
@@ -150,6 +240,22 @@ mod tests {
 		assert!(!cases.is_empty());
 		for case in cases {
 			assert_eq!(parse(&case.text), case.blocks, "{}", case.name);
+		}
+	}
+
+	#[derive(Deserialize)]
+	struct Emphasis {
+		text: String,
+		spans: Vec<Span>,
+	}
+
+	#[test]
+	fn every_emphasis_case_reads_as_the_frontend_reads_it() {
+		let cases: Vec<Emphasis> =
+			serde_json::from_str(include_str!("../../../src/emphasis.fixture.json")).unwrap();
+		assert!(!cases.is_empty());
+		for case in cases {
+			assert_eq!(spans(&case.text), case.spans, "{}", case.text);
 		}
 	}
 

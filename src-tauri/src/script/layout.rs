@@ -3,7 +3,7 @@
 //! of Courier 12pt, each block wrapped at its own width. The page counts and
 //! the PDF both read this, so they always agree.
 
-use super::fountain::{Block, Kind};
+use super::fountain::{Block, Kind, Span, Style, spans};
 
 pub const LINES_PER_PAGE: usize = 55;
 
@@ -19,11 +19,26 @@ pub fn width(kind: Kind) -> usize {
 	}
 }
 
-/// One printed line. A blank line between blocks is an empty action line.
+/// One printed line, in its emphasis with the marks taken out. A blank line
+/// between blocks is an empty action line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {
 	pub kind: Kind,
-	pub text: String,
+	pub spans: Vec<Span>,
+}
+
+impl Line {
+	/// The line as it prints, without emphasis.
+	pub fn text(&self) -> String {
+		self.spans.iter().map(|span| span.text.as_str()).collect()
+	}
+}
+
+fn plain(text: &str) -> Span {
+	Span {
+		text: text.to_owned(),
+		style: Style::default(),
+	}
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -84,11 +99,11 @@ struct Piece {
 fn pieces(scene: usize, blocks: &[Block]) -> Vec<Piece> {
 	let mut pieces: Vec<Piece> = Vec::new();
 	for block in blocks {
-		let lines = wrap(&block.text, width(block.kind))
+		let lines = wrap(&spans(&block.text), width(block.kind))
 			.into_iter()
-			.map(|text| Line {
+			.map(|spans| Line {
 				kind: block.kind,
-				text,
+				spans,
 			});
 		let spoken = matches!(block.kind, Kind::Dialogue | Kind::Parenthetical);
 		match pieces.last_mut() {
@@ -103,41 +118,66 @@ fn pieces(scene: usize, blocks: &[Block]) -> Vec<Piece> {
 	pieces
 }
 
-/// Words filled into lines of `width` characters. A word longer than a line is
-/// cut where the line ends.
-fn wrap(text: &str, width: usize) -> Vec<String> {
+/// Words filled into lines of `width` printed characters, so emphasis marks
+/// take no room. A word longer than a line is cut where the line ends.
+fn wrap(spans: &[Span], width: usize) -> Vec<Vec<Span>> {
+	let chars: Vec<(char, Style)> = spans
+		.iter()
+		.flat_map(|span| span.text.chars().map(|c| (c, span.style)))
+		.collect();
 	let mut lines = Vec::new();
-	let mut line = String::new();
-	for word in text.split_whitespace() {
-		let mut word: Vec<char> = word.chars().collect();
+	let mut line: Vec<(char, Style)> = Vec::new();
+	for word in chars.split(|(c, _)| c.is_whitespace()) {
+		let mut word = word.to_vec();
 		while word.len() > width {
 			if !line.is_empty() {
 				lines.push(std::mem::take(&mut line));
 			}
 			lines.push(word.drain(..width).collect());
 		}
-		if word.is_empty() {
+		let Some(&(_, first)) = word.first() else {
 			continue;
-		}
-		let used = line.chars().count();
-		if used > 0 && used + 1 + word.len() > width {
+		};
+		if !line.is_empty() && line.len() + 1 + word.len() > width {
 			lines.push(std::mem::take(&mut line));
 		}
-		if !line.is_empty() {
-			line.push(' ');
+		if let Some(&(_, last)) = line.last() {
+			// A space between two words in one emphasis is in it too, so an
+			// underline runs on under it.
+			let between = if last == first {
+				last
+			} else {
+				Style::default()
+			};
+			line.push((' ', between));
 		}
 		line.extend(word);
 	}
 	if !line.is_empty() {
 		lines.push(line);
 	}
-	lines
+	lines.into_iter().map(|line| joined(&line)).collect()
+}
+
+/// Characters back into spans, a new one wherever the emphasis changes.
+fn joined(chars: &[(char, Style)]) -> Vec<Span> {
+	let mut spans: Vec<Span> = Vec::new();
+	for &(c, style) in chars {
+		match spans.last_mut() {
+			Some(span) if span.style == style => span.text.push(c),
+			_ => spans.push(Span {
+				text: c.to_string(),
+				style,
+			}),
+		}
+	}
+	spans
 }
 
 fn blank() -> Line {
 	Line {
 		kind: Kind::Action,
-		text: String::new(),
+		spans: Vec::new(),
 	}
 }
 
@@ -145,21 +185,20 @@ fn blank() -> Line {
 fn ends_sentence(line: &Line) -> bool {
 	line.kind == Kind::Dialogue
 		&& line
-			.text
+			.text()
 			.trim_end_matches(['"', '\'', ')', '\u{201d}', '\u{2019}'])
 			.ends_with(['.', '?', '!', '\u{2026}'])
 }
 
 /// The cue again at the top of the next page.
 fn continued(cue: &Line) -> Line {
-	let text = if cue.text.to_uppercase().contains("(CONT'D)") {
-		cue.text.clone()
-	} else {
-		format!("{} (CONT'D)", cue.text)
-	};
+	let mut spans = cue.spans.clone();
+	if !cue.text().to_uppercase().contains("(CONT'D)") {
+		spans.push(plain(" (CONT'D)"));
+	}
 	Line {
 		kind: Kind::Character,
-		text,
+		spans,
 	}
 }
 
@@ -255,7 +294,7 @@ impl Pages {
 			let rest = lines.split_off(at);
 			lines.push(Line {
 				kind: Kind::Character,
-				text: "(MORE)".to_owned(),
+				spans: vec![plain("(MORE)")],
 			});
 			self.put(scene, lines);
 			self.turn();
@@ -269,8 +308,8 @@ mod tests {
 	use super::*;
 	use crate::script::fountain::parse;
 
-	fn texts(page: &[Line]) -> Vec<&str> {
-		page.iter().map(|line| line.text.as_str()).collect()
+	fn texts(page: &[Line]) -> Vec<String> {
+		page.iter().map(Line::text).collect()
 	}
 
 	/// `count` one-line action paragraphs, which fill `2 * count - 1` lines.
@@ -309,12 +348,12 @@ mod tests {
 		let page = &laid.pages[0];
 		assert!(
 			page.iter()
-				.all(|line| line.text.chars().count() <= width(line.kind))
+				.all(|line| line.text().chars().count() <= width(line.kind))
 		);
 		// 20 five-character words: 12 to an action line, 7 to a dialogue line.
 		assert_eq!(
 			page.iter()
-				.filter(|line| line.kind == Kind::Action && !line.text.is_empty())
+				.filter(|line| line.kind == Kind::Action && !line.spans.is_empty())
 				.count(),
 			2
 		);
@@ -328,7 +367,53 @@ mod tests {
 
 	#[test]
 	fn a_word_longer_than_a_line_is_cut() {
-		assert_eq!(wrap(&"x".repeat(70), 61), ["x".repeat(61), "x".repeat(9)]);
+		let lines = wrap(&[plain(&"x".repeat(70))], 61);
+		assert_eq!(
+			lines,
+			[vec![plain(&"x".repeat(61))], vec![plain(&"x".repeat(9))]]
+		);
+	}
+
+	#[test]
+	fn emphasis_marks_take_no_room_on_a_line() {
+		// 55 letters, a space and BANG. fill 61 exactly; the four marks
+		// would have pushed BANG. onto a second line.
+		let laid = layout(&[parse(&format!("{} **BANG.**", "a".repeat(55)))]);
+		let bold = Style {
+			bold: true,
+			..Style::default()
+		};
+		assert_eq!(
+			laid.pages[0],
+			[Line {
+				kind: Kind::Action,
+				spans: vec![
+					plain(&format!("{} ", "a".repeat(55))),
+					Span {
+						text: "BANG.".to_owned(),
+						style: bold
+					},
+				],
+			}]
+		);
+	}
+
+	#[test]
+	fn a_space_inside_an_underline_stays_underlined() {
+		let under = Style {
+			underline: true,
+			..Style::default()
+		};
+		assert_eq!(
+			wrap(&spans("_two words_ after"), 61),
+			[vec![
+				Span {
+					text: "two words".to_owned(),
+					style: under
+				},
+				plain(" after"),
+			]]
+		);
 	}
 
 	#[test]
@@ -377,7 +462,7 @@ mod tests {
 		let laid = layout(&[parse(&format!("{}\n\n{speech}", actions(25)))]);
 		assert_eq!(laid.pages[0].len(), 49);
 		assert_eq!(laid.pages[1].len(), 6);
-		assert_eq!(laid.pages[1][0].text, "ELENA");
+		assert_eq!(laid.pages[1][0].text(), "ELENA");
 	}
 
 	#[test]

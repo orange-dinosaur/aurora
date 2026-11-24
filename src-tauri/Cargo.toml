@@ -55,6 +55,8 @@ zip = { version = "8.6", default-features = false, features = ["deflate-flate2-z
 # Versions. No network code until projects have a remote, and libgit2 is built
 # in rather than taken from the system, so writers install nothing.
 git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"] }
+pdf-writer = "0.15.0"
+ttf-parser = "0.25.1"
 
 # The same GTK Tauri already builds on, to hold the window's minimum size.
 [target.'cfg(target_os = "linux")'.dependencies]
