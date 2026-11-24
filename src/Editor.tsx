@@ -18,6 +18,7 @@ import {
 	SCRIPT_NODES,
 } from "./screenplay";
 import type { TakeView } from "./bindings/TakeView";
+import type { ScriptNames } from "./subjects";
 import { band } from "./cards";
 import { failure } from "./errors";
 import Icon from "./Icon";
@@ -193,6 +194,8 @@ type Props = {
 	place: Place | null;
 	/** Where the caret and page are now, whenever either moves. */
 	onPlace: (place: Place) => void;
+	/** The characters and locations a script's slash menu offers. */
+	cast: { names: ScriptNames; ask: () => void };
 };
 
 export default function Editor({
@@ -228,6 +231,7 @@ export default function Editor({
 	onTarget,
 	place,
 	onPlace,
+	cast,
 }: Props) {
 	// Held here and handed up whole, because the caret and the scroll move
 	// separately. Through a ref so the handlers below need not change with
@@ -589,7 +593,7 @@ export default function Editor({
 									onLeave={leaveFocus}
 								/>
 								<Typewriter on={preferences.typewriter} />
-								{!script && <SlashMenu />}
+								<SlashMenu cast={script ? cast : undefined} />
 								<Whereabouts
 									place={place}
 									active={active}

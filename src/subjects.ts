@@ -26,9 +26,13 @@ export function isSubject(trail: string[]): boolean {
 /**
  * Every subject in the project by title, in the order the tree lists them, so
  * a relationship can be offered the pages it could point at. Two subjects of
- * the same title are one suggestion: the name is all a tie records.
+ * the same title are one suggestion: the name is all a tie records. `sections`
+ * narrows it to some of the subject sections.
  */
-export function subjectNames(nodes: TreeNode[]): string[] {
+export function subjectNames(
+	nodes: TreeNode[],
+	sections: string[] = SUBJECT_SECTIONS,
+): string[] {
 	const found: string[] = [];
 
 	function walk(node: TreeNode) {
@@ -36,13 +40,25 @@ export function subjectNames(nodes: TreeNode[]): string[] {
 			node.children.forEach(walk);
 			return;
 		}
-		if (isSubject(node.trail) && !found.includes(node.title)) {
+		if (sections.includes(node.trail[0]) && !found.includes(node.title)) {
 			found.push(node.title);
 		}
 	}
 
 	nodes.forEach(walk);
 	return found;
+}
+
+/** The people and places a script's slash menu offers. */
+export type ScriptNames = { characters: string[]; locations: string[] };
+
+export const NO_SCRIPT_NAMES: ScriptNames = { characters: [], locations: [] };
+
+export function scriptNames(nodes: TreeNode[]): ScriptNames {
+	return {
+		characters: subjectNames(nodes, ["Characters"]),
+		locations: subjectNames(nodes, ["Locations"]),
+	};
 }
 
 /**

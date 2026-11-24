@@ -146,6 +146,14 @@ describe("Enter and Tab", () => {
 		];
 		expect(overrules(blocks, 1, "dialogue")).toBe(false);
 	});
+
+	test("a kind chosen for an empty line is held against what is typed next", () => {
+		const blocks: Block[] = [
+			{ kind: "action", text: "Rain.", forced: false },
+			{ kind: "action", text: "", forced: false },
+		];
+		expect(overrules(blocks, 1, "heading")).toBe(true);
+	});
 });
 
 describe("emphasis", () => {

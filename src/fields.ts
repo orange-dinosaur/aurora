@@ -17,7 +17,12 @@ import {
 import { useCorpus } from "./corpus";
 import { failure } from "./errors";
 import { $frontMatter, $setFrontMatter } from "./markdown";
-import { subjectNames } from "./subjects";
+import {
+	NO_SCRIPT_NAMES,
+	scriptNames,
+	subjectNames,
+	type ScriptNames,
+} from "./subjects";
 import { timed } from "./timing";
 import type { TreeNode } from "./types";
 
@@ -280,7 +285,31 @@ export function useSubjectNames(
 	root: string,
 	changed: number,
 ): { names: string[]; ask: () => void } {
-	const [names, setNames] = useState<string[]>([]);
+	return useFromTree(root, changed, "subject names", subjectNames, []);
+}
+
+/** The characters and locations a script's slash menu offers, read the same way. */
+export function useScriptNames(
+	root: string,
+	changed: number,
+): { names: ScriptNames; ask: () => void } {
+	return useFromTree(
+		root,
+		changed,
+		"script names",
+		scriptNames,
+		NO_SCRIPT_NAMES,
+	);
+}
+
+function useFromTree<T>(
+	root: string,
+	changed: number,
+	label: string,
+	from: (tree: TreeNode[]) => T,
+	empty: T,
+): { names: T; ask: () => void } {
+	const [names, setNames] = useState<T>(empty);
 	const read = useRef(-1);
 
 	const ask = useCallback(() => {
@@ -289,13 +318,10 @@ export function useSubjectNames(
 		}
 		read.current = changed;
 
-		void timed(
-			"subject names",
-			invoke<TreeNode[]>("document_tree", { root }),
-		)
-			.then((tree) => setNames(subjectNames(tree)))
+		void timed(label, invoke<TreeNode[]>("document_tree", { root }))
+			.then((tree) => setNames(from(tree)))
 			.catch(() => {});
-	}, [root, changed]);
+	}, [root, changed, label, from]);
 
 	return { names, ask };
 }

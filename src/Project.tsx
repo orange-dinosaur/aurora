@@ -13,7 +13,7 @@ import { NARROW } from "./breakpoints";
 import { filed, refile } from "./corpus";
 import Editor from "./Editor";
 import { useMedia } from "./useMedia";
-import { useFolderFields, type FieldsHandle } from "./fields";
+import { useFolderFields, useScriptNames, type FieldsHandle } from "./fields";
 import { flushAll, flushOthers, holdUnsaved } from "./flushing";
 import { list } from "./frontmatter";
 import type { About } from "./Mentions";
@@ -400,6 +400,7 @@ export default function Project({
 	// Bumped whenever a document reaches disk, which is the other way the
 	// project changes under anything holding a copy of it.
 	const [written, setWritten] = useState(0);
+	const cast = useScriptNames(root, listing + written);
 
 	// A document created, renamed, moved or deleted. Every other change is a
 	// text the corpus has already been handed, but this one it cannot work out
@@ -1601,6 +1602,7 @@ export default function Project({
 					onMarks={setMarks}
 					onRestore={() => void restore(tab.document.id)}
 					changed={tab.save.kind === "changed"}
+					cast={cast}
 					onReload={() => void reload(tab.document.id)}
 					onKeepMine={() => void keepMine(tab.document.id)}
 					onPreferences={onPreferences}

@@ -144,7 +144,8 @@ export function follows(kind: BlockKind): BlockKind {
 			: "action";
 }
 
-const CYCLE: BlockKind[] = [
+/** The blocks Tab steps through, in order. */
+export const CYCLE: BlockKind[] = [
 	"heading",
 	"action",
 	"character",
@@ -166,12 +167,27 @@ export function cycled(kind: BlockKind, step: 1 | -1): BlockKind {
 	return CYCLE[(at + step + CYCLE.length) % CYCLE.length];
 }
 
-/** Whether giving block `at` this kind overrules what its text would make it. */
+/** A character's name as their cue. */
+export function cueFor(name: string): string {
+	return name.toUpperCase();
+}
+
+/** The start of a scene heading set at a place, left for the time of day. */
+export function headingAt(place: string): string {
+	return `INT. ${place.toUpperCase()} - `;
+}
+
+/** Whether giving block `at` this kind overrules what its text would make it.
+ * A kind chosen for an empty line always holds, or the first capital typed into
+ * a heading would turn it into a cue. */
 export function overrules(
 	blocks: Block[],
 	at: number,
 	kind: BlockKind,
 ): boolean {
+	if (blocks[at].text.trim() === "") {
+		return true;
+	}
 	const chosen = blocks.map((block, i) =>
 		i === at ? { ...block, kind, forced: false } : block,
 	);

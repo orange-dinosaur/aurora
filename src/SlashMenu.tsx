@@ -9,40 +9,58 @@ import {
 	KEY_ESCAPE_COMMAND,
 	type LexicalEditor,
 } from "lexical";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { shortcutLabel, type Action } from "./formatting";
-import { $slashAt, matching } from "./slash";
+import { shortcutLabel } from "./formatting";
+import { scriptEntries } from "./screenplay";
+import { $slashAt, matching, NOVEL, type Entry } from "./slash";
+import type { ScriptNames } from "./subjects";
 
-// The menu is handed options rather than actions, so each one carries the
-// action it stands for.
+// The menu is handed options rather than entries, so each one carries the
+// entry it stands for.
 class Choice extends MenuOption {
-	readonly action: Action;
+	readonly action: Entry;
 
-	constructor(action: Action) {
+	constructor(action: Entry) {
 		super(action.id);
 		this.action = action;
 	}
 }
 
-// Nothing to match means no menu at all, rather than an empty one: an open
-// menu takes the arrow keys, and the caret would stop moving.
-function trigger(_text: string, editor: LexicalEditor): MenuTextMatch | null {
-	const query = editor.getEditorState().read($slashAt);
-	if (query === null || matching(query).length === 0) {
-		return null;
-	}
-	return {
-		leadOffset: 0,
-		matchingString: query,
-		replaceableString: `/${query}`,
-	};
-}
+type Props = {
+	/** In a script, the people and places to offer, read once a slash is typed. */
+	cast?: { names: ScriptNames; ask: () => void };
+};
 
 // A slash at the start of an empty block offers the same blocks the bar's
 // dropdown does, without the writer having to reach for it.
-export default function SlashMenu() {
+export default function SlashMenu({ cast }: Props) {
 	const [editor] = useLexicalComposerContext();
+	const names = cast?.names;
+	const offered = useMemo(
+		() =>
+			names === undefined
+				? NOVEL
+				: scriptEntries(names.characters, names.locations),
+		[names],
+	);
+
+	// Nothing to match means no menu at all, rather than an empty one: an open
+	// menu takes the arrow keys, and the caret would stop moving.
+	const trigger = useCallback(
+		(_text: string, editor: LexicalEditor): MenuTextMatch | null => {
+			const query = editor.getEditorState().read($slashAt);
+			if (query === null || matching(query, offered).length === 0) {
+				return null;
+			}
+			return {
+				leadOffset: 0,
+				matchingString: query,
+				replaceableString: `/${query}`,
+			};
+		},
+		[offered],
+	);
 	// What has been typed after the slash. Read here as well as by the plugin
 	// below, because it is also what says when a menu put away by hand may
 	// come back.
@@ -63,9 +81,18 @@ export default function SlashMenu() {
 		setDismissed(false);
 	}, [typed]);
 
+	const asking = typed !== null;
+	const ask = cast?.ask;
+	useEffect(() => {
+		if (asking) {
+			ask?.();
+		}
+	}, [asking, ask]);
+
 	const options = useMemo(
-		() => matching(typed ?? "").map((action) => new Choice(action)),
-		[typed],
+		() =>
+			matching(typed ?? "", offered).map((action) => new Choice(action)),
+		[typed, offered],
 	);
 
 	const showing = typed !== null && !dismissed && options.length > 0;
@@ -160,7 +187,11 @@ export default function SlashMenu() {
 									>
 										{option.action.label}
 										<span className="controls__keys">
-											{shortcutLabel(option.action.keys)}
+											{option.action.keys
+												? shortcutLabel(
+														option.action.keys,
+													)
+												: option.action.hint}
 										</span>
 									</button>
 								))}

@@ -22,11 +22,15 @@ import {
 } from "lexical";
 import { mergeRegister } from "@lexical/utils";
 import { split } from "./frontmatter";
+import type { Entry } from "./slash";
 import {
 	classify,
+	cueFor,
+	CYCLE,
 	cycled,
 	emphasised,
 	follows,
+	headingAt,
 	overrules,
 	parse,
 	serialise,
@@ -184,6 +188,77 @@ export function $toFountain(): string {
 	return body === "" ? head : `${head}\n\n${body}`;
 }
 
+/** Gives a line the block the writer chose, marking it forced only when its
+ * text would have made it something else. */
+function $choose(node: ScriptNode, chosen: BlockKind): void {
+	const nodes = $getRoot().getChildren().filter($isScriptNode);
+	const at = nodes.findIndex((each) => each.is(node));
+	$setState(node, forced, overrules(nodes.map($block), at, chosen));
+	$setState(node, kind, chosen);
+}
+
+const NAMES: Record<string, string> = {
+	heading: "Scene heading",
+	action: "Action",
+	character: "Character",
+	dialogue: "Dialogue",
+	parenthetical: "Parenthetical",
+	transition: "Transition",
+};
+
+// Writes `text` where the caret is, then makes its line `chosen`.
+function line(
+	id: string,
+	label: string,
+	chosen: BlockKind,
+	text = "",
+	hint?: string,
+): Entry {
+	return {
+		id,
+		label,
+		hint,
+		run: (editor) =>
+			editor.update(() => {
+				const selection = $getSelection();
+				if (!$isRangeSelection(selection)) {
+					return;
+				}
+				const node = selection.anchor.getNode().getTopLevelElement();
+				if (node === null || !$isScriptNode(node)) {
+					return;
+				}
+				if (text !== "") {
+					selection.insertText(text);
+				}
+				$choose(node, chosen);
+			}),
+	};
+}
+
+/** What a slash offers in a script: the blocks, then each character as a cue
+ * and each location as the start of a scene heading. */
+export function scriptEntries(
+	characters: string[],
+	locations: string[],
+): Entry[] {
+	return [
+		...CYCLE.map((each) => line(each, NAMES[each], each)),
+		...characters.map((name) =>
+			line(`cue:${name}`, name, "character", cueFor(name), "Character"),
+		),
+		...locations.map((place) =>
+			line(
+				`place:${place}`,
+				place,
+				"heading",
+				headingAt(place),
+				"Location",
+			),
+		),
+	];
+}
+
 /**
  * Works each line's block out again whenever the text changes. The root's
  * transform runs last in every update that changed anything, so the kinds are
@@ -223,18 +298,10 @@ export function registerScript(editor: LexicalEditor): () => void {
 					return false;
 				}
 				event.preventDefault();
-				const nodes = $getRoot().getChildren().filter($isScriptNode);
-				const at = nodes.findIndex((each) => each.is(node));
-				const chosen = cycled(
-					$getState(node, kind),
-					event.shiftKey ? -1 : 1,
-				);
-				$setState(
+				$choose(
 					node,
-					forced,
-					overrules(nodes.map($block), at, chosen),
+					cycled($getState(node, kind), event.shiftKey ? -1 : 1),
 				);
-				$setState(node, kind, chosen);
 				return true;
 			},
 			// Above Lexical's own keydown handler, which runs at the editor's

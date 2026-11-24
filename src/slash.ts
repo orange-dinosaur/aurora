@@ -10,7 +10,7 @@ import {
 	$isRangeSelection,
 	type LexicalNode,
 } from "lexical";
-import { BLOCKS, INSERTS, type Action } from "./formatting";
+import { BLOCKS, INSERTS, type Action, type Keys } from "./formatting";
 
 // Past this the slash is not a search any more, it is a sentence that happens
 // to start with one.
@@ -54,19 +54,26 @@ export function $slashAt(): string | null {
 	);
 }
 
-// What a paragraph can become, and then what can be dropped in after it.
-const OFFERED: Action[] = [...BLOCKS, ...INSERTS];
+/** One line of the menu. A shortcut is shown when it has one, and otherwise a
+ * word saying what it is. */
+export type Entry = Pick<Action, "id" | "label" | "run"> & {
+	keys?: Keys;
+	hint?: string;
+};
+
+/** What a paragraph can become, and then what can be dropped in after it. */
+export const NOVEL: Entry[] = [...BLOCKS, ...INSERTS];
 
 /** The entries whose names answer to what has been typed. Any word of a name
  * can be the one that matches, so "list" finds both of them. */
-export function matching(query: string): Action[] {
+export function matching(query: string, offered: Entry[]): Entry[] {
 	const wanted = query.trim().toLowerCase();
 	if (wanted === "") {
-		return OFFERED;
+		return offered;
 	}
 	// Any run of the label's words can start with the query, so a two-word
 	// query like "heading 1" finds Heading 1.
-	return OFFERED.filter((action) => {
+	return offered.filter((action) => {
 		const words = action.label.toLowerCase().split(" ");
 		return words.some((_, at) =>
 			words.slice(at).join(" ").startsWith(wanted),

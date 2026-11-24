@@ -4,7 +4,9 @@ import { $getRoot, $getSelection, $isRangeSelection } from "lexical";
 import { describe, expect, test } from "vitest";
 import { BLOCKS, INSERTS } from "./formatting";
 import { $fromMarkdown, EDITOR_NODES } from "./markdown";
-import { $slashAt, matching, slashQuery } from "./slash";
+import { cueFor, headingAt } from "./fountain";
+import { scriptEntries } from "./screenplay";
+import { $slashAt, matching, NOVEL, slashQuery } from "./slash";
 
 describe("recognising a slash that is asking for the menu", () => {
 	test("a slash on its own opens it with nothing typed", () => {
@@ -112,39 +114,73 @@ describe("reading the caret", () => {
 });
 
 describe("choosing what the menu lists", () => {
+	const ids = (query: string) =>
+		matching(query, NOVEL).map((action) => action.id);
+
 	test("nothing typed lists everything, the blocks first", () => {
-		expect(matching("")).toEqual([...BLOCKS, ...INSERTS]);
+		expect(matching("", NOVEL)).toEqual([...BLOCKS, ...INSERTS]);
 	});
 
 	test("a name is matched from its start", () => {
-		expect(matching("head").map((action) => action.id)).toEqual([
-			"h1",
-			"h2",
-			"h3",
-		]);
+		expect(ids("head")).toEqual(["h1", "h2", "h3"]);
 	});
 
 	test("any word of a name can be the one that matches", () => {
-		expect(matching("list").map((action) => action.id)).toEqual([
-			"bullet",
-			"number",
-		]);
+		expect(ids("list")).toEqual(["bullet", "number"]);
 	});
 
 	test("the number of a heading finds it", () => {
-		expect(matching("2").map((action) => action.id)).toEqual(["h2"]);
+		expect(ids("2")).toEqual(["h2"]);
 	});
 
 	test("case is not part of the question", () => {
-		expect(matching("QUO").map((action) => action.id)).toEqual(["quote"]);
+		expect(ids("QUO")).toEqual(["quote"]);
 	});
 
 	test("what is inserted is offered alongside what is turned into", () => {
-		expect(matching("scene").map((action) => action.id)).toEqual(["rule"]);
-		expect(matching("break").map((action) => action.id)).toEqual(["rule"]);
+		expect(ids("scene")).toEqual(["rule"]);
+		expect(ids("break")).toEqual(["rule"]);
 	});
 
 	test("a name nothing answers to lists nothing", () => {
-		expect(matching("footnote")).toEqual([]);
+		expect(matching("footnote", NOVEL)).toEqual([]);
+	});
+});
+
+describe("what a slash offers in a script", () => {
+	const offered = scriptEntries(
+		["Elena Marsh", "Marcus"],
+		["Kitchen", "Paris"],
+	);
+	const ids = (query: string) =>
+		matching(query, offered).map((action) => action.id);
+
+	test("nothing typed lists the blocks, then characters, then locations", () => {
+		expect(ids("")).toEqual([
+			"heading",
+			"action",
+			"character",
+			"dialogue",
+			"parenthetical",
+			"transition",
+			"cue:Elena Marsh",
+			"cue:Marcus",
+			"place:Kitchen",
+			"place:Paris",
+		]);
+	});
+
+	test("a character is found by any word of their name", () => {
+		expect(ids("el")).toEqual(["cue:Elena Marsh"]);
+		expect(ids("mar")).toEqual(["cue:Elena Marsh", "cue:Marcus"]);
+	});
+
+	test("a block and a name can both answer", () => {
+		expect(ids("pa")).toEqual(["parenthetical", "place:Paris"]);
+	});
+
+	test("a cue is the name in capitals and a heading starts at the place", () => {
+		expect(cueFor("Elena Marsh")).toBe("ELENA MARSH");
+		expect(headingAt("Kitchen")).toBe("INT. KITCHEN - ");
 	});
 });
