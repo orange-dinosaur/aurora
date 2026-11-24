@@ -23,6 +23,8 @@ use crate::project::{
 	Book, Error, ExportFormat, Format, MANUSCRIPT, RESERVED, Result, cover_bytes, matter,
 	read_manifest,
 };
+use crate::script::fountain::{Block, parse};
+use crate::script::pdf::pdf;
 use crate::text::text;
 use crate::tree::FolderKind;
 
@@ -396,6 +398,14 @@ pub fn fountain(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
 	out
 }
 
+/// Every scene's body read as Fountain, in binder order.
+fn script(compiled: &Compiled, prose: &Prose) -> Vec<Vec<Block>> {
+	all_scenes(compiled)
+		.into_iter()
+		.map(|scene| parse(prose.get(&scene.id).map_or("", String::as_str)))
+		.collect()
+}
+
 /// One key of a Fountain title page. A value of several lines goes under its
 /// key, each line indented, which is how Fountain tells it from the next key.
 fn title_field(key: &str, value: &str) -> String {
@@ -599,7 +609,8 @@ pub fn export(
 				ExportFormat::Docx => docx(&book, &compiled, &prose)?,
 				ExportFormat::Text => text(&book, &compiled, &prose).into_bytes(),
 				ExportFormat::Fountain => fountain(&book, &compiled, &prose).into_bytes(),
-				ExportFormat::Pdf | ExportFormat::Fdx => {
+				ExportFormat::Pdf => pdf(&book, &script(&compiled, &prose)),
+				ExportFormat::Fdx => {
 					return Err(Error::ExportFormatRefused(format));
 				}
 			};

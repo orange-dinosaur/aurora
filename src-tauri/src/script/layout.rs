@@ -34,7 +34,7 @@ impl Line {
 	}
 }
 
-fn plain(text: &str) -> Span {
+pub fn plain(text: &str) -> Span {
 	Span {
 		text: text.to_owned(),
 		style: Style::default(),
