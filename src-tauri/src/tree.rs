@@ -118,7 +118,21 @@ pub enum Node {
 		/// The take the document's own file holds.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		chosen: Option<Uuid>,
+		/// Where the writer dragged it on the timeline. A scene never dragged
+		/// writes no key and follows the binder.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		placed: Option<Place>,
 	},
+}
+
+/// Where a dragged scene sits in story order: first of all, or straight after
+/// another scene. On disk it is `"first"` or `{ "after": "<id>" }`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum Place {
+	First,
+	After(Uuid),
 }
 
 /// Whether a folder of this kind may be made inside a folder that is itself
@@ -181,6 +195,7 @@ impl Node {
 			target: None,
 			takes: BTreeMap::new(),
 			chosen: None,
+			placed: None,
 		}
 	}
 
@@ -252,6 +267,7 @@ pub fn tree_from_flat(folders: &[String], documents: &[Document]) -> Vec<Node> {
 			target: document.target,
 			takes: BTreeMap::new(),
 			chosen: None,
+			placed: None,
 		});
 	}
 
@@ -557,6 +573,7 @@ mod tests {
 					target: None,
 					takes: BTreeMap::new(),
 					chosen: None,
+					placed: None,
 				}],
 			}],
 		}];
@@ -594,6 +611,7 @@ mod tests {
 			target: None,
 			takes: BTreeMap::new(),
 			chosen: None,
+			placed: None,
 		}
 	}
 

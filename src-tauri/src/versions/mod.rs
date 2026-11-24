@@ -3553,6 +3553,7 @@ mod tests {
 			target: None,
 			takes: BTreeMap::new(),
 			chosen: None,
+			placed: None,
 		};
 		let from = vec![folder_node(
 			p,

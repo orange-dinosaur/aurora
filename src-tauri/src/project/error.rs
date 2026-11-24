@@ -16,6 +16,7 @@ pub enum Error {
 	UnknownDocument,
 	UnknownSection,
 	UnknownFolder,
+	UnknownMarker,
 	FolderNotAllowed,
 	SectionFixed,
 	MoveInsideItself,
@@ -76,6 +77,7 @@ impl fmt::Display for Error {
 			Error::UnknownDocument => write!(f, "that document is not part of this project"),
 			Error::UnknownSection => write!(f, "that section is not part of this project"),
 			Error::UnknownFolder => write!(f, "that folder is not part of this project"),
+			Error::UnknownMarker => write!(f, "that marker is no longer on the timeline"),
 			Error::FolderNotAllowed => {
 				write!(
 					f,
@@ -180,6 +182,7 @@ impl Error {
 			Error::UnknownDocument => "unknownDocument",
 			Error::UnknownSection => "unknownSection",
 			Error::UnknownFolder => "unknownFolder",
+			Error::UnknownMarker => "unknownMarker",
 			Error::FolderNotAllowed => "folderNotAllowed",
 			Error::SectionFixed => "sectionFixed",
 			Error::MoveInsideItself => "moveInsideItself",

@@ -23,6 +23,7 @@ mod front;
 mod pages;
 mod paths;
 mod scan;
+mod timeline;
 mod trash;
 
 pub(crate) use count::manuscript_words;
@@ -31,6 +32,7 @@ pub use front::*;
 pub(crate) use pages::Pages;
 pub(crate) use paths::*;
 pub use scan::*;
+pub use timeline::*;
 pub use trash::*;
 
 /// A document inside a project. The path is relative to the project root and
@@ -849,25 +851,28 @@ pub fn folder_overview(root: PathBuf, id: Uuid) -> Result<Vec<ChildSummary>> {
 			},
 			Node::Document {
 				id, name, target, ..
-			} => {
-				let document = Document {
+			} => ChildSummary::Document(card(
+				&counting_root,
+				pages.as_ref(),
+				&Document {
 					id: *id,
 					path: format!("{prefix}/{name}"),
 					target: *target,
-				};
-				let mut summary = match within(&counting_root, &document.path) {
-					Ok(path) => summarise(&document, &path),
-					// A vanished file, or one the manifest points outside the
-					// project.
-					Err(_) => DocumentSummary::blank(&document),
-				};
-				summary.pages = pages
-					.as_ref()
-					.and_then(|pages| pages.document(&document.path));
-				ChildSummary::Document(summary)
-			}
+				},
+			)),
 		})
 		.collect())
+}
+
+/// What a document's card shows, read from its file.
+fn card(counting_root: &Path, pages: Option<&Pages>, document: &Document) -> DocumentSummary {
+	let mut summary = match within(counting_root, &document.path) {
+		Ok(path) => summarise(document, &path),
+		// A vanished file, or one the manifest points outside the project.
+		Err(_) => DocumentSummary::blank(document),
+	};
+	summary.pages = pages.and_then(|pages| pages.document(&document.path));
+	summary
 }
 
 /// Every document in the project with its text, in manifest order. One call
@@ -1544,6 +1549,7 @@ mod tests {
 				target,
 				takes: Default::default(),
 				chosen: None,
+				placed: None,
 			},
 		);
 		write_manifest(root, &mut manifest).unwrap();

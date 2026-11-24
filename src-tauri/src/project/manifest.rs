@@ -358,6 +358,20 @@ pub struct Manifest {
 	/// there. A project keeps its own sections even if the format's definition
 	/// changes later.
 	pub nodes: Vec<Node>,
+	/// The names the writer put on stretches of the timeline. A project with
+	/// none writes no key.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub markers: Vec<Marker>,
+}
+
+/// A name on the timeline, such as "Three years later", for the stretch from
+/// the scene `before` up to the next marker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct Marker {
+	pub id: Uuid,
+	pub name: String,
+	pub before: Uuid,
 }
 
 impl Manifest {
@@ -380,6 +394,7 @@ impl Manifest {
 				.iter()
 				.map(|s| Node::folder(s.folder, Vec::new()))
 				.collect(),
+			markers: Vec::new(),
 		}
 	}
 
@@ -418,6 +433,8 @@ pub(super) struct Stored {
 	documents: Vec<Document>,
 	nodes: Option<Vec<Node>>,
 	book: Option<Book>,
+	#[serde(default)]
+	markers: Vec<Marker>,
 }
 
 impl<'de> Deserialize<'de> for Manifest {
@@ -437,6 +454,7 @@ impl<'de> Deserialize<'de> for Manifest {
 			nodes: stored
 				.nodes
 				.unwrap_or_else(|| tree_from_flat(&stored.folders, &stored.documents)),
+			markers: stored.markers,
 		})
 	}
 }
