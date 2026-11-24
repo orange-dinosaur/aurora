@@ -18,6 +18,8 @@ const empty: Book = {
 	isbn: "",
 	keywords: [],
 	copyright: "",
+	contact: "",
+	draft: "",
 	exportFormats: [],
 };
 

@@ -47,6 +47,7 @@ pub enum Error {
 	NoManifest,
 	ScenesUnreadable(Vec<String>),
 	ExportInsideProject,
+	ExportFormatRefused(ExportFormat),
 	ExportStopped {
 		written: Vec<String>,
 		cause: Box<Error>,
@@ -146,6 +147,9 @@ impl fmt::Display for Error {
 				write!(f, "these scenes could not be read: {}", paths.join(", "))
 			}
 			Error::ExportInsideProject => write!(f, "Pick a folder outside the project"),
+			Error::ExportFormatRefused(format) => {
+				write!(f, "This project cannot be exported as {}", format.name())
+			}
 			Error::ExportStopped { written, cause } if written.is_empty() => {
 				write!(f, "the export stopped before writing anything: {cause}")
 			}
@@ -207,6 +211,7 @@ impl Error {
 			Error::NoManifest => "noManifest",
 			Error::ScenesUnreadable(_) => "scenesUnreadable",
 			Error::ExportInsideProject => "exportInsideProject",
+			Error::ExportFormatRefused(_) => "exportFormatRefused",
 			Error::ExportStopped { .. } => "exportStopped",
 			Error::Trash(_) => "trash",
 			Error::Git(_) => "git",

@@ -20,7 +20,8 @@ use crate::document::{DocumentView, NodeView, body, document_tree, words_of};
 use crate::docx::docx;
 use crate::epub::{Flavour, epub};
 use crate::project::{
-	Book, Error, ExportFormat, MANUSCRIPT, RESERVED, Result, cover_bytes, matter, read_manifest,
+	Book, Error, ExportFormat, Format, MANUSCRIPT, RESERVED, Result, cover_bytes, matter,
+	read_manifest,
 };
 use crate::text::text;
 use crate::tree::FolderKind;
@@ -503,7 +504,15 @@ pub fn export(
 	if folder.canonicalize()?.starts_with(root.canonicalize()?) {
 		return Err(Error::ExportInsideProject);
 	}
-	let book = read_manifest(root)?.book;
+	let manifest = read_manifest(root)?;
+	let screenplay = manifest.format == Format::Screenplay;
+	if let Some(&refused) = formats
+		.iter()
+		.find(|format| format.for_scripts() != screenplay)
+	{
+		return Err(Error::ExportFormatRefused(refused));
+	}
+	let book = manifest.book;
 	let compiled = compile(&document_tree(root.to_path_buf())?);
 	let scenes = all_scenes(&compiled).len();
 	let total = scenes + formats.len();
@@ -542,6 +551,9 @@ pub fn export(
 				ExportFormat::Kepub => epub_for(Flavour::Kobo)?,
 				ExportFormat::Docx => docx(&book, &compiled, &prose)?,
 				ExportFormat::Text => text(&book, &compiled, &prose).into_bytes(),
+				ExportFormat::Fountain | ExportFormat::Pdf | ExportFormat::Fdx => {
+					return Err(Error::ExportFormatRefused(format));
+				}
 			};
 			// Whole or not at all: a reader never finds half a file under the
 			// book's name.
@@ -571,6 +583,9 @@ fn extension(format: ExportFormat) -> &'static str {
 		ExportFormat::Kepub => "kepub.epub",
 		ExportFormat::Docx => "docx",
 		ExportFormat::Text => "txt",
+		ExportFormat::Fountain => "fountain",
+		ExportFormat::Pdf => "pdf",
+		ExportFormat::Fdx => "fdx",
 	}
 }
 
@@ -1515,6 +1530,47 @@ mod tests {
 			held.get(&scene.id).map(String::as_str),
 			Some("She arrived.")
 		);
+	}
+
+	#[test]
+	fn a_novel_will_not_export_as_a_script() {
+		let parent = tempfile::tempdir().unwrap();
+		let out = tempfile::tempdir().unwrap();
+		let root = ithaca(parent.path());
+
+		let refused = export(
+			&root,
+			out.path(),
+			&[ExportFormat::Markdown, ExportFormat::Pdf],
+			|_| {},
+		);
+
+		assert!(matches!(
+			refused,
+			Err(Error::ExportFormatRefused(ExportFormat::Pdf))
+		));
+		assert!(fs::read_dir(out.path()).unwrap().next().is_none());
+	}
+
+	#[test]
+	fn a_screenplay_will_not_export_as_a_book() {
+		let parent = tempfile::tempdir().unwrap();
+		let out = tempfile::tempdir().unwrap();
+		let root = crate::project::create(
+			parent.path(),
+			"Ithaca",
+			Format::Screenplay,
+			OffsetDateTime::now_utc(),
+		)
+		.unwrap();
+
+		let refused = export(&root, out.path(), &[ExportFormat::Epub], |_| {});
+
+		assert!(matches!(
+			refused,
+			Err(Error::ExportFormatRefused(ExportFormat::Epub))
+		));
+		assert!(fs::read_dir(out.path()).unwrap().next().is_none());
 	}
 
 	#[test]

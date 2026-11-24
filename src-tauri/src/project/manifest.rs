@@ -261,6 +261,13 @@ pub struct Book {
 	pub keywords: Vec<String>,
 	#[serde(default)]
 	pub copyright: String,
+	/// How to reach the writer, for a screenplay's title page.
+	#[serde(default)]
+	pub contact: String,
+	/// Which draft this is, for a screenplay's title page. Free text: "Second
+	/// draft", "Blue revisions".
+	#[serde(default)]
+	pub draft: String,
 	/// The formats ticked on the Export panel, so the next export starts from
 	/// the choice the last one made.
 	#[serde(default)]
@@ -277,6 +284,34 @@ pub enum ExportFormat {
 	Kepub,
 	Docx,
 	Text,
+	Fountain,
+	Pdf,
+	Fdx,
+}
+
+impl ExportFormat {
+	/// Whether this is a screenplay's format rather than a book's. A
+	/// screenplay exports only these, and every other project only the rest.
+	pub fn for_scripts(self) -> bool {
+		matches!(
+			self,
+			ExportFormat::Fountain | ExportFormat::Pdf | ExportFormat::Fdx
+		)
+	}
+
+	/// What the writer knows it as, as the Export dialog names it.
+	pub fn name(self) -> &'static str {
+		match self {
+			ExportFormat::Markdown => "Markdown",
+			ExportFormat::Epub => "EPUB",
+			ExportFormat::Kepub => "KEPUB",
+			ExportFormat::Docx => "DOCX",
+			ExportFormat::Text => "plain text",
+			ExportFormat::Fountain => "Fountain",
+			ExportFormat::Pdf => "PDF",
+			ExportFormat::Fdx => "Final Draft",
+		}
+	}
 }
 
 impl Book {
@@ -299,6 +334,8 @@ impl Book {
 			isbn: String::new(),
 			keywords: Vec::new(),
 			copyright: String::new(),
+			contact: String::new(),
+			draft: String::new(),
 			export_formats: Vec::new(),
 		}
 	}

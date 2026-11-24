@@ -1091,6 +1091,43 @@ mod tests {
 	}
 
 	#[test]
+	fn a_screenplay_keeps_its_contact_and_draft() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Screenplay, fixed_time()).unwrap();
+
+		write_book(
+			root.clone(),
+			Book {
+				contact: "agent@example.com".to_owned(),
+				draft: "Second draft".to_owned(),
+				export_formats: vec![ExportFormat::Fountain, ExportFormat::Fdx],
+				..read_book(root.clone()).unwrap()
+			},
+		)
+		.unwrap();
+
+		let book = read_book(root).unwrap();
+		assert_eq!(book.contact, "agent@example.com");
+		assert_eq!(book.draft, "Second draft");
+		assert_eq!(
+			book.export_formats,
+			vec![ExportFormat::Fountain, ExportFormat::Fdx]
+		);
+	}
+
+	#[test]
+	fn a_book_written_before_contact_and_draft_reads_them_as_empty() {
+		let mut json = serde_json::to_value(Book::new("Ithaca")).unwrap();
+		let fields = json.as_object_mut().unwrap();
+		fields.remove("contact");
+		fields.remove("draft");
+
+		let book: Book = serde_json::from_value(json).unwrap();
+
+		assert_eq!((book.contact.as_str(), book.draft.as_str()), ("", ""));
+	}
+
+	#[test]
 	fn writing_a_book_leaves_the_project_alone() {
 		let parent = tempfile::tempdir().unwrap();
 		let root = create(parent.path(), "Ithaca", Format::Novel, fixed_time()).unwrap();

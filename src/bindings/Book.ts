@@ -29,6 +29,15 @@ cover: string, publisher: string,
  */
 publicationDate: string, isbn: string, keywords: Array<string>, copyright: string, 
 /**
+ * How to reach the writer, for a screenplay's title page.
+ */
+contact: string, 
+/**
+ * Which draft this is, for a screenplay's title page. Free text: "Second
+ * draft", "Blue revisions".
+ */
+draft: string, 
+/**
  * The formats ticked on the Export panel, so the next export starts from
  * the choice the last one made.
  */

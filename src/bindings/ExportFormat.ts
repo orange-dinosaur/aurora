@@ -3,4 +3,4 @@
 /**
  * A kind of file the book can be exported as.
  */
-export type ExportFormat = "markdown" | "epub" | "kepub" | "docx" | "text";
+export type ExportFormat = "markdown" | "epub" | "kepub" | "docx" | "text" | "fountain" | "pdf" | "fdx";
