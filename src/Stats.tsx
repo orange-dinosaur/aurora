@@ -173,6 +173,7 @@ export default function Stats({
 				<div className="stats__words">
 					<Target
 						words={progress.words}
+						pages={progress.pages}
 						target={progress.target}
 						onTarget={onTarget}
 						merging={merging}

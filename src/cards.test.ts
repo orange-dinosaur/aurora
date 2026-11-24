@@ -3,6 +3,8 @@ import {
 	band,
 	counted,
 	described,
+	eighths,
+	paged,
 	previewed,
 	reached,
 	summarised,
@@ -50,6 +52,41 @@ describe("a document card's count", () => {
 
 	test("a target turns the count into a report against it", () => {
 		expect(counted(1200, 2000)).toBe("1,200 of 2,000 words");
+	});
+
+	test("a screenplay's count and target are in pages", () => {
+		expect(counted(300, null, 1.375)).toBe("1 3/8 pages");
+		expect(counted(12_000, 30, 12.5)).toBe("12 4/8 of 30 pages");
+	});
+});
+
+describe("a length in pages", () => {
+	test("is written in unreduced eighths", () => {
+		expect(eighths(1.375)).toBe("1 3/8");
+		expect(eighths(0.25)).toBe("2/8");
+		expect(eighths(104)).toBe("104");
+	});
+
+	test("rounds to the nearest eighth, and never below one when written", () => {
+		expect(eighths(1.06)).toBe("1");
+		expect(eighths(0.01)).toBe("1/8");
+		expect(eighths(0)).toBe("0");
+	});
+
+	test("says page up to one and pages after", () => {
+		expect(paged(0.375)).toBe("3/8 page");
+		expect(paged(1)).toBe("1 page");
+		expect(paged(1.125)).toBe("1 1/8 pages");
+		expect(paged(0)).toBe("0 pages");
+	});
+
+	test("a screenplay folder adds up its cards' pages", () => {
+		const cards = [
+			{ ...document("Opening", 300), pages: 1.25 },
+			{ ...document("Chase", 200), pages: 0.5 },
+		];
+		expect(summarised(cards).pages).toBe(1.75);
+		expect(summarised([document("Novel", 300)]).pages).toBeNull();
 	});
 });
 
@@ -148,7 +185,11 @@ describe("a folder card's line", () => {
 
 describe("the line under a folder's name", () => {
 	test("an empty folder still says so", () => {
-		expect(summarised([])).toEqual({ documents: "0 documents", words: 0 });
+		expect(summarised([])).toEqual({
+			documents: "0 documents",
+			words: 0,
+			pages: null,
+		});
 	});
 
 	test("the documents at this level are counted", () => {
@@ -157,7 +198,7 @@ describe("the line under a folder's name", () => {
 				document("Chapter 1", 900),
 				document("Chapter 2", 350),
 			]),
-		).toEqual({ documents: "2 documents", words: 1_250 });
+		).toEqual({ documents: "2 documents", words: 1_250, pages: null });
 	});
 
 	test("a folder card brings its words but is not a document", () => {
@@ -166,7 +207,7 @@ describe("the line under a folder's name", () => {
 				folder("Part One", "part", 4, 8_000),
 				document("Epilogue", 120),
 			]),
-		).toEqual({ documents: "1 document", words: 8_120 });
+		).toEqual({ documents: "1 document", words: 8_120, pages: null });
 	});
 
 	test("front and back matter bring no words", () => {
@@ -176,6 +217,6 @@ describe("the line under a folder's name", () => {
 				folder("Part One", "part", 4, 8_000),
 				folder("Back Matter", "back-matter", 1, 150),
 			]),
-		).toEqual({ documents: "0 documents", words: 8_000 });
+		).toEqual({ documents: "0 documents", words: 8_000, pages: null });
 	});
 });

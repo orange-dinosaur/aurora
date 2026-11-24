@@ -3,6 +3,7 @@
 // offers a drag.
 
 import type { CSSProperties } from "react";
+import { eighths } from "./cards";
 import type { Spot } from "./reorder";
 import type { Row } from "./tree";
 
@@ -70,8 +71,12 @@ export function spot(
  * the word after it. Always short of the true figure rather than over it: a
  * writer reads their own count as a claim, and a rounded-up one is a lie. An
  * empty row shows nothing, so a new project's binder is not a column of zeros.
+ * In a screenplay's Manuscript the row shows its pages in eighths instead.
  */
-export function abbreviated(words: number) {
+export function abbreviated(words: number, pages: number | null = null) {
+	if (pages !== null) {
+		return words === 0 ? "" : eighths(pages);
+	}
 	if (words === 0) {
 		return "";
 	}

@@ -104,6 +104,7 @@ export default function FolderRow({
 					<TargetField
 						compact
 						target={row.target}
+						pages={row.pages}
 						onTarget={onTarget}
 						onDone={() => setAiming(false)}
 					/>
@@ -120,11 +121,11 @@ export default function FolderRow({
 					{/* Left of the menus' slot rather than in it, so the two can
 					    appear together when the row is hovered. */}
 					<span className="folder__words">
-						{abbreviated(row.words)}
+						{abbreviated(row.words, row.pages)}
 					</span>
 				</button>
 			)}
-			{progress(row.words, row.target)}
+			{progress(row.pages ?? row.words, row.target)}
 
 			{/* Two menus share the right-hand end of a folder's row, so they sit
 			    in a slot rather than both reaching for the same edge. */}

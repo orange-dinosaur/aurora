@@ -62,6 +62,11 @@ describe("a folder row's count", () => {
 		expect(abbreviated(1999)).toBe("1.9k");
 		expect(abbreviated(9999)).toBe("9.9k");
 	});
+
+	test("a screenplay's row shows its pages, and nothing while empty", () => {
+		expect(abbreviated(400, 1.625)).toBe("1 5/8");
+		expect(abbreviated(0, 0)).toBe("");
+	});
 });
 
 describe("deliberate", () => {

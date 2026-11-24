@@ -66,7 +66,9 @@ export type Row =
 			folderKind: FolderKind | null;
 			/** The words in every document below it, however deep. */
 			words: number;
-			/** The words the writer means it to reach, null when unset. */
+			/** Its pages in a screenplay's Manuscript, null anywhere else. */
+			pages: number | null;
+			/** The words or pages the writer means it to reach, null when unset. */
 			target: number | null;
 			/** How many nodes it holds directly, which is whether it opens. */
 			holds: number;
@@ -80,6 +82,8 @@ export type Row =
 			document: ProjectDocument;
 			/** The words in its body. */
 			words: number;
+			/** Its pages in a screenplay's Manuscript, null anywhere else. */
+			pages: number | null;
 	  });
 
 /**
@@ -136,6 +140,7 @@ export function rows(
 				...place,
 				document,
 				words: node.words,
+				pages: node.pages,
 			};
 			return [row];
 		}
@@ -149,6 +154,7 @@ export function rows(
 			name: node.name,
 			folderKind: node.kind,
 			words: node.words,
+			pages: node.pages,
 			target: node.target,
 			holds: node.children.length,
 			expanded,

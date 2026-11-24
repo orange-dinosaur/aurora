@@ -407,6 +407,7 @@ export default function FolderView({
 						{summary.documents} ·{" "}
 						<Target
 							words={summary.words}
+							pages={summary.pages}
 							target={target}
 							onTarget={(target) => aimed(onRetarget(target))}
 							merging={merging}
@@ -478,12 +479,14 @@ export default function FolderView({
 											card.words,
 											card.target,
 											format,
+											card.pages,
 										)}
 									</span>
 									{aiming === card.id ? (
 										<span className="card__meta">
 											<TargetField
 												words={card.words}
+												pages={card.pages}
 												target={card.target}
 												onTarget={(target) =>
 													aimed(
@@ -502,11 +505,12 @@ export default function FolderView({
 												{counted(
 													card.words,
 													card.target,
+													card.pages,
 												)}
 											</span>
 										)
 									)}
-									{bar(card.words, card.target)}
+									{bar(card.pages ?? card.words, card.target)}
 								</Card>
 								<RowMenu
 									label={`Actions for ${card.name}`}
@@ -580,6 +584,7 @@ export default function FolderView({
 									{aiming === document.id ? (
 										<TargetField
 											words={document.words}
+											pages={document.pages}
 											target={document.target}
 											onTarget={(target) =>
 												aimed(
@@ -594,10 +599,13 @@ export default function FolderView({
 									) : document.modified === null ? (
 										"This document’s file is no longer there"
 									) : (
-										`${counted(document.words, document.target)} · ${when(document.modified)}`
+										`${counted(document.words, document.target, document.pages)} · ${when(document.modified)}`
 									)}
 								</span>
-								{bar(document.words, document.target)}
+								{bar(
+									document.pages ?? document.words,
+									document.target,
+								)}
 							</Card>
 							<RowMenu
 								label={`Actions for ${document.title}`}

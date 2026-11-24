@@ -6,8 +6,51 @@ import { parse, text } from "./frontmatter";
 import { isMatter } from "./kinds";
 import type { FolderKind, Format, OverviewCard } from "./types";
 
-/** A document card's count, which says what it is aiming at if it is. */
-export function counted(words: number, target: number | null) {
+/**
+ * A length in pages, in eighths the way a script breakdown writes it: "1 3/8".
+ * The eighths stay unreduced, so 2/8 is never 1/4, and anything written rounds
+ * up to at least 1/8.
+ */
+export function eighths(pages: number): string {
+	const total = pages > 0 ? Math.max(1, Math.round(pages * 8)) : 0;
+	const whole = Math.floor(total / 8);
+	const part = total % 8;
+	if (part === 0) {
+		return whole.toLocaleString();
+	}
+	return whole === 0 ? `${part}/8` : `${whole.toLocaleString()} ${part}/8`;
+}
+
+/** "3/8 page", "1 page", "1 3/8 pages". */
+export function paged(pages: number): string {
+	const length = eighths(pages);
+	return Math.round(pages * 8) <= 8 && length !== "0"
+		? `${length} page`
+		: `${length} pages`;
+}
+
+/**
+ * What a count is in: pages when Rust sent them, which it does for a
+ * screenplay's Manuscript, and words everywhere else.
+ */
+export function unit(pages: number | null): "pages" | "words" {
+	return pages === null ? "words" : "pages";
+}
+
+/**
+ * A card's count, which says what it is aiming at if it is. In a screenplay's
+ * Manuscript the count and the target are both in pages.
+ */
+export function counted(
+	words: number,
+	target: number | null,
+	pages: number | null = null,
+) {
+	if (pages !== null) {
+		return target === null
+			? paged(pages)
+			: `${eighths(pages)} of ${target.toLocaleString()} pages`;
+	}
 	if (target !== null) {
 		return `${words.toLocaleString()} of ${target.toLocaleString()} words`;
 	}
@@ -64,6 +107,7 @@ export function described(
 	words: number,
 	target: number | null = null,
 	format: Format = "novel",
+	pages: number | null = null,
 ) {
 	const what =
 		kind === null
@@ -74,7 +118,7 @@ export function described(
 	// With a target the words get a line of their own, the one a document
 	// card gives them, so they are not said twice.
 	return target === null
-		? `${what} · ${held} · ${counted(words, null)}`
+		? `${what} · ${held} · ${counted(words, null, pages)}`
 		: `${what} · ${held}`;
 }
 
@@ -104,12 +148,16 @@ export function previewed(front: string, excerpt: string): string {
  */
 export function summarised(cards: OverviewCard[]) {
 	let words = 0;
+	let pages: number | null = null;
 	let documents = 0;
 	for (const card of cards) {
 		if (card.node === "folder" && isMatter(card.kind)) {
 			continue;
 		}
 		words += card.words;
+		if (card.pages !== null) {
+			pages = (pages ?? 0) + card.pages;
+		}
 		if (card.node === "document") {
 			documents += 1;
 		}
@@ -117,5 +165,6 @@ export function summarised(cards: OverviewCard[]) {
 	return {
 		documents: documents === 1 ? "1 document" : `${documents} documents`,
 		words,
+		pages,
 	};
 }

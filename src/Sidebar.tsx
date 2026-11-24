@@ -577,6 +577,7 @@ export default function Sidebar({
 											<TargetField
 												compact
 												target={section.target}
+												pages={section.pages}
 												onTarget={(target) =>
 													aimed(
 														onRetargetFolder(
@@ -591,11 +592,17 @@ export default function Sidebar({
 											/>
 										) : (
 											<span className="section__words">
-												{abbreviated(section.words)}
+												{abbreviated(
+													section.words,
+													section.pages,
+												)}
 											</span>
 										))}
 									{section.name === MANUSCRIPT &&
-										progress(section.words, section.target)}
+										progress(
+											section.pages ?? section.words,
+											section.target,
+										)}
 									<NewMenu
 										label={`New in ${section.name}`}
 										kind={section.kind}

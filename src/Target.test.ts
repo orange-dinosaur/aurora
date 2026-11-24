@@ -11,6 +11,10 @@ describe("the words half of the status line", () => {
 		expect(reading(5, 10)).toBe("5 of 10 words · 50%");
 	});
 
+	test("a screenplay's share is of its page target", () => {
+		expect(reading(9000, 30, 15)).toBe("15 of 30 pages · 50%");
+	});
+
 	test("a target of zero is no target", () => {
 		expect(reading(5, 0)).toBe("5 words");
 		expect(reading(5, 0)).not.toContain("Infinity");

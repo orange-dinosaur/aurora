@@ -28,14 +28,17 @@ import { folderName, going, place } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
 import NewProject, { COPY, describe, type FormatOption } from "./NewProject";
+import { paged } from "./cards";
 
 // How big a project is and when it was last open. A project whose manifest
 // could not be read shows only the date, rather than a made-up count.
 function size(project: RecentSummary) {
 	const words =
-		project.words === null
-			? null
-			: `${project.words.toLocaleString()} words`;
+		project.pages !== null
+			? paged(project.pages)
+			: project.words === null
+				? null
+				: `${project.words.toLocaleString()} words`;
 	const opened =
 		project.lastOpened === null ? null : when(project.lastOpened);
 	return [words, opened].filter(Boolean).join(" · ");

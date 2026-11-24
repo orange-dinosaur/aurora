@@ -99,6 +99,7 @@ export default function DocumentRow({
 					<TargetField
 						compact
 						target={document.target}
+						pages={row.pages}
 						onTarget={onTarget}
 						onDone={() => setAiming(false)}
 					/>
@@ -112,11 +113,11 @@ export default function DocumentRow({
 				>
 					{title}
 					<span className="document__words">
-						{abbreviated(row.words)}
+						{abbreviated(row.words, row.pages)}
 					</span>
 				</button>
 			)}
-			{progress(row.words, document.target)}
+			{progress(row.pages ?? row.words, document.target)}
 			<RowMenu
 				label={`Actions for ${document.title}`}
 				pointer={pointer}

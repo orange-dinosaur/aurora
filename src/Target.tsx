@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { MERGE_HOLDS } from "./branches";
-import { counted } from "./cards";
+import { counted, eighths, unit } from "./cards";
 
 /** Sets a target. Rejects when it was refused, so the field stays open. */
 export type Aim = (target: number | null) => void | Promise<void>;
 
 type Props = {
 	words: number;
+	/** Set in a screenplay's Manuscript, where the count and target are pages. */
+	pages?: number | null;
 	target: number | null;
 	onTarget: Aim;
 	merging: boolean;
@@ -18,13 +20,17 @@ type Props = {
 };
 
 /** The words half of the status line: how many there are, and how many are wanted. */
-export function reading(words: number, target: number | null): string {
+export function reading(
+	words: number,
+	target: number | null,
+	pages: number | null = null,
+): string {
 	if (target === null || target <= 0) {
-		return counted(words, null);
+		return counted(words, null, pages);
 	}
 
-	const share = Math.round((words / target) * 100);
-	return `${counted(words, target)} · ${share}%`;
+	const share = Math.round(((pages ?? words) / target) * 100);
+	return `${counted(words, target, pages)} · ${share}%`;
 }
 
 /**
@@ -33,12 +39,14 @@ export function reading(words: number, target: number | null): string {
  */
 export default function Target({
 	words,
+	pages = null,
 	target,
 	onTarget,
 	merging,
 	inline = false,
 }: Props) {
 	const [typing, setTyping] = useState(false);
+	const counts = unit(pages) === "pages" ? "page" : "word";
 
 	if (!typing) {
 		return (
@@ -50,12 +58,12 @@ export default function Target({
 					merging
 						? MERGE_HOLDS
 						: target === null
-							? "Set a word target"
-							: "Change or clear the word target"
+							? `Set a ${counts} target`
+							: `Change or clear the ${counts} target`
 				}
 				onClick={() => setTyping(true)}
 			>
-				{reading(words, target)}
+				{reading(words, target, pages)}
 			</button>
 		);
 	}
@@ -64,6 +72,7 @@ export default function Target({
 		<TargetField
 			target={target}
 			words={inline ? words : undefined}
+			pages={pages}
 			onTarget={onTarget}
 			onDone={() => setTyping(false)}
 		/>
@@ -79,6 +88,8 @@ type FieldProps = {
 	compact?: boolean;
 	/** Given, the field stands in a sentence: "11 of [target] words". */
 	words?: number;
+	/** Set in a screenplay's Manuscript: the target is in pages. */
+	pages?: number | null;
 };
 
 /** The field a target is typed into, wherever a count opens one. */
@@ -88,8 +99,10 @@ export function TargetField({
 	onDone,
 	compact = false,
 	words,
+	pages = null,
 }: FieldProps) {
 	const sentence = words !== undefined;
+	const counts = unit(pages);
 	const [draft, setDraft] = useState(target === null ? "" : String(target));
 	const input = useRef<HTMLInputElement>(null);
 
@@ -130,7 +143,12 @@ export function TargetField({
 				}
 			}}
 		>
-			{sentence && <span>{words.toLocaleString()} of</span>}
+			{sentence && (
+				<span>
+					{pages === null ? words.toLocaleString() : eighths(pages)}{" "}
+					of
+				</span>
+			)}
 			<input
 				ref={input}
 				className="editor__aim-input"
@@ -138,7 +156,7 @@ export function TargetField({
 				value={draft}
 				inputMode="numeric"
 				maxLength={9}
-				aria-label="Word target"
+				aria-label={counts === "pages" ? "Page target" : "Word target"}
 				placeholder={compact || sentence ? "no target" : "none"}
 				// In a sentence the field is as wide as what it holds, so the
 				// words after it sit where they would in the line it replaced.
@@ -161,10 +179,14 @@ export function TargetField({
 					}
 				}}
 			/>
-			{sentence && <span>words</span>}
+			{sentence && <span>{counts}</span>}
 			{!compact && !sentence && (
 				<span className="editor__aim-note">
-					{draft === "" ? "no target" : "word target"}
+					{draft === ""
+						? "no target"
+						: counts === "pages"
+							? "page target"
+							: "word target"}
 				</span>
 			)}
 		</form>
