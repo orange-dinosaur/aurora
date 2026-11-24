@@ -30,6 +30,7 @@ import {
 	cueNames,
 	cueTitle,
 	headingPlace,
+	placeNames,
 	CYCLE,
 	cycled,
 	emphasised,
@@ -271,8 +272,8 @@ export function missingFrom(
 	}
 	if (kind === "heading") {
 		const name = headingPlace(text);
-		const known = names.locations.some(
-			(each) => each.name.toUpperCase() === name.toUpperCase(),
+		const known = names.locations.some((each) =>
+			placeNames(text, each.name),
 		);
 		return name === "" || known ? null : { section: "Locations", name };
 	}

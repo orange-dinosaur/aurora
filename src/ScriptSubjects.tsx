@@ -15,8 +15,8 @@ const CLICK = IS_APPLE ? "⌘-click" : "Ctrl+click";
 
 type Props = {
 	cast: { names: ScriptNames; ask: () => void };
-	/** A cue Ctrl+clicked that names a character with a page. */
-	onCue: (cue: string) => void;
+	/** A cue or heading Ctrl+clicked, with the section its page would be in. */
+	onFollow: (section: Missing["section"], line: string) => void;
 	/** Makes the page a missing name asks for. */
 	onAdd: (missing: Missing) => Promise<void>;
 };
@@ -28,7 +28,7 @@ type Offer = Missing & { x: number; y: number; refused: string | null };
  * underlined, and Ctrl+click on it offers to make the page; Ctrl+click on a
  * cue that does name one opens it.
  */
-export default function ScriptSubjects({ cast, onCue, onAdd }: Props) {
+export default function ScriptSubjects({ cast, onFollow, onAdd }: Props) {
 	const [editor] = useLexicalComposerContext();
 	const [offer, setOffer] = useState<Offer | null>(null);
 	const box = useRef<HTMLDivElement>(null);
@@ -95,12 +95,14 @@ export default function ScriptSubjects({ cast, onCue, onAdd }: Props) {
 						line.textContent ?? "",
 						names,
 					);
-					if (missing === null && line.dataset.kind !== "character") {
-						return false;
-					}
 					event.preventDefault();
 					if (missing === null) {
-						onCue(line.textContent ?? "");
+						onFollow(
+							line.dataset.kind === "character"
+								? "Characters"
+								: "Locations",
+							line.textContent ?? "",
+						);
 					} else {
 						setOffer({
 							...missing,
@@ -113,7 +115,7 @@ export default function ScriptSubjects({ cast, onCue, onAdd }: Props) {
 				},
 				COMMAND_PRIORITY_LOW,
 			),
-		[editor, names, onCue],
+		[editor, names, onFollow],
 	);
 
 	useEffect(() => {

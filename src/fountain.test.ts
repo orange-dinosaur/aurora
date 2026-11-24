@@ -4,6 +4,7 @@ import {
 	cueNames,
 	cueTitle,
 	headingPlace,
+	placeNames,
 	cycled,
 	emphasised,
 	follows,
@@ -56,6 +57,13 @@ describe("the page a name would get", () => {
 		);
 		expect(headingPlace("INT. TWENTY-ONE CLUB")).toBe("Twenty-One Club");
 		expect(headingPlace(".BACKSTAGE")).toBe("Backstage");
+	});
+
+	test("a heading is set at a place whatever the case of its title", () => {
+		expect(placeNames("INT. KITCHEN - NIGHT", "Kitchen")).toBe(true);
+		expect(placeNames("EXT. OLD MILL", "old mill")).toBe(true);
+		expect(placeNames("INT. KITCHEN GARDEN", "Kitchen")).toBe(false);
+		expect(placeNames("INT. ", "Kitchen")).toBe(false);
 	});
 
 	test("a heading still being typed gives what is there so far", () => {

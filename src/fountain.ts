@@ -214,6 +214,12 @@ export function headingPlace(heading: string): string {
 	return titled(place);
 }
 
+/** Whether a scene heading is set at this place, ignoring case. */
+export function placeNames(heading: string, name: string): boolean {
+	const place = headingPlace(heading);
+	return place !== "" && place.toUpperCase() === name.trim().toUpperCase();
+}
+
 /** The start of a scene heading set at a place, left for the time of day. */
 export function headingAt(place: string): string {
 	return `INT. ${place.toUpperCase()} - `;

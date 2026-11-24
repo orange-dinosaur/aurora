@@ -198,8 +198,8 @@ type Props = {
 	onPlace: (place: Place) => void;
 	/** The characters and locations a script's slash menu offers. */
 	cast: { names: ScriptNames; ask: () => void };
-	/** A cue Ctrl+clicked in a script, as its text reads. */
-	onCue: (cue: string) => void;
+	/** A cue or heading Ctrl+clicked in a script, as its text reads. */
+	onFollow: (section: Missing["section"], line: string) => void;
 	/** Makes the page a script's cue or heading names but has none. */
 	onAdd: (missing: Missing) => Promise<void>;
 };
@@ -238,7 +238,7 @@ export default function Editor({
 	place,
 	onPlace,
 	cast,
-	onCue,
+	onFollow,
 	onAdd,
 }: Props) {
 	// Held here and handed up whole, because the caret and the scroll move
@@ -571,7 +571,7 @@ export default function Editor({
 										<Script />
 										<ScriptSubjects
 											cast={cast}
-											onCue={onCue}
+											onFollow={onFollow}
 											onAdd={onAdd}
 										/>
 									</>

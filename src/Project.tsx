@@ -43,7 +43,7 @@ import type {
 } from "./types";
 import type { FolderRef } from "./tree";
 import { documentsOf, firstScene, folderOf, rows } from "./tree";
-import { cueNames } from "./fountain";
+import { cueNames, placeNames } from "./fountain";
 import type { Opened } from "./bindings/Opened";
 import type { Workspace } from "./bindings/Workspace";
 import {
@@ -870,15 +870,16 @@ export default function Project({
 	}
 
 	/**
-	 * The page of the character a script's cue names, opened across from the
-	 * script. A cue naming no one opens nothing.
+	 * The page of the character a script's cue names, or of the place its
+	 * heading is set at, opened across from the script. A line naming no page
+	 * opens nothing.
 	 */
-	async function openCue(cue: string) {
+	async function openNamed(section: Missing["section"], line: string) {
+		const names = section === "Characters" ? cueNames : placeNames;
 		const tree = await documentTree(root).catch(() => []);
 		const found = documentsOf(tree).find(
 			(document) =>
-				document.trail[0] === "Characters" &&
-				cueNames(cue, document.title),
+				document.trail[0] === section && names(line, document.title),
 		);
 		if (found !== undefined) {
 			openSubject(found, "beside");
@@ -1642,7 +1643,7 @@ export default function Project({
 					onRestore={() => void restore(tab.document.id)}
 					changed={tab.save.kind === "changed"}
 					cast={cast}
-					onCue={(cue) => void openCue(cue)}
+					onFollow={(section, line) => void openNamed(section, line)}
 					onAdd={addSubject}
 					onReload={() => void reload(tab.document.id)}
 					onKeepMine={() => void keepMine(tab.document.id)}
