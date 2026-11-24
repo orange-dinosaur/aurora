@@ -11,7 +11,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::project::{Error, Result, store_path, write_json};
 
-pub const STORE_VERSION: u32 = 10;
+pub const STORE_VERSION: u32 = 11;
 
 /// How the writer likes to write, which follows them into every project rather
 /// than belonging to any one of them.
@@ -229,6 +229,27 @@ pub struct Workspace {
 	pub beside: Option<Beside>,
 }
 
+/// What the timeline's rows are, and which subjects the writer took off it.
+/// Hidden ids are kept per switch, so flipping to locations and back keeps
+/// the characters the writer had hidden.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export)]
+pub struct TimelineView {
+	pub rows: TimelineRows,
+	pub hidden_characters: Vec<Uuid>,
+	pub hidden_locations: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum TimelineRows {
+	#[default]
+	Characters,
+	Locations,
+}
+
 /// The tab on the side of a split the writer was not in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[ts(export)]
@@ -279,6 +300,11 @@ pub struct Store {
 	/// `expanded`. Absent from a store written before version 10.
 	#[serde(default)]
 	pub workspace: BTreeMap<PathBuf, Workspace>,
+	/// How each project's timeline was left. Its own entry rather than part of
+	/// `workspace`, which is rewritten from the open tabs. Absent from a store
+	/// written before version 11.
+	#[serde(default)]
+	pub timeline: BTreeMap<PathBuf, TimelineView>,
 }
 
 impl Default for Store {
@@ -292,6 +318,7 @@ impl Default for Store {
 			folded: BTreeMap::new(),
 			forgotten: Vec::new(),
 			workspace: BTreeMap::new(),
+			timeline: BTreeMap::new(),
 		}
 	}
 }
@@ -389,7 +416,8 @@ pub fn load(path: &Path) -> Result<Store> {
 /// `expanded`, version 5 no right sidebar, version 6 neither the sidebar
 /// widths nor the theme and manuscript font, and version 7 none of the session
 /// preferences, version 8 no folded groups on the Book page, and version 9
-/// neither the projects folder, forgotten books nor workspaces; serde's defaults are the whole migration for all eight, and
+/// neither the projects folder, forgotten books nor workspaces, and version
+/// 10 no timeline views; serde's defaults are the whole migration for all nine, and
 /// each of them is the behaviour that version already had.
 /// Nothing is written back — the next save carries the new shape.
 fn migrate(mut store: Store) -> Store {
@@ -535,6 +563,32 @@ pub fn read_workspace(app: AppHandle, root: PathBuf) -> Result<Option<Workspace>
 #[tauri::command]
 pub fn write_workspace(app: AppHandle, root: PathBuf, workspace: Workspace) -> Result<()> {
 	set_workspace(&store_path(&app)?, root, workspace)
+}
+
+fn timeline_view(path: &Path, root: &Path) -> Result<TimelineView> {
+	Ok(load(path)?.timeline.remove(root).unwrap_or_default())
+}
+
+/// A view back at the default drops the project's entry, as folded groups do.
+fn set_timeline_view(path: &Path, root: PathBuf, view: TimelineView) -> Result<()> {
+	update(path, |store| {
+		if view == TimelineView::default() {
+			store.timeline.remove(&root);
+		} else {
+			store.timeline.insert(root, view);
+		}
+	})
+}
+
+/// How one project's timeline was left, or the default for one never changed.
+#[tauri::command]
+pub fn read_timeline_view(app: AppHandle, root: PathBuf) -> Result<TimelineView> {
+	timeline_view(&store_path(&app)?, &root)
+}
+
+#[tauri::command]
+pub fn write_timeline_view(app: AppHandle, root: PathBuf, view: TimelineView) -> Result<()> {
+	set_timeline_view(&store_path(&app)?, root, view)
 }
 
 #[cfg(test)]
@@ -1057,6 +1111,49 @@ mod tests {
 			active: Some(5),
 			beside: Some(Beside { tab: 0, left: true }),
 		}
+	}
+
+	#[test]
+	fn a_timeline_view_comes_back_project_by_project() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		let ithaca = PathBuf::from("/writing/Ithaca");
+		let rooks = PathBuf::from("/writing/Rooks");
+		let view = TimelineView {
+			rows: TimelineRows::Locations,
+			hidden_characters: vec![Uuid::new_v4()],
+			hidden_locations: vec![Uuid::new_v4(), Uuid::new_v4()],
+		};
+
+		set_timeline_view(&path, ithaca.clone(), view.clone()).unwrap();
+
+		assert_eq!(timeline_view(&path, &ithaca).unwrap(), view);
+		assert_eq!(
+			timeline_view(&path, &rooks).unwrap(),
+			TimelineView::default()
+		);
+
+		set_timeline_view(&path, ithaca, TimelineView::default()).unwrap();
+		assert!(load(&path).unwrap().timeline.is_empty());
+	}
+
+	#[test]
+	fn a_store_from_before_timelines_still_loads() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		fs::write(
+			&path,
+			r#"{
+				"version": 10,
+				"recent": [],
+				"workspace": { "/writing/Ithaca": { "tabs": [{ "kind": "book" }], "active": 0 } }
+			}"#,
+		)
+		.unwrap();
+
+		let store = load(&path).unwrap();
+		assert_eq!(store.workspace.len(), 1);
+		assert!(store.timeline.is_empty());
 	}
 
 	#[test]

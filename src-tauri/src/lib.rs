@@ -230,6 +230,8 @@ pub fn run() {
 			store::write_expanded,
 			store::read_folded,
 			store::write_folded,
+			store::read_timeline_view,
+			store::write_timeline_view,
 			store::read_workspace,
 			store::write_workspace
 		])
