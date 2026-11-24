@@ -237,6 +237,20 @@ export function wordsIn(nodes: TreeNode[]): number {
 	return sections(nodes).reduce((all, section) => all + section.words, 0);
 }
 
+/**
+ * Each document's pages by id. Only a screenplay's Manuscript has any, so for
+ * every other project this is empty.
+ */
+export function pagesBy(nodes: TreeNode[]): Map<string, number> {
+	return new Map(
+		rows(nodes, "").flatMap((row): [string, number][] =>
+			row.kind === "document" && row.pages !== null
+				? [[row.document.id, row.pages]]
+				: [],
+		),
+	);
+}
+
 /** The folder with this id, and everything under it. */
 export function folderOf(nodes: TreeNode[], id: string): FolderNode | null {
 	for (const node of nodes) {

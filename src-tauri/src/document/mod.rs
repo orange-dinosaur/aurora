@@ -3466,11 +3466,37 @@ mod tests {
 				NodeView::Folder { pages, .. } | NodeView::Document { pages, .. } => pages.unwrap(),
 			})
 			.sum();
-		assert!((sum - total).abs() < 1e-9, "{sum} {total}");
+		// The last page's empty foot belongs to nobody, so the scenes come to
+		// less than the page count, but by less than a page.
+		assert!(sum < *total && sum > total - 1.0, "{sum} {total}");
 
 		// Notes outside the Manuscript stay in words.
 		let notes = tree.iter().find(|node| node.id() != manuscript).unwrap();
 		assert!(matches!(notes, NodeView::Folder { pages: None, .. }));
+	}
+
+	#[test]
+	fn a_short_scene_is_a_sliver_of_its_one_page() {
+		let parent = tempfile::tempdir().unwrap();
+		let root = create(parent.path(), "Ithaca", Format::Screenplay, fixed_time()).unwrap();
+		let act = root.join("Manuscript").join("Act One");
+		fs::create_dir_all(&act).unwrap();
+		fs::write(
+			act.join("Scene.md"),
+			"INT. KITCHEN\n\nELISABETTA\nHello.\n\nMARCUS\nHello.",
+		)
+		.unwrap();
+		refresh_documents(root.clone()).unwrap();
+
+		let manuscript = folder_id(&root, "Manuscript");
+		let act = folder_id(&root, "Manuscript/Act One");
+		assert_eq!(
+			folder_progress(root.clone(), manuscript).unwrap().pages,
+			Some(1.0),
+			"the script prints on one page"
+		);
+		let scene = folder_progress(root, act).unwrap().pages.unwrap();
+		assert!(scene < 0.25, "{scene}");
 	}
 
 	/// Writes a folder of that name inside `parent` with one document in it,

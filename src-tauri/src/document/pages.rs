@@ -5,7 +5,8 @@ use crate::script::{fountain, layout};
 /// What a screenplay's Manuscript fills on the page, by document path. The
 /// whole script is laid out at once, so the total is the PDF's page count. The
 /// lines left empty at the page feet are shared out among the scenes by
-/// length, so the scenes and acts add up to that total.
+/// length, all but the last page's, so the scenes and acts add up to within a
+/// page of that total.
 pub(crate) struct Pages {
 	by_path: HashMap<String, f64>,
 	total: usize,
@@ -42,10 +43,14 @@ impl Pages {
 		let laid = layout::layout(&scenes);
 		let total = laid.pages.len();
 		let lines: usize = laid.shares.iter().sum();
+		// The last page ends where the writing does, so only the pages before
+		// it count whole. A short scene on its own then reads as short.
+		let last = laid.pages.last().map_or(0, Vec::len);
+		let filled = total.saturating_sub(1) as f64 + last as f64 / layout::LINES_PER_PAGE as f64;
 		let scale = if lines == 0 {
 			0.0
 		} else {
-			total as f64 / lines as f64
+			filled / lines as f64
 		};
 		Some(Self {
 			by_path: paths

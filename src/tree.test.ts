@@ -8,6 +8,7 @@ import {
 	folderOf,
 	inManuscript,
 	inside,
+	pagesBy,
 	pruned,
 	rows,
 	sections,
@@ -389,6 +390,20 @@ describe("choosing somewhere to move to", () => {
 		expect(where.find((one) => one.name === "Manuscript")?.children).toBe(
 			3,
 		);
+	});
+});
+
+describe("each scene's pages", () => {
+	test("come keyed by id from however deep, leaving out what has none", () => {
+		const scene = {
+			...document("Manuscript/Act One/Opening.md"),
+			pages: 1.5,
+		};
+		const tree = [
+			folder("Manuscript", [folder("Act One", [scene])]),
+			folder("Notes", [document("Notes/Ideas.md")]),
+		];
+		expect(pagesBy(tree)).toEqual(new Map([[scene.id, 1.5]]));
 	});
 });
 

@@ -65,6 +65,8 @@ type Props = {
 	live: Map<string, string>;
 	/** The open document, and its text, for the panel that counts words. */
 	page: ProjectDocument | null;
+	/** Its pages in a screenplay, null anywhere else. */
+	pages: number | null;
 	text: string;
 	/** The folder whose overview is showing, when it is one of those. */
 	folder: FolderRef | null;
@@ -129,6 +131,7 @@ export default function RightSidebar({
 	changed,
 	live,
 	page,
+	pages,
 	text,
 	folder,
 	onTarget,
@@ -237,6 +240,7 @@ export default function RightSidebar({
 						) : tab === "stats" ? (
 							<Stats
 								page={page}
+								pages={pages}
 								text={text}
 								folder={folder}
 								sessions={sessions}

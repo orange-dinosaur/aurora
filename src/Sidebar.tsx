@@ -41,6 +41,7 @@ import {
 	folded,
 	foldersAbove,
 	inside,
+	pagesBy,
 	pruned,
 	rows,
 	sections,
@@ -125,6 +126,11 @@ type Props = {
 	 * on every render.
 	 */
 	onWords: (words: number) => void;
+	/**
+	 * Each scene's pages in a screenplay, said again every time the tree is
+	 * read, for the counts outside the binder. Has to be stable, as above.
+	 */
+	onPages: (pages: ReadonlyMap<string, number>) => void;
 	onDelete: (id: string) => Promise<void>;
 	onDeleteFolder: (id: string) => Promise<void>;
 	onClose: () => void;
@@ -171,6 +177,7 @@ export default function Sidebar({
 	onChanged,
 	onMoved,
 	onWords,
+	onPages,
 	onDelete,
 	onDeleteFolder,
 	onClose,
@@ -238,12 +245,13 @@ export default function Sidebar({
 			}
 			setTree(read);
 			told.current(wordsIn(read));
+			onPages(pagesBy(read));
 		} catch (error) {
 			if (mine === reads.current) {
 				setStatus({ kind: "error", message: failure(error).message });
 			}
 		}
-	}, [root]);
+	}, [root, onPages]);
 
 	useEffect(() => {
 		void load();

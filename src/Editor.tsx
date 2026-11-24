@@ -168,6 +168,11 @@ type Props = {
 	missing: boolean;
 	error: string | null;
 	target: number | null;
+	/**
+	 * Its pages in a screenplay, as of the last tree read, which is what the
+	 * target is in there. Null everywhere else.
+	 */
+	pages: number | null;
 	/** A hit clicked in search, which opens Find on that word. */
 	seed: Seed | null;
 	/** Null when the list could not be read. */
@@ -215,6 +220,7 @@ export default function Editor({
 	missing,
 	error,
 	target,
+	pages,
 	seed,
 	takes,
 	merging,
@@ -663,6 +669,7 @@ export default function Editor({
 					<p className="editor__count">
 						<Target
 							words={tally.words}
+							pages={pages}
 							target={target}
 							onTarget={onTarget}
 							merging={merging}

@@ -397,6 +397,10 @@ export default function Project({
 	// Bumped whenever this view changes what the manifest holds, so the sidebar
 	// knows to read it again.
 	const [listing, setListing] = useState(0);
+	// Each scene's pages in a screenplay, as the sidebar last read them.
+	const [scenePages, setScenePages] = useState<ReadonlyMap<string, number>>(
+		() => new Map(),
+	);
 	// Bumped every time search is asked for, so asking again while its panel
 	// is already open reaches the field rather than doing nothing.
 	const [asked, setAsked] = useState(0);
@@ -1614,6 +1618,7 @@ export default function Project({
 					missing={tab.save.kind === "missing"}
 					error={tab.save.kind === "failed" ? tab.save.message : null}
 					target={tab.document.target}
+					pages={scenePages.get(tab.document.id) ?? null}
 					seed={tab.seed}
 					takes={tab.takes}
 					merging={merge !== null}
@@ -2069,6 +2074,7 @@ export default function Project({
 					reload={listing + written}
 					bookWritten={bookWritten}
 					onWords={measured}
+					onPages={setScenePages}
 					unsaved={tabs.flatMap((tab) =>
 						tab.kind === "document" && tab.save.kind !== "clean"
 							? [tab.document.id]
@@ -2281,6 +2287,11 @@ export default function Project({
 					changed={listing + written}
 					live={live}
 					page={active?.kind === "document" ? active.document : null}
+					pages={
+						active?.kind === "document"
+							? (scenePages.get(active.document.id) ?? null)
+							: null
+					}
 					text={
 						active?.kind === "document" &&
 						active.content.kind === "ready"

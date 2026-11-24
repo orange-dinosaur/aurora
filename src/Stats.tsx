@@ -14,6 +14,8 @@ import { prose, words } from "./words";
 type Props = {
 	/** The open document, or null when a folder's overview is showing. */
 	page: ProjectDocument | null;
+	/** Its pages in a screenplay, which its target is in there. */
+	pages: number | null;
 	/** Its text as its tab holds it, so this counts what is on screen. */
 	text: string;
 	/** The folder whose overview is showing, when it is one of those. */
@@ -88,6 +90,7 @@ function Whole({ name, tally }: { name: string; tally: Tally }) {
 
 export default function Stats({
 	page,
+	pages,
 	text,
 	folder,
 	sessions,
@@ -192,6 +195,7 @@ export default function Stats({
 			<div className="stats__words">
 				<Target
 					words={counted}
+					pages={pages}
 					target={page.target}
 					onTarget={onTarget}
 					merging={merging}
