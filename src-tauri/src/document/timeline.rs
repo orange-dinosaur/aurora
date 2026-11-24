@@ -142,13 +142,27 @@ pub fn timeline(root: PathBuf, folder: Uuid) -> Result<Timeline> {
 }
 
 /// Puts a scene where the writer dropped it, or back in binder order with
-/// `None`.
+/// `None`. `before` is the scene the drop landed in front of. Scenes placed
+/// alike go in binder order, so if that one was placed where this one now is,
+/// it is moved to follow this one, or the drop would not land where it was let
+/// go.
 #[tauri::command]
-pub fn place_scene(root: PathBuf, id: Uuid, place: Option<Place>) -> Result<()> {
+pub fn place_scene(
+	root: PathBuf,
+	id: Uuid,
+	place: Option<Place>,
+	before: Option<Uuid>,
+) -> Result<()> {
 	let mut manifest = editable(&root)?;
 	match tree::find_mut(&mut manifest.nodes, id) {
 		Some(Node::Document { placed, .. }) => *placed = place,
 		_ => return Err(Error::UnknownDocument),
+	}
+	if let (Some(place), Some(next)) = (place, before.filter(|next| *next != id))
+		&& let Some(Node::Document { placed, .. }) = tree::find_mut(&mut manifest.nodes, next)
+		&& *placed == Some(place)
+	{
+		*placed = Some(Place::After(id));
 	}
 	write_manifest(&root, &mut manifest)
 }
@@ -332,7 +346,7 @@ mod tests {
 		let parent = tempfile::tempdir().unwrap();
 		let (root, manuscript, scenes) = project(parent.path());
 
-		place_scene(root.clone(), scenes[2], Some(Place::First)).unwrap();
+		place_scene(root.clone(), scenes[2], Some(Place::First), None).unwrap();
 		assert_eq!(titles(&root, manuscript), ["Three", "One", "Two"]);
 		assert!(
 			fs::read_to_string(root.join(crate::project::MANIFEST_FILE))
@@ -340,13 +354,53 @@ mod tests {
 				.contains("\"placed\": \"first\"")
 		);
 
-		place_scene(root.clone(), scenes[2], None).unwrap();
+		place_scene(root.clone(), scenes[2], None, None).unwrap();
 		assert_eq!(titles(&root, manuscript), ["One", "Two", "Three"]);
 		assert!(
 			!fs::read_to_string(root.join(crate::project::MANIFEST_FILE))
 				.unwrap()
 				.contains("placed")
 		);
+	}
+
+	#[test]
+	fn a_drop_lands_in_front_of_a_scene_placed_after_the_same_one() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, manuscript, scenes) = project(parent.path());
+		let [one, two, three] = [scenes[0], scenes[1], scenes[2]];
+
+		// Two follows Three, so the order is One, Three, Two.
+		place_scene(root.clone(), two, Some(Place::After(three)), None).unwrap();
+		assert_eq!(titles(&root, manuscript), ["One", "Three", "Two"]);
+
+		// One dropped between Three and Two would land after Two by binder
+		// order alone.
+		place_scene(root.clone(), one, Some(Place::After(three)), Some(two)).unwrap();
+		assert_eq!(titles(&root, manuscript), ["Three", "One", "Two"]);
+	}
+
+	#[test]
+	fn a_drop_in_front_of_an_undragged_scene_leaves_it_undragged() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, manuscript, scenes) = project(parent.path());
+
+		place_scene(root.clone(), scenes[2], Some(Place::First), Some(scenes[0])).unwrap();
+		assert_eq!(titles(&root, manuscript), ["Three", "One", "Two"]);
+		let manifest = read_manifest(&root).unwrap();
+		assert!(matches!(
+			tree::find(&manifest.nodes, scenes[0]),
+			Some(Node::Document { placed: None, .. })
+		));
+	}
+
+	#[test]
+	fn two_scenes_dropped_at_the_start_keep_the_order_they_were_dropped_in() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, manuscript, scenes) = project(parent.path());
+
+		place_scene(root.clone(), scenes[1], Some(Place::First), None).unwrap();
+		place_scene(root.clone(), scenes[2], Some(Place::First), Some(scenes[1])).unwrap();
+		assert_eq!(titles(&root, manuscript), ["Three", "Two", "One"]);
 	}
 
 	#[test]

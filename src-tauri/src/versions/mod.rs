@@ -2611,11 +2611,11 @@ mod tests {
 		let conflicts = diverged(
 			&root,
 			|| {
-				place_scene(root.clone(), seeded, Some(Place::First)).unwrap();
-				place_scene(root.clone(), other, Some(Place::First)).unwrap();
+				place_scene(root.clone(), seeded, Some(Place::First), None).unwrap();
+				place_scene(root.clone(), other, Some(Place::First), None).unwrap();
 			},
 			|| {
-				place_scene(root.clone(), other, Some(Place::After(seeded))).unwrap();
+				place_scene(root.clone(), other, Some(Place::After(seeded)), None).unwrap();
 			},
 		);
 
