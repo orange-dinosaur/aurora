@@ -366,6 +366,53 @@ pub fn markdown(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
 	out
 }
 
+/// The screenplay as one Fountain file: the title page, then every scene's
+/// body in binder order. A scene already holds Fountain, so it goes out as
+/// written, and acts add nothing but their order.
+pub fn fountain(book: &Book, compiled: &Compiled, prose: &Prose) -> String {
+	let author = book.author.trim();
+	let mut page = vec![title_field("Title", title_of(book))];
+	if !author.is_empty() {
+		page.push(title_field("Credit", "Written by"));
+		page.push(title_field("Author", author));
+	}
+	for (key, value) in [("Contact", &book.contact), ("Draft date", &book.draft)] {
+		if !value.trim().is_empty() {
+			page.push(title_field(key, value.trim()));
+		}
+	}
+
+	// A blank line ends the title page, and one parts each scene from the next.
+	let mut blocks = vec![page.concat().trim_end().to_owned()];
+	blocks.extend(
+		all_scenes(compiled)
+			.into_iter()
+			.filter_map(|scene| prose.get(&scene.id))
+			.filter(|text| !text.is_empty())
+			.cloned(),
+	);
+	let mut out = blocks.join("\n\n");
+	out.push('\n');
+	out
+}
+
+/// One key of a Fountain title page. A value of several lines goes under its
+/// key, each line indented, which is how Fountain tells it from the next key.
+fn title_field(key: &str, value: &str) -> String {
+	let lines: Vec<&str> = value
+		.lines()
+		.map(str::trim)
+		.filter(|l| !l.is_empty())
+		.collect();
+	match lines.as_slice() {
+		[line] => format!("{key}: {line}\n"),
+		_ => {
+			let indented: String = lines.iter().map(|line| format!("    {line}\n")).collect();
+			format!("{key}:\n{indented}")
+		}
+	}
+}
+
 /// A document that stands on its own, which is what every piece of front and
 /// back matter is. It keeps its title, unlike a scene.
 fn piece(blocks: &mut Vec<String>, scene: &Scene, prose: &Prose) {
@@ -551,7 +598,8 @@ pub fn export(
 				ExportFormat::Kepub => epub_for(Flavour::Kobo)?,
 				ExportFormat::Docx => docx(&book, &compiled, &prose)?,
 				ExportFormat::Text => text(&book, &compiled, &prose).into_bytes(),
-				ExportFormat::Fountain | ExportFormat::Pdf | ExportFormat::Fdx => {
+				ExportFormat::Fountain => fountain(&book, &compiled, &prose).into_bytes(),
+				ExportFormat::Pdf | ExportFormat::Fdx => {
 					return Err(Error::ExportFormatRefused(format));
 				}
 			};
@@ -1571,6 +1619,72 @@ mod tests {
 			Err(Error::ExportFormatRefused(ExportFormat::Epub))
 		));
 		assert!(fs::read_dir(out.path()).unwrap().next().is_none());
+	}
+
+	#[test]
+	fn a_fountain_title_page_leaves_out_what_is_blank() {
+		let mut book = book("Ithaca", "");
+		book.draft = "  ".to_owned();
+
+		let written = fountain(&book, &Compiled::default(), &Prose::new());
+
+		assert_eq!(written, "Title: Ithaca\n");
+	}
+
+	#[test]
+	fn a_screenplay_exports_as_fountain_in_binder_order() {
+		let parent = tempfile::tempdir().unwrap();
+		let out = tempfile::tempdir().unwrap();
+		let root = crate::project::create(
+			parent.path(),
+			"Ithaca",
+			Format::Screenplay,
+			OffsetDateTime::now_utc(),
+		)
+		.unwrap();
+		let path = root.join(crate::project::MANIFEST_FILE);
+		let mut manifest: serde_json::Value =
+			serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+		manifest["book"]["author"] = "Penelope".into();
+		manifest["book"]["contact"] = "Agent Argos\n555 0100".into();
+		manifest["book"]["draft"] = "Second draft".into();
+		fs::write(&path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+		let manuscript = document_tree(root.clone())
+			.unwrap()
+			.into_iter()
+			.find_map(|node| match node {
+				NodeView::Folder { id, name, .. } if name == MANUSCRIPT => Some(id),
+				_ => None,
+			})
+			.unwrap();
+		for act in ["Opening", "Ending"] {
+			let NodeView::Folder { id, .. } = crate::document::create_folder(
+				root.clone(),
+				manuscript,
+				act.to_owned(),
+				Some(FolderKind::Part),
+			)
+			.unwrap() else {
+				unreachable!()
+			};
+			let scene =
+				crate::document::create_document(root.clone(), id, "Hall".to_owned()).unwrap();
+			let file = root.join(&scene.path);
+			let text = fs::read_to_string(&file).unwrap();
+			fs::write(&file, format!("{text}\nINT. HALL - {act}\n\nShe waits.\n")).unwrap();
+		}
+
+		let written = export(&root, out.path(), &[ExportFormat::Fountain], |_| {}).unwrap();
+
+		assert_eq!(written, vec!["Ithaca.fountain"]);
+		assert_eq!(
+			fs::read_to_string(out.path().join("Ithaca.fountain")).unwrap(),
+			"Title: Ithaca\nCredit: Written by\nAuthor: Penelope\n\
+			Contact:\n    Agent Argos\n    555 0100\nDraft date: Second draft\n\n\
+			INT.\n\n\
+			INT. HALL - Opening\n\nShe waits.\n\n\
+			INT. HALL - Ending\n\nShe waits.\n"
+		);
 	}
 
 	#[test]
