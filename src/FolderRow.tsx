@@ -39,6 +39,7 @@ type Props = {
 	onToggle: () => void;
 	onRetitle: (name: string) => void;
 	onCancelRetitle: () => void;
+	onTimeline: () => void;
 };
 
 export default function FolderRow({
@@ -58,6 +59,7 @@ export default function FolderRow({
 	onToggle,
 	onRetitle,
 	onCancelRetitle,
+	onTimeline,
 }: Props) {
 	const pointer = useRightClick();
 	const format = useFormat();
@@ -151,6 +153,14 @@ export default function FolderRow({
 					onBeside={() => onOpen(true)}
 					onRename={onRename}
 					onTarget={() => setAiming(true)}
+					onTimeline={
+						// In a collection, each story has a timeline of its own.
+						format === "short-stories" &&
+						row.folderKind === "part" &&
+						inManuscript(row)
+							? onTimeline
+							: undefined
+					}
 					onDelete={onDelete}
 					merging={merging}
 				/>

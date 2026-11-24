@@ -29,6 +29,7 @@ import {
 	sameFormatting,
 	setLink,
 	shortcutLabel,
+	TIMELINE,
 	TOOLBAR,
 	written,
 	type Action,
@@ -470,9 +471,9 @@ describe("the keyboard the settings dialog lists", () => {
 		for (const action of ACTIONS) {
 			expect(listed).toContain(action.label);
 		}
-		// The actions, the eight bindings that do something to the app rather
+		// The actions, the nine bindings that do something to the app rather
 		// than to the text, and the split's six. Nothing else is bound.
-		expect(rows).toHaveLength(ACTIONS.length + 8 + 6);
+		expect(rows).toHaveLength(ACTIONS.length + 9 + 6);
 	});
 
 	test("an action is listed under the keys it is bound to", () => {
@@ -492,6 +493,7 @@ describe("the keyboard the settings dialog lists", () => {
 			OUTLINE,
 			TOOLBAR,
 			SESSION,
+			TIMELINE,
 		]) {
 			expect(chords).toContain(shortcutLabel(keys));
 		}

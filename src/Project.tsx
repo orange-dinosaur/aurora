@@ -42,7 +42,10 @@ import type {
 	TreeNode,
 } from "./types";
 import type { FolderRef } from "./tree";
-import { documentsOf, firstScene, folderOf, rows } from "./tree";
+import { documentsOf, firstScene, folderOf, folderRef, rows } from "./tree";
+import Timeline from "./Timeline";
+import { MANUSCRIPT } from "./kinds";
+import { useFormat } from "./projectFormat";
 import { cueNames, placeNames } from "./fountain";
 import type { Opened } from "./bindings/Opened";
 import type { Workspace } from "./bindings/Workspace";
@@ -103,7 +106,7 @@ import {
 	type Save,
 	type Tab,
 } from "./tabbing";
-import { pressed, SEARCH, SESSION } from "./formatting";
+import { pressed, SEARCH, SESSION, TIMELINE } from "./formatting";
 
 type Props = {
 	name: string;
@@ -516,6 +519,9 @@ export default function Project({
 		setSides,
 		readMerge,
 	} = useMergeState(root);
+	// The folder whose timeline stands over the binder and the tabs.
+	const [timelineOf, setTimelineOf] = useState<FolderRef | null>(null);
+	const format = useFormat();
 	// The put back question while it waits for an answer.
 	const [asking, setAsking] = useState<{
 		names: string[];
@@ -933,6 +939,31 @@ export default function Project({
 		);
 	}
 
+	/**
+	 * The shortcut's timeline: the Manuscript's, or in a collection the first
+	 * story's, since a key cannot say which story the writer means.
+	 */
+	async function openTimeline() {
+		const tree = await documentTree(root).catch(() => []);
+		const manuscript = tree.find(
+			(node) => node.node === "folder" && node.name === MANUSCRIPT,
+		);
+		if (manuscript?.node !== "folder") {
+			return;
+		}
+		const shown =
+			format === "short-stories"
+				? manuscript.children.find(
+						(node) =>
+							node.node === "folder" && node.kind === "part",
+					)
+				: manuscript;
+		const folder = shown === undefined ? null : folderRef(tree, shown.id);
+		if (folder !== null) {
+			setTimelineOf(folder);
+		}
+	}
+
 	function openSearch() {
 		onPreferences({
 			rightSidebar: true,
@@ -950,6 +981,10 @@ export default function Project({
 			if (pressed(event, SEARCH) && !coveredNow.current) {
 				event.preventDefault();
 				openSearch();
+			}
+			if (pressed(event, TIMELINE) && !coveredNow.current) {
+				event.preventDefault();
+				void openTimeline();
 			}
 			// One key both ways round, so a writer who cannot see the titlebar
 			// control can still end what they started. The layer is read from
@@ -1793,7 +1828,10 @@ export default function Project({
 				: null;
 
 	// Compare and Merge stand where the writing stands.
-	const covered = comparing !== null || (merge !== null && settling !== null);
+	const covered =
+		timelineOf !== null ||
+		comparing !== null ||
+		(merge !== null && settling !== null);
 	coveredNow.current = covered;
 
 	function backToBinder() {
@@ -1951,15 +1989,17 @@ export default function Project({
 								type="button"
 								className="quiet"
 								onClick={() =>
-									comparing !== null
-										? setComparing(null)
-										: setSettling(null)
+									timelineOf !== null
+										? setTimelineOf(null)
+										: comparing !== null
+											? setComparing(null)
+											: setSettling(null)
 								}
 							>
 								<Icon name="chevron-left" />
 								Back to writing
 							</button>
-							{narrow && (
+							{narrow && timelineOf === null && (
 								<button
 									ref={listButton}
 									type="button"
@@ -2007,6 +2047,16 @@ export default function Project({
 						: (merge?.merging ?? null)
 				}
 			/>
+
+			{timelineOf !== null && (
+				<Timeline
+					root={root}
+					folder={timelineOf}
+					changed={listing + written}
+					live={live}
+					onBack={() => setTimelineOf(null)}
+				/>
+			)}
 
 			{comparing !== null && (
 				<Compare
@@ -2111,6 +2161,7 @@ export default function Project({
 					onOpenFolder={(folder, beside) =>
 						openFolder(folder, beside ? "beside" : "here")
 					}
+					onTimeline={setTimelineOf}
 					onOpenTrash={(beside) =>
 						openTrash(beside ? "beside" : "here")
 					}

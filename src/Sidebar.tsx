@@ -20,6 +20,7 @@ import NewMenu from "./NewMenu";
 import type { FolderNode, ProjectDocument, TreeNode } from "./types";
 import type { Making } from "./kinds";
 import { MANUSCRIPT, folderKinds } from "./kinds";
+import { useFormat } from "./projectFormat";
 import {
 	createDocument,
 	createFolder,
@@ -103,6 +104,8 @@ type Props = {
 	onSubject: (document: ProjectDocument) => void;
 	onTry: (document: ProjectDocument) => Promise<void>;
 	onOpenFolder: (folder: FolderRef, beside: boolean) => void;
+	/** Opens the timeline of the Manuscript, or of a story in a collection. */
+	onTimeline: (folder: FolderRef) => void;
 	onOpenTrash: (beside: boolean) => void;
 	/** Opens the page about the book the project adds up to. */
 	onOpenBook: (beside: boolean) => void;
@@ -167,6 +170,7 @@ export default function Sidebar({
 	onSubject,
 	onTry,
 	onOpenFolder,
+	onTimeline,
 	onOpenTrash,
 	onOpenBook,
 	onCreated,
@@ -188,6 +192,7 @@ export default function Sidebar({
 	onMergeChanged,
 }: Props) {
 	const trash = useRightClick();
+	const format = useFormat();
 	// The section heading right-clicked, and where. Kept after the menu shuts,
 	// so its items still have a section to open while they fade.
 	const [sectionAsked, setSectionAsked] = useState<{
@@ -717,6 +722,14 @@ export default function Sidebar({
 																kind: "closed",
 															})
 														}
+														onTimeline={() =>
+															onTimeline(
+																rowRef(
+																	row,
+																	section.name,
+																),
+															)
+														}
 													/>
 													{naming.kind !== "closed" &&
 														naming.at ===
@@ -873,6 +886,19 @@ export default function Sidebar({
 								{/* A target on the Manuscript is the book's.
 								    Research and the rest measure nothing the
 								    writer is aiming at. */}
+								{/* A collection's timeline is a story's, from
+								    the story's own menu. */}
+								{sectionAsked.folder.name === MANUSCRIPT &&
+									format !== "short-stories" && (
+										<MenuItem
+											onSelect={() => {
+												close();
+												onTimeline(sectionAsked.folder);
+											}}
+										>
+											Timeline
+										</MenuItem>
+									)}
 								{sectionAsked.folder.name === MANUSCRIPT && (
 									<MenuItem
 										disabled={merging}

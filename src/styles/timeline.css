@@ -1,0 +1,90 @@
+/* The timeline stands where the binder and the tabs' pages stand. Only the
+   grid scrolls, so the heading stays put while the scenes run sideways. */
+.timeline {
+	--timeline-label: 140px;
+	--timeline-block: 128px;
+	grid-area: 2 / 1 / 3 / -1;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	background: var(--bg);
+}
+
+.timeline__head {
+	flex: none;
+	padding: var(--space-md) var(--space-lg) var(--space-sm);
+}
+
+.timeline__of {
+	margin: 0;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.timeline__title {
+	margin: 2px 0 0;
+	font: var(--text-heading);
+	letter-spacing: var(--tracking-heading);
+}
+
+.timeline__note {
+	margin: 0;
+	padding: 0 var(--space-lg);
+	font: var(--text-ui);
+	color: var(--text-dim);
+}
+
+.timeline__scroll {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.timeline__grid {
+	display: grid;
+	width: max-content;
+	row-gap: var(--space-xs);
+	column-gap: var(--space-xxs);
+}
+
+/* Each row's cells stand on the grid's own columns. */
+.timeline__row {
+	display: contents;
+}
+
+.timeline__corner,
+.timeline__label {
+	position: sticky;
+	left: 0;
+	z-index: 1;
+	background: var(--bg);
+}
+
+.timeline__label {
+	align-self: center;
+	padding-right: var(--space-sm);
+	font: var(--text-ui-strong);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.timeline__tick {
+	padding-bottom: var(--space-xxs);
+	border-bottom: var(--hairline);
+	font: var(--text-caption);
+	color: var(--text-faint);
+	text-align: center;
+}
+
+.timeline__block {
+	padding: var(--space-xs);
+	border-radius: var(--radius-sm);
+	background: var(--accent-wash);
+	font: var(--text-ui);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}

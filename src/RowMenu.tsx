@@ -29,6 +29,8 @@ type Props = {
 	onSubject?: () => void;
 	/** Given only for a document in the Manuscript. */
 	onTry?: () => void;
+	/** Given only for a story in a collection. */
+	onTimeline?: () => void;
 	merging: boolean;
 };
 
@@ -71,6 +73,7 @@ function Actions({
 	onDelete,
 	onSubject,
 	onTry,
+	onTimeline,
 	merging,
 }: Omit<Props, "label"> & { close: () => void }) {
 	const [choosing, setChoosing] = useState(false);
@@ -102,6 +105,16 @@ function Actions({
 					>
 						Open beside
 					</MenuItem>
+					{onTimeline !== undefined && (
+						<MenuItem
+							onSelect={() => {
+								close();
+								onTimeline();
+							}}
+						>
+							Timeline
+						</MenuItem>
+					)}
 					<span className="menu__rule" />
 				</>
 			)}

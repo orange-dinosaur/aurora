@@ -305,6 +305,11 @@ export const SETTINGS: Keys = { key: ",", shift: false };
  * a writer types far more often than they fold. */
 export const FOLD: Keys = { key: "a", shift: true };
 
+/** Opens the timeline of the Manuscript, or of the first story in a
+ * collection. Bound on the window like search, since the timeline is about the
+ * whole book rather than the page in front of the writer. */
+export const TIMELINE: Keys = { key: "l", shift: true };
+
 const COMMAND_KEY = IS_APPLE ? "⌘" : "Ctrl+";
 const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift+";
 
@@ -368,6 +373,7 @@ export const KEYBOARD: ShortcutGroup[] = [
 			{ label: "Formatting bar", keys: TOOLBAR },
 			{ label: "Start or stop a session", keys: SESSION },
 			{ label: "Fold or unfold every section", keys: FOLD },
+			{ label: "Timeline", keys: TIMELINE },
 		],
 	},
 	{
