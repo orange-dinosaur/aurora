@@ -6,7 +6,7 @@
 import { createHeadlessEditor } from "@lexical/headless";
 import { $isListItemNode } from "@lexical/list";
 import { $findMatchingParent } from "@lexical/utils";
-import { $getRoot, type TextNode } from "lexical";
+import { $getRoot, $isLineBreakNode, type TextNode } from "lexical";
 import type { Run } from "./lib/find";
 import { $fromMarkdown, EDITOR_NODES } from "./markdown";
 
@@ -21,15 +21,31 @@ function $blockOf(node: TextNode): string {
 	return (item ?? node.getTopLevelElementOrThrow()).getKey();
 }
 
-/** The runs of text a document is made of, in reading order. */
+/**
+ * The runs of text a document is made of, in reading order. A line break ends
+ * a block as a paragraph does: there is no space at the break, so a cue and
+ * the speech under it would otherwise read as `ELENAWhere`.
+ */
 export function $runs(): Run[] {
+	let paragraph: string | null = null;
+	let line = "";
 	return $getRoot()
 		.getAllTextNodes()
-		.map((node) => ({
-			key: node.getKey(),
-			text: node.getTextContent(),
-			block: $blockOf(node),
-		}));
+		.map((node) => {
+			const block = $blockOf(node);
+			if (
+				block !== paragraph ||
+				$isLineBreakNode(node.getPreviousSibling())
+			) {
+				line = node.getKey();
+			}
+			paragraph = block;
+			return {
+				key: node.getKey(),
+				text: node.getTextContent(),
+				block: `${block}:${line}`,
+			};
+		});
 }
 
 /**

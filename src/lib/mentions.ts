@@ -9,6 +9,7 @@
 
 import { type Match, type Run, find, prepare } from "./find";
 import { lineOf, locate, type Searchable, type Unreadable } from "./search";
+import { MANUSCRIPT } from "../kinds";
 import { isSubject } from "../subjects";
 
 /** A document the writer keeps a page about, and what it answers to. */
@@ -37,12 +38,21 @@ export const RECOGNITION = { wholeWord: true, caseSensitive: true };
  * Every name a subject answers to, longest first, with blanks and repeats
  * dropped. The title leads because the writer never has to type it twice.
  */
-function namesOf(subject: Subject): string[] {
+function namesOf(subject: Subject, script = false): string[] {
 	const all = [subject.title, ...subject.names]
 		.map((name) => name.trim())
 		.filter((name) => name !== "");
+	// A script writes a character's name in capitals above every speech.
+	const read = script
+		? all.flatMap((name) => [name, name.toUpperCase()])
+		: all;
 
-	return [...new Set(all)].sort((one, other) => other.length - one.length);
+	return [...new Set(read)].sort((one, other) => other.length - one.length);
+}
+
+/** Whether a document is a scene of a screenplay, whose text is Fountain. */
+export function isScript(screenplay: boolean, trail: string[]): boolean {
+	return screenplay && trail[0] === MANUSCRIPT;
 }
 
 /**
@@ -51,8 +61,13 @@ function namesOf(subject: Subject): string[] {
  * Recognition is whole-word and case-sensitive, which is what tells `Rose`
  * from `rose`, `Rosemary` and `prose`. Two subjects that share a name are both
  * reported at the same place; deciding between them is not this module's job.
+ * In a `script`, each name in capitals counts too, still whole-word.
  */
-export function mentions(subjects: Subject[], runs: Run[]): Mention[] {
+export function mentions(
+	subjects: Subject[],
+	runs: Run[],
+	script = false,
+): Mention[] {
 	const found: Mention[] = [];
 	const prepared = prepare(runs);
 	const order = new Map(runs.map((run, index) => [run.key, index]));
@@ -64,7 +79,7 @@ export function mentions(subjects: Subject[], runs: Run[]): Mention[] {
 		// Names run longest first, so a shorter one that sits inside a hit
 		// already taken is the same mention and is not counted again.
 		const taken: Mention[] = [];
-		for (const name of namesOf(subject)) {
+		for (const name of namesOf(subject, script)) {
 			for (const at of find(prepared, name, RECOGNITION)) {
 				const from = place(at.fromKey, at.fromOffset);
 				const to = place(at.toKey, at.toOffset);
@@ -162,6 +177,7 @@ export type MentionResults = {
 export function mentionsIn(
 	subject: Subject,
 	documents: Mentionable[],
+	screenplay = false,
 ): MentionResults {
 	const names = namesOf(subject);
 	const groups: MentionGroup[] = [];
@@ -184,7 +200,11 @@ export function mentionsIn(
 		const seen = new Map<string, number>();
 		const hits: MentionHit[] = [];
 
-		for (const { name, at } of mentions([subject], runs)) {
+		for (const { name, at } of mentions(
+			[subject],
+			runs,
+			isScript(screenplay, trail),
+		)) {
 			// Counted before the line is looked up, because Find numbers every
 			// occurrence of the name, including one that has no line to show.
 			const ordinal = seen.get(name) ?? 0;
@@ -235,6 +255,7 @@ export type Appearance = {
 export function appearancesIn(
 	document: Mentionable,
 	subjects: Subject[],
+	screenplay = false,
 ): Appearance[] {
 	const others = subjects.filter((subject) => subject.id !== document.id);
 	const by = new Map(others.map((subject) => [subject.id, subject]));
@@ -242,7 +263,11 @@ export function appearancesIn(
 	// `mentions` hands them back in reading order, so the map is in the order
 	// each subject is first named and stays that way as the counts go up.
 	const counts = new Map<string, number>();
-	for (const { subject } of mentions(others, document.runs ?? [])) {
+	for (const { subject } of mentions(
+		others,
+		document.runs ?? [],
+		isScript(screenplay, document.trail),
+	)) {
 		counts.set(subject, (counts.get(subject) ?? 0) + 1);
 	}
 
@@ -291,11 +316,16 @@ export type CastMember = {
 export function castOf(
 	documents: Mentionable[],
 	subjects: Subject[],
+	screenplay = false,
 ): CastMember[] {
 	const counts = new Map<string, number>();
 
 	for (const document of documents) {
-		for (const { subject } of appearancesIn(document, subjects)) {
+		for (const { subject } of appearancesIn(
+			document,
+			subjects,
+			screenplay,
+		)) {
 			counts.set(subject.id, (counts.get(subject.id) ?? 0) + 1);
 		}
 	}

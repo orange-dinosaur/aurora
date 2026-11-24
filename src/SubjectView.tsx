@@ -14,6 +14,7 @@ import {
 	type Fields,
 } from "./frontmatter";
 import { mentionsIn, subjectsIn } from "./lib/mentions";
+import { useFormat } from "./projectFormat";
 import { factsOf, linksOf } from "./subjects";
 import type { ProjectDocument } from "./types";
 
@@ -122,6 +123,7 @@ export default function SubjectView({
 	// The names travel as one string so a re-render that changed nothing about
 	// the page does not sweep the project again.
 	const heldNames = list(fields, "names").join("\n");
+	const screenplay = useFormat() === "screenplay";
 
 	const appearances = useMemo(() => {
 		if (corpus.kind !== "ready") {
@@ -135,8 +137,16 @@ export default function SubjectView({
 				names: heldNames === "" ? [] : heldNames.split("\n"),
 			},
 			documents,
+			screenplay,
 		).groups;
-	}, [corpus.kind, documents, subject.id, subject.title, heldNames]);
+	}, [
+		corpus.kind,
+		documents,
+		subject.id,
+		subject.title,
+		heldNames,
+		screenplay,
+	]);
 
 	const facts = useMemo(
 		() =>

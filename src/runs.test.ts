@@ -34,6 +34,13 @@ describe("a document becomes the runs the editor would hold", () => {
 		expect(blocks("One.\n\nTwo.")).toEqual([["One."], ["Two."]]);
 	});
 
+	test("a line break ends a block, so its two sides never join", () => {
+		expect(blocks("ELENA\nWhere is **the** rose?")).toEqual([
+			["ELENA"],
+			["Where is ", "the", " rose?"],
+		]);
+	});
+
 	test("a heading is a block like any other", () => {
 		expect(blocks("# Chapter One\n\nShe ran.")).toEqual([
 			["Chapter One"],

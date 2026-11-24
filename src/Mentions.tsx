@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { contextOf } from "./context";
 import { useCorpus } from "./corpus";
+import { useFormat } from "./projectFormat";
 import type { Seed } from "./lib/find";
 import Icon from "./Icon";
 import {
@@ -93,6 +94,7 @@ export default function Mentions({
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 	const [full, setFull] = useState<Set<string>>(new Set());
 
+	const screenplay = useFormat() === "screenplay";
 	const { corpus, documents } = useCorpus({
 		root,
 		moved: changed,
@@ -123,14 +125,22 @@ export default function Mentions({
 		if (folder) {
 			return {
 				kind: "folder" as const,
-				cast: castOf(under(documents, parts), subjectsIn(documents)),
+				cast: castOf(
+					under(documents, parts),
+					subjectsIn(documents),
+					screenplay,
+				),
 			};
 		}
 
 		if (own) {
 			return {
 				kind: "subject" as const,
-				...mentionsIn({ id, title, names: parts }, documents),
+				...mentionsIn(
+					{ id, title, names: parts },
+					documents,
+					screenplay,
+				),
 			};
 		}
 
@@ -144,9 +154,9 @@ export default function Mentions({
 			appearances:
 				here === undefined
 					? []
-					: appearancesIn(here, subjectsIn(documents)),
+					: appearancesIn(here, subjectsIn(documents), screenplay),
 		};
-	}, [corpus.kind, documents, folder, id, title, own, held]);
+	}, [corpus.kind, documents, folder, id, title, own, held, screenplay]);
 
 	// A row that is on screen came out of the corpus, so its document is in
 	// hand; nothing happens if it somehow is not.

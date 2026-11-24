@@ -386,3 +386,32 @@ describe("a folder collects the cast of everything under it", () => {
 		);
 	});
 });
+
+describe("a screenplay names its characters in capitals", () => {
+	const rose = subject("Rose");
+	const scene = chapter("Kitchen", "ELENA\nWhere is the rose?");
+
+	test("a cue in capitals counts in a screenplay scene", () => {
+		const { groups } = mentionsIn(elena, [scene], true);
+		expect(groups[0].hits.map((hit) => hit.name)).toEqual(["ELENA"]);
+	});
+
+	test("capitals still mean the whole word, and lower case is not a name", () => {
+		const read = chapter("Hall", "ELENAS ROSEMARY rose");
+		expect(appearancesIn(read, [elena, rose], true)).toEqual([]);
+	});
+
+	test("the same capitals in a novel are not a name", () => {
+		expect(mentionsIn(elena, [scene]).groups).toEqual([]);
+	});
+
+	test("only a screenplay's scenes read capitals, not its notes", () => {
+		const note = chapter("Idea", "ELENA", [], ["Notes"]);
+		expect(mentionsIn(elena, [note], true).groups).toEqual([]);
+	});
+
+	test("a folder's cast counts a scene that only cues a character", () => {
+		const cast = castOf([scene], [elena, rose], true);
+		expect(cast.map((member) => member.subject.title)).toEqual(["Elena"]);
+	});
+});
