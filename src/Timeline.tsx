@@ -2,7 +2,8 @@
 // left to right in story order, once in each row whose character or place it
 // names. It stands over the binder and the tabs, and Escape goes back to them.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Timeline as Laid } from "./bindings/Timeline";
 import type { TimelineView } from "./bindings/TimelineView";
@@ -11,7 +12,7 @@ import { failure } from "./errors";
 import Icon from "./Icon";
 import Menu, { MenuItem } from "./Menu";
 import { useFormat } from "./projectFormat";
-import { rowsOf, subjectsOf } from "./timeline";
+import { dropAt, rowsOf, subjectsOf, type Drop } from "./timeline";
 import type { FolderRef } from "./tree";
 
 type Props = {
@@ -59,6 +60,11 @@ export default function Timeline({
 	const [read, setRead] = useState<Read>({ kind: "reading" });
 	const [view, setView] = useState<TimelineView>(FRESH);
 	const screenplay = useFormat() === "screenplay";
+	const [placed, setPlaced] = useState(0);
+	const [dragging, setDragging] = useState<string | null>(null);
+	const [over, setOver] = useState<{ drop: Drop; left: number } | null>(null);
+	const [trouble, setTrouble] = useState<string | null>(null);
+	const grid = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		let gone = false;
@@ -79,7 +85,7 @@ export default function Timeline({
 		return () => {
 			gone = true;
 		};
-	}, [root, folder.id, changed]);
+	}, [root, folder.id, changed, placed]);
 
 	// A store that cannot be read leaves the timeline as it first opens.
 	useEffect(() => {
@@ -141,6 +147,80 @@ export default function Timeline({
 		[scenes, documents, side.section, screenplay, hidden],
 	);
 
+	/**
+	 * Where the dragged scene would land under the cursor, and how far into
+	 * the grid to draw the line, measured off the column numbers.
+	 */
+	function aimed(event: DragEvent) {
+		const box = grid.current;
+		const first = box?.querySelector<HTMLElement>(".timeline__tick");
+		if (
+			read.kind !== "ready" ||
+			dragging === null ||
+			box === null ||
+			!first
+		) {
+			return null;
+		}
+		const space = parseFloat(getComputedStyle(box).columnGap) || 0;
+		const pitch = first.offsetWidth + space;
+		const start = first.getBoundingClientRect().left;
+		const drop = dropAt(
+			event.clientX - start,
+			pitch,
+			scenes.map((scene) => scene.id),
+			dragging,
+			read.laid.placed,
+		);
+		return drop === null
+			? null
+			: {
+					drop,
+					left:
+						start -
+						box.getBoundingClientRect().left +
+						drop.gap * pitch -
+						space / 2,
+				};
+	}
+
+	function stop() {
+		setDragging(null);
+		setOver(null);
+	}
+
+	function hover(event: DragEvent) {
+		const at = aimed(event);
+		if (at === null) {
+			setOver(null);
+			return;
+		}
+		// Only a prevented dragover makes the grid a drop target.
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "move";
+		setOver((current) =>
+			current?.drop.gap === at.drop.gap ? current : at,
+		);
+	}
+
+	function drop(event: DragEvent) {
+		event.preventDefault();
+		const at = aimed(event);
+		const id = dragging;
+		stop();
+		if (at === null || id === null) {
+			return;
+		}
+		invoke("place_scene", {
+			root,
+			id,
+			place: at.drop.place,
+			before: at.drop.before,
+		})
+			.then(() => setPlaced((count) => count + 1))
+			.catch((error: unknown) => setTrouble(failure(error).message));
+	}
+
 	function toggle(id: string) {
 		change({
 			...view,
@@ -154,7 +234,16 @@ export default function Timeline({
 		<section className="timeline" aria-label={`Timeline of ${folder.name}`}>
 			<header className="timeline__head">
 				<div>
-					<p className="timeline__of">Timeline</p>
+					{trouble === null ? (
+						<p className="timeline__of">Timeline</p>
+					) : (
+						<p
+							className="timeline__of timeline__trouble"
+							role="alert"
+						>
+							{trouble}
+						</p>
+					)}
 					<h1 className="timeline__title">{folder.name}</h1>
 				</div>
 				<div className="timeline__controls">
@@ -224,11 +313,29 @@ export default function Timeline({
 			) : (
 				<div className="timeline__scroll">
 					<div
+						ref={grid}
 						className="timeline__grid"
 						style={{
 							gridTemplateColumns: `var(--timeline-label) repeat(${scenes.length}, var(--timeline-block))`,
 						}}
+						onDragOver={hover}
+						onDragLeave={(event) => {
+							if (
+								!event.currentTarget.contains(
+									event.relatedTarget as Node | null,
+								)
+							) {
+								setOver(null);
+							}
+						}}
+						onDrop={drop}
 					>
+						{over !== null && (
+							<span
+								className="timeline__drop"
+								style={{ left: over.left }}
+							/>
+						)}
 						<span className="timeline__corner" />
 						{scenes.map((scene, at) => (
 							<span
@@ -253,6 +360,25 @@ export default function Timeline({
 											key={scene.id}
 											className="timeline__block"
 											title={scene.title}
+											draggable
+											data-dragging={
+												dragging === scene.id
+													? ""
+													: undefined
+											}
+											onDragStart={(event) => {
+												event.dataTransfer.effectAllowed =
+													"move";
+												// A drag with nothing on the transfer
+												// does not start in some browsers.
+												event.dataTransfer.setData(
+													"text/plain",
+													scene.id,
+												);
+												setTrouble(null);
+												setDragging(scene.id);
+											}}
+											onDragEnd={stop}
 										>
 											{scene.title}
 										</span>

@@ -97,7 +97,12 @@
 	padding: 0 var(--space-lg) var(--space-lg);
 }
 
+.timeline__trouble {
+	color: var(--danger);
+}
+
 .timeline__grid {
+	position: relative;
 	display: grid;
 	width: max-content;
 	row-gap: var(--space-xs);
@@ -142,4 +147,23 @@
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
+	cursor: grab;
+}
+
+.timeline__block[data-dragging] {
+	opacity: 0.55;
+}
+
+/* Where a dragged scene would come down: a line down the gap between two
+   columns, through every row. */
+.timeline__drop {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	z-index: 2;
+	width: 2px;
+	margin-left: -1px;
+	background: var(--accent);
+	border-radius: 1px;
+	pointer-events: none;
 }

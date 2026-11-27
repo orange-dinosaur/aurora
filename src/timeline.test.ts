@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
 import type { Mentionable } from "./lib/mentions";
 import { runsOf } from "./runs";
-import { rowsOf, subjectsOf, type TimelineRow } from "./timeline";
+import {
+	chainOf,
+	dropAt,
+	rowsOf,
+	subjectsOf,
+	type TimelineRow,
+} from "./timeline";
 
 function page(section: string, title: string, ...names: string[]): Mentionable {
 	return {
@@ -130,5 +136,56 @@ describe("timeline rows", () => {
 		expect(drawn(rowsOf(["gone"], cast, "Characters", false))).toEqual([
 			["-", ["gone"]],
 		]);
+	});
+});
+
+describe("dropping a scene", () => {
+	const order = ["a", "b", "c", "d"];
+
+	test("a drop lands in the nearest gap, after the scene on its left", () => {
+		expect(dropAt(260, 100, order, "a", {})).toEqual({
+			gap: 3,
+			place: { after: "c" },
+			before: "d",
+		});
+		expect(dropAt(140, 100, order, "d", {})).toEqual({
+			gap: 1,
+			place: { after: "a" },
+			before: "b",
+		});
+	});
+
+	test("a drop before the first scene puts it first", () => {
+		expect(dropAt(-40, 100, order, "c", {})).toEqual({
+			gap: 0,
+			place: "first",
+			before: "a",
+		});
+	});
+
+	test("a drop past the last scene has nothing on its right", () => {
+		expect(dropAt(900, 100, order, "a", {})).toEqual({
+			gap: 4,
+			place: { after: "d" },
+			before: null,
+		});
+	});
+
+	test("either side of the scene itself is no drop", () => {
+		expect(dropAt(100, 100, order, "b", {})).toBeNull();
+		expect(dropAt(200, 100, order, "b", {})).toBeNull();
+	});
+
+	test("no gap inside the scene's chain of followers", () => {
+		const placed = { c: { after: "b" }, d: { after: "c" } };
+
+		expect([...chainOf("b", placed)]).toEqual(["b", "c", "d"]);
+		expect(dropAt(300, 100, order, "b", placed)).toBeNull();
+		expect(dropAt(400, 100, order, "b", placed)).toBeNull();
+		expect(dropAt(0, 100, order, "b", placed)?.place).toBe("first");
+	});
+
+	test("a scene placed first is no follower", () => {
+		expect([...chainOf("a", { b: "first" })]).toEqual(["a"]);
 	});
 });
