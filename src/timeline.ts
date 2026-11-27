@@ -2,6 +2,7 @@
 // character or a place, and a scene sits in every row whose subject it names
 // or tags, so one scene can show more than once down the same column.
 
+import type { Marker } from "./bindings/Marker";
 import type { Place } from "./bindings/Place";
 import { appearancesIn, type Mentionable, type Subject } from "./lib/mentions";
 
@@ -39,6 +40,50 @@ export function chainOf(
 }
 
 /**
+ * The gap nearest `x` pixels right of the first scene's left edge, with
+ * columns `pitch` apart: 0 before the first scene, `count` after the last.
+ */
+export function gapAt(x: number, pitch: number, count: number): number {
+	return Math.min(count, Math.max(0, Math.round(x / pitch)));
+}
+
+/** A marker and the columns it names, `from` its scene up to `to`. */
+export type Stretch = { marker: Marker; from: number; to: number };
+
+/**
+ * Each marker whose scene is in `order`, left to right, running up to the
+ * next marker or the last scene.
+ */
+export function stretchesOf(markers: Marker[], order: string[]): Stretch[] {
+	const at = new Map(order.map((id, index) => [id, index]));
+	const starts = markers
+		.flatMap((marker) => {
+			const from = at.get(marker.before);
+			return from === undefined ? [] : [{ marker, from }];
+		})
+		.sort((one, other) => one.from - other.from);
+	return starts.map((start) => ({
+		...start,
+		to: starts.find((next) => next.from > start.from)?.from ?? order.length,
+	}));
+}
+
+/**
+ * The scene a marker put in `gap` would sit before, or null past the last
+ * scene or where a marker already starts, the dragged one's own gap included.
+ */
+export function markerAt(
+	gap: number,
+	order: string[],
+	stretches: Stretch[],
+): string | null {
+	return gap >= order.length ||
+		stretches.some((stretch) => stretch.from === gap)
+		? null
+		: order[gap];
+}
+
+/**
  * Where `moving` lands when let go `x` pixels right of the first scene's left
  * edge, with columns `pitch` apart. The nearest gap wins. Null for a gap that
  * leaves the scene where it is or falls inside its own chain.
@@ -50,7 +95,7 @@ export function dropAt(
 	moving: string,
 	placed: Partial<Record<string, Place>>,
 ): Drop | null {
-	const gap = Math.min(order.length, Math.max(0, Math.round(x / pitch)));
+	const gap = gapAt(x, pitch, order.length);
 	const left = gap === 0 ? null : order[gap - 1];
 	if (
 		order[gap] === moving ||

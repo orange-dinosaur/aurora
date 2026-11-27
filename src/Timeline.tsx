@@ -3,16 +3,25 @@
 // names. It stands over the binder and the tabs, and Escape goes back to them.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent } from "react";
+import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import type { Marker } from "./bindings/Marker";
 import type { Timeline as Laid } from "./bindings/Timeline";
 import type { TimelineView } from "./bindings/TimelineView";
 import { useCorpus } from "./corpus";
 import { failure } from "./errors";
 import Icon from "./Icon";
-import Menu, { MenuItem } from "./Menu";
+import Menu, { MenuItem, PointerMenu, useRightClick } from "./Menu";
+import NameField from "./NameField";
 import { useFormat } from "./projectFormat";
-import { dropAt, rowsOf, subjectsOf, type Drop } from "./timeline";
+import {
+	dropAt,
+	gapAt,
+	markerAt,
+	rowsOf,
+	stretchesOf,
+	subjectsOf,
+} from "./timeline";
 import type { FolderRef } from "./tree";
 
 type Props = {
@@ -27,6 +36,15 @@ type Read =
 	| { kind: "reading" }
 	| { kind: "ready"; laid: Laid }
 	| { kind: "failed"; message: string };
+
+/** What is being dragged: a scene's block or a marker's band. */
+type Dragged = { kind: "scene" | "marker"; id: string };
+
+/** A command that would carry out the drop, and its arguments past `root`. */
+type Call = [string, Record<string, unknown>];
+
+/** The name field, open on a gap for a new marker or on a marker. */
+type Naming = { kind: "new"; gap: number } | { kind: "rename"; marker: Marker };
 
 const FRESH: TimelineView = {
 	rows: "characters",
@@ -60,10 +78,17 @@ export default function Timeline({
 	const [read, setRead] = useState<Read>({ kind: "reading" });
 	const [view, setView] = useState<TimelineView>(FRESH);
 	const screenplay = useFormat() === "screenplay";
-	const [placed, setPlaced] = useState(0);
-	const [dragging, setDragging] = useState<string | null>(null);
-	const [over, setOver] = useState<{ drop: Drop; left: number } | null>(null);
+	const [reread, setReread] = useState(0);
+	const [dragging, setDragging] = useState<Dragged | null>(null);
+	const [over, setOver] = useState<{ gap: number; left: number } | null>(
+		null,
+	);
 	const [trouble, setTrouble] = useState<string | null>(null);
+	const [naming, setNaming] = useState<Naming | null>(null);
+	const [nameBusy, setNameBusy] = useState(false);
+	const [nameError, setNameError] = useState<string | null>(null);
+	const [menuFor, setMenuFor] = useState<Marker | null>(null);
+	const pointer = useRightClick();
 	const grid = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -85,7 +110,7 @@ export default function Timeline({
 		return () => {
 			gone = true;
 		};
-	}, [root, folder.id, changed, placed]);
+	}, [root, folder.id, changed, reread]);
 
 	// A store that cannot be read leaves the timeline as it first opens.
 	useEffect(() => {
@@ -131,57 +156,142 @@ export default function Timeline({
 	const side = SIDES[view.rows];
 	const hidden = view[side.hidden];
 	const scenes = read.kind === "ready" ? read.laid.scenes : [];
+	const markers = read.kind === "ready" ? read.laid.markers : [];
+	const order = useMemo(() => scenes.map((scene) => scene.id), [scenes]);
+	const stretches = useMemo(
+		() => stretchesOf(markers, order),
+		[markers, order],
+	);
 	const subjects = useMemo(
 		() => subjectsOf(documents, side.section),
 		[documents, side.section],
 	);
 	const rows = useMemo(
 		() =>
-			rowsOf(
-				scenes.map((scene) => scene.id),
-				documents,
-				side.section,
-				screenplay,
-				new Set(hidden),
-			),
-		[scenes, documents, side.section, screenplay, hidden],
+			rowsOf(order, documents, side.section, screenplay, new Set(hidden)),
+		[order, documents, side.section, screenplay, hidden],
 	);
 
 	/**
-	 * Where the dragged scene would land under the cursor, and how far into
-	 * the grid to draw the line, measured off the column numbers.
+	 * The columns as drawn, measured off the column numbers: where the first
+	 * starts, how far apart they are, and how far into the grid a gap sits.
 	 */
-	function aimed(event: DragEvent) {
+	function measure() {
 		const box = grid.current;
 		const first = box?.querySelector<HTMLElement>(".timeline__tick");
-		if (
-			read.kind !== "ready" ||
-			dragging === null ||
-			box === null ||
-			!first
-		) {
+		if (!box || !first) {
 			return null;
 		}
 		const space = parseFloat(getComputedStyle(box).columnGap) || 0;
 		const pitch = first.offsetWidth + space;
 		const start = first.getBoundingClientRect().left;
-		const drop = dropAt(
-			event.clientX - start,
-			pitch,
-			scenes.map((scene) => scene.id),
-			dragging,
-			read.laid.placed,
-		);
-		return drop === null
+		const offset = start - box.getBoundingClientRect().left - space / 2;
+		return { start, pitch, line: (gap: number) => offset + gap * pitch };
+	}
+
+	/** The gap the drag would come down in, and the command that puts it there. */
+	function aimed(event: DragEvent) {
+		const at = measure();
+		if (at === null || dragging === null || read.kind !== "ready") {
+			return null;
+		}
+		const x = event.clientX - at.start;
+		const landing = ((): { gap: number; call: Call } | null => {
+			if (dragging.kind === "scene") {
+				const drop = dropAt(
+					x,
+					at.pitch,
+					order,
+					dragging.id,
+					read.laid.placed,
+				);
+				return drop === null
+					? null
+					: {
+							gap: drop.gap,
+							call: [
+								"place_scene",
+								{
+									id: dragging.id,
+									place: drop.place,
+									before: drop.before,
+								},
+							],
+						};
+			}
+			const gap = gapAt(x, at.pitch, order.length);
+			const before = markerAt(gap, order, stretches);
+			return before === null
+				? null
+				: { gap, call: ["move_marker", { id: dragging.id, before }] };
+		})();
+		return landing === null
 			? null
-			: {
-					drop,
-					left:
-						start -
-						box.getBoundingClientRect().left +
-						drop.gap * pitch -
-						space / 2,
-				};
+			: { ...landing, left: at.line(landing.gap) };
+	}
+
+	function run([command, args]: Call) {
+		invoke(command, { root, ...args })
+			.then(() => setReread((count) => count + 1))
+			.catch((error: unknown) => setTrouble(failure(error).message));
+	}
+
+	function startDrag(event: DragEvent, what: Dragged) {
+		event.dataTransfer.effectAllowed = "move";
+		// A drag with nothing on the transfer does not start in some browsers.
+		event.dataTransfer.setData("text/plain", what.id);
+		setTrouble(null);
+		setDragging(what);
+	}
+
+	/** Opens the name field on the gap nearest a click on the column numbers. */
+	function aimName(event: ReactMouseEvent) {
+		const at = measure();
+		if (at === null) {
+			return;
+		}
+		const gap = gapAt(event.clientX - at.start, at.pitch, order.length);
+		if (markerAt(gap, order, stretches) !== null) {
+			setNameError(null);
+			setNaming({ kind: "new", gap });
+		}
+	}
+
+	function submitName(name: string) {
+		if (naming === null) {
+			return;
+		}
+		setNameBusy(true);
+		const saved =
+			naming.kind === "new"
+				? invoke("add_marker", {
+						root,
+						name,
+						before: order[naming.gap],
+					})
+				: invoke("rename_marker", { root, id: naming.marker.id, name });
+		saved
+			.then(() => {
+				setNaming(null);
+				setReread((count) => count + 1);
+			})
+			.catch((error: unknown) => setNameError(failure(error).message))
+			.finally(() => setNameBusy(false));
+	}
+
+	function nameField(initial: string) {
+		return (
+			<NameField
+				label="Marker name"
+				placeholder="Three years later"
+				initial={initial}
+				busy={nameBusy}
+				working="Saving…"
+				error={nameError}
+				onSubmit={submitName}
+				onCancel={() => setNaming(null)}
+			/>
+		);
 	}
 
 	function stop() {
@@ -199,26 +309,17 @@ export default function Timeline({
 		event.preventDefault();
 		event.dataTransfer.dropEffect = "move";
 		setOver((current) =>
-			current?.drop.gap === at.drop.gap ? current : at,
+			current?.gap === at.gap ? current : { gap: at.gap, left: at.left },
 		);
 	}
 
 	function drop(event: DragEvent) {
 		event.preventDefault();
 		const at = aimed(event);
-		const id = dragging;
 		stop();
-		if (at === null || id === null) {
-			return;
+		if (at !== null) {
+			run(at.call);
 		}
-		invoke("place_scene", {
-			root,
-			id,
-			place: at.drop.place,
-			before: at.drop.before,
-		})
-			.then(() => setPlaced((count) => count + 1))
-			.catch((error: unknown) => setTrouble(failure(error).message));
 	}
 
 	function toggle(id: string) {
@@ -337,11 +438,70 @@ export default function Timeline({
 							/>
 						)}
 						<span className="timeline__corner" />
+						<div
+							className="timeline__strip"
+							style={{
+								gridTemplateColumns: `repeat(${scenes.length}, var(--timeline-block))`,
+							}}
+						>
+							{stretches.map(({ marker, from, to }) => {
+								const span = `${from + 1} / ${to + 1}`;
+								return naming?.kind === "rename" &&
+									naming.marker.id === marker.id ? (
+									<div
+										key={marker.id}
+										className="timeline__naming"
+										style={{ gridColumn: span }}
+									>
+										{nameField(marker.name)}
+									</div>
+								) : (
+									<span
+										key={marker.id}
+										className="timeline__marker"
+										style={{ gridColumn: span }}
+										title={marker.name}
+										tabIndex={0}
+										draggable
+										data-dragging={
+											dragging?.id === marker.id
+												? ""
+												: undefined
+										}
+										onDragStart={(event) =>
+											startDrag(event, {
+												kind: "marker",
+												id: marker.id,
+											})
+										}
+										onDragEnd={stop}
+										onContextMenu={(event) => {
+											setMenuFor(marker);
+											pointer.open(event);
+										}}
+									>
+										{marker.name}
+									</span>
+								);
+							})}
+							{naming?.kind === "new" && (
+								<div
+									className="timeline__naming"
+									style={{
+										gridColumn: `${naming.gap + 1} / span ${Math.min(2, scenes.length - naming.gap)}`,
+									}}
+								>
+									{nameField("")}
+								</div>
+							)}
+						</div>
+						<span className="timeline__corner" />
 						{scenes.map((scene, at) => (
 							<span
 								key={scene.id}
 								className="timeline__tick"
 								title={scene.title}
+								onClick={aimName}
 							>
 								{at + 1}
 							</span>
@@ -362,22 +522,16 @@ export default function Timeline({
 											title={scene.title}
 											draggable
 											data-dragging={
-												dragging === scene.id
+												dragging?.id === scene.id
 													? ""
 													: undefined
 											}
-											onDragStart={(event) => {
-												event.dataTransfer.effectAllowed =
-													"move";
-												// A drag with nothing on the transfer
-												// does not start in some browsers.
-												event.dataTransfer.setData(
-													"text/plain",
-													scene.id,
-												);
-												setTrouble(null);
-												setDragging(scene.id);
-											}}
+											onDragStart={(event) =>
+												startDrag(event, {
+													kind: "scene",
+													id: scene.id,
+												})
+											}
 											onDragEnd={stop}
 										>
 											{scene.title}
@@ -391,6 +545,39 @@ export default function Timeline({
 					</div>
 				</div>
 			)}
+			<PointerMenu
+				at={pointer.at}
+				label={`Marker ${menuFor?.name ?? ""}`}
+				onClose={pointer.close}
+			>
+				{(close) =>
+					menuFor !== null && (
+						<>
+							<MenuItem
+								onSelect={() => {
+									close();
+									setNameError(null);
+									setNaming({
+										kind: "rename",
+										marker: menuFor,
+									});
+								}}
+							>
+								Rename
+							</MenuItem>
+							<MenuItem
+								danger
+								onSelect={() => {
+									close();
+									run(["delete_marker", { id: menuFor.id }]);
+								}}
+							>
+								Delete
+							</MenuItem>
+						</>
+					)
+				}
+			</PointerMenu>
 		</section>
 	);
 }

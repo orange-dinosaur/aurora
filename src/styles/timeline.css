@@ -131,12 +131,65 @@
 	text-overflow: ellipsis;
 }
 
+/* Clicked between two numbers, it opens a field to name a marker there. */
 .timeline__tick {
 	padding-bottom: var(--space-xxs);
 	border-bottom: var(--hairline);
 	font: var(--text-caption);
 	color: var(--text-faint);
 	text-align: center;
+	cursor: pointer;
+}
+
+/* The markers, above the numbers. It keeps its height with none, so the
+   first marker or a name field opening moves nothing. */
+.timeline__strip {
+	grid-column: 2 / -1;
+	display: grid;
+	grid-template-rows: 1.5rem;
+	column-gap: inherit;
+}
+
+.timeline__strip > * {
+	grid-row: 1;
+	min-width: 0;
+}
+
+/* A marker's band runs over the stretch it names, its start edged in accent. */
+.timeline__marker {
+	align-self: stretch;
+	display: flex;
+	align-items: center;
+	padding: 0 var(--space-xs);
+	border-left: 2px solid var(--accent);
+	background: var(--bg-hover);
+	font: var(--text-caption);
+	color: var(--text-dim);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	cursor: grab;
+}
+
+.timeline__marker:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.timeline__marker[data-dragging] {
+	opacity: 0.55;
+}
+
+/* Over whatever band it lands on, since the stretch it starts is not there yet. */
+.timeline__naming {
+	position: relative;
+	z-index: 2;
+	background: var(--bg);
+}
+
+.timeline__naming .namefield__input {
+	padding: 0.15rem var(--space-xs);
+	font: var(--text-caption);
 }
 
 .timeline__block {

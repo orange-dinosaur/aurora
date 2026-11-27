@@ -4,7 +4,10 @@ import { runsOf } from "./runs";
 import {
 	chainOf,
 	dropAt,
+	gapAt,
+	markerAt,
 	rowsOf,
+	stretchesOf,
 	subjectsOf,
 	type TimelineRow,
 } from "./timeline";
@@ -187,5 +190,39 @@ describe("dropping a scene", () => {
 
 	test("a scene placed first is no follower", () => {
 		expect([...chainOf("a", { b: "first" })]).toEqual(["a"]);
+	});
+});
+
+describe("markers", () => {
+	const order = ["a", "b", "c", "d", "e"];
+	const later = { id: "m2", name: "Three years later", before: "d" };
+	const summer = { id: "m1", name: "Summer", before: "a" };
+	const gone = { id: "m3", name: "Cut", before: "zz" };
+
+	test("a marker runs from its scene to the next marker or the end", () => {
+		expect(
+			stretchesOf([later, gone, summer], order).map(
+				({ marker, from, to }) => [marker.name, from, to],
+			),
+		).toEqual([
+			["Summer", 0, 3],
+			["Three years later", 3, 5],
+		]);
+	});
+
+	test("a marker goes before the scene right of the gap", () => {
+		const stretches = stretchesOf([later], order);
+
+		expect(markerAt(gapAt(140, 100, order.length), order, stretches)).toBe(
+			"b",
+		);
+		expect(markerAt(0, order, stretches)).toBe("a");
+	});
+
+	test("no marker past the last scene or where one already starts", () => {
+		const stretches = stretchesOf([later], order);
+
+		expect(markerAt(5, order, stretches)).toBeNull();
+		expect(markerAt(3, order, stretches)).toBeNull();
 	});
 });
