@@ -3,7 +3,11 @@
 // names. It stands over the binder and the tabs, and Escape goes back to them.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
+import type {
+	CSSProperties,
+	DragEvent,
+	MouseEvent as ReactMouseEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import type { DocumentSummary } from "./bindings/DocumentSummary";
@@ -28,8 +32,11 @@ import { useFormat } from "./projectFormat";
 import {
 	dropAt,
 	gapAt,
+	hue,
 	markerAt,
+	markerStepped,
 	rowsOf,
+	stepped,
 	stretchesOf,
 	subjectsOf,
 } from "./timeline";
@@ -60,6 +67,23 @@ type Call = [string, Record<string, unknown>];
 
 /** The name field, open on a gap for a new marker or on a marker. */
 type Naming = { kind: "new"; gap: number } | { kind: "rename"; marker: Marker };
+
+/** A row a scene sits in, as its card lists it. Null hue for "No one". */
+type Who = { key: string; name: string; hue: number | null };
+
+/** The block colour for the row or marker at `index`, as `--c`. */
+function tinted(index: number): CSSProperties {
+	return { "--c": `var(--block-${hue(index)})` } as CSSProperties;
+}
+
+const STEPS: Partial<Record<string, -1 | 1>> = { ArrowLeft: -1, ArrowRight: 1 };
+
+const HINTS = {
+	rest: "Hover between two numbers and press + to add a marker. Right-click a marker to rename, move earlier, move later or delete it.",
+	card: "Click a block for its card. Drag it sideways, or press Alt ← and Alt → on it, to move it in the story.",
+	drag: "Drop between two scenes. Escape puts it back.",
+	naming: "Name the marker. Enter saves, Escape cancels.",
+};
 
 const FRESH: TimelineView = {
 	rows: "characters",
@@ -264,13 +288,42 @@ export default function Timeline({
 	/** Opens the name field on the gap nearest a click on the column numbers. */
 	function aimName(event: ReactMouseEvent) {
 		const at = measure();
-		if (at === null) {
-			return;
+		if (at !== null) {
+			nameAt(gapAt(event.clientX - at.start, at.pitch, order.length));
 		}
-		const gap = gapAt(event.clientX - at.start, at.pitch, order.length);
+	}
+
+	function nameAt(gap: number) {
 		if (markerAt(gap, order, stretches) !== null) {
 			setNameError(null);
 			setNaming({ kind: "new", gap });
+		}
+	}
+
+	/** The command that moves a scene one step, or null at an end. */
+	function sceneStep(id: string, step: -1 | 1): Call | null {
+		const drop =
+			read.kind === "ready"
+				? stepped(order, id, read.laid.placed, step)
+				: null;
+		return drop === null
+			? null
+			: ["place_scene", { id, place: drop.place, before: drop.before }];
+	}
+
+	function markerStep(id: string, step: -1 | 1): Call | null {
+		const stretch = stretches.find((each) => each.marker.id === id);
+		const before =
+			stretch === undefined
+				? null
+				: markerStepped(stretch, step, order, stretches);
+		return before === null ? null : ["move_marker", { id, before }];
+	}
+
+	function move(call: Call | null) {
+		if (call !== null) {
+			setTrouble(null);
+			run(call);
 		}
 	}
 
@@ -348,6 +401,73 @@ export default function Timeline({
 		});
 	}
 
+	/** A scene's block in one row. Alt and an arrow move it a step. */
+	function block(scene: DocumentSummary) {
+		return (
+			<button
+				type="button"
+				className="timeline__block"
+				title={scene.title}
+				aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+				onKeyDown={(event) => {
+					const step = STEPS[event.key];
+					if (event.altKey && step !== undefined) {
+						event.preventDefault();
+						move(sceneStep(scene.id, step));
+					}
+				}}
+				onClick={(event) => {
+					const box = event.currentTarget.getBoundingClientRect();
+					setCard({
+						scene,
+						at: { x: box.left, y: box.bottom + 4 },
+						from: event.currentTarget,
+					});
+				}}
+				draggable
+				data-dragging={dragging?.id === scene.id ? "" : undefined}
+				onDragStart={(event) =>
+					startDrag(event, { kind: "scene", id: scene.id })
+				}
+				onDragEnd={stop}
+			>
+				<span className="timeline__block-title">{scene.title}</span>
+				<span className="timeline__block-count">
+					{counted(scene.words, null, scene.pages)}
+				</span>
+			</button>
+		);
+	}
+
+	const drawn =
+		read.kind === "ready" && corpus.kind === "ready" && scenes.length > 0;
+	const hint = !drawn
+		? ""
+		: naming !== null
+			? HINTS.naming
+			: dragging !== null
+				? HINTS.drag
+				: card !== null
+					? HINTS.card
+					: HINTS.rest;
+	const who: Who[] =
+		card === null
+			? []
+			: rows.flatMap((row, index) =>
+					row.scenes.has(card.scene.id)
+						? [
+								{
+									key: row.subject?.id ?? "",
+									name: row.subject?.title ?? side.none,
+									hue:
+										row.subject === null
+											? null
+											: hue(index),
+								},
+							]
+						: [],
+				);
+
 	return (
 		<section className="timeline" aria-label={`Timeline of ${folder.name}`}>
 			<header className="timeline__head">
@@ -416,6 +536,7 @@ export default function Timeline({
 					</Menu>
 				</div>
 			</header>
+			<p className="timeline__hint">{hint}</p>
 			{read.kind === "failed" ? (
 				<p className="timeline__note" role="alert">
 					{read.message}
@@ -461,7 +582,7 @@ export default function Timeline({
 								gridTemplateColumns: `repeat(${scenes.length}, var(--timeline-block))`,
 							}}
 						>
-							{stretches.map(({ marker, from, to }) => {
+							{stretches.map(({ marker, from, to }, index) => {
 								const span = `${from + 1} / ${to + 1}`;
 								return naming?.kind === "rename" &&
 									naming.marker.id === marker.id ? (
@@ -476,7 +597,10 @@ export default function Timeline({
 									<span
 										key={marker.id}
 										className="timeline__marker"
-										style={{ gridColumn: span }}
+										style={{
+											...tinted(index),
+											gridColumn: span,
+										}}
 										title={marker.name}
 										tabIndex={0}
 										draggable
@@ -521,55 +645,50 @@ export default function Timeline({
 								onClick={aimName}
 							>
 								{at + 1}
+								{at > 0 &&
+									markerAt(at, order, stretches) !== null && (
+										<button
+											type="button"
+											className="timeline__add"
+											aria-label={`Add a marker before ${scene.title}`}
+											onClick={(event) => {
+												event.stopPropagation();
+												nameAt(at);
+											}}
+										>
+											<Icon name="plus" />
+										</button>
+									)}
 							</span>
 						))}
-						{rows.map((row) => (
+						{rows.map((row, index) => (
 							<div
 								key={row.subject?.id ?? ""}
 								className="timeline__row"
+								style={
+									row.subject === null
+										? undefined
+										: tinted(index)
+								}
+								data-none={
+									row.subject === null ? "" : undefined
+								}
 							>
 								<span className="timeline__label">
-									{row.subject?.title ?? side.none}
+									<i className="timeline__swatch" />
+									<span>
+										{row.subject?.title ?? side.none}
+									</span>
 								</span>
-								{scenes.map((scene) =>
-									row.scenes.has(scene.id) ? (
-										<button
-											type="button"
-											key={scene.id}
-											className="timeline__block"
-											title={scene.title}
-											onClick={(event) => {
-												const box =
-													event.currentTarget.getBoundingClientRect();
-												setCard({
-													scene,
-													at: {
-														x: box.left,
-														y: box.bottom + 4,
-													},
-													from: event.currentTarget,
-												});
-											}}
-											draggable
-											data-dragging={
-												dragging?.id === scene.id
-													? ""
-													: undefined
-											}
-											onDragStart={(event) =>
-												startDrag(event, {
-													kind: "scene",
-													id: scene.id,
-												})
-											}
-											onDragEnd={stop}
-										>
-											{scene.title}
-										</button>
-									) : (
-										<span key={scene.id} />
-									),
-								)}
+								{scenes.map((scene) => (
+									<div
+										key={scene.id}
+										className="timeline__lane"
+									>
+										{row.scenes.has(scene.id) &&
+											block(scene)}
+									</div>
+								))}
 							</div>
 						))}
 					</div>
@@ -596,6 +715,24 @@ export default function Timeline({
 								Rename
 							</MenuItem>
 							<MenuItem
+								disabled={markerStep(menuFor.id, -1) === null}
+								onSelect={() => {
+									close();
+									move(markerStep(menuFor.id, -1));
+								}}
+							>
+								Move earlier
+							</MenuItem>
+							<MenuItem
+								disabled={markerStep(menuFor.id, 1) === null}
+								onSelect={() => {
+									close();
+									move(markerStep(menuFor.id, 1));
+								}}
+							>
+								Move later
+							</MenuItem>
+							<MenuItem
 								danger
 								onSelect={() => {
 									close();
@@ -612,6 +749,10 @@ export default function Timeline({
 				<SceneCard
 					key={card.scene.id}
 					opened={card}
+					who={who}
+					earlier={sceneStep(card.scene.id, -1)}
+					later={sceneStep(card.scene.id, 1)}
+					onMove={move}
 					onOpen={() => onOpen(card.scene)}
 					onClose={() => setCard(null)}
 				/>
@@ -621,15 +762,24 @@ export default function Timeline({
 }
 
 /**
- * What the overview's card says about a scene, over the timeline: its synopsis
- * or opening, its tags and its count, with Open to go to it.
+ * What the overview's card says about a scene, over the timeline: the rows it
+ * sits in, its synopsis or opening, its tags and its count, with a step either
+ * way and Open to go to it.
  */
 function SceneCard({
 	opened: { scene, at, from },
+	who,
+	earlier,
+	later,
+	onMove,
 	onOpen,
 	onClose,
 }: {
 	opened: Opened;
+	who: Who[];
+	earlier: Call | null;
+	later: Call | null;
+	onMove: (call: Call | null) => void;
 	onOpen: () => void;
 	onClose: () => void;
 }) {
@@ -670,6 +820,26 @@ function SceneCard({
 			role="dialog"
 			aria-label={scene.title}
 		>
+			{who.length > 0 && (
+				<ul className="timeline__who" aria-label="Rows">
+					{who.map((row) => (
+						<li
+							key={row.key}
+							style={
+								row.hue === null
+									? undefined
+									: ({
+											"--c": `var(--block-${row.hue})`,
+										} as CSSProperties)
+							}
+							data-none={row.hue === null ? "" : undefined}
+						>
+							<i className="timeline__swatch" />
+							{row.name}
+						</li>
+					))}
+				</ul>
+			)}
 			<span className="card__title">{scene.title}</span>
 			<span className="card__excerpt">
 				{previewed(scene.front, scene.excerpt)}
@@ -683,6 +853,26 @@ function SceneCard({
 					))}
 				</ul>
 			)}
+			<div className="timeline__moves">
+				<button
+					type="button"
+					className="timeline__move"
+					title="Alt ←"
+					disabled={earlier === null}
+					onClick={() => onMove(earlier)}
+				>
+					← Move earlier
+				</button>
+				<button
+					type="button"
+					className="timeline__move"
+					title="Alt →"
+					disabled={later === null}
+					onClick={() => onMove(later)}
+				>
+					Move later →
+				</button>
+			</div>
 			<div className="timeline__card-foot">
 				<span className="card__meta">
 					{counted(scene.words, scene.target, scene.pages)}

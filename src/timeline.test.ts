@@ -5,8 +5,11 @@ import {
 	chainOf,
 	dropAt,
 	gapAt,
+	hue,
 	markerAt,
+	markerStepped,
 	rowsOf,
+	stepped,
 	stretchesOf,
 	subjectsOf,
 	type TimelineRow,
@@ -224,5 +227,81 @@ describe("markers", () => {
 
 		expect(markerAt(5, order, stretches)).toBeNull();
 		expect(markerAt(3, order, stretches)).toBeNull();
+	});
+
+	test("a marker steps one scene each way, but not past an end or another marker", () => {
+		const stretches = stretchesOf([summer, later], order);
+		const [first, second] = stretches;
+
+		expect(markerStepped(first, -1, order, stretches)).toBeNull();
+		expect(markerStepped(first, 1, order, stretches)).toBe("b");
+		expect(markerStepped(second, -1, order, stretches)).toBe("c");
+		expect(markerStepped(second, 1, order, stretches)).toBe("e");
+
+		const last = stretchesOf([{ ...later, before: "e" }], order);
+		expect(markerStepped(last[0], 1, order, last)).toBeNull();
+
+		const touching = stretchesOf(
+			[summer, { ...later, before: "b" }],
+			order,
+		);
+		expect(markerStepped(touching[0], 1, order, touching)).toBeNull();
+		expect(markerStepped(touching[1], -1, order, touching)).toBeNull();
+	});
+});
+
+describe("moving a scene without a drag", () => {
+	const order = ["a", "b", "c", "d"];
+
+	test("one step lands the gap past the neighbour, as a drop there would", () => {
+		expect(stepped(order, "c", {}, -1)).toEqual({
+			gap: 1,
+			place: { after: "a" },
+			before: "b",
+		});
+		expect(stepped(order, "b", {}, 1)).toEqual({
+			gap: 3,
+			place: { after: "c" },
+			before: "d",
+		});
+	});
+
+	test("the first scene steps to first and the last to the end", () => {
+		expect(stepped(order, "b", {}, -1)?.place).toBe("first");
+		expect(stepped(order, "c", {}, 1)).toEqual({
+			gap: 4,
+			place: { after: "d" },
+			before: null,
+		});
+	});
+
+	test("nothing further at either end", () => {
+		expect(stepped(order, "a", {}, -1)).toBeNull();
+		expect(stepped(order, "d", {}, 1)).toBeNull();
+		expect(stepped(order, "zz", {}, 1)).toBeNull();
+	});
+
+	test("a later step goes past the scene's own followers", () => {
+		const placed = { c: { after: "b" } };
+
+		expect(stepped(order, "b", placed, 1)).toEqual({
+			gap: 4,
+			place: { after: "d" },
+			before: null,
+		});
+		expect(
+			stepped(
+				order,
+				"a",
+				{ b: { after: "a" }, d: { after: "c" }, ...placed },
+				1,
+			),
+		).toBeNull();
+	});
+});
+
+describe("block colours", () => {
+	test("rows take the five colours in turn", () => {
+		expect([0, 1, 4, 5, 9].map(hue)).toEqual([1, 2, 5, 1, 5]);
 	});
 });

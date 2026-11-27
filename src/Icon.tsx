@@ -25,6 +25,7 @@ export type IconName =
 	| "card"
 	| "quote"
 	| "bars"
+	| "gantt"
 	| "layers"
 	| "check"
 	| "pencil";
@@ -151,6 +152,14 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<rect x="3" y="12" width="4.5" height="9" rx="1" />
 			<rect x="9.75" y="7" width="4.5" height="14" rx="1" />
 			<rect x="16.5" y="3" width="4.5" height="18" rx="1" />
+		</>
+	),
+	// Lucide's older gantt-chart: three staggered bars, for the timeline.
+	gantt: (
+		<>
+			<path d="M8 6h10" />
+			<path d="M6 12h9" />
+			<path d="M11 18h7" />
 		</>
 	),
 	layers: (

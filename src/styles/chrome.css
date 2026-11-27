@@ -254,6 +254,49 @@
 	cursor: default;
 }
 
+.titlebar__button[aria-pressed="true"] {
+	color: var(--accent-text);
+	background: var(--accent-wash);
+}
+
+.titlebar__button:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/* A tooltip the app draws, so it matches the palette, after the same pause
+   a native one takes. */
+.titlebar__tipped {
+	position: relative;
+}
+
+.titlebar__tip {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 10;
+	padding: 4px 8px;
+	font: var(--text-caption);
+	white-space: nowrap;
+	color: var(--bg);
+	background: var(--text);
+	border-radius: var(--radius-xs);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease 400ms;
+}
+
+.titlebar__tip kbd {
+	margin-left: 6px;
+	font: inherit;
+	opacity: 0.75;
+}
+
+.titlebar__tipped:hover .titlebar__tip,
+.titlebar__tipped:focus-visible .titlebar__tip {
+	opacity: 1;
+}
+
 /* A person in a coral circle, signed in or not. The menu says the rest. */
 .account__chip {
 	display: grid;

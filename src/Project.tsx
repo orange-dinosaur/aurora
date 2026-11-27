@@ -2035,6 +2035,13 @@ export default function Project({
 					)
 				}
 				onSearch={openSearch}
+				timeline={timelineOf !== null}
+				timelineOff={covered && timelineOf === null}
+				onTimeline={() =>
+					timelineOf !== null
+						? setTimelineOf(null)
+						: void openTimeline()
+				}
 				theme={preferences.theme}
 				onTheme={(theme) => onPreferences({ theme })}
 				onSettings={onSettings}

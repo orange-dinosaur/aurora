@@ -654,9 +654,16 @@
 	--removed-wash: var(--accent-2-wash);
 	--danger: #b3362c;
 	--progress-red: #e03131;
-	--progress-orange: #f76707;
-	--progress-yellow: #fcc419;
+	--progress-orange: #e35d00;
+	--progress-yellow: #b08400;
 	--progress-green: #2f9e44;
+	/* Timeline rows and their blocks, taken in turn. */
+	--block-1: #f4ae8a;
+	--block-2: #efb5de;
+	--block-3: #86d1c5;
+	--block-4: #a3bdf0;
+	--block-5: #f1cf7e;
+	--on-block: #22202a;
 	/* The tint on a match that is not the one being read. */
 	--find: var(--accent-wash);
 	--surface-float: rgb(255 255 255 / 0.72);
@@ -674,6 +681,8 @@
 	--text-ui: 400 13px/1.4 var(--font-ui);
 	--text-ui-strong: 600 13px/1.4 var(--font-ui);
 	--text-caption: 400 11px/1.35 var(--font-ui);
+	--text-ui-small: 400 12px/1.35 var(--font-ui);
+	--text-section: 600 14px/1.3 var(--font-ui);
 	--tracking-display: -0.01em;
 	--tracking-heading: -0.01em;
 	--tracking-title: 0;
@@ -701,6 +710,8 @@
 	/* Every opening starts from this, and eases on this curve. */
 	--open-from: scale(0.97);
 	--ease-open: cubic-bezier(0.23, 1, 0.32, 1);
+	--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+	--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 	--lift: translateY(-3px);
 
 	font-family: var(--font-ui);
@@ -746,6 +757,12 @@
 		--progress-orange: #ff922b;
 		--progress-yellow: #ffe066;
 		--progress-green: #69db7c;
+		--block-1: #e09a77;
+		--block-2: #d99bc8;
+		--block-3: #63b6a9;
+		--block-4: #8aa3dc;
+		--block-5: #d8b660;
+		--on-block: #1c1c28;
 		--surface-float: rgb(43 43 58 / 0.72);
 		--shadow-float: 0 8px 30px rgb(0 0 0 / 0.5);
 	}
@@ -776,6 +793,12 @@
 	--progress-orange: #ff922b;
 	--progress-yellow: #ffe066;
 	--progress-green: #69db7c;
+	--block-1: #e09a77;
+	--block-2: #d99bc8;
+	--block-3: #63b6a9;
+	--block-4: #8aa3dc;
+	--block-5: #d8b660;
+	--on-block: #1c1c28;
 	--surface-float: rgb(43 43 58 / 0.72);
 	--shadow-float: 0 8px 30px rgb(0 0 0 / 0.5);
 }

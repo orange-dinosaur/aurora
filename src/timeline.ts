@@ -95,7 +95,62 @@ export function dropAt(
 	moving: string,
 	placed: Partial<Record<string, Place>>,
 ): Drop | null {
-	const gap = gapAt(x, pitch, order.length);
+	return dropIn(gapAt(x, pitch, order.length), order, moving, placed);
+}
+
+/**
+ * Where `moving` lands one step earlier (-1) or later (1) without a drag: the
+ * nearest gap that way a drop would accept, so a scene steps over its own
+ * followers. Null at either end.
+ */
+export function stepped(
+	order: string[],
+	moving: string,
+	placed: Partial<Record<string, Place>>,
+	step: -1 | 1,
+): Drop | null {
+	const at = order.indexOf(moving);
+	if (at === -1) {
+		return null;
+	}
+	for (
+		let gap = step < 0 ? at - 1 : at + 2;
+		gap >= 0 && gap <= order.length;
+		gap += step
+	) {
+		const drop = dropIn(gap, order, moving, placed);
+		if (drop !== null) {
+			return drop;
+		}
+	}
+	return null;
+}
+
+/**
+ * The scene a marker would start before one scene earlier (-1) or later (1),
+ * or null where that is past an end or another marker starts.
+ */
+export function markerStepped(
+	stretch: Stretch,
+	step: -1 | 1,
+	order: string[],
+	stretches: Stretch[],
+): string | null {
+	const gap = stretch.from + step;
+	return gap < 0 ? null : markerAt(gap, order, stretches);
+}
+
+/** Which of the five block colours the row or marker at `index` takes, 1 to 5. */
+export function hue(index: number): number {
+	return (index % 5) + 1;
+}
+
+function dropIn(
+	gap: number,
+	order: string[],
+	moving: string,
+	placed: Partial<Record<string, Place>>,
+): Drop | null {
 	const left = gap === 0 ? null : order[gap - 1];
 	if (
 		order[gap] === moving ||

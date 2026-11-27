@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { AccountChip } from "./Account";
 import Icon from "./Icon";
 import Session from "./Session";
-import { SEARCH, SESSION, shortcutLabel } from "./formatting";
+import { SEARCH, SESSION, shortcutLabel, TIMELINE } from "./formatting";
 import { dayTally, onDay } from "./lib/stats";
 import type { Limit, Running, Sessions } from "./sessions";
 import ThemeToggle from "./ThemeToggle";
@@ -38,6 +38,11 @@ type Props = {
 	/** The open tabs, or the way back from Compare or Merge. */
 	tabs: ReactNode;
 	onSearch: () => void;
+	/** Whether the timeline is up, which the button closes. */
+	timeline: boolean;
+	/** Off while Compare or Merge stands where the timeline would. */
+	timelineOff: boolean;
+	onTimeline: () => void;
 	/** The writer's theme preference, which the header can move between two of. */
 	theme: Theme;
 	onTheme: (theme: Theme) => void;
@@ -66,6 +71,9 @@ export default function Titlebar({
 	sidebarToggle,
 	tabs,
 	onSearch,
+	timeline,
+	timelineOff,
+	onTimeline,
 	theme,
 	onTheme,
 	onSettings,
@@ -117,6 +125,21 @@ export default function Titlebar({
 					onTick={onTickSession}
 					shortcut={shortcutLabel(SESSION)}
 				/>
+
+				<button
+					type="button"
+					className="titlebar__button titlebar__tipped"
+					aria-label="Timeline"
+					aria-pressed={timeline}
+					disabled={timelineOff}
+					onClick={onTimeline}
+				>
+					<Icon name="gantt" />
+					<span className="titlebar__tip" aria-hidden="true">
+						{timeline ? "Close timeline" : "Timeline"}
+						<kbd>{shortcutLabel(TIMELINE)}</kbd>
+					</span>
+				</button>
 
 				{/* The one place search is reachable from in every
 				    configuration: the toolbar and the sidebar can both be
