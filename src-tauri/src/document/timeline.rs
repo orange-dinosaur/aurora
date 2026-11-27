@@ -11,6 +11,9 @@ use crate::tree::Place;
 #[ts(export)]
 pub struct Timeline {
 	pub scenes: Vec<DocumentSummary>,
+	/// Where each dragged scene was put, by scene id. A scene missing here
+	/// follows the binder.
+	pub placed: HashMap<Uuid, Place>,
 	pub markers: Vec<Marker>,
 }
 
@@ -119,6 +122,10 @@ pub fn timeline(root: PathBuf, folder: Uuid) -> Result<Timeline> {
 		.iter()
 		.map(|(document, place)| (document.id, *place))
 		.collect();
+	let placed: HashMap<Uuid, Place> = places
+		.iter()
+		.filter_map(|&(id, place)| place.map(|place| (id, place)))
+		.collect();
 	let by_id: HashMap<Uuid, Document> = found
 		.into_iter()
 		.map(|(document, _)| (document.id, document))
@@ -131,6 +138,7 @@ pub fn timeline(root: PathBuf, folder: Uuid) -> Result<Timeline> {
 			.into_iter()
 			.map(|id| card(&counting_root, pages.as_ref(), &by_id[&id]))
 			.collect(),
+		placed,
 		// A marker whose scene has gone stays on disk, in case the scene
 		// comes back with an undo or a merge.
 		markers: manifest
@@ -360,6 +368,20 @@ mod tests {
 			!fs::read_to_string(root.join(crate::project::MANIFEST_FILE))
 				.unwrap()
 				.contains("placed")
+		);
+	}
+
+	#[test]
+	fn the_timeline_reports_where_each_dragged_scene_was_put() {
+		let parent = tempfile::tempdir().unwrap();
+		let (root, manuscript, scenes) = project(parent.path());
+		let placed = |root: &Path| timeline(root.to_path_buf(), manuscript).unwrap().placed;
+		assert!(placed(&root).is_empty());
+
+		place_scene(root.clone(), scenes[0], Some(Place::After(scenes[2])), None).unwrap();
+		assert_eq!(
+			placed(&root),
+			HashMap::from([(scenes[0], Place::After(scenes[2]))])
 		);
 	}
 
