@@ -192,19 +192,92 @@
 	font: var(--text-caption);
 }
 
+/* A button, so a click opens its card, dressed as a plain block. */
 .timeline__block {
 	padding: var(--space-xs);
+	border: 0;
 	border-radius: var(--radius-sm);
 	background: var(--accent-wash);
 	font: var(--text-ui);
+	color: var(--text);
+	text-align: left;
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	cursor: grab;
 }
 
+.timeline__block:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
 .timeline__block[data-dragging] {
 	opacity: 0.55;
+}
+
+/* A scene's card floats under its block, as wide as two blocks and a bit. */
+.timeline__card {
+	position: fixed;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xs);
+	width: 300px;
+	padding: var(--space-sm) var(--space-md);
+	font: var(--text-ui);
+	color: var(--text);
+	background: var(--surface-float);
+	border: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-float);
+}
+
+.timeline__tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-xxs);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font: var(--text-caption);
+}
+
+.timeline__tag {
+	padding: 0.0625rem 0.375rem;
+	background: var(--accent-wash);
+	border-radius: var(--radius-pill);
+}
+
+.timeline__card-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-sm);
+}
+
+.timeline__card-foot .card__meta {
+	margin-top: 0;
+}
+
+.timeline__open {
+	padding: 0.35rem 0.9rem;
+	font: inherit;
+	font-size: 0.75rem;
+	color: var(--accent-text);
+	background: var(--accent-wash);
+	border: 0;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.timeline__open:hover {
+	background: var(--bg-hover);
+}
+
+.timeline__open:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
 }
 
 /* Where a dragged scene would come down: a line down the gap between two

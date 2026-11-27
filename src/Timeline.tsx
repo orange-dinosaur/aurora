@@ -2,16 +2,27 @@
 // left to right in story order, once in each row whose character or place it
 // names. It stands over the binder and the tabs, and Escape goes back to them.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
+import type { DocumentSummary } from "./bindings/DocumentSummary";
 import type { Marker } from "./bindings/Marker";
 import type { Timeline as Laid } from "./bindings/Timeline";
 import type { TimelineView } from "./bindings/TimelineView";
 import { useCorpus } from "./corpus";
 import { failure } from "./errors";
 import Icon from "./Icon";
-import Menu, { MenuItem, PointerMenu, useRightClick } from "./Menu";
+import { counted, previewed } from "./cards";
+import { list, parse } from "./frontmatter";
+import { inward } from "./lib/overflow";
+import Menu, {
+	MenuItem,
+	PointerMenu,
+	useDismissal,
+	useRightClick,
+	type Point,
+} from "./Menu";
 import NameField from "./NameField";
 import { useFormat } from "./projectFormat";
 import {
@@ -30,7 +41,11 @@ type Props = {
 	changed: number;
 	live: Map<string, string>;
 	onBack: () => void;
+	onOpen: (scene: DocumentSummary) => void;
 };
+
+/** A scene's card, open under the block that was clicked. */
+type Opened = { scene: DocumentSummary; at: Point; from: HTMLElement };
 
 type Read =
 	| { kind: "reading" }
@@ -74,6 +89,7 @@ export default function Timeline({
 	changed,
 	live,
 	onBack,
+	onOpen,
 }: Props) {
 	const [read, setRead] = useState<Read>({ kind: "reading" });
 	const [view, setView] = useState<TimelineView>(FRESH);
@@ -88,6 +104,7 @@ export default function Timeline({
 	const [nameBusy, setNameBusy] = useState(false);
 	const [nameError, setNameError] = useState<string | null>(null);
 	const [menuFor, setMenuFor] = useState<Marker | null>(null);
+	const [card, setCard] = useState<Opened | null>(null);
 	const pointer = useRightClick();
 	const grid = useRef<HTMLDivElement>(null);
 
@@ -516,10 +533,23 @@ export default function Timeline({
 								</span>
 								{scenes.map((scene) =>
 									row.scenes.has(scene.id) ? (
-										<span
+										<button
+											type="button"
 											key={scene.id}
 											className="timeline__block"
 											title={scene.title}
+											onClick={(event) => {
+												const box =
+													event.currentTarget.getBoundingClientRect();
+												setCard({
+													scene,
+													at: {
+														x: box.left,
+														y: box.bottom + 4,
+													},
+													from: event.currentTarget,
+												});
+											}}
 											draggable
 											data-dragging={
 												dragging?.id === scene.id
@@ -535,7 +565,7 @@ export default function Timeline({
 											onDragEnd={stop}
 										>
 											{scene.title}
-										</span>
+										</button>
 									) : (
 										<span key={scene.id} />
 									),
@@ -578,6 +608,95 @@ export default function Timeline({
 					)
 				}
 			</PointerMenu>
+			{card !== null && (
+				<SceneCard
+					key={card.scene.id}
+					opened={card}
+					onOpen={() => onOpen(card.scene)}
+					onClose={() => setCard(null)}
+				/>
+			)}
 		</section>
+	);
+}
+
+/**
+ * What the overview's card says about a scene, over the timeline: its synopsis
+ * or opening, its tags and its count, with Open to go to it.
+ */
+function SceneCard({
+	opened: { scene, at, from },
+	onOpen,
+	onClose,
+}: {
+	opened: Opened;
+	onOpen: () => void;
+	onClose: () => void;
+}) {
+	const box = useRef<HTMLDivElement>(null);
+	const tags = list(parse(scene.front), "tags");
+
+	// Focus goes back to the block, unless a click away already put it elsewhere.
+	function close() {
+		if (box.current?.contains(document.activeElement)) {
+			from.focus();
+		}
+		onClose();
+	}
+
+	useDismissal(true, box, close);
+
+	// Placed before it is painted, so it never shows past the window's edge.
+	useLayoutEffect(() => {
+		const card = box.current;
+		if (card === null) {
+			return;
+		}
+		const spot = inward(
+			at,
+			{ width: card.offsetWidth, height: card.offsetHeight },
+			{ width: window.innerWidth, height: window.innerHeight },
+		);
+		card.style.left = `${spot.x}px`;
+		card.style.top = `${spot.y}px`;
+	}, [at]);
+
+	// On the body, as a right-click menu is, so nothing around the timeline
+	// becomes what `fixed` is measured against.
+	return createPortal(
+		<div
+			ref={box}
+			className="timeline__card"
+			role="dialog"
+			aria-label={scene.title}
+		>
+			<span className="card__title">{scene.title}</span>
+			<span className="card__excerpt">
+				{previewed(scene.front, scene.excerpt)}
+			</span>
+			{tags.length > 0 && (
+				<ul className="timeline__tags" aria-label="Tags">
+					{tags.map((tag) => (
+						<li key={tag} className="timeline__tag">
+							{tag}
+						</li>
+					))}
+				</ul>
+			)}
+			<div className="timeline__card-foot">
+				<span className="card__meta">
+					{counted(scene.words, scene.target, scene.pages)}
+				</span>
+				<button
+					type="button"
+					className="timeline__open"
+					autoFocus
+					onClick={onOpen}
+				>
+					Open
+				</button>
+			</div>
+		</div>,
+		document.body,
 	);
 }

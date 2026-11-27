@@ -2055,6 +2055,10 @@ export default function Project({
 					changed={listing + written}
 					live={live}
 					onBack={() => setTimelineOf(null)}
+					onOpen={(scene) => {
+						setTimelineOf(null);
+						void openDocument(scene);
+					}}
 				/>
 			)}
 
