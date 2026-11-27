@@ -105,7 +105,18 @@ const SIDES = {
 		none: "Nowhere",
 		hidden: "hiddenLocations",
 	},
+	// One row of every scene, so nothing to read rows from or hide.
+	scenes: {
+		section: null,
+		label: "Scenes",
+		none: "Scenes",
+		hidden: null,
+	},
 } as const;
+
+const ROWS = ["characters", "locations", "scenes"] as const;
+
+const NONE_HIDDEN: string[] = [];
 
 export default function Timeline({
 	root,
@@ -195,7 +206,7 @@ export default function Timeline({
 	});
 
 	const side = SIDES[view.rows];
-	const hidden = view[side.hidden];
+	const hidden = side.hidden === null ? NONE_HIDDEN : view[side.hidden];
 	const scenes = read.kind === "ready" ? read.laid.scenes : [];
 	const markers = read.kind === "ready" ? read.laid.markers : [];
 	const order = useMemo(() => scenes.map((scene) => scene.id), [scenes]);
@@ -204,14 +215,26 @@ export default function Timeline({
 		[markers, order],
 	);
 	const subjects = useMemo(
-		() => subjectsOf(documents, side.section),
+		() =>
+			side.section === null ? [] : subjectsOf(documents, side.section),
 		[documents, side.section],
 	);
 	const rows = useMemo(
 		() =>
-			rowsOf(order, documents, side.section, screenplay, new Set(hidden)),
+			side.section === null
+				? [{ subject: null, scenes: new Set(order) }]
+				: rowsOf(
+						order,
+						documents,
+						side.section,
+						screenplay,
+						new Set(hidden),
+					),
 		[order, documents, side.section, screenplay, hidden],
 	);
+	/** "No one" or "Nowhere", drawn grey. The scenes view's row is not. */
+	const nobody = (row: { subject: unknown }) =>
+		row.subject === null && side.section !== null;
 
 	/**
 	 * The columns as drawn, measured off the column numbers: where the first
@@ -393,6 +416,9 @@ export default function Timeline({
 	}
 
 	function toggle(id: string) {
+		if (side.hidden === null) {
+			return;
+		}
 		change({
 			...view,
 			[side.hidden]: hidden.includes(id)
@@ -451,7 +477,7 @@ export default function Timeline({
 					? HINTS.card
 					: HINTS.rest;
 	const who: Who[] =
-		card === null
+		card === null || side.section === null
 			? []
 			: rows.flatMap((row, index) =>
 					row.scenes.has(card.scene.id)
@@ -490,7 +516,7 @@ export default function Timeline({
 						role="group"
 						aria-label="Rows"
 					>
-						{(["characters", "locations"] as const).map((rows) => (
+						{ROWS.map((rows) => (
 							<button
 								key={rows}
 								type="button"
@@ -511,9 +537,11 @@ export default function Timeline({
 						className="timeline__show"
 						disabled={subjects.length === 0}
 						title={
-							subjects.length === 0
-								? `This project has no ${side.label.toLowerCase()} pages`
-								: undefined
+							side.section === null
+								? "Every scene shows in this view"
+								: subjects.length === 0
+									? `This project has no ${side.label.toLowerCase()} pages`
+									: undefined
 						}
 					>
 						{() =>
@@ -665,14 +693,8 @@ export default function Timeline({
 							<div
 								key={row.subject?.id ?? ""}
 								className="timeline__row"
-								style={
-									row.subject === null
-										? undefined
-										: tinted(index)
-								}
-								data-none={
-									row.subject === null ? "" : undefined
-								}
+								style={nobody(row) ? undefined : tinted(index)}
+								data-none={nobody(row) ? "" : undefined}
 							>
 								<span className="timeline__label">
 									<i className="timeline__swatch" />

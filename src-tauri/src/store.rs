@@ -248,6 +248,8 @@ pub enum TimelineRows {
 	#[default]
 	Characters,
 	Locations,
+	/// One row with every scene once, in story order.
+	Scenes,
 }
 
 /// The tab on the side of a split the writer was not in.
@@ -1135,6 +1137,25 @@ mod tests {
 
 		set_timeline_view(&path, ithaca, TimelineView::default()).unwrap();
 		assert!(load(&path).unwrap().timeline.is_empty());
+	}
+
+	#[test]
+	fn the_scenes_view_comes_back() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("store.json");
+		let root = PathBuf::from("/writing/Ithaca");
+		let view = TimelineView {
+			rows: TimelineRows::Scenes,
+			..TimelineView::default()
+		};
+
+		set_timeline_view(&path, root.clone(), view.clone()).unwrap();
+
+		assert_eq!(timeline_view(&path, &root).unwrap(), view);
+		assert_eq!(
+			serde_json::to_value(TimelineRows::Scenes).unwrap(),
+			"scenes"
+		);
 	}
 
 	#[test]
