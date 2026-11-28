@@ -76,6 +76,18 @@ pub struct Preferences {
 	pub font_size: u32,
 	/// A multiple of the font size, as CSS takes it.
 	pub line_height: f32,
+	/// Whether the shelf stands its books as covers or lists them in rows.
+	pub shelf_view: ShelfView,
+}
+
+/// The shelf's two ways of showing books.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ShelfView {
+	#[default]
+	Covers,
+	List,
 }
 
 /// What a sprint counts. The pair the Stats tab already offers, named here so
@@ -164,6 +176,7 @@ impl Default for Preferences {
 			measure: 68,
 			font_size: 16,
 			line_height: 1.7,
+			shelf_view: ShelfView::Covers,
 		}
 	}
 }
@@ -980,6 +993,7 @@ mod tests {
 			measure: 80,
 			font_size: 19,
 			line_height: 2.0,
+			shelf_view: ShelfView::List,
 		};
 
 		set_preferences(&path, wanted.clone()).unwrap();

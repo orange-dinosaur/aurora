@@ -28,7 +28,11 @@ export type IconName =
 	| "gantt"
 	| "layers"
 	| "check"
-	| "pencil";
+	| "pencil"
+	| "clapperboard"
+	| "copy"
+	| "layout-grid"
+	| "list";
 
 // Lucide's geometry, on its 24-unit grid. Anything added here should be traced
 // from the same set rather than drawn by eye, or the family stops reading as
@@ -152,6 +156,38 @@ const SHAPES: Record<IconName, ReactNode> = {
 			<rect x="3" y="12" width="4.5" height="9" rx="1" />
 			<rect x="9.75" y="7" width="4.5" height="14" rx="1" />
 			<rect x="16.5" y="3" width="4.5" height="18" rx="1" />
+		</>
+	),
+	clapperboard: (
+		<>
+			<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z" />
+			<path d="m6.2 5.3 3.1 3.9" />
+			<path d="m12.4 3.4 3.1 4" />
+			<path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+		</>
+	),
+	copy: (
+		<>
+			<rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+			<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+		</>
+	),
+	"layout-grid": (
+		<>
+			<rect width="7" height="7" x="3" y="3" rx="1" />
+			<rect width="7" height="7" x="14" y="3" rx="1" />
+			<rect width="7" height="7" x="14" y="14" rx="1" />
+			<rect width="7" height="7" x="3" y="14" rx="1" />
+		</>
+	),
+	list: (
+		<>
+			<path d="M3 6h.01" />
+			<path d="M3 12h.01" />
+			<path d="M3 18h.01" />
+			<path d="M8 6h13" />
+			<path d="M8 12h13" />
+			<path d="M8 18h13" />
 		</>
 	),
 	// Lucide's older gantt-chart: three staggered bars, for the timeline.

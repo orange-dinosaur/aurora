@@ -41,6 +41,7 @@ const DEFAULTS: Preferences = {
 	measure: 68,
 	fontSize: 16,
 	lineHeight: 1.7,
+	shelfView: "covers",
 };
 
 type Boot =
@@ -186,6 +187,8 @@ function App() {
 							onSettings={openSettings}
 							theme={preferences.theme}
 							onTheme={(theme) => save({ theme })}
+							shelfView={preferences.shelfView}
+							onShelfView={(shelfView) => save({ shelfView })}
 							projectsFolder={preferences.projectsFolder}
 							onProjectsFolder={(projectsFolder) =>
 								save({ projectsFolder })

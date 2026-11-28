@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { MouseEvent } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { homeDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import ThemeToggle from "./ThemeToggle";
+import type { ShelfView } from "./bindings/ShelfView";
 import type {
 	Format,
 	FormatLayout,
@@ -16,7 +17,7 @@ import type {
 } from "./types";
 import { AccountChip } from "./Account";
 import { useCoverImage } from "./Cover";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
 import Menu, {
 	DIALOG_FADE,
 	MenuItem,
@@ -24,24 +25,52 @@ import Menu, {
 	useLingering,
 } from "./Menu";
 import { coverFor } from "./lib/covers";
-import { folderName, going, place } from "./recents";
+import { going, place } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
 import NewProject, { COPY, describe, type FormatOption } from "./NewProject";
 import { paged } from "./cards";
+import {
+	bookTitle,
+	formatCounts,
+	shelved,
+	type ShelfFormat,
+	type ShelfSort,
+} from "./shelf";
 
-// How big a project is and when it was last open. A project whose manifest
-// could not be read shows only the date, rather than a made-up count.
-function size(project: RecentSummary) {
-	const words =
-		project.pages !== null
-			? paged(project.pages)
-			: project.words === null
-				? null
-				: `${project.words.toLocaleString()} words`;
-	const opened =
-		project.lastOpened === null ? null : when(project.lastOpened);
-	return [words, opened].filter(Boolean).join(" · ");
+/** How each format shows on the shelf: its chip, and its tag's icon and colour. */
+const FORMATS: Record<Format, { plural: string; icon: IconName; hue: number }> =
+	{
+		novel: { plural: "Novels", icon: "book", hue: 1 },
+		screenplay: { plural: "Screenplays", icon: "clapperboard", hue: 4 },
+		"short-stories": { plural: "Short stories", icon: "copy", hue: 3 },
+		"stage-play": { plural: "Stage plays", icon: "layers", hue: 2 },
+	};
+
+const SORTS: Record<ShelfSort, string> = {
+	opened: "Last opened",
+	title: "Title",
+	length: "Length",
+};
+
+const SORT_ORDER = Object.keys(SORTS) as ShelfSort[];
+
+// How big a project is. A project whose manifest could not be read has no
+// count, rather than a made-up one.
+function length(project: RecentSummary): string | null {
+	return project.pages !== null
+		? paged(project.pages)
+		: project.words === null
+			? null
+			: `${project.words.toLocaleString()} words`;
+}
+
+function opened(project: RecentSummary): string | null {
+	return project.lastOpened === null ? null : when(project.lastOpened);
+}
+
+function books(count: number): string {
+	return count === 1 ? "1 book" : `${count.toLocaleString()} books`;
 }
 
 type Status =
@@ -56,14 +85,34 @@ type Props = {
 	onSettings: (keyboard: boolean) => void;
 	theme: Theme;
 	onTheme: (theme: Theme) => void;
+	shelfView: ShelfView;
+	onShelfView: (view: ShelfView) => void;
 	/** Where new projects go, or null while the writer has never been asked. */
 	projectsFolder: string | null;
 	onProjectsFolder: (folder: string) => void;
 };
 
-/** One project standing on the Shelf. */
+/** The format's icon and name, in its colour. */
+function FormatTag({ format }: { format: Format }) {
+	return (
+		<span
+			className="shelf__tag"
+			style={
+				{
+					"--c": `var(--block-${FORMATS[format].hue})`,
+				} as CSSProperties
+			}
+		>
+			<Icon name={FORMATS[format].icon} />
+			{COPY[format].name}
+		</span>
+	);
+}
+
+/** One project on the Shelf, as a cover or as a row of the list. */
 function Book({
 	project,
+	view,
 	busy,
 	asking,
 	onOpen,
@@ -75,6 +124,7 @@ function Book({
 	home,
 }: {
 	project: RecentSummary;
+	view: ShelfView;
 	busy: boolean;
 	/** For writing a book from elsewhere's folder with `~`. */
 	home: string | null;
@@ -92,12 +142,170 @@ function Book({
 
 	const { src } = useCoverImage(project.root, project.cover ?? "", 0);
 	const unread = project.words === null;
-	// A book nobody has named yet goes by its project's name. One that cannot
-	// be read has only its folder to go by: the name may be as stale as the
-	// file that could not be read.
-	const title = unread
-		? folderName(project.root)
-		: project.title?.trim() || project.name;
+	const title = bookTitle(project);
+
+	/** The cover, with its words only where there is room for them. */
+	function cover(small: boolean) {
+		if (unread) {
+			return (
+				<span className="shelf__cover shelf__cover--unread">
+					{!small && (
+						<>
+							<strong>{title}</strong>
+							<span>Aurora can't read this project.</span>
+						</>
+					)}
+				</span>
+			);
+		}
+		// A wash of the title stands behind an image too, so the cover is
+		// never blank while one loads or if it cannot be read.
+		return (
+			<span
+				className={
+					src === ""
+						? "shelf__cover"
+						: "shelf__cover shelf__cover--image"
+				}
+				style={{ background: coverFor(title) }}
+			>
+				{src !== "" && <img src={src} alt="" />}
+				{!small && (
+					<>
+						<span className="shelf__title">{title}</span>
+						<span className="shelf__author">{project.author}</span>
+					</>
+				)}
+			</span>
+		);
+	}
+
+	const question = asking && (
+		<div ref={ask} className="shelf__ask" role="alertdialog">
+			<p className="shelf__question">Delete {title}?</p>
+			<p className="shelf__going">{going(project.documents)}</p>
+			<div className="shelf__answers">
+				{/* Focused rather than Delete, so Enter cannot lose work. */}
+				<button
+					type="button"
+					className="shelf__cancel"
+					autoFocus
+					disabled={busy}
+					onClick={onCancel}
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					className="shelf__sure"
+					disabled={busy}
+					onClick={onDelete}
+				>
+					Delete project
+				</button>
+			</div>
+		</div>
+	);
+
+	const actions = (
+		<Menu
+			label={`Actions for ${title}`}
+			icon="more-horizontal"
+			wrapper={view === "list" ? "shelf__row-menu" : undefined}
+		>
+			{(close) => (
+				<>
+					{/* What tells two books of the same title apart. */}
+					<p className="menu__note shelf__path">{project.root}</p>
+
+					<span className="menu__rule" />
+
+					<MenuItem
+						onSelect={() => {
+							close();
+							onShow();
+						}}
+					>
+						Show in Files
+					</MenuItem>
+					<MenuItem
+						onSelect={() => {
+							close();
+							onForget();
+						}}
+					>
+						Remove from Aurora
+						<span className="menu__hint">
+							Leaves the files where they are
+						</span>
+					</MenuItem>
+
+					<span className="menu__rule" />
+
+					<MenuItem
+						danger
+						onSelect={() => {
+							close();
+							onAsk();
+						}}
+					>
+						Delete project…
+						<span className="menu__hint">
+							Moves the whole folder to the trash
+						</span>
+					</MenuItem>
+				</>
+			)}
+		</Menu>
+	);
+
+	const where = project.elsewhere ? place(project.root, home) : null;
+
+	if (view === "list") {
+		return (
+			<li className="shelf__row">
+				{cover(true)}
+				{/* Its click reaches across the whole row. */}
+				<button
+					type="button"
+					className="shelf__row-open"
+					disabled={busy}
+					onClick={onOpen}
+				>
+					<b>{title}</b>
+					<span>
+						{[
+							unread
+								? "Aurora can't read this project."
+								: project.author,
+							where,
+						]
+							.filter(Boolean)
+							.join(" · ")}
+					</span>
+				</button>
+				<span className="shelf__cell shelf__cell--format">
+					{project.format !== null && (
+						<FormatTag format={project.format} />
+					)}
+				</span>
+				<span
+					className="shelf__cell shelf__cell--left"
+					title={project.leftOff ?? undefined}
+				>
+					{project.leftOff}
+				</span>
+				<span className="shelf__cell shelf__cell--number">
+					{length(project)}
+				</span>
+				<span className="shelf__cell shelf__cell--number shelf__cell--date">
+					{opened(project)}
+				</span>
+				{question}
+				{actions}
+			</li>
+		);
+	}
 
 	return (
 		<li className="shelf__book">
@@ -109,34 +317,15 @@ function Book({
 				disabled={busy}
 				onClick={onOpen}
 			>
-				{unread ? (
-					<span className="shelf__cover shelf__cover--unread">
-						<strong>{title}</strong>
-						<span>Aurora can't read this project.</span>
-					</span>
-				) : (
-					/* A wash of the title stands behind an image too, so the
-					   cover is never blank while one loads or if it cannot be
-					   read. */
-					<span
-						className={
-							src === ""
-								? "shelf__cover"
-								: "shelf__cover shelf__cover--image"
-						}
-						style={{ background: coverFor(title) }}
-					>
-						{src !== "" && <img src={src} alt="" />}
-						<span className="shelf__title">{title}</span>
-						<span className="shelf__author">{project.author}</span>
-					</span>
-				)}
+				{cover(false)}
 				{project.format !== null && (
-					<span className="shelf__format">
-						{COPY[project.format].name}
-					</span>
+					<FormatTag format={project.format} />
 				)}
-				<span className="shelf__meta">{size(project)}</span>
+				<span className="shelf__meta">
+					{[length(project), opened(project)]
+						.filter(Boolean)
+						.join(" · ")}
+				</span>
 				{project.leftOff !== null && (
 					<span
 						className="shelf__meta shelf__left"
@@ -145,86 +334,15 @@ function Book({
 						{project.leftOff}
 					</span>
 				)}
-				{project.elsewhere && (
+				{where !== null && (
 					<span className="shelf__meta shelf__place">
 						<Icon name="link" />
-						<span>{place(project.root, home)}</span>
+						<span>{where}</span>
 					</span>
 				)}
 			</button>
-
-			{asking && (
-				<div ref={ask} className="shelf__ask" role="alertdialog">
-					<p className="shelf__question">Delete {title}?</p>
-					<p className="shelf__going">{going(project.documents)}</p>
-					<div className="shelf__answers">
-						{/* Focused rather than Delete, so Enter cannot lose work. */}
-						<button
-							type="button"
-							className="shelf__cancel"
-							autoFocus
-							disabled={busy}
-							onClick={onCancel}
-						>
-							Cancel
-						</button>
-						<button
-							type="button"
-							className="shelf__sure"
-							disabled={busy}
-							onClick={onDelete}
-						>
-							Delete project
-						</button>
-					</div>
-				</div>
-			)}
-
-			<Menu label={`Actions for ${title}`} icon="more-horizontal">
-				{(close) => (
-					<>
-						{/* What tells two books of the same title apart. */}
-						<p className="menu__note shelf__path">{project.root}</p>
-
-						<span className="menu__rule" />
-
-						<MenuItem
-							onSelect={() => {
-								close();
-								onShow();
-							}}
-						>
-							Show in Files
-						</MenuItem>
-						<MenuItem
-							onSelect={() => {
-								close();
-								onForget();
-							}}
-						>
-							Remove from Aurora
-							<span className="menu__hint">
-								Leaves the files where they are
-							</span>
-						</MenuItem>
-
-						<span className="menu__rule" />
-
-						<MenuItem
-							danger
-							onSelect={() => {
-								close();
-								onAsk();
-							}}
-						>
-							Delete project…
-							<span className="menu__hint">
-								Moves the whole folder to the trash
-							</span>
-						</MenuItem>
-					</>
-				)}
-			</Menu>
+			{question}
+			{actions}
 		</li>
 	);
 }
@@ -237,6 +355,8 @@ export default function Welcome({
 	onSettings,
 	theme,
 	onTheme,
+	shelfView,
+	onShelfView,
 	projectsFolder,
 	onProjectsFolder,
 }: Props) {
@@ -255,6 +375,9 @@ export default function Welcome({
 	// click anywhere else answers Cancel.
 	const [asking, setAsking] = useState<string | null>(null);
 	const [home, setHome] = useState<string | null>(null);
+	const [format, setFormat] = useState<ShelfFormat>("all");
+	const [search, setSearch] = useState("");
+	const [sort, setSort] = useState<ShelfSort>("opened");
 
 	// Without it the place line shows the whole path, which is still right.
 	useEffect(() => {
@@ -368,6 +491,21 @@ export default function Welcome({
 		}
 	}
 
+	const all = recents ?? [];
+	const counts = formatCounts(all);
+	// A format whose last book went falls back to all, so no chip is left
+	// pressed over an empty shelf.
+	const narrowed = counts[format] > 0 ? format : "all";
+	const shown = shelved(all, narrowed, search, sort);
+	const chips = (["all", ...Object.keys(FORMATS)] as ShelfFormat[]).filter(
+		(each) => each === "all" || counts[each] > 0,
+	);
+
+	function showAll() {
+		setSearch("");
+		setFormat("all");
+	}
+
 	return (
 		<div className="welcome">
 			<div className="welcome__bar">
@@ -406,17 +544,18 @@ export default function Welcome({
 				/>
 			)}
 
-			<section className="shelf">
+			{/* Only the books scroll: the heading and the tools stay in reach. */}
+			<div className="shelf shelf--top">
 				<div className="shelf__head">
 					<div>
 						<h1 className="shelf__heading">Your shelf</h1>
-						{recents !== null && recents.length > 0 && (
-							<p className="shelf__count">
-								{recents.length === 1
-									? "1 book"
-									: `${recents.length.toLocaleString()} books`}
-							</p>
-						)}
+						<p className="shelf__count" aria-live="polite">
+							{all.length === 0
+								? ""
+								: shown.length === all.length
+									? books(all.length)
+									: `${shown.length.toLocaleString()} of ${books(all.length)}`}
+						</p>
 					</div>
 					<div className="shelf__actions">
 						<button
@@ -438,44 +577,185 @@ export default function Welcome({
 					</div>
 				</div>
 
-				{recents !== null && (
-					<ul className="shelf__books">
-						<li>
-							<button
-								type="button"
-								className="shelf__ghost"
-								aria-label="New project"
-								disabled={busy}
-								onClick={startNew}
-							>
-								<Icon name="plus" />
-								<span className="shelf__ghost-label">
-									New project
-								</span>
-							</button>
-						</li>
-						{recents.map((project) => (
-							<Book
-								key={project.root}
-								project={project}
-								busy={busy}
-								home={home}
-								asking={asking === project.root}
-								onOpen={() => void openProject(project.root)}
-								onShow={() => void showInFiles(project.root)}
-								onForget={() =>
-									void drop("forget_project", project.root)
-								}
-								onAsk={() => setAsking(project.root)}
-								onCancel={() => setAsking(null)}
-								onDelete={() =>
-									void drop("trash_project", project.root)
+				{all.length > 0 && (
+					<div className="shelf__tools">
+						<div
+							className="shelf__chips"
+							role="group"
+							aria-label="Show"
+						>
+							{chips.map((each) => (
+								<button
+									key={each}
+									type="button"
+									className="shelf__chip"
+									aria-pressed={narrowed === each}
+									onClick={() => setFormat(each)}
+								>
+									{each !== "all" && (
+										<Icon name={FORMATS[each].icon} />
+									)}
+									{each === "all"
+										? "All"
+										: FORMATS[each].plural}
+									<span className="shelf__chip-count">
+										{counts[each].toLocaleString()}
+									</span>
+								</button>
+							))}
+						</div>
+						<span className="shelf__spacer" />
+						<label
+							className="shelf__search"
+							data-filled={search === "" ? undefined : ""}
+						>
+							<Icon name="search" />
+							<input
+								type="text"
+								placeholder="Find a book…"
+								aria-label="Find a book by title or author"
+								autoComplete="off"
+								spellCheck={false}
+								value={search}
+								onChange={(event) =>
+									setSearch(event.target.value)
 								}
 							/>
-						))}
-					</ul>
+							<button
+								type="button"
+								className="shelf__clear"
+								aria-label="Clear the search"
+								tabIndex={search === "" ? -1 : 0}
+								onClick={() => setSearch("")}
+							>
+								<Icon name="x" />
+							</button>
+						</label>
+						<Menu
+							label="Sort the shelf"
+							wrapper="shelf__sort-menu"
+							className="shelf__sort"
+							trigger={
+								<>
+									Sort: <b>{SORTS[sort]}</b>
+									<Icon name="chevron-down" />
+								</>
+							}
+						>
+							{(close) =>
+								SORT_ORDER.map((each) => (
+									<MenuItem
+										key={each}
+										checked={sort === each}
+										onSelect={() => {
+											close();
+											setSort(each);
+										}}
+									>
+										<span className="menu__tick">
+											{sort === each && (
+												<Icon name="check" />
+											)}
+										</span>
+										{SORTS[each]}
+									</MenuItem>
+								))
+							}
+						</Menu>
+						<div
+							className="shelf__view"
+							role="group"
+							aria-label="View"
+						>
+							<button
+								type="button"
+								aria-label="Covers"
+								aria-pressed={shelfView === "covers"}
+								onClick={() => onShelfView("covers")}
+							>
+								<Icon name="layout-grid" />
+							</button>
+							<button
+								type="button"
+								aria-label="List"
+								aria-pressed={shelfView === "list"}
+								onClick={() => onShelfView("list")}
+							>
+								<Icon name="list" />
+							</button>
+						</div>
+					</div>
 				)}
-			</section>
+			</div>
+
+			<div className="shelf__scroll">
+				<section className="shelf shelf--books" aria-label="Books">
+					{shown.length === 0 && all.length > 0 && (
+						<div className="shelf__empty">
+							<p>No books match “{search.trim()}”.</p>
+							<button
+								type="button"
+								className="shelf__folder"
+								onClick={showAll}
+							>
+								Show all books
+							</button>
+						</div>
+					)}
+					{shown.length > 0 && shelfView === "list" && (
+						<div className="shelf__list-head" aria-hidden="true">
+							<span />
+							<span>Title</span>
+							<span className="shelf__cell--format">Format</span>
+							<span className="shelf__cell--left">
+								Left off at
+							</span>
+							<span className="shelf__cell--number">Length</span>
+							<span className="shelf__cell--number shelf__cell--date">
+								Last opened
+							</span>
+							<span />
+						</div>
+					)}
+					{shown.length > 0 && (
+						<ul
+							className={
+								shelfView === "list"
+									? "shelf__list"
+									: "shelf__books"
+							}
+						>
+							{shown.map((project) => (
+								<Book
+									key={project.root}
+									project={project}
+									view={shelfView}
+									busy={busy}
+									home={home}
+									asking={asking === project.root}
+									onOpen={() =>
+										void openProject(project.root)
+									}
+									onShow={() =>
+										void showInFiles(project.root)
+									}
+									onForget={() =>
+										void drop(
+											"forget_project",
+											project.root,
+										)
+									}
+									onAsk={() => setAsking(project.root)}
+									onCancel={() => setAsking(null)}
+									onDelete={() =>
+										void drop("trash_project", project.root)
+									}
+								/>
+							))}
+						</ul>
+					)}
+				</section>
+			</div>
 
 			<p
 				className={

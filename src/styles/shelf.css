@@ -7,7 +7,8 @@
 	flex-direction: column;
 	align-self: stretch;
 	width: 100%;
-	min-height: 100%;
+	height: 100%;
+	overflow: hidden;
 	text-align: left;
 }
 
@@ -83,13 +84,241 @@
 	padding: var(--space-xl) var(--space-lg) var(--space-section);
 }
 
+/* The heading and the tool row, which stay put while the books scroll. */
+.shelf--top {
+	flex: none;
+	padding-bottom: 0;
+}
+
+/* The books fade in over their first 12px rather than cut off at the rule. */
+.shelf__scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	-webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+	mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+}
+
+.shelf--books {
+	padding-top: var(--space-lg);
+}
+
 .shelf__head {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: flex-end;
 	justify-content: space-between;
 	gap: var(--space-sm);
-	margin-bottom: var(--space-xl);
+}
+
+/* Format chips, the search, the sort and the view, on one rule. */
+.shelf__tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-sm);
+	margin-top: var(--space-lg);
+	padding: var(--space-sm) 0;
+	border-bottom: var(--hairline);
+}
+
+.shelf__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.shelf__chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	font: var(--text-ui);
+	color: var(--text-dim);
+	background: none;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.shelf__chip .icon {
+	width: 13px;
+	height: 13px;
+	opacity: 0.85;
+}
+
+.shelf__chip:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.shelf__chip[aria-pressed="true"] {
+	color: var(--bg);
+	background: var(--text);
+	border-color: var(--text);
+}
+
+.shelf__chip-count {
+	font: var(--text-caption);
+	font-variant-numeric: tabular-nums;
+	opacity: 0.7;
+}
+
+.shelf__spacer {
+	flex: 1;
+}
+
+/* An underline rather than a box, so it reads as part of the row. */
+.shelf__search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 220px;
+	padding: 4px 2px;
+	color: var(--text-faint);
+	border-bottom: 1px solid var(--border-strong);
+}
+
+.shelf__search:focus-within {
+	border-bottom-color: var(--accent-text);
+}
+
+.shelf__search .icon {
+	flex: none;
+	width: 14px;
+	height: 14px;
+}
+
+.shelf__search input {
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	font: var(--text-ui);
+	color: var(--text);
+	background: none;
+	border: 0;
+	outline: none;
+}
+
+.shelf__search input::placeholder {
+	color: var(--text-faint);
+}
+
+.shelf__clear {
+	display: grid;
+	place-items: center;
+	padding: 0 2px;
+	color: var(--text-faint);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+	visibility: hidden;
+}
+
+.shelf__search[data-filled] .shelf__clear {
+	visibility: visible;
+}
+
+.shelf__clear:hover {
+	color: var(--text);
+}
+
+.shelf__clear .icon {
+	width: 12px;
+	height: 12px;
+}
+
+.menu.shelf__sort-menu {
+	position: relative;
+	flex: none;
+}
+
+.shelf__sort-menu .menu__items {
+	top: calc(100% + 4px);
+	right: 0;
+}
+
+.shelf__sort {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px;
+	font: var(--text-ui);
+	color: var(--text-dim);
+	white-space: nowrap;
+	background: none;
+	border: 0;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.shelf__sort b {
+	font-weight: 600;
+	color: var(--text);
+}
+
+.shelf__sort .icon {
+	width: 12px;
+	height: 12px;
+}
+
+.shelf__sort:hover,
+.shelf__sort[aria-expanded="true"] {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.shelf__view {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	background: var(--bg-hover);
+	border-radius: var(--radius-sm);
+}
+
+.shelf__view button {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 26px;
+	padding: 0;
+	color: var(--text-faint);
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.shelf__view .icon {
+	width: 14px;
+	height: 14px;
+}
+
+.shelf__view button[aria-pressed="true"] {
+	color: var(--text);
+	background: var(--bg-card);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.shelf__chip:focus-visible,
+.shelf__clear:focus-visible,
+.shelf__sort:focus-visible,
+.shelf__view button:focus-visible,
+.shelf__row-open:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+.shelf__empty {
+	padding: var(--space-xxl) 0;
+	text-align: center;
+	color: var(--text-dim);
+}
+
+.shelf__empty p {
+	margin: 0 0 var(--space-xs);
 }
 
 .shelf__heading {
@@ -143,14 +372,10 @@
 	outline-offset: 2px;
 }
 
-/* Books grow with the window: 148px wide at the default 1000px window, 200px
-   at a full HD one. */
+/* At least 180px a book, as many as the row holds. */
 .shelf__books {
 	display: grid;
-	grid-template-columns: repeat(
-		auto-fill,
-		minmax(clamp(148px, 91.5px + 5.65vw, 200px), 1fr)
-	);
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 	gap: var(--space-xl) var(--space-lg);
 	margin: 0;
 	padding: 0;
@@ -351,7 +576,7 @@
 .shelf__title {
 	position: relative;
 	display: -webkit-box;
-	font: 400 26px/1.05 var(--font-title);
+	font: 400 24px/1.08 var(--font-title);
 	letter-spacing: var(--tracking-heading);
 	overflow: hidden;
 	overflow-wrap: anywhere;
@@ -365,10 +590,127 @@
 	overflow-wrap: anywhere;
 }
 
-.shelf__format {
-	display: block;
+/* The format, in the colour the timeline's blocks use for it. */
+.shelf__tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 8px;
+	font: 600 11px/1.5 var(--font-ui);
+	color: var(--on-block);
+	white-space: nowrap;
+	background: var(--c);
+	border-radius: var(--radius-pill);
+}
+
+.shelf__tag .icon {
+	width: 11px;
+	height: 11px;
+}
+
+.shelf__cover + .shelf__tag {
 	margin-top: var(--space-sm);
-	font: 600 11px/1.35 var(--font-ui);
+}
+
+/* The list: one book a row, every row on the same columns. */
+.shelf__list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	border-top: var(--hairline);
+}
+
+.shelf__row,
+.shelf__list-head {
+	display: grid;
+	grid-template-columns:
+		36px minmax(0, 2.2fr) 130px minmax(0, 1.6fr)
+		110px 120px 32px;
+	align-items: center;
+	gap: var(--space-md);
+	padding: 8px 4px 8px 8px;
+}
+
+.shelf__list-head {
+	padding-top: 0;
+	padding-bottom: 6px;
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.shelf__row {
+	position: relative;
+	border-bottom: var(--hairline);
+}
+
+.shelf__row:hover {
+	background: var(--bg-hover);
+}
+
+.shelf__row .shelf__cover {
+	width: 36px;
+	height: 54px;
+	aspect-ratio: auto;
+	padding: 0;
+	box-shadow: 0 2px 6px rgb(0 0 0 / 0.18);
+}
+
+.shelf__row-open {
+	display: grid;
+	min-width: 0;
+	padding: 0;
+	text-align: left;
+	color: inherit;
+	background: none;
+	border: 0;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+}
+
+/* The whole row opens the book; the actions sit above this. */
+.shelf__row-open::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+}
+
+.shelf__row-open b {
+	font: var(--text-section);
+}
+
+.shelf__row-open b,
+.shelf__row-open span,
+.shelf__cell {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.shelf__row-open span {
+	font: var(--text-caption);
+	color: var(--text-faint);
+}
+
+.shelf__cell {
+	font: var(--text-caption);
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+}
+
+.shelf__cell--number {
+	text-align: right;
+}
+
+.menu.shelf__row-menu {
+	position: relative;
+	z-index: 1;
+}
+
+.shelf__row .shelf__ask {
+	top: 100%;
+	right: 0;
+	left: auto;
+	transform: none;
 }
 
 .shelf__meta {
@@ -404,52 +746,60 @@
 	white-space: nowrap;
 }
 
-.shelf__ghost {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: var(--space-sm);
-	width: 100%;
-	aspect-ratio: 2 / 3;
-	color: var(--accent-text);
-	background: none;
-	border: 1px dashed var(--border-strong);
-	border-radius: 3px 6px 6px 3px;
-	cursor: pointer;
-	transition: transform 160ms var(--ease-open);
+/* Columns drop out as the window narrows. */
+@media (max-width: 860px) {
+	.shelf__row,
+	.shelf__list-head {
+		grid-template-columns: 36px minmax(0, 1fr) 110px 90px 32px;
+	}
+
+	.shelf__cell--left,
+	.shelf__cell--date {
+		display: none;
+	}
 }
 
-.shelf__ghost:hover:not(:disabled) {
-	background: var(--bg-hover);
-	transform: var(--lift);
-}
-
-.shelf__ghost:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: 2px;
-}
-
-.shelf__ghost svg {
-	width: 22px;
-	height: 22px;
-}
-
-.shelf__ghost-label {
-	font: 400 20px/1.1 var(--font-title);
-	letter-spacing: var(--tracking-heading);
-}
-
-@media (max-width: 620px) {
+@media (max-width: 640px) {
 	.shelf {
-		padding: var(--space-md) var(--space-md) var(--space-xxl);
+		padding: var(--space-md) var(--space-md) var(--space-xl);
+	}
+
+	.shelf--top {
+		padding-bottom: 0;
+	}
+
+	.shelf--books {
+		padding-top: var(--space-lg);
+	}
+
+	.shelf__heading {
+		font: var(--text-heading);
+	}
+
+	.shelf__search {
+		order: 5;
+		width: 100%;
+	}
+
+	.shelf__spacer {
+		display: none;
 	}
 
 	.shelf__books {
+		grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
 		gap: var(--space-lg) var(--space-md);
 	}
 
 	.shelf__title {
 		font-size: 22px;
+	}
+
+	.shelf__row,
+	.shelf__list-head {
+		grid-template-columns: 36px minmax(0, 1fr) 80px 32px;
+	}
+
+	.shelf__cell--format {
+		display: none;
 	}
 }
