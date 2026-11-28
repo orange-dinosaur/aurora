@@ -4,6 +4,24 @@ Aurora is a desktop app for writers, to organize ideas and write stories. A proj
 
 It's a personal project I'm building with Tauri, React and Rust.
 
+## What it does
+
+You start on a shelf of your books. Each one has a cover and a tag saying whether it's a novel, a screenplay or a collection of short stories. You can filter the shelf by that tag, search it by title or author, and sort it. If you'd rather see a table, there's a list view.
+
+Inside a book, the binder on the left holds everything. The manuscript is split into parts, chapters and scenes. Next to it sit an outline, your characters and your locations. Every folder shows its word count, and if you give it a target, a small ring fills up as you write.
+
+A new novel can start from a structure like Three acts, which gives you parts, chapters and beats to fill in. Or you can start from a single empty scene and let the shape come later.
+
+A few more things it does:
+
+- Aurora notices when a character's name turns up in a scene. You don't tag anything, you just write.
+- The timeline lays out your scenes in story order, one row per character, so you can see who is where. Drag a scene to move it. Markers name stretches of time, like "Three years later".
+- Writing sessions count the words you write and delete. A sprint is a session with a limit in minutes or words.
+- Takes let you rewrite a scene another way without losing the first try. You pick which take counts.
+- Versions are for bigger changes. You can try a rewrite of the whole book, compare it with Main, and merge back what you like. Checkpoints save the project as it stood, with a note on what changed.
+- Screenplays are written in Fountain, the plain-text screenplay format.
+- Export writes the whole book out as Word, EPUB, Kobo EPUB, PDF, Markdown or plain text. A screenplay can also go out as Fountain or Final Draft.
+
 ## Download
 
 Get the latest version from the [Releases](https://github.com/orange-dinosaur/aurora/releases/latest) page:
