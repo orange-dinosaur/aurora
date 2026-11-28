@@ -13,7 +13,7 @@ import {
 	stretchesOf,
 	subjectsOf,
 	type TimelineRow,
-} from "./timeline";
+} from "./timelineGrid";
 
 function page(section: string, title: string, ...names: string[]): Mentionable {
 	return {

@@ -40,7 +40,7 @@ import {
 	stepped,
 	stretchesOf,
 	subjectsOf,
-} from "./timeline";
+} from "./timelineGrid";
 import type { FolderRef } from "./tree";
 
 type Props = {
