@@ -47,6 +47,7 @@ import {
 	firstScene,
 	folded,
 	foldersAbove,
+	folderOf,
 	inside,
 	pagesBy,
 	pruned,
@@ -432,7 +433,12 @@ export default function Sidebar({
 
 	// The row asking what to call the new thing, at the depth it will land at.
 	// Both a section header and a folder inside it want the same one.
-	function field(at: string, where: string, depth: number, holds: number) {
+	function field(
+		at: string,
+		where: string,
+		depth: number,
+		holds: TreeNode[],
+	) {
 		if (naming.kind === "closed") {
 			return null;
 		}
@@ -467,7 +473,12 @@ export default function Sidebar({
 					<NameField
 						label={`Name of the new ${making.noun} in ${where}`}
 						placeholder={making.placeholder}
-						initial={suggested(making.noun, holds)}
+						initial={suggested(
+							making.noun,
+							holds.map((node) =>
+								node.node === "folder" ? node.name : node.title,
+							),
+						)}
 						busy={naming.kind === "creating"}
 						error={
 							naming.kind === "refused" ? naming.message : null
@@ -636,7 +647,7 @@ export default function Sidebar({
 								host.id,
 								host.name,
 								host.depth + 1,
-								host.holds,
+								folderOf(tree, host.id)?.children ?? [],
 							);
 						const atEnd =
 							naming.kind !== "closed" &&
@@ -645,7 +656,7 @@ export default function Sidebar({
 								section.id,
 								section.name,
 								0,
-								section.children.length,
+								section.children,
 							);
 						// Every row in the list asks for its drag the same way.
 						// A row can always be dragged to the page, since

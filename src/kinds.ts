@@ -39,11 +39,25 @@ export type Making = {
 };
 
 /**
- * The name a new thing's field opens with: "Scene 4" in a folder holding three.
- * It is selected, so typing replaces it.
+ * The name a new thing's field opens with: "Scene 4" in a folder holding three,
+ * counting on past any number the folder already uses, so "Chapter 5" is not
+ * offered beside "Chapter 5 The Storm". It is selected, so typing replaces it.
  */
-export function suggested(noun: string, holds: number) {
-	return `${noun[0].toUpperCase()}${noun.slice(1)} ${holds + 1}`;
+export function suggested(noun: string, taken: string[]) {
+	const word = `${noun[0].toUpperCase()}${noun.slice(1)}`;
+	// Case apart is still a clash on a disk that ignores case.
+	const names = taken.map((name) => name.toLowerCase());
+	const used = (number: number) => {
+		const name = `${word} ${number}`.toLowerCase();
+		return names.some(
+			(each) => each === name || each.startsWith(`${name} `),
+		);
+	};
+	let number = taken.length + 1;
+	while (used(number)) {
+		number += 1;
+	}
+	return `${word} ${number}`;
 }
 
 /**

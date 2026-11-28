@@ -11,8 +11,19 @@ import type { FolderKind, Format } from "./types";
 
 describe("the name a new thing's field opens with", () => {
 	test("the noun, capitalised, numbered after what the folder holds", () => {
-		expect(suggested("scene", 3)).toBe("Scene 4");
-		expect(suggested("chapter", 0)).toBe("Chapter 1");
+		expect(suggested("scene", ["A", "B", "C"])).toBe("Scene 4");
+		expect(suggested("chapter", [])).toBe("Chapter 1");
+	});
+
+	test("past a name the folder already has, whatever its case", () => {
+		expect(
+			suggested("chapter", [
+				"Chapter 4",
+				"Chapter 5 The Storm",
+				"chapter 6",
+			]),
+		).toBe("Chapter 7");
+		expect(suggested("scene", ["Scene 1", "Scene 10"])).toBe("Scene 3");
 	});
 });
 
