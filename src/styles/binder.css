@@ -540,6 +540,36 @@
 		0 2px 8px rgb(0 0 0 / 0.08);
 }
 
+/* It drops into place; the rows below have already moved. */
+.adding {
+	animation: adding-in 150ms var(--ease-out);
+}
+
+[data-leaving] > .adding {
+	animation: adding-out 120ms var(--ease-out) forwards;
+}
+
+@keyframes adding-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+}
+
+@keyframes adding-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	@keyframes adding-in {
+		from {
+			opacity: 0;
+		}
+	}
+}
+
 .adding .row__icon {
 	color: var(--accent-text);
 }

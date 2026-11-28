@@ -140,6 +140,17 @@
 	border: 1px solid var(--border-strong);
 	border-radius: var(--radius-pill);
 	cursor: pointer;
+	transition: transform 160ms var(--ease-out);
+}
+
+.shelf__chip:active {
+	transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.shelf__chip:active {
+		transform: none;
+	}
 }
 
 .shelf__chip .icon {
@@ -373,7 +384,9 @@
 }
 
 /* At least 180px a book, as many as the row holds. */
+/* Positioned, so a book on its way out can stand where it was. */
 .shelf__books {
+	position: relative;
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 	gap: var(--space-xl) var(--space-lg);
@@ -614,6 +627,7 @@
 
 /* The list: one book a row, every row on the same columns. */
 .shelf__list {
+	position: relative;
 	margin: 0;
 	padding: 0;
 	list-style: none;

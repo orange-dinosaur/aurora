@@ -66,7 +66,7 @@ type Status = { kind: "idle" } | { kind: "error"; message: string };
 // is ride along with the state rather than sitting beside it.
 type Naming =
 	| { kind: "closed" }
-	| { kind: "open"; at: string; making: Making }
+	| { kind: "open"; at: string; making: Making; leaving?: boolean }
 	| { kind: "creating"; at: string; making: Making }
 	| { kind: "refused"; at: string; making: Making; message: string };
 
@@ -439,7 +439,18 @@ export default function Sidebar({
 		const { making } = naming;
 
 		return (
-			<li className="documents__item" style={indent(depth)}>
+			<li
+				className="documents__item"
+				style={indent(depth)}
+				data-leaving={
+					naming.kind === "open" && naming.leaving ? "" : undefined
+				}
+				onAnimationEnd={(event) => {
+					if (event.animationName === "adding-out") {
+						setNaming({ kind: "closed" });
+					}
+				}}
+			>
 				<div className="sidebar__field adding">
 					<span
 						className={
@@ -462,7 +473,19 @@ export default function Sidebar({
 							naming.kind === "refused" ? naming.message : null
 						}
 						onSubmit={(name) => void create(at, making, name)}
-						onCancel={() => setNaming({ kind: "closed" })}
+						onCancel={(away) =>
+							// A click elsewhere lets it fade; Escape is at once.
+							setNaming(
+								away
+									? {
+											kind: "open",
+											at,
+											making,
+											leaving: true,
+										}
+									: { kind: "closed" },
+							)
+						}
 					/>
 					<span className="adding__hint" aria-hidden="true">
 						<kbd>Enter</kbd> add · <kbd>Esc</kbd>

@@ -296,7 +296,8 @@
 	cursor: grab;
 	transition:
 		transform 120ms var(--ease-out),
-		box-shadow 120ms var(--ease-out);
+		box-shadow 120ms var(--ease-out),
+		opacity 120ms var(--ease-out);
 }
 
 .timeline__block:hover {
@@ -334,7 +335,7 @@
 }
 
 .timeline__block[data-dragging] {
-	opacity: 0.55;
+	opacity: 0.35;
 }
 
 /* A scene's card floats under its block, as wide as two blocks and a bit. */
@@ -464,12 +465,20 @@
 	position: absolute;
 	top: 0;
 	bottom: 0;
+	left: 0;
 	z-index: 2;
 	width: 2px;
 	margin-left: -1px;
 	background: var(--accent);
 	border-radius: 1px;
 	pointer-events: none;
+	transition: transform 100ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.timeline__drop {
+		transition: none;
+	}
 }
 
 @media (max-width: 720px) {

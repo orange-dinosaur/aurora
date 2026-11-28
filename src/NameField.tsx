@@ -11,7 +11,8 @@ type Props = {
 	// Whatever Rust said about the last name that was tried.
 	error: string | null;
 	onSubmit: (name: string) => void;
-	onCancel: () => void;
+	/** `away` is true when a click elsewhere closed it, false for Escape. */
+	onCancel: (away: boolean) => void;
 };
 
 export default function NameField({
@@ -56,7 +57,7 @@ export default function NameField({
 				// Nor when the whole window lost focus: switching away is not
 				// abandoning the name.
 				if (!busy && !inside && document.hasFocus()) {
-					onCancel();
+					onCancel(true);
 				}
 			}}
 		>
@@ -74,7 +75,7 @@ export default function NameField({
 					if (event.key === "Escape") {
 						event.preventDefault();
 						if (!busy) {
-							onCancel();
+							onCancel(false);
 						}
 					}
 				}}

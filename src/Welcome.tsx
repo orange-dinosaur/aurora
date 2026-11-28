@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { homeDir } from "@tauri-apps/api/path";
@@ -25,6 +25,7 @@ import Menu, {
 	useLingering,
 } from "./Menu";
 import { coverFor } from "./lib/covers";
+import { settle, spots, type Spots } from "./lib/settle";
 import { going, place } from "./recents";
 import { when } from "./dates";
 import { failure } from "./errors";
@@ -263,7 +264,7 @@ function Book({
 
 	if (view === "list") {
 		return (
-			<li className="shelf__row">
+			<li className="shelf__row" data-settle={project.root}>
 				{cover(true)}
 				{/* Its click reaches across the whole row. */}
 				<button
@@ -308,7 +309,7 @@ function Book({
 	}
 
 	return (
-		<li className="shelf__book">
+		<li className="shelf__book" data-settle={project.root}>
 			{/* Still a button when it cannot be read: opening it is how the
 			    writer finds out why, at the foot of the window. */}
 			<button
@@ -501,6 +502,27 @@ export default function Welcome({
 		(each) => each === "all" || counts[each] > 0,
 	);
 
+	// Only a chip moves the books; the search changes them at once.
+	const shelf = useRef<HTMLUListElement>(null);
+	const narrowing = useRef<Spots | null>(null);
+
+	function narrow(to: ShelfFormat) {
+		narrowing.current = spots(shelf.current);
+		setFormat(to);
+	}
+
+	useLayoutEffect(() => {
+		if (narrowing.current !== null) {
+			settle(shelf.current, narrowing.current, {
+				slide: 200,
+				enter: 180,
+				leave: 100,
+				easing: "--ease-out",
+			});
+			narrowing.current = null;
+		}
+	}, [narrowed]);
+
 	function showAll() {
 		setSearch("");
 		setFormat("all");
@@ -590,7 +612,7 @@ export default function Welcome({
 									type="button"
 									className="shelf__chip"
 									aria-pressed={narrowed === each}
-									onClick={() => setFormat(each)}
+									onClick={() => narrow(each)}
 								>
 									{each !== "all" && (
 										<Icon name={FORMATS[each].icon} />
@@ -719,6 +741,7 @@ export default function Welcome({
 					)}
 					{shown.length > 0 && (
 						<ul
+							ref={shelf}
 							className={
 								shelfView === "list"
 									? "shelf__list"

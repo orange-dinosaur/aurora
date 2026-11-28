@@ -20,6 +20,7 @@ import Icon from "./Icon";
 import { counted, previewed } from "./cards";
 import { list, parse } from "./frontmatter";
 import { inward } from "./lib/overflow";
+import { settle, spots, type Spots } from "./lib/settle";
 import Menu, {
 	MenuItem,
 	PointerMenu,
@@ -142,6 +143,18 @@ export default function Timeline({
 	const [card, setCard] = useState<Opened | null>(null);
 	const pointer = useRightClick();
 	const grid = useRef<HTMLDivElement>(null);
+	// Where the blocks stood when a drag came down, until the new order is in.
+	const dropped = useRef<Spots | null>(null);
+
+	useLayoutEffect(() => {
+		if (dropped.current !== null && read.kind === "ready") {
+			settle(grid.current, dropped.current, {
+				slide: 220,
+				easing: "--ease-in-out",
+			});
+			dropped.current = null;
+		}
+	}, [read]);
 
 	useEffect(() => {
 		let gone = false;
@@ -297,7 +310,10 @@ export default function Timeline({
 	function run([command, args]: Call) {
 		invoke(command, { root, ...args })
 			.then(() => setReread((count) => count + 1))
-			.catch((error: unknown) => setTrouble(failure(error).message));
+			.catch((error: unknown) => {
+				dropped.current = null;
+				setTrouble(failure(error).message);
+			});
 	}
 
 	function startDrag(event: DragEvent, what: Dragged) {
@@ -411,6 +427,8 @@ export default function Timeline({
 		const at = aimed(event);
 		stop();
 		if (at !== null) {
+			// Only a drop settles; Alt and an arrow move a block at once.
+			dropped.current = spots(grid.current);
 			run(at.call);
 		}
 	}
@@ -428,11 +446,12 @@ export default function Timeline({
 	}
 
 	/** A scene's block in one row. Alt and an arrow move it a step. */
-	function block(scene: DocumentSummary) {
+	function block(scene: DocumentSummary, row: string) {
 		return (
 			<button
 				type="button"
 				className="timeline__block"
+				data-settle={`${row}/${scene.id}`}
 				title={scene.title}
 				aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
 				onKeyDown={(event) => {
@@ -600,7 +619,9 @@ export default function Timeline({
 						{over !== null && (
 							<span
 								className="timeline__drop"
-								style={{ left: over.left }}
+								style={{
+									transform: `translateX(${over.left}px)`,
+								}}
 							/>
 						)}
 						<span className="timeline__corner" />
@@ -708,7 +729,7 @@ export default function Timeline({
 										className="timeline__lane"
 									>
 										{row.scenes.has(scene.id) &&
-											block(scene)}
+											block(scene, row.subject?.id ?? "")}
 									</div>
 								))}
 							</div>
