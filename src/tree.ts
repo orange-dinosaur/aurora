@@ -200,6 +200,52 @@ export function inside(list: Row[], id: string): ReadonlySet<string> {
 	return held;
 }
 
+/** What a key does on a binder row: move to another row, or fold this one. */
+export type TreeStep = { kind: "go"; to: number } | { kind: "toggle" } | null;
+
+/**
+ * A key pressed on the row at `at`, given every drawn row's depth and whether
+ * this row is open: null for a row with nothing to open. Down and Up move,
+ * Right opens or steps in, Left closes or climbs, Enter and Space fold.
+ */
+export function treeStep(
+	key: string,
+	at: number,
+	depths: number[],
+	open: boolean | null,
+): TreeStep {
+	const go = (to: number): TreeStep =>
+		to >= 0 && to < depths.length ? { kind: "go", to } : null;
+
+	switch (key) {
+		case "ArrowDown":
+			return go(at + 1);
+		case "ArrowUp":
+			return go(at - 1);
+		case "ArrowRight":
+			if (open === null) {
+				return null;
+			}
+			return open ? go(at + 1) : { kind: "toggle" };
+		case "ArrowLeft": {
+			if (open) {
+				return { kind: "toggle" };
+			}
+			for (let i = at - 1; i >= 0; i--) {
+				if (depths[i] < depths[at]) {
+					return go(i);
+				}
+			}
+			return null;
+		}
+		case "Enter":
+		case " ":
+			return open === null ? null : { kind: "toggle" };
+		default:
+			return null;
+	}
+}
+
 /** The project's sections: the folders at the top of the tree. */
 export function sections(nodes: TreeNode[]) {
 	return nodes.filter((node) => node.node === "folder");

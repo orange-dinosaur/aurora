@@ -78,6 +78,8 @@ pub struct Preferences {
 	pub line_height: f32,
 	/// Whether the shelf stands its books as covers or lists them in rows.
 	pub shelf_view: ShelfView,
+	/// Whether the binder shows word counts and target rings.
+	pub binder_counts: bool,
 }
 
 /// The shelf's two ways of showing books.
@@ -177,6 +179,7 @@ impl Default for Preferences {
 			font_size: 16,
 			line_height: 1.7,
 			shelf_view: ShelfView::Covers,
+			binder_counts: true,
 		}
 	}
 }
@@ -994,6 +997,7 @@ mod tests {
 			font_size: 19,
 			line_height: 2.0,
 			shelf_view: ShelfView::List,
+			binder_counts: false,
 		};
 
 		set_preferences(&path, wanted.clone()).unwrap();

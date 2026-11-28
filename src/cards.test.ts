@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
+	aimed,
+	arc,
 	band,
 	counted,
 	described,
@@ -103,6 +105,33 @@ describe("how far a row is along its target", () => {
 
 	test("writing past the target keeps the line full", () => {
 		expect(reached(1800, 1500)).toBe(1);
+	});
+});
+
+describe("what a binder count says about its target", () => {
+	test("no target says nothing", () => {
+		expect(aimed(900, null)).toBeNull();
+		expect(aimed(900, 0)).toBeNull();
+	});
+
+	test("words, the target and the rounded share", () => {
+		expect(aimed(7320, 8000)).toBe("7,320 of 8,000 words, 92%");
+	});
+
+	test("past the target the share goes past 100", () => {
+		expect(aimed(1800, 1500)).toBe("1,800 of 1,500 words, 120%");
+	});
+
+	test("a screenplay counts pages", () => {
+		expect(aimed(5000, 10, 5)).toBe("5 of 10 pages, 50%");
+	});
+});
+
+describe("a target ring's dash", () => {
+	test("nothing written draws nothing, a full target the whole circle", () => {
+		const whole = 2 * Math.PI * 4.5;
+		expect(arc(0)).toBe(`0 ${whole}`);
+		expect(arc(1)).toBe(`${whole} ${whole}`);
 	});
 });
 

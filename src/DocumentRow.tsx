@@ -2,7 +2,7 @@
 // and what may be done to it. It draws the field instead when it is the row
 // being retitled, and is not draggable while it does.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { documentPlaceholder } from "./kinds";
 import { useRightClick } from "./Menu";
 import RowMenu, { RowShell } from "./RowMenu";
@@ -11,8 +11,9 @@ import { canTry } from "./takes";
 import type { Row } from "./tree";
 import { inManuscript } from "./tree";
 import type { Draggable } from "./reorder";
-import { abbreviated, type Retitling } from "./rows";
-import { progress } from "./RowProgress";
+import Icon from "./Icon";
+import type { Retitling } from "./rows";
+import { Count } from "./RowProgress";
 import { TargetField, type Aim } from "./Target";
 
 type Props = {
@@ -37,6 +38,8 @@ type Props = {
 	onDelete: () => void;
 	onRetitle: (name: string) => void;
 	onCancelRetitle: () => void;
+	/** Drawn right after the row. */
+	after: ReactNode;
 };
 
 export default function DocumentRow({
@@ -56,6 +59,7 @@ export default function DocumentRow({
 	onDelete,
 	onRetitle,
 	onCancelRetitle,
+	after,
 }: Props) {
 	const document = row.document;
 	const pointer = useRightClick();
@@ -63,15 +67,20 @@ export default function DocumentRow({
 
 	const title = (
 		<>
-			<span className="document__title">{document.title}</span>
-			{/* Always in the row and faded when there is nothing to say, so
-			    the title never shifts as the writer types. */}
-			<span
-				className="document__dirty"
-				data-dirty={unsaved ? "" : undefined}
-				aria-hidden="true"
-			/>
-			{unsaved && <span className="visually-hidden"> (unsaved)</span>}
+			<span className="row__icon" aria-hidden="true">
+				<Icon name="file" />
+			</span>
+			<span className="row__name">
+				<span className="document__title">{document.title}</span>
+				{/* Always in the row and faded when there is nothing to say, so
+				    the title never shifts as the writer types. */}
+				<span
+					className="document__dirty"
+					data-dirty={unsaved ? "" : undefined}
+					aria-hidden="true"
+				/>
+				{unsaved && <span className="visually-hidden"> (unsaved)</span>}
+			</span>
 		</>
 	);
 
@@ -87,6 +96,7 @@ export default function DocumentRow({
 			onContextMenu={pointer.open}
 			onRetitle={onRetitle}
 			onCancelRetitle={onCancelRetitle}
+			after={after}
 		>
 			{aiming ? (
 				// A form cannot sit inside a button, so the row is drawn
@@ -107,17 +117,19 @@ export default function DocumentRow({
 			) : (
 				<button
 					type="button"
-					className="document"
+					className="document tree__row"
+					data-depth={row.depth}
 					aria-current={current ? "page" : undefined}
 					onClick={() => onOpen(false)}
 				>
 					{title}
-					<span className="document__words">
-						{abbreviated(row.words, row.pages)}
-					</span>
+					<Count
+						words={row.words}
+						pages={row.pages}
+						target={document.target}
+					/>
 				</button>
 			)}
-			{progress(row.pages ?? row.words, document.target)}
 			<RowMenu
 				label={`Actions for ${document.title}`}
 				pointer={pointer}

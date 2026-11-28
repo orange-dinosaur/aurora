@@ -69,6 +69,31 @@ export function reached(words: number, target: number | null) {
 	return Math.min(words / target, 1);
 }
 
+/**
+ * What a binder count says about its target: "7,320 of 8,000 words, 92%".
+ * Null without a target.
+ */
+export function aimed(
+	words: number,
+	target: number | null,
+	pages: number | null = null,
+) {
+	if (target === null || target <= 0) {
+		return null;
+	}
+	const share = Math.round(((pages ?? words) / target) * 100);
+	return `${counted(words, target, pages)}, ${share}%`;
+}
+
+/** The radius of a binder row's target ring, in a 12-unit box. */
+export const RING = 4.5;
+
+/** The ring's dash for a share from 0 to 1: drawn length, then the full circle. */
+export function arc(share: number) {
+	const whole = 2 * Math.PI * RING;
+	return `${share * whole} ${whole}`;
+}
+
 export type Band = "red" | "orange" | "yellow" | "green";
 
 /** The colour a progress line takes from its share of the target. */

@@ -12,9 +12,52 @@ import {
 	pruned,
 	rows,
 	sections,
+	treeStep,
 	wordsIn,
 } from "./tree";
 import type { Moving } from "./tree";
+
+describe("what a key does on a binder row", () => {
+	// A section, a part in it, a scene in the part, then a second section.
+	const depths = [-1, 0, 1, -1];
+
+	test("Down and Up move one row and stop at the ends", () => {
+		expect(treeStep("ArrowDown", 1, depths, true)).toEqual({
+			kind: "go",
+			to: 2,
+		});
+		expect(treeStep("ArrowUp", 0, depths, true)).toBeNull();
+		expect(treeStep("ArrowDown", 3, depths, false)).toBeNull();
+	});
+
+	test("Right opens a shut folder, then steps into it", () => {
+		expect(treeStep("ArrowRight", 3, depths, false)).toEqual({
+			kind: "toggle",
+		});
+		expect(treeStep("ArrowRight", 1, depths, true)).toEqual({
+			kind: "go",
+			to: 2,
+		});
+		expect(treeStep("ArrowRight", 2, depths, null)).toBeNull();
+	});
+
+	test("Left closes an open folder, otherwise climbs to the parent", () => {
+		expect(treeStep("ArrowLeft", 1, depths, true)).toEqual({
+			kind: "toggle",
+		});
+		expect(treeStep("ArrowLeft", 2, depths, null)).toEqual({
+			kind: "go",
+			to: 1,
+		});
+		expect(treeStep("ArrowLeft", 0, depths, false)).toBeNull();
+	});
+
+	test("Enter and Space fold a folder and leave a document to its button", () => {
+		expect(treeStep("Enter", 1, depths, true)).toEqual({ kind: "toggle" });
+		expect(treeStep(" ", 3, depths, false)).toEqual({ kind: "toggle" });
+		expect(treeStep("Enter", 2, depths, null)).toBeNull();
+	});
+});
 import type { FolderKind, TreeNode } from "./types";
 
 function folder(

@@ -41,6 +41,7 @@ const DEFAULTS: Preferences = {
 	fontSize: 16,
 	lineHeight: 1.7,
 	shelfView: "covers",
+	binderCounts: true,
 };
 
 describe("nudging a setting", () => {

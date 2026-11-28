@@ -39,6 +39,14 @@ export type Making = {
 };
 
 /**
+ * The name a new thing's field opens with: "Scene 4" in a folder holding three.
+ * It is selected, so typing replaces it.
+ */
+export function suggested(noun: string, holds: number) {
+	return `${noun[0].toUpperCase()}${noun.slice(1)} ${holds + 1}`;
+}
+
+/**
  * Every folder offers a document. What it is called depends on where it sits:
  * a document anywhere in the Manuscript is a scene, however deep, and a
  * document in any other section is only a document.

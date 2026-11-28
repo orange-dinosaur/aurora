@@ -42,6 +42,7 @@ const DEFAULTS: Preferences = {
 	fontSize: 16,
 	lineHeight: 1.7,
 	shelfView: "covers",
+	binderCounts: true,
 };
 
 type Boot =

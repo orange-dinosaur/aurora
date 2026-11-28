@@ -5,8 +5,16 @@ import {
 	folderKinds,
 	folderPlaceholder,
 	mayHold,
+	suggested,
 } from "./kinds";
 import type { FolderKind, Format } from "./types";
+
+describe("the name a new thing's field opens with", () => {
+	test("the noun, capitalised, numbered after what the folder holds", () => {
+		expect(suggested("scene", 3)).toBe("Scene 4");
+		expect(suggested("chapter", 0)).toBe("Chapter 1");
+	});
+});
 
 /** What the + would offer, written the way the menu reads. */
 function offered(

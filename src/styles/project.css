@@ -251,7 +251,40 @@
 .menu.binder__menu--version {
 	width: fit-content;
 	max-width: calc(100% - var(--space-xxs));
-	margin: var(--space-xs) 0 0 var(--space-xxs);
+	margin: 0 0 0 var(--space-xxs);
+}
+
+/* The version chip, and at the far end the eye that hides every count. */
+.binder__versions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+	margin-top: var(--space-xs);
+}
+
+.binder__eye {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	margin: 0 -6px 0 auto;
+	padding: 0;
+	color: var(--text-faint);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.binder__eye:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.binder__eye:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -2px;
 }
 
 /* In scale with the small chip that opens it, and inside the binder's edge. */

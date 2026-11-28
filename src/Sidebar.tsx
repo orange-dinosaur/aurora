@@ -1,5 +1,11 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import type { RefObject } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
+import type { KeyboardEvent as KeyPress, RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import BookHead from "./BookHead";
 import DocumentRow from "./DocumentRow";
@@ -19,7 +25,7 @@ import NameField from "./NameField";
 import NewMenu from "./NewMenu";
 import type { FolderNode, ProjectDocument, TreeNode } from "./types";
 import type { Making } from "./kinds";
-import { MANUSCRIPT, folderKinds } from "./kinds";
+import { MANUSCRIPT, folderKinds, suggested } from "./kinds";
 import { useFormat } from "./projectFormat";
 import {
 	createDocument,
@@ -32,8 +38,8 @@ import { failure } from "./errors";
 import { FOLD, pressed } from "./formatting";
 import { useReorder, type Draggable } from "./reorder";
 import type { Renaming } from "./rows";
-import { abbreviated, indent, retitling, spot } from "./rows";
-import { progress } from "./RowProgress";
+import { indent, retitling, spot } from "./rows";
+import { Count } from "./RowProgress";
 import { TargetField } from "./Target";
 import { MERGE_HOLDS } from "./branches";
 import { timed } from "./timing";
@@ -46,6 +52,7 @@ import {
 	pruned,
 	rows,
 	sections,
+	treeStep,
 	wordsIn,
 } from "./tree";
 import type { FolderRef, Row } from "./tree";
@@ -147,6 +154,9 @@ type Props = {
 	onSwitch: (task: () => Promise<unknown>) => Promise<boolean>;
 	/** Reads the merge again after a switch or a merge from here. */
 	onMergeChanged: () => Promise<void>;
+	/** Whether rows show their counts and target rings. */
+	counts: boolean;
+	onCounts: (counts: boolean) => void;
 };
 
 export default function Sidebar({
@@ -190,6 +200,8 @@ export default function Sidebar({
 	onBeforeSwitch,
 	onSwitch,
 	onMergeChanged,
+	counts,
+	onCounts,
 }: Props) {
 	const trash = useRightClick();
 	const format = useFormat();
@@ -418,25 +430,102 @@ export default function Sidebar({
 		}
 	}
 
-	// The field asking what to call the new thing, under whichever row asked
-	// for it. Both a section header and a folder inside it want the same one.
-	function field(at: string, where: string) {
+	// The row asking what to call the new thing, at the depth it will land at.
+	// Both a section header and a folder inside it want the same one.
+	function field(at: string, where: string, depth: number, holds: number) {
 		if (naming.kind === "closed") {
 			return null;
 		}
+		const { making } = naming;
 
 		return (
-			<div className="sidebar__field">
-				<NameField
-					label={`Name of the new ${naming.making.noun} in ${where}`}
-					placeholder={naming.making.placeholder}
-					busy={naming.kind === "creating"}
-					error={naming.kind === "refused" ? naming.message : null}
-					onSubmit={(name) => void create(at, naming.making, name)}
-					onCancel={() => setNaming({ kind: "closed" })}
-				/>
-			</div>
+			<li className="documents__item" style={indent(depth)}>
+				<div className="sidebar__field adding">
+					<span
+						className={
+							making.kind === "part"
+								? "row__icon row__icon--part"
+								: "row__icon"
+						}
+						aria-hidden="true"
+					>
+						<Icon
+							name={making.what === "folder" ? "folder" : "file"}
+						/>
+					</span>
+					<NameField
+						label={`Name of the new ${making.noun} in ${where}`}
+						placeholder={making.placeholder}
+						initial={suggested(making.noun, holds)}
+						busy={naming.kind === "creating"}
+						error={
+							naming.kind === "refused" ? naming.message : null
+						}
+						onSubmit={(name) => void create(at, making, name)}
+						onCancel={() => setNaming({ kind: "closed" })}
+					/>
+					<span className="adding__hint" aria-hidden="true">
+						<kbd>Enter</kbd> add · <kbd>Esc</kbd>
+					</span>
+				</div>
+			</li>
 		);
+	}
+
+	// One row in the tab order: the last one that had focus, else the one
+	// showing, else the first. The arrow keys move between the rest.
+	const binder = useRef<HTMLDivElement>(null);
+	const active = useRef<HTMLElement | null>(null);
+	const rove = useCallback(() => {
+		const rows = [
+			...(binder.current?.querySelectorAll<HTMLElement>(".tree__row") ??
+				[]),
+		];
+		const kept =
+			rows.find((row) => row === active.current) ??
+			rows.find((row) => row.getAttribute("aria-current") === "page") ??
+			rows[0];
+		for (const row of rows) {
+			row.tabIndex = row === kept ? 0 : -1;
+		}
+	}, []);
+	useLayoutEffect(rove);
+
+	function onTreeKey(event: KeyPress<HTMLDivElement>) {
+		const row = event.target;
+		if (
+			!(row instanceof HTMLElement) ||
+			!row.classList.contains("tree__row") ||
+			event.altKey ||
+			event.ctrlKey ||
+			event.metaKey ||
+			event.shiftKey
+		) {
+			return;
+		}
+		const rows = [
+			...event.currentTarget.querySelectorAll<HTMLElement>(".tree__row"),
+		];
+		const fold = row
+			.closest("li, .section__header")
+			?.querySelector<HTMLButtonElement>(
+				":scope > .disclosure, :scope > .section__fold",
+			);
+		const step = treeStep(
+			event.key,
+			rows.indexOf(row),
+			rows.map((each) => Number(each.dataset.depth)),
+			fold ? fold.getAttribute("aria-expanded") === "true" : null,
+		);
+		if (step === null) {
+			return;
+		}
+		event.preventDefault();
+		if (step.kind === "toggle") {
+			fold?.click();
+		} else {
+			rows[step.to].focus();
+		}
 	}
 
 	return (
@@ -460,6 +549,8 @@ export default function Sidebar({
 				onBeforeSwitch={onBeforeSwitch}
 				onSwitch={onSwitch}
 				onMergeChanged={onMergeChanged}
+				counts={counts}
+				onCounts={onCounts}
 				onMessage={(message) =>
 					setStatus(
 						message === null
@@ -470,7 +561,21 @@ export default function Sidebar({
 			/>
 
 			<div className="sidebar__list">
-				<div className="sidebar__sections">
+				<div
+					ref={binder}
+					className="sidebar__sections"
+					data-counts={counts ? undefined : "off"}
+					onKeyDown={onTreeKey}
+					onFocus={(event) => {
+						if (
+							event.target instanceof HTMLElement &&
+							event.target.classList.contains("tree__row")
+						) {
+							active.current = event.target;
+							rove();
+						}
+					}}
+				>
 					{sections(tree).map((section) => {
 						// A section folds through the same set as every folder
 						// under it, so one press of the chord reaches all of
@@ -489,6 +594,36 @@ export default function Sidebar({
 							reorder.dragging === null
 								? NONE
 								: inside(list, reorder.dragging);
+						// Rust adopts a new file last in its folder, so the
+						// field asking its name opens after the last row drawn
+						// inside that folder.
+						const host = list.find(
+							(row) =>
+								naming.kind !== "closed" &&
+								row.kind === "folder" &&
+								row.id === naming.at,
+						);
+						const landing =
+							host?.kind === "folder"
+								? ([...inside(list, host.id)].pop() ?? host.id)
+								: null;
+						const adding =
+							host?.kind === "folder" &&
+							field(
+								host.id,
+								host.name,
+								host.depth + 1,
+								host.holds,
+							);
+						const atEnd =
+							naming.kind !== "closed" &&
+							naming.at === section.id &&
+							field(
+								section.id,
+								section.name,
+								0,
+								section.children.length,
+							);
 						// Every row in the list asks for its drag the same way.
 						// A row can always be dragged to the page, since
 						// opening is allowed while a merge waits. Only the
@@ -536,6 +671,7 @@ export default function Sidebar({
 									<button
 										type="button"
 										className="section__fold"
+										tabIndex={-1}
 										aria-expanded={!shut}
 										aria-label={`${verb} ${section.name}`}
 										onClick={() => void toggle(section.id)}
@@ -545,7 +681,8 @@ export default function Sidebar({
 									<h3 className="section__title">
 										<button
 											type="button"
-											className="section__open"
+											className="section__open tree__row"
+											data-depth={-1}
 											aria-current={
 												section.id === selectedFolder
 													? "page"
@@ -604,18 +741,12 @@ export default function Sidebar({
 												}
 											/>
 										) : (
-											<span className="section__words">
-												{abbreviated(
-													section.words,
-													section.pages,
-												)}
-											</span>
+											<Count
+												words={section.words}
+												pages={section.pages}
+												target={section.target}
+											/>
 										))}
-									{section.name === MANUSCRIPT &&
-										progress(
-											section.pages ?? section.words,
-											section.target,
-										)}
 									<NewMenu
 										label={`New in ${section.name}`}
 										kind={section.kind}
@@ -638,119 +769,113 @@ export default function Sidebar({
 									/>
 								</div>
 
-								{naming.kind !== "closed" &&
-									naming.at === section.id &&
-									field(section.id, section.name)}
-
-								{list.length > 0 ? (
+								{list.length > 0 || atEnd ? (
 									<ul className="documents">
 										{list.map((row) =>
 											row.kind === "folder" ? (
-												<Fragment key={row.id}>
-													<FolderRow
-														root={root}
-														row={row}
-														section={section.name}
-														drag={draggable(row)}
-														merging={merging}
-														current={
-															row.id ===
-															selectedFolder
+												<FolderRow
+													key={row.id}
+													root={root}
+													row={row}
+													section={section.name}
+													drag={draggable(row)}
+													merging={merging}
+													current={
+														row.id ===
+														selectedFolder
+													}
+													renaming={retitling(
+														renaming,
+														row.id,
+													)}
+													after={
+														landing === row.id &&
+														adding
+													}
+													onOpen={(beside) =>
+														onOpenFolder(
+															rowRef(
+																row,
+																section.name,
+															),
+															beside,
+														)
+													}
+													onNew={(making) => {
+														setNaming({
+															kind: "open",
+															at: row.id,
+															making,
+														});
+														// The field opens after
+														// what the folder holds.
+														if (!open.has(row.id)) {
+															void keep(
+																new Set(
+																	open,
+																).add(row.id),
+															);
 														}
-														renaming={retitling(
-															renaming,
+													}}
+													onMove={(parentId, at) =>
+														void move(
 															row.id,
-														)}
-														onOpen={(beside) =>
-															onOpenFolder(
-																rowRef(
-																	row,
-																	section.name,
-																),
-																beside,
-															)
-														}
-														onNew={(making) =>
-															setNaming({
-																kind: "open",
-																at: row.id,
-																making,
-															})
-														}
-														onMove={(
 															parentId,
 															at,
-														) =>
-															void move(
+														)
+													}
+													onRename={() =>
+														setRenaming({
+															kind: "open",
+															id: row.id,
+														})
+													}
+													onTarget={(target) =>
+														aimed(
+															onRetargetFolder(
 																row.id,
-																parentId,
-																at,
-															)
-														}
-														onRename={() =>
-															setRenaming({
-																kind: "open",
-																id: row.id,
-															})
-														}
-														onTarget={(target) =>
-															aimed(
-																onRetargetFolder(
-																	row.id,
-																	target,
-																),
-															)
-														}
-														onDelete={() =>
-															void remove(
-																row.id,
-																"folder",
-															)
-														}
-														onToggle={() =>
-															void toggle(row.id)
-														}
-														onRetitle={(name) =>
-															void rename(
-																row.id,
-																name,
-																"folder",
-															)
-														}
-														onCancelRetitle={() =>
-															setRenaming({
-																kind: "closed",
-															})
-														}
-														onTimeline={() =>
-															onTimeline(
-																rowRef(
-																	row,
-																	section.name,
-																),
-															)
-														}
-													/>
-													{naming.kind !== "closed" &&
-														naming.at ===
-															row.id && (
-															<li
-																className="documents__item"
-																style={indent(
-																	row.depth +
-																		1,
-																)}
-															>
-																{field(
-																	row.id,
-																	row.name,
-																)}
-															</li>
-														)}
-												</Fragment>
+																target,
+															),
+														)
+													}
+													onDelete={() =>
+														void remove(
+															row.id,
+															"folder",
+														)
+													}
+													onToggle={() =>
+														void toggle(row.id)
+													}
+													onRetitle={(name) =>
+														void rename(
+															row.id,
+															name,
+															"folder",
+														)
+													}
+													onCancelRetitle={() =>
+														setRenaming({
+															kind: "closed",
+														})
+													}
+													onTimeline={() =>
+														onTimeline(
+															rowRef(
+																row,
+																section.name,
+															),
+														)
+													}
+												/>
 											) : (
 												<DocumentRow
 													key={row.document.id}
+													after={
+														landing ===
+															row.document.id &&
+														adding
+													}
 													root={root}
 													row={row}
 													current={
@@ -823,6 +948,7 @@ export default function Sidebar({
 												/>
 											),
 										)}
+										{atEnd}
 									</ul>
 								) : (
 									!shut && (

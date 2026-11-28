@@ -42,19 +42,26 @@ type Props = BookProps & {
 	onSwitch: (task: () => Promise<unknown>) => Promise<boolean>;
 	/** Reads the merge again after a switch or a merge from here. */
 	onMergeChanged: () => Promise<void>;
+	/** Whether the binder's rows show their counts. */
+	counts: boolean;
+	onCounts: (counts: boolean) => void;
 };
 
 /**
  * What leads the binder: the book's cover and title, which open what can be
- * done to the project as a whole, and the version it is on.
+ * done to the project as a whole, the version it is on, and whether the rows
+ * below show their counts.
  */
 export default function BookHead({
 	onCompare,
 	onBeforeSwitch,
 	onSwitch,
 	onMergeChanged,
+	counts,
+	onCounts,
 	...book
 }: Props) {
+	const eye = counts ? "Hide word counts" : "Show word counts";
 	const { root, merging, onMessage } = book;
 	const [versions, setVersions] = useState<Branch[]>([]);
 	const current = versions.find((version) => version.current);
@@ -119,38 +126,49 @@ export default function BookHead({
 		<div className="binder__head">
 			<BookMenu {...book} />
 
-			{current !== undefined && (
-				<Menu
-					label={`Version: ${current.name}`}
-					trigger={
-						<>
-							<span className="binder__version-name">
-								{current.name}
-							</span>
-							<Icon name="chevron-down" />
-						</>
-					}
-					wrapper="binder__menu binder__menu--version"
-					className="binder__version"
+			<div className="binder__versions">
+				{current !== undefined && (
+					<Menu
+						label={`Version: ${current.name}`}
+						trigger={
+							<>
+								<span className="binder__version-name">
+									{current.name}
+								</span>
+								<Icon name="chevron-down" />
+							</>
+						}
+						wrapper="binder__menu binder__menu--version"
+						className="binder__version"
+					>
+						{(close) => (
+							<VersionMenu
+								root={root}
+								versions={versions}
+								current={current}
+								merging={merging}
+								close={close}
+								onChoose={choose}
+								onCheckpoint={(slug, words, merge) =>
+									void switchTo(slug, words, merge)
+								}
+								onCompare={onCompare}
+								onChanged={listVersions}
+								onFailure={onMessage}
+							/>
+						)}
+					</Menu>
+				)}
+				<button
+					type="button"
+					className="binder__eye"
+					aria-label={eye}
+					title={eye}
+					onClick={() => onCounts(!counts)}
 				>
-					{(close) => (
-						<VersionMenu
-							root={root}
-							versions={versions}
-							current={current}
-							merging={merging}
-							close={close}
-							onChoose={choose}
-							onCheckpoint={(slug, words, merge) =>
-								void switchTo(slug, words, merge)
-							}
-							onCompare={onCompare}
-							onChanged={listVersions}
-							onFailure={onMessage}
-						/>
-					)}
-				</Menu>
-			)}
+					<Icon name={counts ? "eye" : "eye-off"} />
+				</button>
+			</div>
 		</div>
 	);
 }

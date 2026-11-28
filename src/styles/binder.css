@@ -7,6 +7,8 @@
 }
 
 .sidebar__sections {
+	/* Every row's count stands in this one column, ring and number. */
+	--count-col: 56px;
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
@@ -17,6 +19,21 @@
 	   control they hold. The list scrolls by wheel and a row can always be
 	   reached by moving through it. */
 	scrollbar-width: none;
+}
+
+@media (max-width: 720px) {
+	.sidebar__sections {
+		--count-col: 52px;
+	}
+}
+
+/* Hidden with the eye, the counts give their column back to the names. */
+.sidebar__sections[data-counts="off"] {
+	--count-col: 0px;
+}
+
+.sidebar__sections[data-counts="off"] .row__count {
+	display: none;
 }
 
 .sidebar__sections::-webkit-scrollbar {
@@ -66,40 +83,33 @@
 	outline-offset: -2px;
 }
 
-/* Everything inside a section stands one column right of its header, so a part
-   reads as something in the Manuscript rather than a sibling of it. The header
-   keeps its own chevron at the sidebar's edge. Every row, every chevron and
-   every drop-line inside a section is placed from here; the fallback is what
-   the same rows use anywhere else. */
-.section {
-	--nest: 0.5rem;
-}
-
 .section + .section {
-	margin-top: var(--space-xs);
+	margin-top: var(--space-sm);
 }
 
+/* The same columns as the rows below it, with no indent and no icon, so the
+   section's count stands in theirs. */
 .section__header {
 	position: relative;
-	display: flex;
+	display: grid;
+	grid-template-columns: 0 16px 0 minmax(0, 1fr) var(--count-col);
 	align-items: center;
-	border-radius: var(--radius-xs);
+	column-gap: 6px;
+	min-height: 32px;
+	padding: 0 6px 0 4px;
+	border-radius: var(--radius-sm);
 }
 
 .section__header:hover {
 	background: var(--bg-hover);
 }
 
-/* Pulled back so the names stand where they would without it. Laid out in the
-   header's flex row, where a row's chevron floats because the row itself is a
-   button and cannot hold one. */
 .section__fold {
-	flex: none;
+	grid-column: 2;
 	display: grid;
 	place-items: center;
-	width: 24px;
-	height: 26px;
-	margin-left: -3px;
+	width: 16px;
+	height: 16px;
 	padding: 0;
 	color: var(--text-faint);
 	background: none;
@@ -109,8 +119,8 @@
 }
 
 .section__fold svg {
-	width: 13px;
-	height: 13px;
+	width: 12px;
+	height: 12px;
 }
 
 .section__fold[aria-expanded="false"] svg {
@@ -121,41 +131,37 @@
 	color: var(--text);
 }
 
-/* Inset, because the list clips anything drawn past its edge. */
-.section__fold:focus-visible {
-	outline: 2px solid var(--accent-text);
-	outline-offset: -2px;
-}
-
 .section__title {
-	flex: 1;
+	grid-column: 4;
 	min-width: 0;
 	margin: 0;
-	font: var(--text-ui-strong);
+	font: var(--text-section);
 	color: var(--text);
 }
 
-/* The + on a section header is a menu of what may be made there. It sits in
-   the header's flex row rather than over it, which is what every other menu
-   in the interface does. */
+.section__header .row__count,
+.section__header .row__aim {
+	grid-column: 5;
+}
+
+/* The + on a section header is a menu of what may be made there. Like a row's,
+   it covers the end of the name and never the count. */
 .section__header .menu {
-	position: relative;
-	flex: none;
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	right: calc(var(--count-col) + 12px);
+	display: flex;
+	align-items: center;
+	padding-left: 8px;
+	background: var(--bg-hover);
+	border-radius: 5px;
 	opacity: 0;
 }
 
 .section__header:hover .menu,
 .section__header:focus-within .menu {
 	opacity: 1;
-}
-
-/* The book's length, left of the + the way a folder row's count sits left of
-   its menus. */
-.section__words {
-	flex: none;
-	font-size: 0.75rem;
-	font-variant-numeric: tabular-nums;
-	color: var(--text-dim);
 }
 
 .section__header .menu__trigger {
@@ -180,7 +186,7 @@
 .section__open {
 	display: block;
 	width: 100%;
-	padding: 5px var(--space-xxs);
+	padding: 5px 0;
 	font: inherit;
 	text-align: left;
 	color: inherit;
@@ -197,17 +203,20 @@
 	color: var(--accent-text);
 }
 
+/* Inset, because the list clips anything drawn past its edge. */
+.section__fold:focus-visible,
 .section__open:focus-visible {
 	outline: 2px solid var(--accent-text);
 	outline-offset: -2px;
 }
 
-/* In line with the section's name, past its chevron. */
+/* In line with the names of the rows that would be here. */
 .section__empty {
 	margin: 0;
-	padding: var(--space-xxs) 0 var(--space-xxs) 25px;
-	font-size: 0.85rem;
-	color: var(--text-dim);
+	padding: 2px 0 4px 44px;
+	font: var(--text-caption);
+	font-style: italic;
+	color: var(--text-faint);
 }
 
 .documents {
@@ -217,15 +226,56 @@
 }
 
 /* The menu sits over the row rather than inside it: the row is a button, and a
-   button cannot hold another one. */
+   button cannot hold another one. A section's rows start one level in. */
 .documents__item {
+	--indent: calc((var(--depth, 0) + 1) * 14px);
 	position: relative;
 }
 
-/* A row's target field takes the count's slot in the row's own line, so the
-   row keeps its height and its highlight. */
+/* One grid for every row, so icons, names and counts stand in columns:
+   indent, chevron, icon, name, count. The chevron is painted over its column
+   from outside the button. A hairline runs under each ancestor's chevron. */
+.document,
+.folder {
+	display: grid;
+	grid-template-columns: var(--indent) 16px 16px minmax(0, 1fr) var(
+			--count-col
+		);
+	align-items: center;
+	column-gap: 6px;
+	width: 100%;
+	height: 28px;
+	padding: 0 6px 0 4px;
+	font: inherit;
+	font-size: 0.75rem;
+	text-align: left;
+	color: var(--text-dim);
+	background-color: transparent;
+	background-image: repeating-linear-gradient(
+		to right,
+		var(--border) 0 1px,
+		transparent 1px 14px
+	);
+	background-position: 32px 0;
+	background-size: calc(var(--depth, 0) * 14px) 100%;
+	background-repeat: no-repeat;
+	border: 0;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.folder {
+	font-weight: 600;
+	color: var(--text);
+}
+
+/* A row's target field takes the count's column, which widens to hold it. */
+:is(.document, .folder, .section__header):has(.row__aim) {
+	--count-col: auto;
+}
+
 .row__aim {
-	flex: none;
+	grid-column: 5;
 	align-items: center;
 }
 
@@ -234,23 +284,105 @@
 	cursor: text;
 }
 
-/* Drawn over the row's bottom edge rather than below it, so a target never
-   changes the row's height. It starts where the names do. */
-.row__progress {
-	position: absolute;
-	bottom: 1px;
-	left: calc(var(--nest, 0rem) + 0.25rem + var(--depth, 0) * 0.75rem + 1rem);
-	right: 0.25rem;
-	height: 2px;
-	border-radius: 1px;
-	background: var(--band);
-	transform: scaleX(var(--reached));
-	transform-origin: left;
-	pointer-events: none;
+.row__icon {
+	grid-column: 3;
+	display: grid;
+	place-items: center;
+	color: var(--graphic-faint);
+}
+
+.folder .row__icon {
+	color: var(--text-dim);
+}
+
+.row__icon .icon {
+	width: 14px;
+	height: 14px;
+}
+
+/* A part is filled, so it stands over the chapters drawn in outline. */
+.row__icon--part .icon {
+	fill: currentColor;
+	fill-opacity: 0.22;
+}
+
+.row__name,
+.folder__name {
+	grid-column: 4;
+	min-width: 0;
+}
+
+.row__name {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.folder__name {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* A fixed slot for the ring, then the number to the right, so rings stand in
+   one column whether or not the rows around them have one. */
+.row__count {
+	grid-column: 5;
+	align-self: stretch;
+	display: grid;
+	grid-template-columns: 12px 1fr;
+	align-items: center;
+	column-gap: 4px;
+	font: var(--text-caption);
+	font-variant-numeric: tabular-nums;
+	color: var(--text-faint);
+}
+
+.row__n {
+	justify-self: end;
+}
+
+[aria-current="page"] > .row__count {
+	color: var(--text-dim);
+}
+
+.row__ring svg {
+	display: block;
+	width: 12px;
+	height: 12px;
+	fill: none;
+	stroke-width: 2;
+}
+
+.row__ring circle:first-child {
+	stroke: var(--border-strong);
+}
+
+.row__ring circle + circle {
+	stroke: var(--band);
+	stroke-linecap: round;
+}
+
+/* An open folder's count is the sum of the rows under it, so only a shut one
+   shows it. */
+.disclosure[aria-expanded="true"] ~ .folder .row__count {
+	visibility: hidden;
+}
+
+/* There when asked for outside the Manuscript, where a column of figures says
+   nothing about the book. Inside it every row keeps its count in view. */
+.documents__item .row__count {
+	opacity: 0;
+}
+
+.documents__item:hover .row__count,
+.documents__item:focus-within .row__count,
+.documents__item--counted .row__count {
+	opacity: 1;
 }
 
 /* Every bar measuring a target takes its colour from how far along it is: the
-   binder row, the overview card and the editor's foot. */
+   binder's ring, the overview card and the editor's foot. */
 [data-band="red"] {
 	--band: var(--progress-red);
 }
@@ -293,8 +425,8 @@
 .documents__item[data-over="after"]::after {
 	content: "";
 	position: absolute;
-	right: 0.25rem;
-	left: calc(var(--nest, 0rem) + 0.25rem + var(--depth, 0) * 0.75rem + 1rem);
+	right: 6px;
+	left: calc(var(--indent) + 54px);
 	height: 2px;
 	background: var(--accent);
 	border-radius: 1px;
@@ -308,74 +440,18 @@
 	bottom: -1px;
 }
 
-.document {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	width: 100%;
-	height: 26px;
-	/* The right-hand room is the row menu's, which is painted over the row.
-	   The left is how far down the tree the row sits, plus the column the
-	   folders' chevrons stand in, which every row leaves clear so that names
-	   line up whether or not the row beside them opens. */
-	padding: 0 1.4rem 0
-		calc(var(--nest, 0rem) + 0.25rem + var(--depth, 0) * 0.75rem + 1rem);
-	font: inherit;
-	font-size: 0.75rem;
-	text-align: left;
-	color: var(--text-dim);
-	background: none;
-	border: 0;
-	border-radius: var(--radius-xs);
-	cursor: pointer;
-}
-
-/* A folder in the list opens its overview. Two buttons are painted over its
-   right-hand end rather than one, so it keeps twice the room clear. */
-.folder {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	width: 100%;
-	height: 26px;
-	padding: 0 2.8rem 0
-		calc(var(--nest, 0rem) + 0.25rem + var(--depth, 0) * 0.75rem + 1rem);
-	font: 600 12px/1.35 var(--font-ui);
-	text-align: left;
-	color: var(--text-dim);
-	background: none;
-	border: 0;
-	border-radius: var(--radius-xs);
-	cursor: pointer;
-}
-
-/* A part stands over its chapters, which is otherwise only an indent. */
-.folder[data-kind="part"] {
-	color: var(--text);
-}
-
-.folder__name {
-	flex: 1;
-	min-width: 0;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-/* Painted over the row's left end, at the row's own depth, in the column both
-   kinds of row keep clear for it. Wider than the chevron it holds, so it is
-   still a target on a 26px row. */
+/* Painted over the chevron column of the row's grid. */
 .disclosure {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: calc(var(--nest, 0rem) + var(--depth, 0) * 0.75rem);
+	left: calc(var(--indent) + 10px);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 1rem;
+	width: 16px;
 	padding: 0;
-	color: var(--text-dim);
+	color: var(--text-faint);
 	background: none;
 	border: 0;
 	border-radius: var(--radius-xs);
@@ -413,34 +489,23 @@
 	}
 }
 
-/* There when asked for outside the Manuscript, where a column of figures says
-   nothing about the book. Inside it every row keeps its count in view. */
-.folder__words,
-.document__words {
-	flex: none;
-	font-variant-numeric: tabular-nums;
-	opacity: 0;
-}
-
-.documents__item:hover :is(.folder__words, .document__words),
-.documents__item:focus-within :is(.folder__words, .document__words),
-.documents__item--counted :is(.folder__words, .document__words) {
-	opacity: 1;
-}
-
-.folder:hover {
+/* The whole item, so the row stays lit while the pointer is on its menus. */
+.documents__item:hover > :is(.document, .folder) {
 	color: var(--text);
-	background: var(--bg-hover);
+	background-color: var(--bg-hover);
 }
 
-.folder[aria-current="page"] {
+:is(.document, .folder)[aria-current="page"] {
 	color: var(--text);
-	background: var(--accent-wash);
+	background-color: var(--accent-wash);
+}
+
+:is(.document, .folder).tree__row:focus-visible {
+	outline: 2px solid var(--accent-text);
+	outline-offset: -2px;
 }
 
 .document__title {
-	flex: 1;
-	min-width: 0;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -459,13 +524,58 @@
 	opacity: 1;
 }
 
-.document:hover {
-	color: var(--text);
-	background: var(--bg-hover);
+/* Where the new thing will land, already named, the name selected. */
+.adding {
+	display: grid;
+	grid-template-columns: var(--indent) 16px 16px minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: 6px;
+	height: 30px;
+	margin: 1px 0;
+	padding: 0 6px 0 4px;
+	border-radius: var(--radius-sm);
+	background: var(--bg-card);
+	box-shadow:
+		0 0 0 1.5px var(--accent),
+		0 2px 8px rgb(0 0 0 / 0.08);
 }
 
-.document[aria-current="page"] {
-	font-weight: 600;
+.adding .row__icon {
+	color: var(--accent-text);
+}
+
+.sidebar__field.adding .namefield__input {
+	grid-column: 4;
+	min-width: 0;
+	height: auto;
+	padding: 0;
+	font-size: 0.75rem;
 	color: var(--text);
+	background: none;
+	border: 0;
+	outline: none;
+}
+
+.adding .namefield__input::selection {
 	background: var(--accent-wash);
+}
+
+.adding__hint {
+	grid-column: 5;
+	font: var(--text-caption);
+	color: var(--text-faint);
+	white-space: nowrap;
+}
+
+.adding__hint kbd {
+	padding: 0 4px;
+	font: inherit;
+	background: var(--bg-hover);
+	border-radius: 3px;
+}
+
+@media (max-width: 720px) {
+	.adding__hint {
+		display: none;
+	}
 }

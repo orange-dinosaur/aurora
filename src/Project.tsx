@@ -2130,6 +2130,8 @@ export default function Project({
 					opener={sidebarButton}
 					width={preferences.sidebarWidth}
 					onWidth={(sidebarWidth) => onPreferences({ sidebarWidth })}
+					counts={preferences.binderCounts}
+					onCounts={(binderCounts) => onPreferences({ binderCounts })}
 					root={root}
 					name={name}
 					reload={listing + written}

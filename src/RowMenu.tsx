@@ -226,6 +226,8 @@ type Shell = {
 	onRetitle: (name: string) => void;
 	onCancelRetitle: () => void;
 	children: ReactNode;
+	/** Drawn right after the row: the add row, when a new thing lands there. */
+	after: ReactNode;
 };
 
 /**
@@ -244,6 +246,7 @@ export function RowShell({
 	onRetitle,
 	onCancelRetitle,
 	children,
+	after,
 }: Shell) {
 	if (renaming !== null) {
 		return (
@@ -265,19 +268,22 @@ export function RowShell({
 	}
 
 	return (
-		<li
-			className={[
-				"documents__item",
-				dim && "documents__item--out",
-				counted && "documents__item--counted",
-			]
-				.filter(Boolean)
-				.join(" ")}
-			style={indent(depth)}
-			{...drag}
-			onContextMenu={onContextMenu}
-		>
-			{children}
-		</li>
+		<>
+			<li
+				className={[
+					"documents__item",
+					dim && "documents__item--out",
+					counted && "documents__item--counted",
+				]
+					.filter(Boolean)
+					.join(" ")}
+				style={indent(depth)}
+				{...drag}
+				onContextMenu={onContextMenu}
+			>
+				{children}
+			</li>
+			{after}
+		</>
 	);
 }

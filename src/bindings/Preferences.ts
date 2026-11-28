@@ -109,4 +109,8 @@ lineHeight: number,
 /**
  * Whether the shelf stands its books as covers or lists them in rows.
  */
-shelfView: ShelfView, };
+shelfView: ShelfView, 
+/**
+ * Whether the binder shows word counts and target rings.
+ */
+binderCounts: boolean, };
